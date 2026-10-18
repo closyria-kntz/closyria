@@ -1,0 +1,21 @@
+{
+  "name": "@closyria/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsdown --watch --on-success \"node --env-file-if-exists=.env --enable-source-maps dist/index.mjs\"",
+    "build": "tsdown",
+    "start": "node --enable-source-maps dist/index.mjs",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@closyria/shared": "workspace:*",
+    "pg-boss": "^12.38.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@closyria/config": "workspace:*",
+    "tsdown": "^0.23.1"
+  }
+}
