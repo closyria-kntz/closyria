@@ -26,3 +26,14 @@ export async function pingDb(db: Database): Promise<boolean> {
 }
 
 export { schema };
+
+/** Applies pending SQL migrations from `migrationsFolder` in a single connection. */
+export async function runMigrations(connectionString: string, migrationsFolder: string) {
+  const { migrate } = await import("drizzle-orm/node-postgres/migrator");
+  const { db, pool } = createDb(connectionString, { max: 1 });
+  try {
+    await migrate(db, { migrationsFolder });
+  } finally {
+    await pool.end();
+  }
+}

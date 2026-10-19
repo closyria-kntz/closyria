@@ -1,0 +1,43 @@
+[Unit]
+Description=Closyria Web (prod)
+After=network-online.target postgresql.service
+Wants=network-online.target
+PartOf=closyria-prod.target
+
+[Service]
+Type=simple
+User=closyria
+Group=closyria
+Slice=closyria-prod.slice
+WorkingDirectory=/srv/closyria/prod/current/web/apps/web
+EnvironmentFile=/etc/closyria/prod.env
+EnvironmentFile=/srv/closyria/prod/current/release.env
+Environment=NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3000 INTERNAL_API_URL=http://127.0.0.1:3001 NEXT_TELEMETRY_DISABLED=1
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+UMask=0027
+# Next.js writes its cache under .next/cache in the release
+ReadWritePaths=/srv/closyria/prod/releases
+
+[Install]
+WantedBy=closyria-prod.target

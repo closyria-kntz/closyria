@@ -1,0 +1,41 @@
+[Unit]
+Description=Closyria Worker (dev)
+After=network-online.target postgresql.service
+Wants=network-online.target
+PartOf=closyria-dev.target
+
+[Service]
+Type=simple
+User=closyria-dev
+Group=closyria-dev
+Slice=closyria-dev.slice
+WorkingDirectory=/srv/closyria/dev/current/worker
+EnvironmentFile=/etc/closyria/dev.env
+EnvironmentFile=/srv/closyria/dev/current/release.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node --enable-source-maps index.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+UMask=0027
+
+[Install]
+WantedBy=closyria-dev.target

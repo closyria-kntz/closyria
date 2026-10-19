@@ -1,0 +1,41 @@
+[Unit]
+Description=Closyria API (prod)
+After=network-online.target postgresql.service
+Wants=network-online.target
+PartOf=closyria-prod.target
+
+[Service]
+Type=simple
+User=closyria
+Group=closyria
+Slice=closyria-prod.slice
+WorkingDirectory=/srv/closyria/prod/current/api
+EnvironmentFile=/etc/closyria/prod.env
+EnvironmentFile=/srv/closyria/prod/current/release.env
+Environment=NODE_ENV=production HOST=127.0.0.1 PORT=3001
+ExecStart=/usr/bin/node --enable-source-maps index.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+UMask=0027
+
+[Install]
+WantedBy=closyria-prod.target

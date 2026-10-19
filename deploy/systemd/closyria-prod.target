@@ -1,0 +1,6 @@
+[Unit]
+Description=Closyria (prod)
+Wants=closyria-prod-api.service closyria-prod-web.service closyria-prod-worker.service
+
+[Install]
+WantedBy=multi-user.target

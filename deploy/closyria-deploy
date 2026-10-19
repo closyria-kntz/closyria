@@ -1,0 +1,116 @@
+#!/bin/bash
+# Deploys a release artifact built by deploy/build.sh. Installed root-owned in /usr/local/bin.
+#   closyria-deploy <dev|prod> <release-id>   deploy (migrations, switch, restart, health check)
+#   closyria-deploy <dev|prod> rollback       switch back to the previous release
+#   closyria-deploy <dev|prod> list           list releases
+# Security: runs as root via sudo. Arguments are strictly validated, and every file
+# coming from the artifact is handled as the environment's service user, never as root.
+set -euo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+umask 022
+
+ARTIFACTS=/home/mystery/closyria-artifacts
+ARTIFACT_OWNER=mystery
+KEEP=5
+
+die() { echo "error: $*" >&2; exit 1; }
+
+case "${1:-}" in
+  dev)  USER_=closyria-dev; WEB_PORT=3100; API_PORT=3101 ;;
+  prod) USER_=closyria;     WEB_PORT=3000; API_PORT=3001 ;;
+  *) die "usage: closyria-deploy <dev|prod> <release-id|rollback|list>" ;;
+esac
+ENV_=$1
+ACTION=${2:-}
+BASE=/srv/closyria/$ENV_
+RELEASES=$BASE/releases
+ENV_FILE=/etc/closyria/$ENV_.env
+TARGET=closyria-$ENV_.target
+
+[ $# -eq 2 ] || die "usage: closyria-deploy <dev|prod> <release-id|rollback|list>"
+[ -d "$RELEASES" ] || die "$RELEASES missing"
+[ -f "$ENV_FILE" ] || die "$ENV_FILE missing"
+
+as_user() { runuser -u "$USER_" -- "$@"; }
+current() { readlink "$BASE/current" 2>/dev/null | sed 's#^releases/##' || true; }
+
+switch_to() {
+  as_user ln -sfn "releases/$1" "$BASE/current.new"
+  as_user mv -T "$BASE/current.new" "$BASE/current"
+  systemctl restart "$TARGET"
+}
+
+healthy() {
+  local i
+  for i in $(seq 1 30); do
+    if curl -fsS -m 3 -o /dev/null "http://127.0.0.1:$API_PORT/api/health" \
+      && curl -fsS -m 3 -o /dev/null "http://127.0.0.1:$WEB_PORT/"; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+case "$ACTION" in
+  list)
+    cur=$(current)
+    for r in $(ls -1 "$RELEASES" | sort); do
+      [ "$r" = "$cur" ] && echo "* $r" || echo "  $r"
+    done
+    exit 0
+    ;;
+  rollback)
+    cur=$(current)
+    prev=$(ls -1 "$RELEASES" | sort | grep -B1 -x -- "$cur" | head -n1 || true)
+    [ -n "$prev" ] && [ "$prev" != "$cur" ] || die "no previous release"
+    echo "rolling back $ENV_: $cur -> $prev (database migrations are not reverted)"
+    switch_to "$prev"
+    healthy || die "previous release is not healthy either, check: journalctl -u 'closyria-$ENV_-*'"
+    echo "ok: $ENV_ runs $prev"
+    exit 0
+    ;;
+esac
+
+ID=$ACTION
+[[ "$ID" =~ ^[0-9]{8}-[0-9]{6}-[0-9a-f]{12}$ ]] || die "invalid release id: $ID"
+REL=$RELEASES/$ID
+
+if [ ! -d "$REL" ]; then
+  ART=$ARTIFACTS/$ID.tar.gz
+  # Open first, then check what was actually opened (no symlink tricks, must belong to the builder).
+  [ -e "$ART" ] || die "artifact not found: $ART"
+  exec 3<"$ART"
+  [ "$(stat -L -c '%F %U' /proc/self/fd/3)" = "regular file $ARTIFACT_OWNER" ] || die "artifact must be a regular file owned by $ARTIFACT_OWNER"
+  as_user rm -rf "$REL.tmp"
+  as_user mkdir "$REL.tmp"
+  as_user tar -xzf - -C "$REL.tmp" --no-same-owner <&3
+  exec 3<&-
+  as_user mv -T "$REL.tmp" "$REL"
+fi
+
+echo "migrating $ENV_ database"
+systemd-run --quiet --wait --pipe --collect --uid="$USER_" --gid="$USER_" \
+  -p EnvironmentFile="$ENV_FILE" -E MIGRATIONS_DIR="$REL/migrations" \
+  /usr/bin/node "$REL/api/migrate.mjs"
+
+prev=$(current)
+echo "switching $ENV_: ${prev:-none} -> $ID"
+switch_to "$ID"
+
+if ! healthy; then
+  echo "release $ID is not healthy" >&2
+  if [ -n "$prev" ] && [ -d "$RELEASES/$prev" ]; then
+    echo "restoring $prev" >&2
+    switch_to "$prev"
+  fi
+  die "deploy failed, check: journalctl -u 'closyria-$ENV_-*' --since -5min"
+fi
+
+# Keep the most recent releases, never the current one
+cur=$(current)
+ls -1 "$RELEASES" | grep -E '^[0-9]{8}-[0-9]{6}-[0-9a-f]{12}$' | sort | head -n -"$KEEP" | while read -r old; do
+  [ "$old" != "$cur" ] && as_user rm -rf "$RELEASES/$old"
+done
+
+echo "ok: $ENV_ runs $ID"

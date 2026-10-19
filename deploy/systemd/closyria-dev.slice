@@ -1,0 +1,7 @@
+[Unit]
+Description=Closyria dev (capped so it never competes with prod)
+
+[Slice]
+CPUWeight=20
+MemoryHigh=3G
+MemoryMax=4G
