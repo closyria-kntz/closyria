@@ -43,8 +43,8 @@ switch_to() {
 healthy() {
   local i
   for i in $(seq 1 30); do
-    if curl -fsS -m 3 -o /dev/null "http://127.0.0.1:$API_PORT/api/health" \
-      && curl -fsS -m 3 -o /dev/null "http://127.0.0.1:$WEB_PORT/"; then
+    if curl -fs -m 3 -o /dev/null "http://127.0.0.1:$API_PORT/api/health" \
+      && curl -fs -m 3 -o /dev/null "http://127.0.0.1:$WEB_PORT/"; then
       return 0
     fi
     sleep 1

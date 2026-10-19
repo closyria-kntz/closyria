@@ -1,0 +1,16 @@
+# Dev environment: password-protected, never indexed.
+# Replace HASH with the output of: caddy hash-password
+dev.closyria.com {
+	basic_auth {
+		closyria HASH
+	}
+	header X-Robots-Tag "noindex, nofollow"
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3101
+	}
+	handle {
+		reverse_proxy 127.0.0.1:3100
+	}
+}
