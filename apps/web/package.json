@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --port 3000",
+    "predev": "pnpm --filter @closyria/design-tokens build:css",
     "build": "next build",
+    "prebuild": "pnpm --filter @closyria/design-tokens build:css",
     "start": "next start",
     "typecheck": "next typegen && tsc"
   },
@@ -13,7 +15,8 @@
     "@closyria/shared": "workspace:*",
     "next": "^16.4.2",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "@closyria/design-tokens": "workspace:*"
   },
   "devDependencies": {
     "@closyria/config": "workspace:*",

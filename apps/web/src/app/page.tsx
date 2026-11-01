@@ -1,8 +1,8 @@
 export default function Home() {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center gap-4 px-6 text-center">
-      <h1 className="text-4xl font-semibold tracking-tight">Closyria</h1>
-      <p className="text-lg opacity-75">Votre dressing en ligne arrive bientôt.</p>
+    <main className="mx-auto flex min-h-dvh max-w-narrow flex-col items-center justify-center gap-space-4 px-space-5 text-center">
+      <h1 className="font-display text-display font-strong">Closyria</h1>
+      <p className="text-lead text-ink-muted">Votre dressing en ligne arrive bientôt.</p>
     </main>
   );
 }

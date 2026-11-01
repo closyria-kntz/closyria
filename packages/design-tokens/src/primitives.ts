@@ -1,0 +1,65 @@
+/**
+ * Layer 1: raw values. Never referenced by the UI directly; only semantic tokens read from here.
+ * Palette values are provisional (former "Atelier" charter) until the visual-direction task.
+ */
+export const primitives = {
+  palette: {
+    cream: "#FFF8F0",
+    sand: "#F4EDE3",
+    linen: "#E8DECE",
+    paper: "#FFFDF9",
+    ink: "#1E1B15",
+    umber: "#57423D",
+    blush: "#DEC0BA",
+    rust: "#B53D25",
+    teal: "#005F66",
+    tealPale: "#CAFAFF",
+    olive: "#556B2F",
+    crimson: "#B3261E",
+    night: "#16130F",
+    charcoal: "#1E1A15",
+    coal: "#2A251E",
+    graphite: "#211D17",
+    bone: "#F3EBDD",
+    stone: "#C9B8AE",
+    bark: "#4A3F37",
+    coral: "#E8836B",
+    rose: "#F2A9A0",
+    moss: "#A8C27A",
+  },
+  space: {
+    0: "0",
+    1: "0.25rem",
+    2: "0.5rem",
+    3: "0.75rem",
+    4: "1rem",
+    5: "1.5rem",
+    6: "2rem",
+    7: "3rem",
+    8: "4rem",
+  },
+  radius: { none: "0", sm: "0.25rem", md: "0.5rem", lg: "1rem", full: "9999px" },
+  font: {
+    body: "ui-sans-serif, system-ui, sans-serif",
+    display: "ui-serif, Georgia, serif",
+  },
+  fontSize: {
+    sm: "0.875rem",
+    base: "1rem",
+    lead: "1.25rem",
+    title: "1.75rem",
+    display: "2.5rem",
+  },
+  fontWeight: { regular: "400", strong: "600" },
+  duration: { instant: "0ms", fast: "120ms", base: "200ms", slow: "400ms" },
+  easing: {
+    standard: "cubic-bezier(0.2, 0, 0, 1)",
+    emphasized: "cubic-bezier(0.3, 0, 0, 1.2)",
+  },
+  shadow: {
+    soft: "0 1px 2px rgb(30 27 21 / 0.08)",
+    lifted: "0 4px 12px rgb(30 27 21 / 0.12)",
+  },
+  breakpoint: { sm: "40rem", md: "48rem", lg: "64rem" },
+  container: { narrow: "36rem", wide: "72rem" },
+} as const;
