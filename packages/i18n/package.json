@@ -1,0 +1,19 @@
+{
+  "name": "@closyria/i18n",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./messages/*": "./messages/*"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@closyria/config": "workspace:*",
+    "intl-messageformat": "^12.0.0",
+    "vitest": "^5.0.5"
+  }
+}
