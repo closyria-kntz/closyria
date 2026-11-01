@@ -1,6 +1,6 @@
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { getAdminAccess } from "../server";
+import { getAdminAccess, requireAdminPage } from "../server";
 import { PasskeyActions } from "./passkey-actions";
 
 /**
@@ -8,9 +8,8 @@ import { PasskeyActions } from "./passkey-actions";
  * Non-admins never get here (the admin layout answers 404); an admin already on a passkey goes to /admin.
  */
 export default async function PasskeyRequiredPage() {
-  const access = await getAdminAccess();
-  if (access === "not-found") notFound(); // also checked by the admin layout, which renders concurrently
-  if (access === "ok") redirect("/admin");
+  await requireAdminPage({ allowPasskeyRequired: true }); // 404 for non-admins, like the admin layout
+  if ((await getAdminAccess()) === "ok") redirect("/admin");
   const t = await getTranslations("Admin.passkey");
   return (
     <main className="mx-auto flex min-h-dvh max-w-narrow flex-col justify-center gap-space-4 px-space-5 py-space-7">

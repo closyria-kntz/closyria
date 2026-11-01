@@ -11,3 +11,18 @@ export function adminAccess(session: AdminSession): AdminAccess {
   if (session?.user.role !== "admin") return "not-found";
   return session.session.authMethod === "passkey" ? "ok" : "passkey-required";
 }
+
+/**
+ * The access decision from a session loader. If the session cannot be checked (API down, timeout, bad
+ * answer), the area does not exist for this request: 404, never a 500 that would reveal it. Only the
+ * error class is logged, never its message (it could carry personal data).
+ */
+export async function loadAdminAccess(load: () => Promise<AdminSession>): Promise<AdminAccess> {
+  try {
+    return adminAccess(await load());
+  } catch (error) {
+    const kind = error instanceof Error ? error.name : typeof error;
+    console.error(JSON.stringify({ event: "admin.session_check_failed", error: kind }));
+    return "not-found";
+  }
+}

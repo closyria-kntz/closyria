@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { isPaletteShortcut } from "./keyboard";
 import { nextThemeMode } from "./theme-mode";
@@ -28,5 +31,16 @@ describe("nextThemeMode", () => {
     expect(nextThemeMode("system")).toBe("light");
     expect(nextThemeMode("light")).toBe("dark");
     expect(nextThemeMode("dark")).toBe("system");
+  });
+});
+
+describe("admin page guard", () => {
+  it("is called by every admin page, not only by the layouts", () => {
+    const root = fileURLToPath(new URL(".", import.meta.url));
+    const pages = readdirSync(root, { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith("page.tsx"));
+    expect(pages.length).toBeGreaterThanOrEqual(3);
+    for (const page of pages) {
+      expect(readFileSync(join(root, page), "utf8"), page).toMatch(/await requireAdminPage\(/);
+    }
   });
 });

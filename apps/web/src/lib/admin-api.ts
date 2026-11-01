@@ -16,8 +16,15 @@ export function internalApiUrl(env: Record<string, string | undefined>): string 
   return envSchema.parse(env).INTERNAL_API_URL.replace(/\/$/, "");
 }
 
+/** The API runs on the same machine: an answer slower than this means it is down or stuck. */
+const INTERNAL_TIMEOUT_MS = 5000;
+
 const request = (api: InternalApi, path: string) =>
-  api.fetch(`${api.baseUrl}${path}`, { headers: { cookie: api.cookie }, cache: "no-store" });
+  api.fetch(`${api.baseUrl}${path}`, {
+    headers: { cookie: api.cookie },
+    cache: "no-store",
+    signal: AbortSignal.timeout(INTERNAL_TIMEOUT_MS),
+  });
 
 /** The caller's session as Better Auth sees it, reduced to role and sign-in method; null without one. */
 export async function fetchAdminSession(api: InternalApi): Promise<AdminSession> {

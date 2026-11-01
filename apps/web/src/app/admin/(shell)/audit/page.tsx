@@ -2,13 +2,14 @@ import { adminAuditPageSchema } from "@closyria/shared";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
-import { adminRead } from "../../server";
+import { adminRead, requireAdminPage } from "../../server";
 import { buttonClass } from "../../ui";
 
 type Props = { searchParams: Promise<{ cursor?: string | string[] }> };
 
 /** The admin audit log, newest first, 50 entries per page (keyset pagination of the API). */
 export default async function AdminAuditPage({ searchParams }: Props) {
+  await requireAdminPage();
   const { cursor } = await searchParams;
   const current = typeof cursor === "string" ? cursor : undefined;
   const t = await getTranslations("Admin.audit");

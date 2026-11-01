@@ -1,9 +1,10 @@
 import { adminOverviewSchema } from "@closyria/shared";
 import { getFormatter, getTranslations } from "next-intl/server";
-import { adminRead } from "../server";
+import { adminRead, requireAdminPage } from "../server";
 
 /** Dashboard: aggregate figures only (spec D13), never a user's content. */
 export default async function AdminDashboardPage() {
+  await requireAdminPage();
   const t = await getTranslations("Admin.dashboard");
   const format = await getFormatter();
   const overview = await adminRead("/api/admin/overview", adminOverviewSchema);

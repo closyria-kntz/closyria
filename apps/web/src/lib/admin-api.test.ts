@@ -1,5 +1,5 @@
 import { adminOverviewSchema } from "@closyria/shared";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fetchAdminJson, fetchAdminSession, internalApiUrl } from "./admin-api";
 
 type Call = { url: string; init: RequestInit | undefined };
@@ -78,5 +78,18 @@ describe("fetchAdminJson", () => {
     await expect(
       fetchAdminJson({ fetch, baseUrl: "http://api", cookie: "" }, "/x", adminOverviewSchema),
     ).rejects.toThrow();
+  });
+});
+
+describe("internal API timeout", () => {
+  it("gives every internal call a 5 s abort signal", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    const { fetch, calls } = fakeFetch(200, overview);
+    await fetchAdminJson({ fetch, baseUrl: "http://api", cookie: "" }, "/api/admin/overview", adminOverviewSchema);
+    const session = fakeFetch(200, null);
+    await fetchAdminSession({ fetch: session.fetch, baseUrl: "http://api", cookie: "" });
+    expect(timeout).toHaveBeenCalledWith(5000);
+    for (const call of [...calls, ...session.calls]) expect(call.init?.signal).toBeInstanceOf(AbortSignal);
+    timeout.mockRestore();
   });
 });
