@@ -21,7 +21,14 @@ SaaS de dressing en ligne et de suivi d'articles (stock par taille, prix, alerte
 | `packages/shared` | Schémas Zod et utilitaires communs. |
 | `packages/config` | tsconfig partagés. |
 
-Prévus : `packages/extract` (extraction des fiches produit, phase 1), `apps/extension` (WXT, après la V1 web), `apps/mobile` (Expo, phase 6).
+Prévus par la conception V1 (`docs/specs/2026-11-01-v1-conception.md`) : `packages/{extract,auth,entitlements,ai,vision,i18n}`.
+Après la V1 : `apps/extension` (WXT) et `apps/mobile` (Expo).
+
+## Documents de travail
+
+Plans, specs et décisions vivent dans `docs/` (`docs/specs/` pour les conceptions, `docs/plans/` pour les plans de chantier). On les écrit avant d'implémenter,
+on travaille à partir d'eux et on les tient à jour (cases cochées, décisions validées).
+Utiliser les skills installés quand ils s'appliquent (superpowers, code-review, frontend-design, engineering, design).
 
 ## Commandes
 
