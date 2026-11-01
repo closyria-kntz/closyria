@@ -12,6 +12,7 @@ Slice=closyria-prod.slice
 WorkingDirectory=/srv/closyria/prod/current/web/apps/web
 EnvironmentFile=/etc/closyria/prod.env
 EnvironmentFile=/srv/closyria/prod/current/release.env
+Environment=TZ=UTC
 Environment=NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3000 INTERNAL_API_URL=http://127.0.0.1:3001 NEXT_TELEMETRY_DISABLED=1
 ExecStart=/usr/bin/node server.js
 Restart=on-failure

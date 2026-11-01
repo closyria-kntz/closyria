@@ -12,6 +12,7 @@ Slice=closyria-dev.slice
 WorkingDirectory=/srv/closyria/dev/current/worker
 EnvironmentFile=/etc/closyria/dev.env
 EnvironmentFile=/srv/closyria/dev/current/release.env
+Environment=TZ=UTC
 Environment=NODE_ENV=production
 ExecStart=/usr/bin/node --enable-source-maps index.mjs
 Restart=on-failure

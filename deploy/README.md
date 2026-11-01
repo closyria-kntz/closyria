@@ -40,12 +40,13 @@ fixés par les unités systemd : ne pas les mettre dans ces fichiers.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Facultatif : connexion avec Google. Les deux ensemble, ou aucune. | (Google Cloud) | (Google Cloud) |
 | `APPLE_CLIENT_ID`, `APPLE_CLIENT_SECRET` | Facultatif : connexion avec Apple. Les deux ensemble, ou aucune. | (Apple Developer) | (Apple Developer) |
 
-Exemple de `/etc/closyria/prod.env` :
+Exemple de `/etc/closyria/prod.env` (systemd ne comprend pas les commentaires en fin de ligne : un `# …` après une
+valeur ferait partie de la valeur ; `BETTER_AUTH_SECRET` se génère avec `openssl rand -base64 48`) :
 
 ```bash
 APP_ENV=prod
 DATABASE_URL=postgresql:///closyria?host=/var/run/postgresql
-BETTER_AUTH_SECRET=… # openssl rand -base64 48
+BETTER_AUTH_SECRET=…
 BETTER_AUTH_URL=https://closyria.com
 MAIL_TRANSPORT=brevo
 BREVO_API_KEY=xkeysib-…
@@ -173,7 +174,7 @@ Faire les cinq étapes d'une traite, sur l'appareil qui portera la passkey (quel
 
    La réponse doit être `UPDATE 1`. `UPDATE 0` veut dire qu'aucun compte n'a cette adresse : vérifier l'adresse et
    l'étape 1. La base refuse toute autre valeur que `user` ou `admin`.
-3. **Ouvrir** `https://closyria.com/admin/passkey-required` (dans le même navigateur, toujours connectée par code).
+3. **Ouvrir** `https://closyria.com/admin/passkey-required` (dev : `https://dev.closyria.com/admin/passkey-required`) (dans le même navigateur, toujours connectée par code).
 4. **« Enregistrer une passkey »** et suivre le navigateur (empreinte, visage ou code de l'appareil).
 5. **« Se connecter avec une passkey »** : l'espace admin s'ouvre. Il exige le rôle `admin` **et** une session ouverte
    par passkey ; une session ouverte par code e-mail, Google ou Apple n'y donne pas accès, même avec le rôle.

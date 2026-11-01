@@ -12,6 +12,7 @@ Slice=closyria-dev.slice
 WorkingDirectory=/srv/closyria/dev/current/api
 EnvironmentFile=/etc/closyria/dev.env
 EnvironmentFile=/srv/closyria/dev/current/release.env
+Environment=TZ=UTC
 Environment=NODE_ENV=production HOST=127.0.0.1 PORT=3101
 ExecStart=/usr/bin/node --enable-source-maps index.mjs
 Restart=on-failure
