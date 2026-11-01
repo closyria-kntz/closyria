@@ -1,6 +1,6 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalEnv": ["APP_ENV", "APP_VERSION"],
+  "globalEnv": ["APP_ENV", "APP_VERSION", "TEST_DATABASE_URL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -10,6 +10,7 @@
       "dependsOn": ["^typecheck"]
     },
     "test": {
+      "dependsOn": ["^build"],
       "outputs": []
     },
     "dev": {
