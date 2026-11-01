@@ -9,25 +9,29 @@ const { palette, space, radius, font, fontSize, fontWeight, duration, easing, sh
  * The UI only ever uses these.
  */
 export const defaultSemanticTokens = {
-  // Colors (theme-dependent)
-  "color-surface": palette.cream,
-  "color-surface-raised": palette.paper,
-  "color-surface-sunken": palette.sand,
-  "color-surface-strong": palette.linen,
-  "color-outline": palette.blush,
-  "color-ink": palette.ink,
-  "color-ink-muted": palette.umber,
-  "color-accent": palette.rust,
-  "color-accent-ink": palette.paper,
-  "color-info": palette.teal,
-  "color-danger": palette.crimson,
-  "color-success": palette.olive,
-  "color-focus-ring": palette.teal,
+  // Colors (theme-dependent). Names follow the visual-direction spec, section 3.1.
+  "color-surface": palette.blush,
+  "color-surface-raised": palette.porcelain,
+  "color-surface-sunken": palette.veil,
+  "color-surface-strong": palette.rosewater,
+  "color-line": palette.rosewater,
+  "color-ink": palette.prune,
+  "color-ink-muted": palette.mauve,
+  "color-accent": palette.plum,
+  "color-accent-ink": palette.ivory,
+  "color-success": palette.pine,
+  "color-success-surface": palette.mint,
+  "color-premium": palette.bronze,
+  "color-premium-surface": palette.champagne,
+  "color-hint": palette.cream,
+  "color-media-backdrop": palette.veil,
+  "color-danger": palette.garnet,
+  "color-focus-ring": palette.plum,
   // Component tokens
   "color-button-bg": "var(--color-accent)",
   "color-button-ink": "var(--color-accent-ink)",
   "color-card-bg": "var(--color-surface-raised)",
-  "color-card-border": "var(--color-outline)",
+  "color-card-border": "var(--color-line)",
   // Spacing
   "spacing-space-0": space[0],
   "spacing-space-1": space[1],
@@ -55,6 +59,7 @@ export const defaultSemanticTokens = {
   "text-title": fontSize.title,
   "text-display": fontSize.display,
   "font-weight-regular": fontWeight.regular,
+  "font-weight-medium": fontWeight.medium,
   "font-weight-strong": fontWeight.strong,
   // Motion
   "motion-duration-instant": duration.instant,

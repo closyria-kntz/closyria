@@ -1,3 +1,5 @@
+import "@fontsource-variable/cormorant-garamond/wght.css";
+import "@fontsource-variable/jost/wght.css";
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";

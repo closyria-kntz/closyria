@@ -52,7 +52,7 @@ export default async function AdminAuditPage({ searchParams }: Props) {
             </thead>
             <tbody>
               {page.entries.map((entry) => (
-                <tr key={entry.id} className="border-t border-outline">
+                <tr key={entry.id} className="border-t border-line">
                   <td className={`${cell} whitespace-nowrap tabular-nums`}>
                     <time dateTime={entry.createdAt}>
                       {format.dateTime(new Date(entry.createdAt), {

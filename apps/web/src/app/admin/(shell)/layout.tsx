@@ -25,7 +25,7 @@ export default async function AdminShellLayout({ children }: { children: ReactNo
       >
         {t("shell.skipToContent")}
       </a>
-      <header className="flex items-center justify-between gap-space-4 border-b border-outline bg-surface-raised px-space-5 py-space-3">
+      <header className="flex items-center justify-between gap-space-4 border-b border-line bg-surface-raised px-space-5 py-space-3">
         <p className="font-display text-lead font-strong">{t("shell.title")}</p>
         <div className="flex items-center gap-space-2">
           <CommandPalette
@@ -45,7 +45,7 @@ export default async function AdminShellLayout({ children }: { children: ReactNo
       <div className="flex flex-1 flex-col md:flex-row">
         <nav
           aria-label={t("shell.navLabel")}
-          className="border-b border-outline bg-surface-sunken p-space-3 md:border-r md:border-b-0"
+          className="border-b border-line bg-surface-sunken p-space-3 md:border-r md:border-b-0"
         >
           <AdminNavLinks items={items} />
         </nav>

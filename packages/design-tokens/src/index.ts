@@ -9,11 +9,11 @@ export {
   semanticTokensSchema,
 } from "./semantic";
 export {
-  atelierDark,
-  atelierLight,
   type DecorationSet,
   decorationSetSchema,
   defaultTheme,
+  equilibreDark,
+  equilibreLight,
   type Theme,
   themeSchema,
   themes,

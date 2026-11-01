@@ -49,7 +49,7 @@ export function CommandPalette({ items, labels }: { items: Array<{ href: string;
         onClick={() => setOpen(true)}
       >
         {labels.open}
-        <kbd className="rounded-sm border border-outline px-space-1 font-body text-sm text-ink-muted">
+        <kbd className="rounded-sm border border-line px-space-1 font-body text-sm text-ink-muted">
           {labels.shortcut}
         </kbd>
       </button>
@@ -57,14 +57,14 @@ export function CommandPalette({ items, labels }: { items: Array<{ href: string;
         ref={dialog}
         aria-label={labels.label}
         onClose={() => setOpen(false)}
-        className="mx-auto mt-space-8 w-full max-w-narrow rounded-card border border-outline bg-surface-raised p-space-0 text-ink shadow-lifted backdrop:bg-ink/40"
+        className="mx-auto mt-space-8 w-full max-w-narrow rounded-card border border-line bg-surface-raised p-space-0 text-ink shadow-lifted backdrop:bg-ink/40"
       >
         {open ? (
           <Command label={labels.label} loop className="flex flex-col">
             <Command.Input
               autoFocus
               placeholder={labels.placeholder}
-              className={`w-full border-b border-outline bg-surface-raised px-space-4 py-space-3 text-base text-ink placeholder:text-ink-muted ${focusRing}`}
+              className={`w-full border-b border-line bg-surface-raised px-space-4 py-space-3 text-base text-ink placeholder:text-ink-muted ${focusRing}`}
             />
             <Command.List className="max-h-dvh overflow-y-auto p-space-2">
               <Command.Empty className="px-space-3 py-space-2 text-sm text-ink-muted">{labels.empty}</Command.Empty>

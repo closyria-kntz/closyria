@@ -17,6 +17,8 @@
     "@closyria/design-tokens": "workspace:*",
     "@closyria/i18n": "workspace:*",
     "@closyria/shared": "workspace:*",
+    "@fontsource-variable/cormorant-garamond": "^5.3.0",
+    "@fontsource-variable/jost": "^5.3.0",
     "cmdk": "^1.1.1",
     "next": "^16.4.2",
     "next-intl": "^4.14.9",

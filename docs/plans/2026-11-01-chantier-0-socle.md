@@ -71,10 +71,10 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
 - Produit : trois niveaux de tokens. **Primitifs** (palette brute, échelle d'espacement, rayons, typographies, durées, courbes d'animation, ombres). **Sémantiques**, les seuls utilisés par l'interface (`surface`, `surface-raised`, `ink`, `ink-muted`, `accent`, `accent-ink`, `danger`, `success`, `focus-ring`, `space-*`, `radius-*`, `text-*`, `motion-*`…). **Composants** quand un composant en a besoin (`button-*`, `card-*`).
 - Produit : `themeSchema` (Zod) = `{ id, name, base: "light" | "dark", tokens: Partial<SemanticTokens>, decorations?: DecorationSet }`. `DecorationSet` est **réservé** pour les thèmes saisonniers du chantier 4 (illustrations, animations, images d'en-tête, textes d'accroche). Il est défini et validé dès maintenant, mais sans rendu.
 - Produit : `renderThemeCss(theme: Theme): string`. Il produit les variables CSS sous `[data-theme="<id>"]`, plus un bloc `@media (prefers-reduced-motion: reduce)` qui met toutes les durées `motion-*` à `0ms`.
-- Produit : thèmes `atelier-light` et `atelier-dark`, aux **valeurs provisoires** reprises de l'ancienne charte « Atelier ». Les valeurs définitives viennent de la tâche 4.
+- Produit : thèmes `equilibre-light` et `equilibre-dark` (valeurs définitives de la direction visuelle « Équilibré », ex-thèmes provisoires « Atelier »).
 - Tailwind : `@theme { --*: initial; … }`, si bien que seules les classes issues de nos tokens existent (`bg-surface`, `text-ink`, `p-space-4`…).
 
-- [ ] **Étape 1 : tests qui échouent** — `renderThemeCss(atelierLight)` contient `--color-surface:` et ne contient aucune clé primitive ; un thème avec une clé inconnue est refusé par `themeSchema` ; la sortie contient `prefers-reduced-motion` avec `--motion-duration-base: 0ms`.
+- [ ] **Étape 1 : tests qui échouent** — `renderThemeCss(equilibreLight)` contient `--color-surface:` et ne contient aucune clé primitive ; un thème avec une clé inconnue est refusé par `themeSchema` ; la sortie contient `prefers-reduced-motion` avec `--motion-duration-base: 0ms`.
 - [ ] **Étape 2 :** les tests échouent.
 - [ ] **Étape 3 :** implémenter les tokens, le schéma et `renderThemeCss` ; générer `apps/web/src/styles/tokens.css`.
 - [ ] **Étape 4 :** tests au vert ; `pnpm --filter @closyria/web build` passe ; la page d'accueil n'utilise plus que des classes issues des tokens.

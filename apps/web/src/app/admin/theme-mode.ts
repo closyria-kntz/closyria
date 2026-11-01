@@ -1,4 +1,4 @@
-import { atelierDark, atelierLight } from "@closyria/design-tokens";
+import { equilibreDark, equilibreLight } from "@closyria/design-tokens";
 
 export type ThemeMode = "system" | "light" | "dark";
 
@@ -7,8 +7,8 @@ const ORDER: ThemeMode[] = ["system", "light", "dark"];
 /** The `data-theme` of each mode; none for "system" (tokens.css then follows the system preference). */
 export const THEME_ID: Record<ThemeMode, string | null> = {
   system: null,
-  light: atelierLight.id,
-  dark: atelierDark.id,
+  light: equilibreLight.id,
+  dark: equilibreDark.id,
 };
 
 /** The mode after `mode` in the cycle system → light → dark → system. */

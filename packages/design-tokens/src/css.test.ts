@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { atelierDark, atelierLight, primitives, renderThemeCss, renderTokensCss, themeSchema } from "./index";
+import {
+  defaultSemanticTokens,
+  equilibreDark,
+  equilibreLight,
+  primitives,
+  renderThemeCss,
+  renderTokensCss,
+  type Theme,
+  themeSchema,
+} from "./index";
 
 function luminance(hex: string): number {
   const channels = [1, 3, 5].map((i) => {
@@ -15,10 +24,10 @@ function contrast(a: string, b: string): number {
 }
 
 describe("renderThemeCss", () => {
-  const css = renderThemeCss(atelierLight);
+  const css = renderThemeCss(equilibreLight);
 
   it("emits semantic variables under the theme selector", () => {
-    expect(css).toContain('[data-theme="atelier-light"]');
+    expect(css).toContain('[data-theme="equilibre-light"]');
     expect(css).toContain("--color-surface:");
   });
 
@@ -45,16 +54,16 @@ describe("renderTokensCss", () => {
   });
 
   it("covers both themes and the system dark preference", () => {
-    expect(css).toContain('[data-theme="atelier-dark"]');
+    expect(css).toContain('[data-theme="equilibre-dark"]');
     expect(css).toContain("prefers-color-scheme: dark");
-    expect(css).toContain(':root:not([data-theme="atelier-light"])');
+    expect(css).toContain(':root:not([data-theme="equilibre-light"])');
   });
 });
 
 describe("themeSchema", () => {
   it("accepts the built-in themes", () => {
-    expect(themeSchema.parse(atelierLight).id).toBe("atelier-light");
-    expect(themeSchema.parse(atelierDark).base).toBe("dark");
+    expect(themeSchema.parse(equilibreLight).id).toBe("equilibre-light");
+    expect(themeSchema.parse(equilibreDark).base).toBe("dark");
   });
 
   it("rejects a theme with an unknown token key", () => {
@@ -76,10 +85,61 @@ describe("themeSchema", () => {
   });
 });
 
-describe("provisional themes", () => {
-  it.each([atelierLight, atelierDark])("keeps AA contrast in $id", (theme) => {
-    const t = theme.tokens;
-    expect(contrast(t["color-ink"] as string, t["color-surface"] as string)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(t["color-accent-ink"] as string, t["color-accent"] as string)).toBeGreaterThanOrEqual(4.5);
+describe("Équilibré themes", () => {
+  const themes = [equilibreLight, equilibreDark];
+  const get = (theme: Theme, key: string) => (theme.tokens as Record<string, string>)[key] as string;
+
+  it("never mentions the provisional charter", () => {
+    expect(renderTokensCss().toLowerCase()).not.toContain("atelier");
+    expect(themes.map((theme) => theme.id)).toEqual(["equilibre-light", "equilibre-dark"]);
+  });
+
+  it("uses the exact validated palette", () => {
+    expect(get(equilibreLight, "color-surface")).toBe("#F7F0ED");
+    expect(get(equilibreLight, "color-accent")).toBe("#7A2E5F");
+    expect(get(equilibreLight, "color-media-backdrop")).toBe("#EFE2DF");
+    expect(get(equilibreDark, "color-surface")).toBe("#1C1219");
+    expect(get(equilibreDark, "color-accent")).toBe("#E7A6CB");
+    expect(get(equilibreDark, "color-premium-surface")).toBe("#3A3220");
+  });
+
+  it("defines the specified shapes, durations and fonts", () => {
+    const base = defaultSemanticTokens;
+    expect(base["radius-button"]).toBe("0.625rem");
+    expect(base["radius-card"]).toBe("0.75rem");
+    expect(base["radius-full"]).toBe("9999px");
+    expect(base["motion-duration-fast"]).toBe("150ms");
+    expect(base["motion-duration-base"]).toBe("250ms");
+    expect(base["motion-duration-slow"]).toBe("400ms");
+    expect(base["font-body"]).toContain("Jost");
+    expect(base["font-display"]).toContain("Cormorant Garamond");
+  });
+
+  const textPairs: [string, string, number][] = [
+    ["color-ink", "color-surface", 4.5],
+    ["color-ink", "color-surface-raised", 4.5],
+    ["color-ink", "color-surface-strong", 4.5],
+    ["color-ink-muted", "color-surface", 4.5],
+    ["color-ink-muted", "color-surface-raised", 4.5],
+    ["color-ink-muted", "color-surface-sunken", 4.5],
+    ["color-ink", "color-hint", 4.5],
+    ["color-accent-ink", "color-accent", 4.5],
+    ["color-accent", "color-surface", 4.5],
+    ["color-success", "color-success-surface", 4.5],
+    ["color-premium", "color-premium-surface", 4.5],
+    ["color-danger", "color-surface", 4.5],
+    ["color-danger", "color-surface-raised", 4.5],
+    ["color-danger", "color-surface-sunken", 4.5],
+    ["color-success", "color-surface", 4.5],
+    ["color-focus-ring", "color-surface", 4.5],
+    ["color-focus-ring", "color-surface-raised", 4.5],
+    ["color-focus-ring", "color-surface-sunken", 3],
+    ["color-line", "color-surface", 1],
+  ];
+
+  describe.each(themes)("$id", (theme) => {
+    it.each(textPairs)("%s on %s reaches %d:1", (fg, bg, min) => {
+      expect(contrast(get(theme, fg), get(theme, bg))).toBeGreaterThanOrEqual(min);
+    });
   });
 });

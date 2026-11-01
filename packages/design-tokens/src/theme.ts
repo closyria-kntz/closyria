@@ -32,35 +32,39 @@ export type Theme = z.infer<typeof themeSchema>;
 
 const { palette: c } = primitives;
 
-/** Provisional: replaced by the visual-direction task. Complete token set, applied on `:root` too. */
-export const atelierLight: Theme & { tokens: SemanticTokens } = {
-  id: "atelier-light",
-  name: "Atelier clair",
+/** Reference appearance. Complete token set, also applied on `:root`. */
+export const equilibreLight: Theme & { tokens: SemanticTokens } = {
+  id: "equilibre-light",
+  name: "Équilibré clair",
   base: "light",
   tokens: { ...defaultSemanticTokens },
 };
 
-/** Provisional dark variant: only the colors differ, the rest is inherited from the light theme. */
-export const atelierDark: Theme = {
-  id: "atelier-dark",
-  name: "Atelier sombre",
+/** Dark variant: only the colors differ, the rest is inherited from the light theme. */
+export const equilibreDark: Theme = {
+  id: "equilibre-dark",
+  name: "Équilibré sombre",
   base: "dark",
   tokens: {
-    "color-surface": c.night,
-    "color-surface-raised": c.graphite,
-    "color-surface-sunken": c.charcoal,
-    "color-surface-strong": c.coal,
-    "color-outline": c.bark,
-    "color-ink": c.bone,
-    "color-ink-muted": c.stone,
-    "color-accent": c.coral,
-    "color-accent-ink": c.ink,
-    "color-info": c.tealPale,
-    "color-danger": c.rose,
-    "color-success": c.moss,
-    "color-focus-ring": c.tealPale,
+    "color-surface": c.aubergine,
+    "color-surface-raised": c.damson,
+    "color-surface-sunken": c.dusk,
+    "color-surface-strong": c.mulberry,
+    "color-line": c.mulberry,
+    "color-ink": c.petal,
+    "color-ink-muted": c.heather,
+    "color-accent": c.orchid,
+    "color-accent-ink": c.aubergine,
+    "color-success": c.sage,
+    "color-success-surface": c.spruce,
+    "color-premium": c.gold,
+    "color-premium-surface": c.olivewood,
+    "color-hint": c.umber,
+    "color-media-backdrop": c.dusk,
+    "color-danger": c.salmon,
+    "color-focus-ring": c.orchid,
   },
 };
 
-export const themes = [atelierLight, atelierDark] as const;
-export const defaultTheme = atelierLight;
+export const themes = [equilibreLight, equilibreDark] as const;
+export const defaultTheme = equilibreLight;
