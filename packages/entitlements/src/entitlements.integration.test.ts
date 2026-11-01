@@ -11,6 +11,8 @@ let counter = 0;
 
 const JANUARY = () => new Date("2027-01-15T12:00:00Z");
 const FEBRUARY = () => new Date("2027-02-01T00:00:00Z");
+/** Every plan fixture starts before the injected clock: the column default (real now()) would not. */
+const PLAN_START = new Date("2027-01-01T00:00:00Z");
 
 async function newUser(): Promise<string> {
   const id = `user-${++counter}`;
@@ -67,6 +69,7 @@ describe("plans", () => {
     await handle.db.insert(schema.userPlans).values({
       userId: u,
       planId: pro,
+      startsAt: PLAN_START,
       source: "gift",
       endsAt: new Date("2027-02-01T00:00:00Z"),
     });
@@ -115,7 +118,7 @@ describe("checkAndConsume", () => {
 
   it("refuses everything on a limit of 0 and never creates a counter", async () => {
     const u = await newUser();
-    await handle.db.insert(schema.userPlans).values({ userId: u, planId: await newPlan() });
+    await handle.db.insert(schema.userPlans).values({ userId: u, planId: await newPlan(), startsAt: PLAN_START });
     expect(await ent().checkAndConsume(u, "order_emails_per_month")).toEqual({ allowed: false, remaining: 0 });
   });
 
@@ -132,7 +135,7 @@ describe("checkAndConsume", () => {
   it("counts without limit on an unlimited plan", async () => {
     const max = await newPlan([{ key: "ai_calls_per_month", limitValue: null }]);
     const u = await newUser();
-    await handle.db.insert(schema.userPlans).values({ userId: u, planId: max });
+    await handle.db.insert(schema.userPlans).values({ userId: u, planId: max, startsAt: PLAN_START });
     for (let i = 0; i < 30; i++) {
       expect(await ent().checkAndConsume(u, "ai_calls_per_month")).toEqual({ allowed: true, remaining: "unlimited" });
     }
@@ -203,8 +206,8 @@ describe("account linking", () => {
     const anonymous = await newUser();
     const account = await newUser();
     await handle.db.insert(schema.userPlans).values([
-      { userId: anonymous, planId: gift, source: "gift" },
-      { userId: account, planId: paid, source: "stripe" },
+      { userId: anonymous, planId: gift, source: "gift", startsAt: PLAN_START },
+      { userId: account, planId: paid, source: "stripe", startsAt: PLAN_START },
     ]);
     await handle.db.transaction((tx) => reassignUserData(anonymous, account, tx));
     const [kept] = await handle.db.select().from(schema.userPlans).where(eq(schema.userPlans.userId, account));
@@ -212,7 +215,9 @@ describe("account linking", () => {
 
     const anonymous2 = await newUser();
     const account2 = await newUser();
-    await handle.db.insert(schema.userPlans).values({ userId: anonymous2, planId: gift, source: "gift" });
+    await handle.db
+      .insert(schema.userPlans)
+      .values({ userId: anonymous2, planId: gift, source: "gift", startsAt: PLAN_START });
     await handle.db.transaction((tx) => reassignUserData(anonymous2, account2, tx));
     const [moved] = await handle.db.select().from(schema.userPlans).where(eq(schema.userPlans.userId, account2));
     expect(moved?.planId).toBe(gift);
