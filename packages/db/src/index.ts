@@ -9,9 +9,12 @@ export type Database = ReturnType<typeof createDb>["db"];
  * Creates the connection pool and the Drizzle client.
  * On the server, DATABASE_URL uses the Unix socket with peer auth,
  * e.g. postgresql:///closyria?host=/var/run/postgresql
+ *
+ * Every connection runs in UTC (`-c TimeZone=UTC`): several columns are `timestamp without time zone`
+ * filled by `DEFAULT now()`, which would otherwise be stored in the server's local time.
  */
 export function createDb(connectionString: string, options: { max?: number } = {}) {
-  const pool = new pg.Pool({ connectionString, max: options.max ?? 10 });
+  const pool = new pg.Pool({ connectionString, max: options.max ?? 10, options: "-c TimeZone=UTC" });
   const db = drizzle(pool, { schema });
   return { db, pool };
 }
