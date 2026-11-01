@@ -13,6 +13,7 @@
     "auth:generate": "pnpm dlx auth@1.7.14 generate --config auth.config.ts --output ../db/src/schema/auth.ts -y"
   },
   "dependencies": {
+    "@better-auth/passkey": "1.7.14",
     "@closyria/db": "workspace:*",
     "@closyria/i18n": "workspace:*",
     "better-auth": "1.7.14",

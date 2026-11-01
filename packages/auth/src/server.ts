@@ -1,3 +1,4 @@
+import { passkey } from "@better-auth/passkey";
 import type { Database } from "@closyria/db";
 import { schema } from "@closyria/db";
 import { loadMessages } from "@closyria/i18n";
@@ -5,6 +6,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { anonymous, emailOTP } from "better-auth/plugins";
+import { type AuthMethod, authMethodFor } from "./auth-method";
 import { consumeEmailSend } from "./email-limit";
 import type { Mailer, MailMessage } from "./mailer";
 import { reassignUserData } from "./owned-data";
@@ -14,7 +16,22 @@ export const OTP_LENGTH = 6;
 export const OTP_EXPIRES_IN_SECONDS = 600;
 export const OTP_ALLOWED_ATTEMPTS = 5;
 
-export type AuthDeps = { db: Database; mailer: Mailer; baseUrl: string; secret: string };
+export type OAuthClient = { clientId: string; clientSecret: string };
+
+export type AuthDeps = {
+  db: Database;
+  mailer: Mailer;
+  baseUrl: string;
+  secret: string;
+  /** A provider is enabled only when its credentials are given. */
+  social?: { google?: OAuthClient; apple?: OAuthClient };
+};
+
+export const USER_ROLES = ["user", "admin"] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
+/** Apple posts its sign-in callback (form_post) from this origin. */
+const APPLE_ORIGIN = "https://appleid.apple.com";
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -34,11 +51,31 @@ export function codeEmail(to: string, code: string): MailMessage {
 
 /** Better Auth options; also read by the Better Auth CLI to generate the Drizzle schema. */
 export function authOptions(deps: AuthDeps) {
+  const { google, apple } = deps.social ?? {};
+  const origin = new URL(deps.baseUrl);
   return {
+    appName: "Closyria",
     baseURL: deps.baseUrl,
     secret: deps.secret,
     database: drizzleAdapter(deps.db, { provider: "pg", schema }),
     telemetry: { enabled: false },
+    trustedOrigins: apple ? [APPLE_ORIGIN] : [],
+    socialProviders: {
+      ...(google ? { google: { clientId: google.clientId, clientSecret: google.clientSecret } } : {}),
+      ...(apple ? { apple: { clientId: apple.clientId, clientSecret: apple.clientSecret } } : {}),
+    },
+    user: {
+      additionalFields: {
+        // Promotion to admin is a one-off SQL statement (deploy/README.md): never settable through the API.
+        role: { type: [...USER_ROLES], required: true, defaultValue: "user", input: false },
+      },
+    },
+    session: {
+      additionalFields: {
+        // How the session was opened. The admin area requires "passkey" (spec §8).
+        authMethod: { type: "string", required: true, input: false },
+      },
+    },
     // Closyria has no password: close the emailOTP routes that reset one or change the e-mail.
     disabledPaths: [
       "/email-otp/request-password-reset",
@@ -58,7 +95,12 @@ export function authOptions(deps: AuthDeps) {
     databaseHooks: {
       session: {
         // No IP address stored on sessions (spec §9). The user agent is kept for the session list.
-        create: { before: async (session) => ({ data: { ...session, ipAddress: null } }) },
+        // The sign-in method comes from the endpoint that creates the session; unknown ones are refused.
+        create: {
+          before: async (session, ctx) => ({
+            data: { ...session, ipAddress: null, authMethod: authMethodFor(ctx) satisfies AuthMethod },
+          }),
+        },
       },
     },
     hooks: {
@@ -68,6 +110,17 @@ export function authOptions(deps: AuthDeps) {
         if (ctx.path === "/sign-in/anonymous") {
           const current = await getSessionFromCtx(ctx, { disableRefresh: true });
           if (current) return ctx.json({ token: current.session.token, user: current.user });
+        }
+        if (ctx.path === "/passkey/generate-register-options" || ctx.path === "/passkey/verify-registration") {
+          // A passkey belongs to an account: an anonymous user has nothing to protect with it yet.
+          const current = await getSessionFromCtx(ctx, { disableRefresh: true });
+          if (current?.user.isAnonymous) {
+            throw new APIError("FORBIDDEN", { message: "Sign in with your e-mail before adding a passkey." });
+          }
+          // Registering proves a session, not possession of the passkey: it must not open a passkey session.
+          if (ctx.body?.createSession) {
+            throw new APIError("BAD_REQUEST", { message: "Registering a passkey does not open a session." });
+          }
         }
         if (ctx.path === "/email-otp/send-verification-otp") {
           // Codes only ever serve to sign in: no password, no separate e-mail verification.
@@ -100,6 +153,12 @@ export function authOptions(deps: AuthDeps) {
           if (type !== "sign-in") return;
           await deps.mailer.send(codeEmail(email, otp));
         },
+      }),
+      passkey({
+        rpID: origin.hostname,
+        rpName: "Closyria",
+        // Fixed from BETTER_AUTH_URL rather than read from the request's Origin header.
+        origin: origin.origin,
       }),
     ],
   } satisfies Parameters<typeof betterAuth>[0];

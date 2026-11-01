@@ -1,3 +1,4 @@
+export { AUTH_METHODS, type AuthMethod, authMethodFor } from "./auth-method";
 export {
   consumeEmailSend,
   EMAIL_LIMIT_RETENTION_SECONDS,
@@ -12,8 +13,11 @@ export {
   authOptions,
   codeEmail,
   createAuth,
+  type OAuthClient,
   OTP_ALLOWED_ATTEMPTS,
   OTP_EXPIRES_IN_SECONDS,
   OTP_LENGTH,
   type Session,
+  USER_ROLES,
+  type UserRole,
 } from "./server";

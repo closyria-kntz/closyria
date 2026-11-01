@@ -47,4 +47,21 @@ describe("envSchema", () => {
     expect(env.MAIL_FROM).toEqual({ name: "Équipe Closyria", email: "equipe@closyria.com" });
     expect(envSchema.safeParse({ ...base, MAIL_FROM: "pas une adresse" }).success).toBe(false);
   });
+
+  it("leaves Google and Apple off when their variables are absent", () => {
+    const env = envSchema.parse(base);
+    expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
+    expect(env.APPLE_CLIENT_ID).toBeUndefined();
+  });
+
+  it("requires both the id and the secret of a social provider, or neither", () => {
+    for (const [id, secret] of [
+      ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+      ["APPLE_CLIENT_ID", "APPLE_CLIENT_SECRET"],
+    ] as const) {
+      expect(envSchema.safeParse({ ...base, [id]: "id" }).success).toBe(false);
+      expect(envSchema.safeParse({ ...base, [secret]: "secret" }).success).toBe(false);
+      expect(envSchema.safeParse({ ...base, [id]: "id", [secret]: "secret" }).success).toBe(true);
+    }
+  });
 });

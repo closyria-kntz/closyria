@@ -23,6 +23,11 @@ export const envSchema = z
     MAIL_TRANSPORT: z.enum(["brevo", "memory"]).optional(),
     BREVO_API_KEY: z.string().min(1).optional(),
     MAIL_FROM: mailSender.prefault("Closyria <bonjour@closyria.com>"),
+    // Social sign-in: each provider is enabled only when both its variables are set.
+    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+    APPLE_CLIENT_ID: z.string().min(1).optional(),
+    APPLE_CLIENT_SECRET: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     // Only local development may keep codes in memory; dev.closyria.com and prod send real e-mails.
@@ -32,6 +37,15 @@ export const envSchema = z
     }
     if (env.MAIL_TRANSPORT === "brevo" && !env.BREVO_API_KEY) {
       ctx.addIssue({ code: "custom", path: ["BREVO_API_KEY"], message: "required when MAIL_TRANSPORT is brevo" });
+    }
+    for (const [id, secret] of [
+      ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+      ["APPLE_CLIENT_ID", "APPLE_CLIENT_SECRET"],
+    ] as const) {
+      if (Boolean(env[id]) !== Boolean(env[secret])) {
+        const missing = env[id] ? secret : id;
+        ctx.addIssue({ code: "custom", path: [missing], message: `${id} and ${secret} go together` });
+      }
     }
     // Better Auth marks cookies secure for https URLs: required everywhere but local development.
     if (env.APP_ENV !== "development" && !env.BETTER_AUTH_URL.startsWith("https://")) {

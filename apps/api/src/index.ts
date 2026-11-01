@@ -13,7 +13,17 @@ const mailer =
     ? brevoMailer({ apiKey: env.BREVO_API_KEY, from: env.MAIL_FROM })
     : // The code is printed only in local development, so one can sign in without Brevo.
       memoryMailer({ logContent: env.APP_ENV === "development" });
-const auth = createAuth({ db, mailer, baseUrl: env.BETTER_AUTH_URL, secret: env.BETTER_AUTH_SECRET });
+const oauthClient = (clientId?: string, clientSecret?: string) =>
+  clientId && clientSecret ? { clientId, clientSecret } : undefined;
+const google = oauthClient(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET);
+const apple = oauthClient(env.APPLE_CLIENT_ID, env.APPLE_CLIENT_SECRET);
+const auth = createAuth({
+  db,
+  mailer,
+  baseUrl: env.BETTER_AUTH_URL,
+  secret: env.BETTER_AUTH_SECRET,
+  social: { ...(google ? { google } : {}), ...(apple ? { apple } : {}) },
+});
 const app = createApp({ env: env.APP_ENV, version: env.APP_VERSION, pingDb: () => pingDb(db), auth });
 
 const server = serve({ fetch: app.fetch, hostname: env.HOST, port: env.PORT }, (info) => {
