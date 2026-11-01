@@ -11,9 +11,11 @@ const SCANNED_EXTENSIONS = [".ts", ".tsx", ".css"];
 
 const HEX_COLOR = /(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g;
 const COLOR_FUNCTION = /\b(?:rgba?|hsla?|hwb|lab|lch|oklch|oklab|color-mix)\(/g;
-const ARBITRARY_VALUE = /(?<=[\w-]-)\[([^\]]*)\]/g;
+const ARBITRARY_VALUE = /([\w-]+)-(\[([^\]]*)\])/g;
+// Selector variants (data-[…]:, has-[…]:…) are not style values; min-/max- stay checked (hard-coded breakpoints).
+const VARIANT_PREFIX = /(?:^|-)(?:data|aria|supports|has|not|in|nth|nth-last|nth-of-type|nth-last-of-type|group|peer)$/;
 const UNIT = "(?:px|rem|em|ms|s|dvh|svh|lvh|vh|vw|vmin|vmax|deg)(?![\\w])|%";
-const NUMBER_WITH_UNIT = new RegExp(`(?<![\\w.-])(?:\\d+\\.?\\d*|\\.\\d+)(?:${UNIT})`, "g");
+const NUMBER_WITH_UNIT = new RegExp(`(?:(?<![\\w.-])|(?<=[\\s(,:])-)(?:\\d+\\.?\\d*|\\.\\d+)(?:${UNIT})`, "g");
 const CSS_DECLARATION = /(?<![\w-])(-{0,2}[a-z][\w-]*)\s*:\s*([^;{}]+)(?=[;}]|$)/dgi;
 const VAR_ONLY_STRING = /^(["'`])(?:var\(--[\w-]+(?:,[^()]*)?\)\s*)+\1$/;
 
@@ -89,9 +91,12 @@ function topLevelColon(piece: string): number {
 function checkArbitraryValues(src: string, file: string, out: Violation[]): string {
   let masked = src;
   for (const m of src.matchAll(ARBITRARY_VALUE)) {
-    if (!/^var\(--[\w-]+\)$/.test(m[1] as string)) {
-      out.push({ file, line: lineOf(src, m.index), match: m[0], rule: "arbitrary-value" });
-      masked = masked.slice(0, m.index) + " ".repeat(m[0].length) + masked.slice(m.index + m[0].length);
+    const bracket = m[2] as string;
+    const start = m.index + (m[1] as string).length + 1;
+    const isVariant = src[start + bracket.length] === ":" && VARIANT_PREFIX.test(m[1] as string);
+    if (!isVariant && !/^var\(--[\w-]+\)$/.test(m[3] as string)) {
+      out.push({ file, line: lineOf(src, start), match: bracket, rule: "arbitrary-value" });
+      masked = masked.slice(0, start) + " ".repeat(bracket.length) + masked.slice(start + bracket.length);
     }
   }
   return masked;
@@ -140,8 +145,9 @@ function checkCssDeclarations(src: string, file: string, out: Violation[]): void
       value = value.slice(0, span.start) + " ".repeat(span.end - span.start) + value.slice(span.end);
     }
     value = value.replace(/(?<![\w.])100%/g, (x) => " ".repeat(x.length));
-    for (const u of value.matchAll(NUMBER_WITH_UNIT)) {
-      out.push({ file, line: lineOf(src, valueStart + u.index), match: u[0], rule: "literal-value" });
+    // Leading space: the declaration value starts after `:`, so a leading sign is a sign, not part of a name.
+    for (const u of ` ${value}`.matchAll(NUMBER_WITH_UNIT)) {
+      out.push({ file, line: lineOf(src, valueStart + u.index - 1), match: u[0], rule: "literal-value" });
     }
   }
 }

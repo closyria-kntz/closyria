@@ -59,6 +59,33 @@ describe("findHardcodedStyles", () => {
       expect(rules(`<p className="${cls}" />`)).toEqual(["arbitrary-value"]);
     });
 
+    it.each([
+      "data-[state=open]:bg-surface",
+      "aria-[sort=asc]:bg-surface",
+      "group-data-[a=b]:bg-surface",
+      "peer-data-[a=b]:bg-surface",
+      "supports-[display:grid]:grid",
+      "has-[input:checked]:bg-surface",
+      "group-aria-[a=b]:bg-surface",
+      "not-[.x]:flex",
+      "in-[.dark]:flex",
+      "nth-[3n+1]:flex",
+      "group-[.is-open]:flex",
+    ])("allows the selector variant %s", (cls) => {
+      expect(rules(`<p className="${cls}" />`)).toEqual([]);
+    });
+
+    it.each(["-mt-[4px]", "data-[state=open]:w-[50%]", "min-[640px]:flex", "w-[50%]:flex"])(
+      "still flags the value bracket in %s",
+      (cls) => {
+        expect(rules(`<p className="${cls}" />`)).toEqual(["arbitrary-value"]);
+      },
+    );
+
+    it("reports only the value bracket of a mixed class", () => {
+      expect(findHardcodedStyles('<p className="data-[state=open]:w-[50%]" />', "a.tsx")[0]?.match).toBe("[50%]");
+    });
+
     it("allows a bracket holding only a var() reference", () => {
       expect(rules('<p className="bg-[var(--color-ink)]" />')).toEqual([]);
     });
@@ -71,6 +98,10 @@ describe("findHardcodedStyles", () => {
       ["transition: 200ms;", "literal-value"],
       ["box-shadow: 0 1px 2px black;", "literal-value"],
       ["padding: 12px;", "literal-value"],
+      ["margin: -4px;", "literal-value"],
+      ["margin: 0 -1rem;", "literal-value"],
+      ["transform: translateX(-50%);", "literal-value"],
+      ["transform: rotate(-3deg);", "literal-value"],
       ["height: 100dvh;", "literal-value"],
       ["--gap: 1rem;", "literal-value"],
       ["color: oklch(0.5 0.1 20);", "literal-color"],
@@ -82,6 +113,8 @@ describe("findHardcodedStyles", () => {
 
     it.each([
       "padding: 0;",
+      "padding: var(--gap-4px);",
+      "--gap-4px: var(--space-4);",
       "width: 100%;",
       "color: var(--color-ink);",
       "color: rgb(var(--ink-rgb) / .5);",
