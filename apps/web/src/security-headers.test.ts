@@ -40,7 +40,8 @@ describe("securityHeaders", () => {
     expect(directive("script-src")).toBe("script-src 'self'");
     expect(directive("connect-src")).toBe("connect-src 'self'");
     expect(directive("font-src")).toBe("font-src 'self'");
-    expect(directive("img-src")).toBe("img-src 'self' data: blob: https://*.s3.gra.io.cloud.ovh.net");
+    // s3Store is path-style (forcePathStyle): photo URLs are https://s3.gra.io.cloud.ovh.net/<bucket>/<key>.
+    expect(directive("img-src")).toBe("img-src 'self' data: blob: https://s3.gra.io.cloud.ovh.net");
   });
 });
 

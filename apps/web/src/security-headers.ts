@@ -5,7 +5,9 @@
  * Before enforcing, `script-src` needs per-request nonces (Next's inline bootstrap scripts are
  * reported today) and a report endpoint (`report-to`) must exist to see violations outside devtools.
  * `style-src 'unsafe-inline'` stays: Next and React inject inline styles.
- * Photos will be served from the OVH S3 host (Gravelines), hence the `img-src` pattern.
+ * Photos will be served from OVH S3 (Gravelines). s3Store uses path-style URLs
+ * (`https://s3.gra.io.cloud.ovh.net/<bucket>/<key>`), so `img-src` names that exact host, the default
+ * S3_ENDPOINT (deploy/README.md): change both together.
  * Passkeys (WebAuthn) need nothing in the CSP.
  *
  * Framing is the exception, enforced now: a separate enforced CSP holding only `frame-ancestors 'none'`
@@ -15,7 +17,7 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://*.s3.gra.io.cloud.ovh.net",
+  "img-src 'self' data: blob: https://s3.gra.io.cloud.ovh.net",
   "font-src 'self'",
   "connect-src 'self'",
   "object-src 'none'",
