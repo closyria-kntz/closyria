@@ -1,26 +1,26 @@
 {
   "Metadata": {
     "title": "Closyria",
-    "description": "Votre dressing en ligne, et le suivi de vos articles préférés."
+    "description": "Ton dressing en ligne, et le suivi de tes articles préférés."
   },
   "Home": {
     "title": "Closyria",
-    "tagline": "Votre dressing en ligne arrive bientôt."
+    "tagline": "Ton dressing en ligne arrive bientôt."
   },
   "Auth": {
     "email": {
-      "subject": "Votre code de connexion Closyria",
+      "subject": "Ton code de connexion Closyria",
       "greeting": "Bonjour,",
-      "codeIntro": "Voici votre code pour vous connecter à Closyria :",
-      "validity": "Ce code est valable 10 minutes.",
-      "ignore": "Si vous n’avez pas demandé ce code, ignorez simplement ce message."
+      "codeIntro": "Voici ton code pour te connecter à Closyria :",
+      "validity": "Il est valable 10 minutes.",
+      "ignore": "Tu n’as pas demandé ce code ? Ignore simplement ce message."
     }
   },
   "Media": {
     "errors": {
       "unsupported_image": "Format non pris en charge",
       "image_too_large": "Photo trop lourde, 20 Mo maximum",
-      "invalid_upload": "Aucune photo reçue, réessayez"
+      "invalid_upload": "Aucune photo reçue, réessaie"
     }
   },
   "Admin": {
@@ -73,16 +73,16 @@
     },
     "passkey": {
       "title": "Connexion par passkey requise",
-      "intro": "L’administration n’est accessible qu’avec une session ouverte par passkey. Une passkey remplace le mot de passe : elle reste sur votre appareil et se déverrouille avec votre empreinte, votre visage ou votre code.",
+      "intro": "L’administration s’ouvre seulement avec une session ouverte par passkey. Une passkey remplace le mot de passe : elle reste sur ton appareil et se déverrouille avec ton empreinte, ton visage ou ton code.",
       "stepsTitle": "Comment faire",
-      "step1": "Sur cet appareil, cliquez sur « Enregistrer une passkey » et suivez les instructions de votre navigateur.",
-      "step2": "Cliquez ensuite sur « Se connecter avec une passkey » : l’administration s’ouvre.",
-      "step3": "Vous avez déjà une passkey sur un autre appareil ? Connectez-vous depuis cet appareil, ou utilisez l’option « autre appareil » proposée par votre navigateur (code QR).",
+      "step1": "Sur cet appareil, appuie sur « Enregistrer une passkey » et suis les instructions de ton navigateur.",
+      "step2": "Appuie ensuite sur « Se connecter avec une passkey » : l’administration s’ouvre.",
+      "step3": "Tu as déjà une passkey sur un autre appareil ? Connecte-toi depuis cet appareil, ou choisis l’option « autre appareil » de ton navigateur (code QR).",
       "register": "Enregistrer une passkey",
       "signIn": "Se connecter avec une passkey",
-      "registered": "Passkey enregistrée. Connectez-vous maintenant avec elle.",
-      "registerFailed": "La passkey n’a pas pu être enregistrée. Si vous en avez déjà une, connectez-vous avec elle ; sinon, réessayez.",
-      "signInFailed": "La connexion par passkey a échoué ou a été annulée. Réessayez."
+      "registered": "Passkey enregistrée. Connecte-toi maintenant avec elle.",
+      "registerFailed": "La passkey n’a pas pu être enregistrée. Si tu en as déjà une, connecte-toi avec elle ; sinon, réessaie.",
+      "signInFailed": "La connexion par passkey a échoué ou a été annulée. Réessaie."
     }
   }
 }

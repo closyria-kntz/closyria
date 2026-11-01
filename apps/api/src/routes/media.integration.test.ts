@@ -151,6 +151,7 @@ describe("POST /api/media", () => {
       expect(res.status).toBe(400);
       expect(await res.json()).toEqual({ error: "invalid_upload" });
     }
+    expect(fr.Media.errors.invalid_upload).toBe("Aucune photo reçue, réessaie");
   });
 
   it("documents the multipart body and the user access level", async () => {

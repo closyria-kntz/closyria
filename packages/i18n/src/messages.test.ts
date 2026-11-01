@@ -50,6 +50,29 @@ describe("message catalogs", () => {
   });
 });
 
+// Visual spec §9: the interface says "tu". Imperatives ending in -ez (réessayez, cliquez…) betray "vous".
+const VOUVOIEMENT = /\b(vous|votre|vos)\b|-vous\b|\p{L}+ez\b/iu;
+const NOT_VOUVOIEMENT = new Set(["chez", "assez", "nez"]);
+
+function vouvoie(message: string): boolean {
+  const words = message.match(new RegExp(VOUVOIEMENT.source, "giu")) ?? [];
+  return words.some((word) => !NOT_VOUVOIEMENT.has(word.toLowerCase()));
+}
+
+describe("French tone", () => {
+  it("detects vouvoiement", () => {
+    expect(vouvoie("Votre code")).toBe(true);
+    expect(vouvoie("Connectez-vous")).toBe(true);
+    expect(vouvoie("réessayez")).toBe(true);
+    expect(vouvoie("Ton code, chez toi, réessaie")).toBe(false);
+  });
+
+  it("uses tutoiement in every French message", () => {
+    const offending = Object.entries(flatten(fr)).filter(([, message]) => vouvoie(message));
+    expect(offending).toEqual([]);
+  });
+});
+
 describe("loadMessages", () => {
   it("returns French for the default locale", () => {
     expect(loadMessages(defaultLocale)).toEqual(fr);
