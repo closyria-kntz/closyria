@@ -96,28 +96,46 @@ async function signInAnonymously(auth: Auth) {
 }
 
 /** Registers a passkey for the signed-in user behind `cookie`, as the browser would. */
-async function registerPasskey(auth: Auth, cookie: string, authenticator = softAuthenticator(BASE_URL)) {
+async function registerPasskey(
+  auth: Auth,
+  cookie: string,
+  authenticator = softAuthenticator(BASE_URL),
+  { userVerified = true } = {},
+) {
   const optionsRes = await call(auth, "/passkey/generate-register-options", { cookie, method: "GET" });
   expect(optionsRes.status).toBe(200);
   const options = (await optionsRes.json()) as { challenge: string; rp: { id: string } };
   const res = await call(auth, "/passkey/verify-registration", {
     cookie: withCookies(optionsRes, cookie),
-    body: { response: authenticator.register(options) },
+    body: { response: authenticator.register(options, { userVerified }) },
   });
   return { res, authenticator };
 }
 
 /** Signs in with a passkey from a browser without any session. */
-async function signInWithPasskey(auth: Auth, authenticator: ReturnType<typeof softAuthenticator>, tamper = false) {
+async function signInWithPasskey(
+  auth: Auth,
+  authenticator: ReturnType<typeof softAuthenticator>,
+  { tamper = false, userVerified = true } = {},
+) {
   const optionsRes = await call(auth, "/passkey/generate-authenticate-options", { method: "GET" });
   expect(optionsRes.status).toBe(200);
   const options = (await optionsRes.json()) as { challenge: string; rpId: string };
   const res = await call(auth, "/passkey/verify-authentication", {
     cookie: withCookies(optionsRes),
-    body: { response: authenticator.authenticate(options, { tamper }) },
+    body: { response: authenticator.authenticate(options, { tamper, userVerified }) },
   });
   return { res, cookie: withCookies(res) };
 }
+
+async function countRows(query: ReturnType<typeof sql>) {
+  const result = await handle.db.execute<{ n: number }>(query);
+  return result.rows[0]?.n ?? 0;
+}
+const countSessions = (email: string) =>
+  countRows(sql`select count(*)::int as n from session s join "user" u on u.id = s.user_id where u.email = ${email}`);
+const countPasskeys = (email: string) =>
+  countRows(sql`select count(*)::int as n from passkey p join "user" u on u.id = p.user_id where u.email = ${email}`);
 
 beforeAll(async () => {
   database = await startTestDatabase();
@@ -221,6 +239,15 @@ describe("session authMethod", () => {
     expect(session?.session.authMethod).toBe("email-otp");
   });
 
+  it("cannot be changed through the session update", async () => {
+    const auth = createAuth(deps());
+    const cookie = await signInWithEmail(auth, "update-session@example.com");
+    const res = await call(auth, "/update-session", { cookie, body: { authMethod: "passkey" } });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(500);
+    expect((await getSession(auth, cookie))?.session.authMethod).toBe("email-otp");
+  });
+
   it("only accepts the known methods in the database", async () => {
     await expect(
       handle.db.execute(sql`UPDATE "session" SET auth_method = 'password' WHERE true`),
@@ -254,7 +281,7 @@ describe("passkeys", () => {
     const auth = createAuth(deps());
     const cookie = await signInWithEmail(auth, "passkey-tamper@example.com");
     const { authenticator } = await registerPasskey(auth, cookie);
-    const signIn = await signInWithPasskey(auth, authenticator, true);
+    const signIn = await signInWithPasskey(auth, authenticator, { tamper: true });
     expect(signIn.res.status).toBeGreaterThanOrEqual(400);
     expect(signIn.res.status).toBeLessThan(500);
     expect(await getSession(auth, signIn.cookie)).toBeNull();
@@ -269,17 +296,13 @@ describe("passkeys", () => {
   it("refuses a registration signed for another origin", async () => {
     const auth = createAuth(deps());
     const cookie = await signInWithEmail(auth, "passkey-origin@example.com");
-    // Better Auth logs the failed verification (origins only) and answers 500 for it.
+    // Better Auth logs the failed verification (origins only).
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     const { res } = await registerPasskey(auth, cookie, softAuthenticator("https://evil.example"));
-    expect(res.status).not.toBe(200);
+    expect(res.status).toBe(400);
     expect(logged).toHaveBeenCalled();
     logged.mockRestore();
-    const rows = await handle.db.execute<{ n: number }>(
-      sql`select count(*)::int as n from passkey p join "user" u on u.id = p.user_id
-          where u.email = 'passkey-origin@example.com'`,
-    );
-    expect(rows.rows[0]?.n).toBe(0);
+    expect(await countPasskeys("passkey-origin@example.com")).toBe(0);
   });
 
   it("does not let passkey registration open a session", async () => {
@@ -300,5 +323,112 @@ describe("passkeys", () => {
     const cookie = await signInAnonymously(auth);
     const res = await call(auth, "/passkey/generate-register-options", { cookie, method: "GET" });
     expect(res.status).toBe(403);
+  });
+
+  it("stores each credential id once, with a single unique index", async () => {
+    const result = await handle.db.execute<{ indexdef: string }>(
+      sql`select indexdef from pg_indexes where tablename = 'passkey' and indexdef like '%(credential_id)%'`,
+    );
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.indexdef).toMatch(/^CREATE UNIQUE INDEX/);
+  });
+
+  it("refuses a sign-in without user verification (presence only)", async () => {
+    const auth = createAuth(deps());
+    const cookie = await signInWithEmail(auth, "passkey-uv@example.com");
+    const { authenticator } = await registerPasskey(auth, cookie);
+    const sessionsBefore = await countSessions("passkey-uv@example.com");
+    const signIn = await signInWithPasskey(auth, authenticator, { userVerified: false });
+    expect(signIn.res.status).toBe(401);
+    expect(signIn.res.headers.getSetCookie().some((c) => c.includes("session_token="))).toBe(false);
+    expect(await countSessions("passkey-uv@example.com")).toBe(sessionsBefore);
+  });
+
+  it("refuses to register a passkey created without user verification", async () => {
+    const auth = createAuth(deps());
+    const cookie = await signInWithEmail(auth, "passkey-uv-register@example.com");
+    const { res } = await registerPasskey(auth, cookie, softAuthenticator(BASE_URL), { userVerified: false });
+    expect(res.status).toBe(400);
+    expect(await countPasskeys("passkey-uv-register@example.com")).toBe(0);
+  });
+});
+
+describe("admin passkeys (R12)", () => {
+  const EMAIL = "admin-passkeys@example.com";
+  const MANAGE_PATHS = [
+    "/passkey/generate-register-options",
+    "/passkey/verify-registration",
+    "/passkey/update-passkey",
+    "/passkey/delete-passkey",
+  ];
+
+  async function listPasskeys(auth: Auth, cookie: string) {
+    const res = await call(auth, "/passkey/list-user-passkeys", { cookie, method: "GET" });
+    expect(res.status).toBe(200);
+    return (await res.json()) as { id: string }[];
+  }
+
+  it("lets an admin register a first passkey from any session, then requires a passkey session", async () => {
+    const auth = createAuth(deps());
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const emailCookie = await signInWithEmail(auth, EMAIL);
+    await handle.db.execute(sql`UPDATE "user" SET role = 'admin' WHERE email = ${EMAIL}`);
+    const userId = (await getSession(auth, emailCookie))?.user.id;
+
+    // Bootstrap: no passkey yet, an e-mail code session may register the first one.
+    const first = await registerPasskey(auth, emailCookie);
+    expect(first.res.status).toBe(200);
+    const [firstPasskey] = await listPasskeys(auth, emailCookie);
+    expect(firstPasskey).toBeDefined();
+
+    // With a passkey, mailbox access is no longer enough to manage passkeys.
+    const bodies: Record<string, unknown> = {
+      "/passkey/verify-registration": { response: {} },
+      "/passkey/update-passkey": { id: firstPasskey?.id, name: "volée" },
+      "/passkey/delete-passkey": { id: firstPasskey?.id },
+    };
+    for (const path of MANAGE_PATHS) {
+      const body = bodies[path];
+      const res = await call(auth, path, {
+        cookie: emailCookie,
+        ...(body ? { body } : { method: "GET" as const }),
+      });
+      expect(res.status, path).toBe(403);
+    }
+    expect(await countPasskeys(EMAIL)).toBe(1);
+
+    // A passkey session may manage them.
+    const passkeySession = await signInWithPasskey(auth, first.authenticator);
+    expect(passkeySession.res.status).toBe(200);
+    const second = await registerPasskey(auth, passkeySession.cookie);
+    expect(second.res.status).toBe(200);
+    const update = await call(auth, "/passkey/update-passkey", {
+      cookie: passkeySession.cookie,
+      body: { id: firstPasskey?.id, name: "Téléphone" },
+    });
+    expect(update.status).toBe(200);
+    const remove = await call(auth, "/passkey/delete-passkey", {
+      cookie: passkeySession.cookie,
+      body: { id: firstPasskey?.id },
+    });
+    expect(remove.status).toBe(200);
+    expect(await countPasskeys(EMAIL)).toBe(1);
+
+    // Each registration and deletion is logged with the user id only.
+    const events = info.mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
+    expect(events).toEqual([
+      { event: "admin.passkey.registered", userId },
+      { event: "admin.passkey.registered", userId },
+      { event: "admin.passkey.deleted", userId },
+    ]);
+    expect(info.mock.calls.join(" ")).not.toContain("@");
+    info.mockRestore();
+  });
+
+  it("does not restrict users who are not admin", async () => {
+    const auth = createAuth(deps());
+    const cookie = await signInWithEmail(auth, "not-admin@example.com");
+    expect((await registerPasskey(auth, cookie)).res.status).toBe(200);
+    expect((await registerPasskey(auth, cookie)).res.status).toBe(200);
   });
 });

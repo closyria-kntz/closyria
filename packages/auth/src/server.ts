@@ -4,8 +4,9 @@ import { schema } from "@closyria/db";
 import { loadMessages } from "@closyria/i18n";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
+import { APIError, createAuthMiddleware, getSessionFromCtx, isAPIError } from "better-auth/api";
 import { anonymous, emailOTP } from "better-auth/plugins";
+import { count, eq } from "drizzle-orm";
 import { type AuthMethod, authMethodFor } from "./auth-method";
 import { consumeEmailSend } from "./email-limit";
 import type { Mailer, MailMessage } from "./mailer";
@@ -29,6 +30,19 @@ export type AuthDeps = {
 
 export const USER_ROLES = ["user", "admin"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
+
+/** Passkey routes that add, rename or remove a passkey. */
+const PASSKEY_MANAGEMENT_PATHS = new Set([
+  "/passkey/generate-register-options",
+  "/passkey/verify-registration",
+  "/passkey/update-passkey",
+  "/passkey/delete-passkey",
+]);
+
+/** Audit line for the admin's passkeys: the user id only, no other personal data. */
+function logAdminPasskeyEvent(event: "admin.passkey.registered" | "admin.passkey.deleted", userId: string) {
+  console.info(JSON.stringify({ event, userId }));
+}
 
 /** Apple posts its sign-in callback (form_post) from this origin. */
 const APPLE_ORIGIN = "https://appleid.apple.com";
@@ -111,11 +125,25 @@ export function authOptions(deps: AuthDeps) {
           const current = await getSessionFromCtx(ctx, { disableRefresh: true });
           if (current) return ctx.json({ token: current.session.token, user: current.user });
         }
-        if (ctx.path === "/passkey/generate-register-options" || ctx.path === "/passkey/verify-registration") {
-          // A passkey belongs to an account: an anonymous user has nothing to protect with it yet.
+        if (PASSKEY_MANAGEMENT_PATHS.has(ctx.path)) {
           const current = await getSessionFromCtx(ctx, { disableRefresh: true });
+          // A passkey belongs to an account: an anonymous user has nothing to protect with it yet.
           if (current?.user.isAnonymous) {
             throw new APIError("FORBIDDEN", { message: "Sign in with your e-mail before adding a passkey." });
+          }
+          // R12: once an admin has a passkey, only a passkey session may manage passkeys, so that
+          // access to the admin's mailbox is not enough to reach the admin area. The first passkey
+          // (bootstrap) may be registered from any fresh session.
+          const role: unknown = (current?.user as { role?: unknown } | undefined)?.role;
+          const method: unknown = (current?.session as { authMethod?: unknown } | undefined)?.authMethod;
+          if (current && role === "admin" && method !== "passkey") {
+            const [row] = await deps.db
+              .select({ n: count() })
+              .from(schema.passkey)
+              .where(eq(schema.passkey.userId, current.user.id));
+            if ((row?.n ?? 0) > 0) {
+              throw new APIError("FORBIDDEN", { message: "Sign in with a passkey to manage passkeys." });
+            }
           }
           // Registering proves a session, not possession of the passkey: it must not open a passkey session.
           if (ctx.body?.createSession) {
@@ -133,6 +161,27 @@ export function authOptions(deps: AuthDeps) {
             throw new APIError("TOO_MANY_REQUESTS", { message: "Too many codes requested for this address." });
           }
         }
+      }),
+      after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== "/passkey/verify-registration" && ctx.path !== "/passkey/delete-passkey") return;
+        const returned: unknown = ctx.context.returned;
+        if (isAPIError(returned)) {
+          // The plugin answers 500 for any registration that fails verification (wrong origin,
+          // forged response): that is a bad request, not a server fault. Only a Response object
+          // replaces the status: a thrown error or ctx.json() would keep the original 500.
+          if (ctx.path === "/passkey/verify-registration" && returned.statusCode === 500) {
+            return new Response(JSON.stringify(returned.body ?? { message: "The passkey could not be verified." }), {
+              status: 400,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          return;
+        }
+        const current = await getSessionFromCtx(ctx, { disableRefresh: true });
+        if ((current?.user as { role?: unknown } | undefined)?.role !== "admin" || !current) return;
+        const event =
+          ctx.path === "/passkey/verify-registration" ? "admin.passkey.registered" : "admin.passkey.deleted";
+        logAdminPasskeyEvent(event, current.user.id);
       }),
     },
     plugins: [
@@ -159,6 +208,23 @@ export function authOptions(deps: AuthDeps) {
         rpName: "Closyria",
         // Fixed from BETTER_AUTH_URL rather than read from the request's Origin header.
         origin: origin.origin,
+        // User verification (PIN, biometrics) is asked for, then checked on the server below:
+        // a passkey is a second factor in itself, not just a touch on a key.
+        authenticatorSelection: { residentKey: "preferred", userVerification: "required" },
+        registration: {
+          afterVerification: ({ verification }) => {
+            if (!verification.registrationInfo?.userVerified) {
+              throw new APIError("BAD_REQUEST", { message: "The passkey must verify the user." });
+            }
+          },
+        },
+        authentication: {
+          afterVerification: ({ verification }) => {
+            if (!verification.authenticationInfo.userVerified) {
+              throw new APIError("UNAUTHORIZED", { message: "The passkey must verify the user." });
+            }
+          },
+        },
       }),
     ],
   } satisfies Parameters<typeof betterAuth>[0];

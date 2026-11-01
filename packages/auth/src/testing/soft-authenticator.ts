@@ -57,7 +57,7 @@ export function softAuthenticator(origin: string) {
     credentialId: b64url(credentialId),
 
     /** navigator.credentials.create(), serialised the way @simplewebauthn/browser sends it. */
-    register(options: RegistrationOptions) {
+    register(options: RegistrationOptions, { userVerified = true } = {}) {
       const rpId = options.rp.id ?? new URL(origin).hostname;
       const cosePublicKey = new Map<Cbor, Cbor>([
         [1, 2], // kty: EC2
@@ -70,7 +70,7 @@ export function softAuthenticator(origin: string) {
       credentialIdLength.writeUInt16BE(credentialId.length);
       const authData = Buffer.concat([
         sha256(rpId),
-        Buffer.from([FLAG_USER_PRESENT | FLAG_USER_VERIFIED | FLAG_ATTESTED_DATA]),
+        Buffer.from([FLAG_USER_PRESENT | (userVerified ? FLAG_USER_VERIFIED : 0) | FLAG_ATTESTED_DATA]),
         counterBytes(counter),
         Buffer.alloc(16), // AAGUID: all zeros, as with "none" attestation
         credentialIdLength,
@@ -99,12 +99,12 @@ export function softAuthenticator(origin: string) {
     },
 
     /** navigator.credentials.get(), signed with the credential's private key. */
-    authenticate(options: AuthenticationOptions, { tamper = false } = {}) {
+    authenticate(options: AuthenticationOptions, { tamper = false, userVerified = true } = {}) {
       const rpId = options.rpId ?? new URL(origin).hostname;
       counter += 1;
       const authenticatorData = Buffer.concat([
         sha256(rpId),
-        Buffer.from([FLAG_USER_PRESENT | FLAG_USER_VERIFIED]),
+        Buffer.from([FLAG_USER_PRESENT | (userVerified ? FLAG_USER_VERIFIED : 0)]),
         counterBytes(counter),
       ]);
       const clientDataJSON = clientData("webauthn.get", options.challenge);

@@ -1,4 +1,4 @@
-export { AUTH_METHODS, type AuthMethod, authMethodFor } from "./auth-method";
+export { AUTH_METHODS, type AuthMethod } from "./auth-method";
 export {
   consumeEmailSend,
   EMAIL_LIMIT_RETENTION_SECONDS,

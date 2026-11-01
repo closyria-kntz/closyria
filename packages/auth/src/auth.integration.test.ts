@@ -405,7 +405,10 @@ describe("privacy and transport security", () => {
 
   it("refuses a state-changing request from a foreign origin", async () => {
     const { cookie, userId } = await signInAnonymously();
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {}); // "Invalid origin"
     const res = await call("/sign-out", { cookie, body: {}, origin: "https://evil.example" });
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining("Invalid origin: https://evil.example"));
+    logged.mockRestore();
     expect(res.status).toBe(403);
     expect((await sessionUser(cookie))?.id).toBe(userId);
   });
