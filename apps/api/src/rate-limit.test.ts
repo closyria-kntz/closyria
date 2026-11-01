@@ -40,4 +40,16 @@ describe("rateLimit", () => {
     expect(await hit("c2")).toBe(429);
     expect(await hit("c1")).toBe(200); // the oldest was forgotten
   });
+
+  it("counts per custom key when given one", async () => {
+    const app = new Hono();
+    app.use(
+      "*",
+      rateLimit({ max: 1, windowMs: 60_000, key: (c) => c.req.header("x-user") ?? "none" }, (c) => c.json({}, 429)),
+    );
+    app.get("/", (c) => c.text("ok"));
+    expect(await status(app, { "x-user": "a", "x-forwarded-for": "1" })).toBe(200);
+    expect(await status(app, { "x-user": "a", "x-forwarded-for": "2" })).toBe(429);
+    expect(await status(app, { "x-user": "b", "x-forwarded-for": "1" })).toBe(200);
+  });
 });

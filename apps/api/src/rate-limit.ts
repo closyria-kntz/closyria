@@ -1,9 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { Context, MiddlewareHandler } from "hono";
+import type { Context, Env, MiddlewareHandler } from "hono";
 
-export type RateLimitOptions = {
+export type RateLimitOptions<E extends Env = Env> = {
   max: number;
   windowMs: number;
+  /** What is counted. Default: the client address (see the trust assumption below). */
+  key?: (c: Context<E>) => string;
   /** Cap on tracked clients (default 10 000); the oldest are evicted first. */
   maxClients?: number;
 };
@@ -20,18 +22,21 @@ const DEFAULT_MAX_TRACKED_CLIENTS = 10_000;
  * on 127.0.0.1 behind Caddy, which overwrites `X-Forwarded-For` with the address it saw (see deploy/README.md).
  * The API must never be exposed directly: a client could then pick its own bucket.
  */
-export function rateLimit(
-  options: RateLimitOptions,
-  onLimited: (c: Context) => Response,
+export function rateLimit<E extends Env = Env>(
+  options: RateLimitOptions<E>,
+  onLimited: (c: Context<E>) => Response,
   now: () => number = Date.now,
-): MiddlewareHandler {
+): MiddlewareHandler<E> {
   const salt = randomBytes(16);
   const cap = options.maxClients ?? DEFAULT_MAX_TRACKED_CLIENTS;
   const windows = new Map<string, { count: number; resetAt: number }>();
 
   return async (c, next) => {
     const t = now();
-    const key = createHash("sha256").update(salt).update(clientAddress(c.req.raw.headers)).digest("base64");
+    const key = createHash("sha256")
+      .update(salt)
+      .update(options.key ? options.key(c) : clientAddress(c.req.raw.headers))
+      .digest("base64");
     let w = windows.get(key);
     if (!w || w.resetAt <= t) {
       windows.delete(key); // a renewed window goes to the back of the eviction order

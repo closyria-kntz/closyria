@@ -20,7 +20,9 @@
     "errors": {
       "unsupported_image": "Format non pris en charge",
       "image_too_large": "Photo trop lourde, 20 Mo maximum",
-      "invalid_upload": "Aucune photo reçue, réessaie"
+      "invalid_upload": "Aucune photo reçue, réessaie",
+      "rate_limited": "Tu as envoyé beaucoup de photos d’un coup. Réessaie dans une heure.",
+      "busy": "Beaucoup de photos arrivent en même temps. Réessaie dans un instant."
     }
   },
   "Admin": {

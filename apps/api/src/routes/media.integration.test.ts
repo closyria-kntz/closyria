@@ -7,6 +7,8 @@ import { createTestDatabase } from "@closyria/testing/vitest";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app";
+import { createSemaphore } from "../semaphore";
+import type { MediaDeps } from "./media";
 
 const BASE_URL = "http://localhost:3001";
 const MB = 1024 * 1024;
@@ -35,7 +37,13 @@ async function signIn() {
 }
 
 /** Uploads `body` as the `file` field; the name and type claimed by the client are deliberately misleading. */
-function upload(body: Buffer | string | null, cookie?: string, field = "file") {
+function upload(
+  body: Buffer | string | null,
+  cookie?: string,
+  field = "file",
+  target: { request: ReturnType<typeof createApp>["request"] } = app,
+  headers: Record<string, string> = {},
+) {
   const form = new FormData();
   if (body !== null) {
     form.set(
@@ -43,10 +51,10 @@ function upload(body: Buffer | string | null, cookie?: string, field = "file") {
       typeof body === "string" ? body : new File([new Uint8Array(body)], "photo.jpg", { type: "image/jpeg" }),
     );
   }
-  return app.request("/api/media", {
+  return target.request("/api/media", {
     method: "POST",
     body: form,
-    headers: { origin: BASE_URL, ...(cookie ? { cookie } : {}) },
+    headers: { origin: BASE_URL, ...headers, ...(cookie ? { cookie } : {}) },
   });
 }
 
@@ -166,5 +174,66 @@ describe("POST /api/media", () => {
     const op = doc.paths["/api/media"]?.post;
     expect(op?.["x-access"]).toBe("user");
     expect(op?.requestBody?.content).toHaveProperty("multipart/form-data");
+  });
+});
+
+describe("upload limits", () => {
+  const limitedApp = (media: Omit<MediaDeps, "db" | "store">) =>
+    createApp({
+      env: "test",
+      version: "t",
+      origin: BASE_URL,
+      pingDb: async () => true,
+      auth,
+      media: { db: handle.db, store, ...media },
+      events: { db: handle.db },
+      admin: { db: handle.db },
+    });
+
+  it("documents the default limits: 30 uploads an hour per user, 60 per address, 2 at once", async () => {
+    const { MEDIA_LIMITS } = await import("./media");
+    expect(MEDIA_LIMITS).toEqual({
+      perUser: { max: 30, windowMs: 3_600_000 },
+      perAddress: { max: 60, windowMs: 3_600_000 },
+      concurrency: { max: 2, maxWaiting: 8, waitMs: 5_000 },
+    });
+  });
+
+  it("answers 429 rate_limited past the per-user limit, then past the per-address limit", async () => {
+    const limited = limitedApp({
+      limits: { perUser: { max: 2, windowMs: 60_000 }, perAddress: { max: 4, windowMs: 60_000 } },
+    });
+    const photo = await jpegWithGps();
+    const sameAddress = { "x-forwarded-for": "203.0.113.7" };
+    const first = await signIn();
+    for (let i = 0; i < 2; i++)
+      expect((await upload(photo, first.cookie, "file", limited, sameAddress)).status).toBe(201);
+    const refused = await upload(photo, first.cookie, "file", limited, sameAddress);
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toEqual({ error: "rate_limited" });
+
+    // Another user behind the same address: one more request, then the address limit (4 requests, the
+    // refused one included) is reached; another address is not affected.
+    const second = await signIn();
+    expect((await upload(photo, second.cookie, "file", limited, sameAddress)).status).toBe(201);
+    expect((await upload(photo, second.cookie, "file", limited, sameAddress)).status).toBe(429);
+    expect((await upload(photo, second.cookie, "file", limited, { "x-forwarded-for": "203.0.113.8" })).status).toBe(
+      201,
+    );
+    expect(fr.Media.errors.rate_limited).toBeTruthy();
+  });
+
+  it("answers 503 busy when photo processing stays saturated, and works once a slot frees", async () => {
+    const semaphore = createSemaphore({ max: 1, maxWaiting: 4 });
+    const limited = limitedApp({ semaphore, limits: { concurrency: { waitMs: 20 } } });
+    const { cookie } = await signIn();
+    const photo = await jpegWithGps();
+    const held = await semaphore.acquire(0);
+    const busy = await upload(photo, cookie, "file", limited);
+    expect(busy.status).toBe(503);
+    expect(await busy.json()).toEqual({ error: "busy" });
+    expect(fr.Media.errors.busy).toBeTruthy();
+    held?.();
+    expect((await upload(photo, cookie, "file", limited)).status).toBe(201);
   });
 });
