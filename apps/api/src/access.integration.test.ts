@@ -1,8 +1,7 @@
 import { createAuth, memoryMailer } from "@closyria/auth";
-import { createDb, schema } from "@closyria/db";
+import { createDb, eq, schema } from "@closyria/db";
 import { migrateTestDatabase, startTestDatabase, type TestDatabase } from "@closyria/testing";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { type AccessEnv, defineAccess, provideSession } from "./access";
 

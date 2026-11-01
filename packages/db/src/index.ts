@@ -25,6 +25,8 @@ export async function pingDb(db: Database): Promise<boolean> {
   }
 }
 
+/** Query operators, re-exported so consumers need no direct drizzle-orm dependency. */
+export { eq } from "drizzle-orm";
 export { schema };
 
 /** Applies pending SQL migrations from `migrationsFolder` in a single connection. */

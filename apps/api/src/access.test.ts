@@ -4,9 +4,9 @@ import { describe, expect, it } from "vitest";
 import {
   type AccessEnv,
   defineAccess,
+  findStrayRoutes,
   findUndeclaredOperations,
   type OpenApiDocument,
-  PUBLIC_NON_OPENAPI_ROUTES,
   provideSession,
 } from "./access";
 import { createApp } from "./app";
@@ -137,28 +137,57 @@ describe("route coverage", () => {
 
   it("registers no route outside the OpenAPI operations and the public allowlist", async () => {
     const app = make();
-    const doc = await openapi(app);
-    const documented = new Set(
-      Object.entries(doc.paths).flatMap(([path, item]) =>
-        Object.keys(item).map((m) => `${m.toUpperCase()} ${path.replace(/\{(\w+)\}/g, ":$1")}`),
-      ),
-    );
-    const allowed = new Set(PUBLIC_NON_OPENAPI_ROUTES.map((r) => `${r.method} ${r.path}`));
-    const stray = app.routes
-      .filter((r) => r.method !== "ALL") // app-wide middleware
-      .map((r) => `${r.method} ${r.path}`)
-      .filter((id) => !documented.has(id) && !allowed.has(id));
-    expect(stray).toEqual([]);
+    expect(findStrayRoutes(app, await openapi(app))).toEqual([]);
   });
 
-  it("flags a plain Hono route added outside the allowlist", async () => {
+  it("flags a plain Hono route", async () => {
     const app = make();
     app.get("/sneaky", (c) => c.text("hi"));
-    const doc = await openapi(app);
-    const known = new Set(["GET /api/health", ...PUBLIC_NON_OPENAPI_ROUTES.map((r) => `${r.method} ${r.path}`)]);
-    expect(
-      app.routes.filter((r) => r.method !== "ALL" && !known.has(`${r.method} ${r.path}`)).map((r) => r.path),
-    ).toEqual(["/api/sneaky"]);
-    expect(Object.keys(doc.paths)).not.toContain("/api/sneaky");
+    expect(findStrayRoutes(app, await openapi(app))).toEqual(["GET /api/sneaky"]);
+  });
+
+  it("flags an all() route", async () => {
+    const app = make();
+    app.all("/sneaky-all", (c) => c.text("hi"));
+    expect(findStrayRoutes(app, await openapi(app))).toEqual(["ALL /api/sneaky-all"]);
+  });
+
+  it("flags a use() handler other than the session provider", async () => {
+    const app = make();
+    app.use("/x/*", async (_c, next) => next());
+    expect(findStrayRoutes(app, await openapi(app))).toEqual(["ALL /api/x/*"]);
+  });
+
+  it("publishes the 401 and 403 responses of user and admin routes", async () => {
+    const app = new OpenAPIHono<AccessEnv>();
+    for (const level of ["public", "user", "admin"] as const) {
+      app.openapi(defineAccess(createRoute({ method: "get", path: `/${level}`, responses: noContent }), level), (c) =>
+        c.json({}, 200),
+      );
+    }
+    app.doc31("/doc", { openapi: "3.1.0", info: { title: "t", version: "1" } });
+    const doc = (await (await app.request("/doc")).json()) as {
+      paths: Record<string, { get: { responses: Record<string, unknown> } }>;
+    };
+    const codes = (p: string) => Object.keys(doc.paths[p]?.get.responses ?? {}).sort();
+    expect(codes("/public")).toEqual(["200"]);
+    expect(codes("/user")).toEqual(["200", "401"]);
+    expect(codes("/admin")).toEqual(["200", "401", "403"]);
+  });
+
+  it("does not read the session on a public route", async () => {
+    const app = new OpenAPIHono<AccessEnv>();
+    app.use(
+      "*",
+      provideSession({
+        getSession: async () => {
+          throw new Error("database down");
+        },
+      }),
+    );
+    app.openapi(defineAccess(createRoute({ method: "get", path: "/p", responses: noContent }), "public"), (c) =>
+      c.json({}, 200),
+    );
+    expect((await app.request("/p", { headers: { cookie: "better-auth.session_token=x" } })).status).toBe(200);
   });
 });

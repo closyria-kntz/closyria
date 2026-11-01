@@ -1,6 +1,6 @@
 import type { Session } from "@closyria/auth";
-import type { RouteConfig } from "@hono/zod-openapi";
-import type { Env, MiddlewareHandler } from "hono";
+import { type RouteConfig, z } from "@hono/zod-openapi";
+import type { Env, Hono, MiddlewareHandler } from "hono";
 
 /**
  * Who may call a route (spec §8, §9):
@@ -24,7 +24,7 @@ export type SessionSource = { getSession: (headers: Headers) => Promise<Session 
 
 /** Installs the (memoized) session lookup for the request. Register it with `app.use("*", …)` before any route. */
 export function provideSession(source: SessionSource): MiddlewareHandler<AccessEnv> {
-  return async (c, next) => {
+  const handler: MiddlewareHandler<AccessEnv> = async (c, next) => {
     let pending: Promise<Session | null> | undefined;
     c.set("getSession", () => {
       pending ??= source.getSession(c.req.raw.headers);
@@ -32,7 +32,12 @@ export function provideSession(source: SessionSource): MiddlewareHandler<AccessE
     });
     await next();
   };
+  sessionProviders.add(handler);
+  return handler;
 }
+
+/** The handlers made by `provideSession`: the only app-wide handlers `findStrayRoutes` accepts. */
+const sessionProviders = new WeakSet<object>();
 
 /** Per-route enforcement. 401 without a session, 403 when an admin route is not met by an admin passkey session. */
 export function accessMiddleware(level: AccessLevel): MiddlewareHandler<AccessEnv> {
@@ -40,7 +45,9 @@ export function accessMiddleware(level: AccessLevel): MiddlewareHandler<AccessEn
     const getSession = c.get("getSession");
     // Fail closed: a route reached without the session provider is a wiring bug, never a public route.
     if (!getSession) throw new Error("provideSession() must be registered before routes declared with defineAccess");
-    const session = await getSession();
+    // Public routes never touch the session store (the health check must work when the database is down).
+    // A public handler that wants the optional session calls `c.var.getSession()`.
+    const session = level === "public" ? null : await getSession();
     c.set("session", session);
     if (level !== "public") {
       if (!session) return c.json({ error: "unauthorized" }, 401);
@@ -52,6 +59,11 @@ export function accessMiddleware(level: AccessLevel): MiddlewareHandler<AccessEn
   };
 }
 
+const errorBody = (code: string) => ({
+  description: code === "unauthorized" ? "No valid session" : "Not allowed for this account",
+  content: { "application/json": { schema: z.object({ error: z.literal(code) }) } },
+});
+
 /**
  * Declares who may call an OpenAPI route and enforces it. The level is published as the
  * `x-access` extension of the operation, so `/api/openapi.json` lets tests prove that
@@ -60,7 +72,15 @@ export function accessMiddleware(level: AccessLevel): MiddlewareHandler<AccessEn
 export function defineAccess<R extends RouteConfig>(route: R, level: AccessLevel) {
   const own = route.middleware;
   const middleware = [accessMiddleware(level), ...(own ? (Array.isArray(own) ? own : [own]) : [])];
-  return { ...route, "x-access": level, middleware } as R & { "x-access": AccessLevel; middleware: typeof middleware };
+  const responses = {
+    ...(level === "public" ? {} : { 401: errorBody("unauthorized") }),
+    ...(level === "admin" ? { 403: errorBody("forbidden") } : {}),
+    ...route.responses,
+  };
+  return { ...route, responses, "x-access": level, middleware } as R & {
+    "x-access": AccessLevel;
+    middleware: typeof middleware;
+  };
 }
 
 /**
@@ -82,4 +102,21 @@ export function findUndeclaredOperations(doc: OpenApiDocument): string[] {
       .filter(([, op]) => !ACCESS_LEVELS.includes(op["x-access"] as AccessLevel))
       .map(([method]) => `${method.toUpperCase()} ${path}`),
   );
+}
+
+/**
+ * Routes registered on `app` that are neither a documented OpenAPI operation, nor in the public
+ * allowlist, nor the app-wide session provider (as "METHOD /path"). Must be empty.
+ */
+export function findStrayRoutes(app: Pick<Hono, "routes">, doc: OpenApiDocument): string[] {
+  const documented = new Set(
+    Object.entries(doc.paths).flatMap(([path, item]) =>
+      Object.keys(item).map((m) => `${m.toUpperCase()} ${path.replace(/\{(\w+)\}/g, ":$1")}`),
+    ),
+  );
+  const allowed = new Set(PUBLIC_NON_OPENAPI_ROUTES.map((r) => `${r.method} ${r.path}`));
+  return app.routes
+    .filter((r) => !sessionProviders.has(r.handler))
+    .map((r) => `${r.method} ${r.path}`)
+    .filter((id) => !documented.has(id) && !allowed.has(id));
 }
