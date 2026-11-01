@@ -11,7 +11,8 @@ const { db, pool } = createDb(env.DATABASE_URL);
 const mailer =
   env.MAIL_TRANSPORT === "brevo" && env.BREVO_API_KEY
     ? brevoMailer({ apiKey: env.BREVO_API_KEY, from: env.MAIL_FROM })
-    : memoryMailer();
+    : // The code is printed only in local development, so one can sign in without Brevo.
+      memoryMailer({ logContent: env.APP_ENV === "development" });
 const auth = createAuth({ db, mailer, baseUrl: env.BETTER_AUTH_URL, secret: env.BETTER_AUTH_SECRET });
 const app = createApp({ env: env.APP_ENV, version: env.APP_VERSION, pingDb: () => pingDb(db), auth });
 

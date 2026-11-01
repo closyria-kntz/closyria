@@ -4,7 +4,7 @@ import { migrateTestDatabase, startTestDatabase, type TestDatabase } from "@clos
 import { eq, sql } from "drizzle-orm";
 import { pgTable, serial, text } from "drizzle-orm/pg-core";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { type Auth, createAuth, memoryMailer, registerOwnedTable } from "./index";
+import { type Auth, createAuth, EMAIL_SEND_MAX, listOwnedColumns, memoryMailer, registerOwnedTable } from "./index";
 
 // Test-only table standing in for the user data future chantiers will register.
 const ownedItems = pgTable("test_owned_items", {
@@ -25,10 +25,13 @@ let ipCounter = 0;
 /** A fresh client IP, so per-IP rate limits only apply where a test wants them. */
 const nextIp = () => `10.0.${Math.floor(++ipCounter / 250)}.${(ipCounter % 250) + 1}`;
 
-type CallOptions = { body?: unknown; cookie?: string; ip?: string; method?: "GET" | "POST" };
+type CallOptions = { body?: unknown; cookie?: string; ip?: string; method?: "GET" | "POST"; origin?: string };
 
-async function call(path: string, { body, cookie, ip = nextIp(), method = "POST" }: CallOptions = {}) {
-  const headers = new Headers({ origin: BASE_URL, "x-forwarded-for": ip });
+async function call(
+  path: string,
+  { body, cookie, ip = nextIp(), method = "POST", origin = BASE_URL }: CallOptions = {},
+) {
+  const headers = new Headers({ origin, "x-forwarded-for": ip, "user-agent": "closyria-tests" });
   if (cookie) headers.set("cookie", cookie);
   if (body !== undefined) headers.set("content-type", "application/json");
   return auth.handler(
@@ -222,6 +225,38 @@ describe("email one-time codes", () => {
   });
 });
 
+describe("per e-mail limit on code sending", () => {
+  it("refuses an e-mail after the limit whatever the IP, and leaves other e-mails alone", async () => {
+    const email = "Cible@Example.test";
+    for (let i = 0; i < EMAIL_SEND_MAX; i++) {
+      expect((await sendCode(i % 2 ? email : email.toLowerCase())).status, `send ${i + 1}`).toBe(200);
+    }
+    const sent = mailer.messages.length;
+
+    expect((await sendCode(email)).status).toBe(429);
+    expect((await sendCode(email.toLowerCase())).status).toBe(429);
+    expect(mailer.messages.length).toBe(sent);
+    expect((await sendCode("autre@example.test")).status).toBe(200);
+  });
+
+  it("allows the e-mail again after an hour", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-02T08:00:00Z") });
+    const email = "patiente@example.test";
+    for (let i = 0; i < EMAIL_SEND_MAX; i++) await sendCode(email);
+    expect((await sendCode(email)).status).toBe(429);
+
+    vi.setSystemTime(new Date("2026-11-02T09:00:01Z"));
+    expect((await sendCode(email)).status).toBe(200);
+  });
+
+  it("stores only a hash of the e-mail", async () => {
+    await sendCode("secrete@example.test");
+    const rows = await handle.db.execute<{ key: string }>(sql`select key from email_rate_limit`);
+    expect(rows.rows.length).toBeGreaterThan(0);
+    for (const row of rows.rows) expect(row.key).not.toContain("@");
+  });
+});
+
 describe("anonymous data on sign-in", () => {
   async function insertItem(userId: string, label: string) {
     await handle.db.insert(ownedItems).values({ userId, label });
@@ -267,6 +302,64 @@ describe("anonymous data on sign-in", () => {
       await handle.db.execute<{ n: number }>(sql`select count(*)::int as n from "user" where id = ${anonymous.userId}`)
     ).rows;
     expect(anonymousLeft?.n).toBe(0);
+  });
+});
+
+describe("owned tables", () => {
+  it("only registers user id columns with a cascading foreign key to user(id)", async () => {
+    const owned = listOwnedColumns();
+    expect(owned.length).toBeGreaterThan(0);
+    for (const { table, column } of owned) {
+      const result = await handle.db.execute<{ n: number }>(sql`
+        select count(*)::int as n
+        from pg_constraint c
+        join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
+        join pg_attribute r on r.attrelid = c.confrelid and r.attnum = c.confkey[1]
+        where c.contype = 'f'
+          and c.conrelid = ${table}::regclass
+          and c.confrelid = '"user"'::regclass
+          and cardinality(c.conkey) = 1
+          and a.attname = ${column}
+          and r.attname = 'id'
+          and c.confdeltype = 'c'`);
+      expect(result.rows[0]?.n, `${table}.${column}`).toBe(1);
+    }
+  });
+});
+
+describe("privacy and transport security", () => {
+  it("does not store the IP address on sessions", async () => {
+    const { userId } = await signInAnonymously();
+    const rows = await handle.db.execute<{ ip_address: string | null; user_agent: string | null }>(
+      sql`select ip_address, user_agent from session where user_id = ${userId}`,
+    );
+    expect(rows.rows).toEqual([{ ip_address: null, user_agent: "closyria-tests" }]);
+  });
+
+  it("sets a Secure, HttpOnly, SameSite=Lax session cookie over https", async () => {
+    const httpsUrl = "https://closyria.test";
+    const httpsAuth = createAuth({ db: handle.db, mailer, baseUrl: httpsUrl, secret: SECRET });
+    const res = await httpsAuth.handler(
+      new Request(`${httpsUrl}/api/auth/sign-in/anonymous`, {
+        method: "POST",
+        headers: { origin: httpsUrl, "x-forwarded-for": nextIp(), "content-type": "application/json" },
+        body: "{}",
+      }),
+    );
+    expect(res.status).toBe(200);
+    const sessionCookie = res.headers.getSetCookie().find((c) => c.includes("session_token="));
+    expect(sessionCookie).toBeDefined();
+    const attributes = (sessionCookie ?? "").split(";").map((a) => a.trim().toLowerCase());
+    expect(attributes).toContain("secure");
+    expect(attributes).toContain("httponly");
+    expect(attributes).toContain("samesite=lax");
+  });
+
+  it("refuses a state-changing request from a foreign origin", async () => {
+    const { cookie, userId } = await signInAnonymously();
+    const res = await call("/sign-out", { cookie, body: {}, origin: "https://evil.example" });
+    expect(res.status).toBe(403);
+    expect((await sessionUser(cookie))?.id).toBe(userId);
   });
 });
 

@@ -39,6 +39,24 @@ describe("brevoMailer", () => {
     expect(String(error)).not.toContain("alice");
     expect(String(error)).not.toContain("123456");
   });
+
+  it("gives up on a hung request", async () => {
+    const fetch = vi.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        }),
+    );
+    await expect(brevoMailer({ apiKey: "k", from, fetch, timeoutMs: 20 }).send(message)).rejects.toThrow();
+    expect(fetch.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("times out after 10 seconds by default", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    const fetch = vi.fn(async () => new Response("{}", { status: 201 }));
+    await brevoMailer({ apiKey: "k", from, fetch }).send(message);
+    expect(timeout).toHaveBeenCalledWith(10_000);
+  });
 });
 
 describe("memoryMailer", () => {
@@ -52,5 +70,23 @@ describe("memoryMailer", () => {
     const logged = log.mock.calls.flat().join(" ");
     expect(logged).not.toContain("alice");
     expect(logged).not.toContain("123456");
+  });
+});
+
+describe("memoryMailer in local development", () => {
+  it("logs the content (the code) but never the address when asked to", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    await memoryMailer({ logContent: true }).send(message);
+    const logged = log.mock.calls.flat().join(" ");
+    expect(logged).toContain("123456");
+    expect(logged).not.toContain("alice");
+  });
+
+  it("keeps only the last 50 messages", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const mailer = memoryMailer();
+    for (let i = 0; i < 60; i++) await mailer.send({ ...message, subject: `m${i}` });
+    expect(mailer.messages.length).toBe(50);
+    expect(mailer.messages[0]?.subject).toBe("m10");
   });
 });

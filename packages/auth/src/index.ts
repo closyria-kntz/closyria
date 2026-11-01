@@ -1,5 +1,6 @@
+export { consumeEmailSend, EMAIL_SEND_MAX, EMAIL_SEND_WINDOW_SECONDS } from "./email-limit";
 export { brevoMailer, type Mailer, type MailMessage, type MailSender, memoryMailer } from "./mailer";
-export { type DbExecutor, reassignUserData, registerOwnedTable } from "./owned-data";
+export { type DbExecutor, listOwnedColumns, reassignUserData, registerOwnedTable } from "./owned-data";
 export {
   type Auth,
   type AuthDeps,

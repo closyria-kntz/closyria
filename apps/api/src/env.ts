@@ -25,8 +25,10 @@ export const envSchema = z
     MAIL_FROM: mailSender.prefault("Closyria <bonjour@closyria.com>"),
   })
   .superRefine((env, ctx) => {
-    if (env.APP_ENV === "prod" && env.MAIL_TRANSPORT !== "brevo") {
-      ctx.addIssue({ code: "custom", path: ["MAIL_TRANSPORT"], message: "must be brevo in prod" });
+    // Only local development may keep codes in memory; dev.closyria.com and prod send real e-mails.
+    // (appEnvSchema has no "test" value: tests build their mailer directly.)
+    if (env.APP_ENV !== "development" && env.MAIL_TRANSPORT !== "brevo") {
+      ctx.addIssue({ code: "custom", path: ["MAIL_TRANSPORT"], message: "must be brevo outside development" });
     }
     if (env.MAIL_TRANSPORT === "brevo" && !env.BREVO_API_KEY) {
       ctx.addIssue({ code: "custom", path: ["BREVO_API_KEY"], message: "required when MAIL_TRANSPORT is brevo" });

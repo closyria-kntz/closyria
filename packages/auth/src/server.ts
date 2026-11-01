@@ -3,8 +3,9 @@ import { schema } from "@closyria/db";
 import { loadMessages } from "@closyria/i18n";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { anonymous, emailOTP } from "better-auth/plugins";
+import { consumeEmailSend } from "./email-limit";
 import type { Mailer, MailMessage } from "./mailer";
 import { reassignUserData } from "./owned-data";
 
@@ -40,13 +41,33 @@ export function authOptions(deps: AuthDeps) {
     telemetry: { enabled: false },
     // Stored in the database so limits hold across restarts and processes.
     rateLimit: { enabled: true, storage: "database" },
+    advanced: {
+      // Explicit in tests too, where Better Auth would otherwise skip the Origin/CSRF check.
+      disableOriginCheck: false,
+      // The API sits behind Caddy on the same machine: trust its X-Forwarded-For only.
+      ipAddress: { trustedProxies: ["127.0.0.1/32", "::1/128"] },
+    },
+    databaseHooks: {
+      session: {
+        // No IP address stored on sessions (spec §9). The user agent is kept for the session list.
+        create: { before: async (session) => ({ data: { ...session, ipAddress: null } }) },
+      },
+    },
     hooks: {
-      // An anonymous sign-in with a valid session cookie keeps that session: no duplicate
-      // anonymous user, and a signed-in account is never swapped for an anonymous one.
       before: createAuthMiddleware(async (ctx) => {
-        if (ctx.path !== "/sign-in/anonymous") return;
-        const current = await getSessionFromCtx(ctx, { disableRefresh: true });
-        if (current) return ctx.json({ token: current.session.token, user: current.user });
+        // An anonymous sign-in with a valid session cookie keeps that session: no duplicate
+        // anonymous user, and a signed-in account is never swapped for an anonymous one.
+        if (ctx.path === "/sign-in/anonymous") {
+          const current = await getSessionFromCtx(ctx, { disableRefresh: true });
+          if (current) return ctx.json({ token: current.session.token, user: current.user });
+        }
+        // Per e-mail limit, on top of Better Auth's per-IP limit (spec §9).
+        if (ctx.path === "/email-otp/send-verification-otp") {
+          const email: unknown = ctx.body?.email;
+          if (typeof email === "string" && !(await consumeEmailSend(deps.db, email))) {
+            throw new APIError("TOO_MANY_REQUESTS", { message: "Too many codes requested for this address." });
+          }
+        }
       }),
     },
     plugins: [

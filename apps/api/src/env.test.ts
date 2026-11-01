@@ -19,6 +19,13 @@ describe("envSchema", () => {
     expect(envSchema.safeParse({ ...base, BETTER_AUTH_SECRET: "short" }).success).toBe(false);
   });
 
+  it("requires Brevo on dev.closyria.com too, which needs real codes", () => {
+    const dev = { ...base, APP_ENV: "dev", BETTER_AUTH_URL: "https://dev.closyria.com" };
+    expect(envSchema.safeParse(dev).success).toBe(false);
+    expect(envSchema.safeParse({ ...dev, MAIL_TRANSPORT: "memory" }).success).toBe(false);
+    expect(envSchema.safeParse({ ...dev, MAIL_TRANSPORT: "brevo", BREVO_API_KEY: "key" }).success).toBe(true);
+  });
+
   it("requires Brevo in prod", () => {
     expect(envSchema.safeParse(prod).success).toBe(false);
     expect(envSchema.safeParse({ ...prod, MAIL_TRANSPORT: "memory" }).success).toBe(false);
