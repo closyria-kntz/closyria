@@ -9,3 +9,6 @@ coverage/
 !.env.example
 .DS_Store
 next-env.d.ts
+
+# Superpowers SDD workspaces
+.superpowers/
