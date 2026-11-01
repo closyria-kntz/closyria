@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accueil Closyria</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Équilibré tokens (docs/specs/2026-11-01-direction-visuelle.md §3.1). Layout: same app markup rendered in a phone frame and a desktop frame via container queries. */
+:root {
+  --surface: #F7F0ED; --raised: #FFFDFB; --ink: #2E1A2A; --muted: #6F5A67; --line: #E8DCD8;
+  --accent: #7A2E5F; --accent-ink: #FFF6F0; --ok: #1F4A3F; --ok-bg: #DCEBE2; --prem: #6A4F12; --prem-bg: #F1E4C6;
+  --hint: #F6EAD8; --backdrop: #EFE2DF; --danger: #9B1C31; --sil: #D4BCC1;
+  --page: #ECE7E4; --page-ink: #2E1A2A; --page-muted: #6F5A67;
+  --display: "Cormorant Garamond", Georgia, serif; --body: "Jost", system-ui, sans-serif;
+  --r-btn: 10px; --r-card: 12px; --fast: 150ms; --base: 250ms; --slow: 400ms;
+  color-scheme: light;
+}
+.dark {
+  --surface: #1C1219; --raised: #261A23; --ink: #F6EBEE; --muted: #B9A3B0; --line: #3A2A35;
+  --accent: #E7A6CB; --accent-ink: #1C1219; --ok: #A9DCBF; --ok-bg: #1D3A31; --prem: #E8CF8F; --prem-bg: #3A3220;
+  --hint: #322A22; --backdrop: #2F2129; --danger: #F4A3A8; --sil: #4E3A46;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #121012; --page-ink: #ECE7E9; --page-muted: #A89DA5; color-scheme: dark; } }
+:root[data-theme="dark"] { --page: #121012; --page-ink: #ECE7E9; --page-muted: #A89DA5; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--page-ink); font: 16px/1.5 var(--body); }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 24px; }
+.intro h1 { font: 600 2rem/1.1 var(--display); margin: 0 0 6px; }
+.intro p { margin: 0; color: var(--page-muted); max-width: 70ch; }
+.bar { display: flex; gap: 10px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid color-mix(in srgb, var(--page-ink) 20%, transparent); border-radius: 999px; padding: 3px; }
+.seg button { font: 500 .9rem var(--body); border: 0; background: transparent; color: var(--page-muted); padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--page-ink); color: var(--page); }
+.stage { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+.phone { width: 390px; height: 820px; border-radius: 44px; padding: 12px; background: #0c0c0e; flex: none; }
+.phone .app { height: 100%; border-radius: 34px; }
+.desk { flex: 1 1 760px; min-width: 0; border-radius: 14px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--page-ink) 15%, transparent); }
+.desk .chrome { height: 34px; background: color-mix(in srgb, var(--page-ink) 8%, var(--page)); display: flex; align-items: center; gap: 6px; padding: 0 12px; }
+.desk .chrome i { width: 10px; height: 10px; border-radius: 50%; background: color-mix(in srgb, var(--page-ink) 25%, transparent); }
+.desk .chrome span { margin-left: 12px; font-size: 12px; color: var(--page-muted); }
+.desk .app { height: 760px; }
+@media (max-width: 700px) { .phone { width: 100%; max-width: 390px; } }
+
+/* ---------- the app ---------- */
+.app { container-type: inline-size; background: var(--surface); color: var(--ink); font-family: var(--body); overflow: hidden; display: flex; flex-direction: column; position: relative; }
+.app button { font-family: var(--body); }
+.app :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.top { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 6px; gap: 12px; }
+.logo { font: 600 26px/1 var(--display); letter-spacing: .01em; }
+.nav { display: none; gap: 4px; }
+.nav a { color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: var(--r-btn); font-size: 15px; }
+.nav a.on { color: var(--ink); background: var(--raised); font-weight: 500; }
+.icons { display: flex; gap: 6px; }
+.ibtn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--raised); display: grid; place-items: center; color: var(--ink); cursor: pointer; }
+.ibtn svg { width: 18px; height: 18px; }
+.scroll { flex: 1; overflow-y: auto; padding: 4px 18px 24px; display: grid; gap: 22px; align-content: start; }
+.hello h2 { font: 600 32px/1.05 var(--display); margin: 6px 0 4px; }
+.hello p { margin: 0; color: var(--muted); font-size: 15px; }
+.paste { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-card); padding: 14px; display: grid; gap: 10px; }
+.paste label { font-weight: 500; font-size: 15px; }
+.paste .row { display: flex; gap: 8px; }
+.paste input { flex: 1; min-width: 0; font: 400 15px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-btn); padding: 12px; }
+.paste input::placeholder { color: var(--muted); }
+.btn { font: 600 15px var(--body); border-radius: var(--r-btn); padding: 12px 16px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; white-space: nowrap; transition: transform var(--fast) ease; }
+.btn:active { transform: scale(.98); }
+.btn.ghost { background: transparent; color: var(--accent); }
+.paste small { color: var(--muted); font-size: 13px; }
+.sec-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.sec-h h3 { margin: 0; font: 600 22px/1.1 var(--display); }
+.sec-h a { color: var(--accent); font-size: 14px; text-decoration: none; font-weight: 500; }
+.now { display: grid; gap: 10px; }
+.tile { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-card); padding: 12px; display: flex; gap: 12px; align-items: center; }
+.tile .meta { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.tile b { font-weight: 500; font-size: 15px; }
+.tile .sub { color: var(--muted); font-size: 13px; }
+.pill { display: inline-block; max-width: 100%; font-size: 12px; font-weight: 500; padding: 3px 9px; border-radius: 999px; background: var(--prem-bg); color: var(--prem); }
+.pill.ok { background: var(--ok-bg); color: var(--ok); }
+.pill.warn { background: var(--hint); color: var(--danger); }
+.prog { height: 5px; border-radius: 99px; background: var(--line); overflow: hidden; margin-top: 4px; }
+.prog i { display: block; height: 100%; width: 70%; background: var(--accent); }
+.ph { position: relative; aspect-ratio: 3 / 4; background: var(--backdrop); border-radius: calc(var(--r-card) - 4px); overflow: hidden; cursor: zoom-in; flex: none; border: 0; padding: 0; }
+.ph svg { position: absolute; inset: 10% 12%; width: 76%; height: 80%; fill: var(--sil); transition: transform var(--slow) cubic-bezier(.2,.7,.2,1); }
+@media (hover: hover) and (pointer: fine) { .ph:hover svg { transform: scale(1.03); } }
+@media (prefers-reduced-motion: reduce) { .ph svg, .btn { transition: none; } }
+.tile .ph { width: 54px; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.card { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-card); padding: 8px; display: grid; gap: 8px; }
+.card .t { padding: 0 4px 4px; display: grid; gap: 2px; font-size: 13px; min-width: 0; }
+.card .t span { white-space: nowrap; }
+.card .t .pill { white-space: normal; }
+.card .t b { font-weight: 500; font-size: 14px; }
+.card .shop { color: var(--muted); }
+.old { text-decoration: line-through; color: var(--muted); margin-right: 6px; }
+.new { color: var(--accent); font-weight: 600; }
+.heart { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%; background: var(--raised); display: grid; place-items: center; }
+.heart svg { position: static; width: 15px; height: 15px; fill: var(--accent); }
+.hint { background: var(--hint); border-radius: var(--r-card); padding: 12px 14px; font-size: 14px; display: flex; gap: 10px; align-items: center; }
+.tabbar { display: flex; justify-content: space-around; padding: 8px 6px 18px; border-top: 1px solid var(--line); background: var(--raised); font-size: 11px; color: var(--muted); }
+.tabbar span { display: grid; justify-items: center; gap: 3px; }
+.tabbar span.on { color: var(--accent); font-weight: 600; }
+.tabbar svg { width: 20px; height: 20px; }
+.cols { display: grid; gap: 22px; }
+
+@container (min-width: 700px) {
+  .top { padding: 20px 32px 8px; }
+  .nav { display: flex; }
+  .scroll { padding: 8px 32px 32px; gap: 28px; }
+  .tabbar { display: none; }
+  .hello h2 { font-size: 40px; }
+  .cols { grid-template-columns: 1.1fr 1fr; align-items: start; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .paste .row input { padding: 14px; }
+}
+
+/* lightbox */
+.lb { position: absolute; inset: 0; z-index: 20; background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(6px); display: none; flex-direction: column; }
+.lb.open { display: flex; }
+.lb .lb-top { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; }
+.lb .lb-top span { font-size: 14px; color: var(--muted); }
+.lb .big { flex: 1; margin: 0 18px 18px; background: var(--backdrop); border-radius: var(--r-card); position: relative; }
+.lb .big svg { position: absolute; inset: 8% 18%; width: 64%; height: 84%; fill: var(--sil); }
+.lb .dots { display: flex; justify-content: center; gap: 6px; padding-bottom: 18px; }
+.lb .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+.lb .dots i.on { background: var(--accent); }
+footer { color: var(--page-muted); font-size: .9rem; max-width: 80ch; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="intro">
+    <h1>Maquette de l'accueil</h1>
+    <p>La même page sur téléphone et sur ordinateur, en style Équilibré. Touche une photo pour l'agrandir. Sur ordinateur, survole une photo pour voir l'animation légère.</p>
+  </header>
+  <div class="bar">
+    <div class="seg" role="group" aria-label="Mode"><button type="button" data-mode="light" aria-pressed="true">Clair</button><button type="button" data-mode="dark" aria-pressed="false">Sombre</button></div>
+  </div>
+  <div class="stage">
+    <div class="phone"><div class="app" data-slot></div></div>
+    <div class="desk"><div class="chrome"><i></i><i></i><i></i><span>closyria.com</span></div><div class="app" data-slot></div></div>
+  </div>
+  <footer>
+    <p>Ce qu'on voit sur cette page :</p>
+    <ul>
+      <li>Coller un lien en premier : c'est le geste principal de l'appli.</li>
+      <li>« En ce moment » regroupe ce qui demande ton attention : colis, retour à faire, remboursement attendu.</li>
+      <li>Les favoris montrent les bonnes nouvelles (baisse de prix, retour en stock), puis les dernières pièces du dressing.</li>
+      <li>Photos entières, jamais recadrées, au format 3:4 ; agrandissement au toucher ; aucune surbrillance au survol.</li>
+    </ul>
+  </footer>
+</div>
+
+<template id="app">
+  <div class="top">
+    <span class="logo">Closyria</span>
+    <nav class="nav" aria-label="Navigation principale"><a class="on" href="#" aria-current="page">Accueil</a><a href="#">Dressing</a><a href="#">Envies</a><a href="#">Commandes</a><a href="#">Boutiques</a></nav>
+    <div class="icons">
+      <button class="ibtn" type="button" aria-label="Rechercher"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+      <button class="ibtn" type="button" aria-label="Mon compte"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></button>
+    </div>
+  </div>
+  <div class="scroll">
+    <div class="hello"><h2>Bonjour Camille</h2><p>2 colis en route et 1 retour à faire cette semaine.</p></div>
+    <form class="paste" onsubmit="return false">
+      <label>Ajoute un article</label>
+      <div class="row"><input type="url" placeholder="Colle le lien d'un article" aria-label="Lien de l'article"><button class="btn" type="submit">Ajouter</button></div>
+      <small>Ou partage-le depuis l'appli de la boutique avec « Partager → Closyria ».</small>
+    </form>
+    <div class="cols">
+      <section>
+        <div class="sec-h"><h3>En ce moment</h3><a href="#">Tout voir</a></div>
+        <div class="now">
+          <div class="tile"><button class="ph" type="button" aria-label="Agrandir la photo de la robe Lou"><svg viewBox="0 0 30 40"><path d="M10 2h10l2 6-3 4 6 26H5l6-26-3-4z"/></svg></button><div class="meta"><b>Robe Lou · Sézane</b><span class="sub">Taille 38 · 140 €</span><div class="prog"><i></i></div><span class="sub">Livraison prévue demain</span></div></div>
+          <div class="tile"><button class="ph" type="button" aria-label="Agrandir la photo du pull côtelé"><svg viewBox="0 0 30 40"><path d="M6 6l6-4h6l6 4 4 10-5 2-1-5v25H8V13l-1 5-5-2z"/></svg></button><div class="meta"><b>Pull côtelé · Mango</b><span class="sub">À renvoyer avant le 14 nov.</span><span class="pill warn">Plus que 3 jours</span></div></div>
+          <div class="tile"><button class="ph" type="button" aria-label="Agrandir la photo du jean"><svg viewBox="0 0 30 40"><path d="M9 2h12l1 37h-7l0-24-1 24H7z"/></svg></button><div class="meta"><b>Remboursement Zara</b><span class="sub">49,95 € attendus avant le 20 nov.</span><span class="pill ok">Retour reçu par la boutique</span></div></div>
+        </div>
+      </section>
+      <section>
+        <div class="sec-h"><h3>Tes favoris</h3><a href="#">Mes envies</a></div>
+        <div class="grid">
+          <div class="card"><button class="ph" type="button" aria-label="Agrandir la photo du jean droit"><svg viewBox="0 0 30 40"><path d="M9 2h12l1 37h-7l0-24-1 24H7z"/></svg><span class="heart"><svg viewBox="0 0 24 24"><path d="M12 21s-8-5-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 6-8 11-8 11z"/></svg></span></button><div class="t"><b>Jean droit</b><span class="shop">Zara</span><span><span class="old">39,95 €</span><span class="new">29,95 €</span></span></div></div>
+          <div class="card"><button class="ph" type="button" aria-label="Agrandir la photo de la veste en laine"><svg viewBox="0 0 30 40"><path d="M7 4l5-2h6l5 2 5 12-4 2-2-6v26H8V12l-2 6-4-2z"/></svg><span class="heart"><svg viewBox="0 0 24 24"><path d="M12 21s-8-5-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 6-8 11-8 11z"/></svg></span></button><div class="t"><b>Veste en laine</b><span class="shop">Intemporel Shop</span><span class="pill ok">De retour en M</span></div></div>
+          <div class="card"><button class="ph" type="button" aria-label="Agrandir la photo de la chemise Billie"><svg viewBox="0 0 30 40"><path d="M8 3l5-1h4l5 1 5 10-4 2-2-5v28H9V10l-2 5-4-2z"/></svg><span class="heart"><svg viewBox="0 0 24 24"><path d="M12 21s-8-5-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 6-8 11-8 11z"/></svg></span></button><div class="t"><b>Chemise Billie</b><span class="shop">Sézane</span><span>95 €</span></div></div>
+          <div class="card"><button class="ph" type="button" aria-label="Agrandir la photo de la jupe plissée"><svg viewBox="0 0 30 40"><path d="M10 4h10l7 32H3z"/></svg><span class="heart"><svg viewBox="0 0 24 24"><path d="M12 21s-8-5-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 6-8 11-8 11z"/></svg></span></button><div class="t"><b>Jupe plissée</b><span class="shop">My1996</span><span>59 €</span></div></div>
+        </div>
+      </section>
+    </div>
+    <div class="hint"><span>Les soldes d'hiver commencent le 7 janvier. Tes 12 favoris seront surveillés.</span></div>
+  </div>
+  <nav class="tabbar" aria-label="Navigation">
+    <span class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l9-7 9 7v9H3z"/></svg>Accueil</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l3 3h4v14H5V6h4z"/></svg>Dressing</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>Ajouter</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20s-7-4.5-7-10a4 4 0 017-2.5A4 4 0 0119 10c0 5.5-7 10-7 10z"/></svg>Envies</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h18v13H3zM8 7V4h8v3"/></svg>Commandes</span>
+  </nav>
+  <div class="lb" role="dialog" aria-modal="true" aria-label="Photo agrandie">
+    <div class="lb-top"><span>1 / 3 · glisse pour la suivante</span><button class="ibtn" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="big"></div>
+    <div class="dots"><i class="on"></i><i></i><i></i></div>
+  </div>
+</template>
+
+<script>
+(function () {
+  var tpl = document.getElementById("app");
+  document.querySelectorAll("[data-slot]").forEach(function (slot) {
+    slot.appendChild(tpl.content.cloneNode(true));
+    var lb = slot.querySelector(".lb"), big = lb.querySelector(".big"), closeBtn = lb.querySelector(".lb-top button"), last = null;
+    slot.querySelectorAll(".ph").forEach(function (ph) {
+      ph.addEventListener("click", function () {
+        last = ph; big.innerHTML = ""; var svg = ph.querySelector("svg").cloneNode(true); big.appendChild(svg);
+        lb.classList.add("open"); closeBtn.focus();
+      });
+    });
+    function close() { lb.classList.remove("open"); if (last) last.focus(); }
+    closeBtn.addEventListener("click", close);
+    lb.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+  });
+  document.querySelectorAll(".seg button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      document.querySelectorAll(".seg button").forEach(function (x) { x.setAttribute("aria-pressed", "false"); });
+      b.setAttribute("aria-pressed", "true");
+      document.querySelectorAll(".app").forEach(function (a) { a.classList.toggle("dark", b.dataset.mode === "dark"); });
+    });
+  });
+})();
+</script>
+</body>
+</html>

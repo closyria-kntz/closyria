@@ -158,3 +158,13 @@ saison dans l'admin.
   et les durées (§8), avec contrôle des contrastes AA en clair et en sombre.
 - Héberger Cormorant Garamond et Jost dans le site.
 - Les photos (§6) et les thèmes (§10) sont mis en œuvre dans les chantiers qui les utilisent (2 et 4).
+
+## 13. Maquettes validées
+
+| Écran | Fichier | Validée le |
+|---|---|---|
+| Accueil de l'appli (téléphone et ordinateur, clair et sombre) | `docs/maquettes/accueil.html` | 2026-11-01 |
+
+Ordre de l'accueil : salutation et résumé · « Ajoute un article » (coller un lien, rappel du partage) · « En ce moment »
+(colis, retours, remboursements) · « Tes favoris » (bonnes nouvelles d'abord) · conseil du moment. Navigation en bas
+sur téléphone, en haut sur ordinateur. Sert de référence au chantier 1.
