@@ -1,0 +1,14 @@
+{
+  "name": "@closyria/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@closyria/config": "workspace:*",
+    "vitest": "^5.0.5"
+  }
+}
