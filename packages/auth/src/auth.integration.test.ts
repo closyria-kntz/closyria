@@ -1,3 +1,4 @@
+import { createHash, createHmac } from "node:crypto";
 import { createDb } from "@closyria/db";
 import { loadMessages } from "@closyria/i18n";
 import { migrateTestDatabase, startTestDatabase, type TestDatabase } from "@closyria/testing";
@@ -249,12 +250,59 @@ describe("per e-mail limit on code sending", () => {
     expect((await sendCode(email)).status).toBe(200);
   });
 
-  it("stores only a hash of the e-mail", async () => {
+  const keyOf = (email: string) => createHmac("sha256", SECRET).update(`email-otp-send:${email}`).digest("hex");
+  const rowsFor = async (email: string) =>
+    (await handle.db.execute<{ key: string }>(sql`select key from email_rate_limit where key = ${keyOf(email)}`)).rows
+      .length;
+
+  it("stores only a keyed hash (HMAC) of the e-mail", async () => {
     await sendCode("secrete@example.test");
-    const rows = await handle.db.execute<{ key: string }>(sql`select key from email_rate_limit`);
-    expect(rows.rows.length).toBeGreaterThan(0);
-    for (const row of rows.rows) expect(row.key).not.toContain("@");
+    const plainHash = createHash("sha256").update("email-otp-send:secrete@example.test").digest("hex");
+    const all = await handle.db.execute<{ key: string }>(sql`select key from email_rate_limit`);
+    expect(all.rows.map((r) => r.key)).not.toContain(plainHash);
+    for (const row of all.rows) expect(row.key).not.toContain("@");
+    expect(await rowsFor("secrete@example.test")).toBe(1);
   });
+
+  it("purges rows whose window ended more than 24 hours ago", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-05T00:00:00Z") });
+    await sendCode("ancienne@example.test");
+    vi.setSystemTime(new Date("2026-11-05T02:00:00Z"));
+    await sendCode("recente@example.test");
+
+    // 25 h 00 min 01 s after the first window started: it ended 24 h 00 min 01 s ago.
+    vi.setSystemTime(new Date("2026-11-06T01:00:01Z"));
+    await sendCode("declencheuse@example.test");
+
+    expect(await rowsFor("ancienne@example.test")).toBe(0);
+    expect(await rowsFor("recente@example.test")).toBe(1);
+  });
+});
+
+describe("password and other code paths are closed", () => {
+  const registered = "inscrite@example.test";
+
+  beforeAll(async () => {
+    await sendCode(registered);
+    expect((await signInWithCode(registered, lastCode())).status).toBe(200);
+  });
+
+  it.each(["/email-otp/request-password-reset", "/forget-password/email-otp"])("%s is not served", async (path) => {
+    const sent = mailer.messages.length;
+    const res = await call(path, { body: { email: registered } });
+    expect(res.status).toBe(404);
+    expect(mailer.messages.length).toBe(sent);
+  });
+
+  it.each(["email-verification", "forget-password", "change-email"])(
+    "send-verification-otp refuses type %s",
+    async (type) => {
+      const sent = mailer.messages.length;
+      const res = await call("/email-otp/send-verification-otp", { body: { email: registered, type } });
+      expect(res.status).toBe(400);
+      expect(mailer.messages.length).toBe(sent);
+    },
+  );
 });
 
 describe("anonymous data on sign-in", () => {

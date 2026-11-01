@@ -39,6 +39,14 @@ export function authOptions(deps: AuthDeps) {
     secret: deps.secret,
     database: drizzleAdapter(deps.db, { provider: "pg", schema }),
     telemetry: { enabled: false },
+    // Closyria has no password: close the emailOTP routes that reset one or change the e-mail.
+    disabledPaths: [
+      "/email-otp/request-password-reset",
+      "/forget-password/email-otp",
+      "/email-otp/reset-password",
+      "/email-otp/request-email-change",
+      "/email-otp/change-email",
+    ],
     // Stored in the database so limits hold across restarts and processes.
     rateLimit: { enabled: true, storage: "database" },
     advanced: {
@@ -61,10 +69,14 @@ export function authOptions(deps: AuthDeps) {
           const current = await getSessionFromCtx(ctx, { disableRefresh: true });
           if (current) return ctx.json({ token: current.session.token, user: current.user });
         }
-        // Per e-mail limit, on top of Better Auth's per-IP limit (spec §9).
         if (ctx.path === "/email-otp/send-verification-otp") {
+          // Codes only ever serve to sign in: no password, no separate e-mail verification.
+          if (ctx.body?.type !== "sign-in") {
+            throw new APIError("BAD_REQUEST", { message: "Only sign-in codes are available." });
+          }
+          // Per e-mail limit, on top of Better Auth's per-IP limit (spec §9).
           const email: unknown = ctx.body?.email;
-          if (typeof email === "string" && !(await consumeEmailSend(deps.db, email))) {
+          if (typeof email === "string" && !(await consumeEmailSend(deps.db, email, deps.secret))) {
             throw new APIError("TOO_MANY_REQUESTS", { message: "Too many codes requested for this address." });
           }
         }
@@ -83,7 +95,9 @@ export function authOptions(deps: AuthDeps) {
         expiresIn: OTP_EXPIRES_IN_SECONDS,
         allowedAttempts: OTP_ALLOWED_ATTEMPTS,
         storeOTP: "hashed",
-        sendVerificationOTP: async ({ email, otp }) => {
+        sendVerificationOTP: async ({ email, otp, type }) => {
+          // Second barrier behind disabledPaths and the before hook: only sign-in codes are mailed.
+          if (type !== "sign-in") return;
           await deps.mailer.send(codeEmail(email, otp));
         },
       }),
