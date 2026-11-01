@@ -5,6 +5,7 @@ dev.closyria.com {
 		closyria HASH
 	}
 	header X-Robots-Tag "noindex, nofollow"
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	encode zstd gzip
 
 	handle /api/* {

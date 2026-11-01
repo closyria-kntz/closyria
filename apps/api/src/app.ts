@@ -1,6 +1,6 @@
 import { healthSchema } from "@closyria/shared";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { type AccessEnv, defineAccess, provideSession, type SessionSource } from "./access";
+import { type AccessEnv, appWide, defineAccess, provideSession, type SessionSource } from "./access";
 import { auditMiddleware } from "./admin-audit";
 import { auditRoutes } from "./routes/admin/audit";
 import { type AdminDeps, overviewRoutes } from "./routes/admin/overview";
@@ -36,6 +36,15 @@ const healthRoute = defineAccess(
 
 export function createApp(deps: AppDeps) {
   const app = new OpenAPIHono<AccessEnv>().basePath("/api");
+  // Baseline response headers (task 13). The CSP belongs to the pages, HSTS to Caddy.
+  app.use(
+    "*",
+    appWide(async (c, next) => {
+      await next();
+      c.header("X-Content-Type-Options", "nosniff");
+      c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+    }),
+  );
   app.use("*", provideSession(deps.auth));
   // Journals every admin mutation (spec §8): declared app-wide so no admin route can forget it.
   app.use("*", auditMiddleware(deps.admin.db));

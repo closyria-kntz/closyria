@@ -1,5 +1,6 @@
 # Production site. Replaces the former "coming soon" block for closyria.com.
 closyria.com {
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	encode zstd gzip
 
 	handle /api/* {

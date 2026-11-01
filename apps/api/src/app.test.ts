@@ -43,3 +43,13 @@ describe("/api/auth/*", () => {
     }
   });
 });
+
+describe("API security headers", () => {
+  it("sets nosniff and a referrer policy on every response", async () => {
+    for (const path of ["/api/health", "/api/openapi.json", "/api/nope"]) {
+      const res = await make(true).request(path);
+      expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(res.headers.get("referrer-policy")).toBe("strict-origin-when-cross-origin");
+    }
+  });
+});

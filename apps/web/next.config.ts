@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import { securityHeaders } from "./src/security-headers";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
@@ -11,6 +12,7 @@ const config: NextConfig = {
   transpilePackages: ["@closyria/shared", "@closyria/i18n", "@closyria/auth", "@closyria/design-tokens"],
   poweredByHeader: false,
   reactStrictMode: true,
+  headers: async () => [{ source: "/:path*", headers: securityHeaders }],
 };
 
 export default withNextIntl(config);
