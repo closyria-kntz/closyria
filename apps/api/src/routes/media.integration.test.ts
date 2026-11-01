@@ -85,6 +85,7 @@ beforeAll(async () => {
     pingDb: async () => true,
     auth,
     media: { db: handle.db, store },
+    events: { db: handle.db },
   });
 }, 60_000);
 

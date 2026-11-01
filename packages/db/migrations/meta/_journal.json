@@ -36,6 +36,13 @@
       "when": 1793551261087,
       "tag": "0004_media",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793551772282,
+      "tag": "0005_events",
+      "breakpoints": true
     }
   ]
 }

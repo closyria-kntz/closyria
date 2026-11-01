@@ -44,6 +44,7 @@ const app = createApp({
   pingDb: () => pingDb(db),
   auth,
   media: { db, store },
+  events: { db },
 });
 
 const server = serve({ fetch: app.fetch, hostname: env.HOST, port: env.PORT }, (info) => {

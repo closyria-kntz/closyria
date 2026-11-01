@@ -1,6 +1,7 @@
 import { healthSchema } from "@closyria/shared";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { type AccessEnv, defineAccess, provideSession, type SessionSource } from "./access";
+import { type EventsDeps, eventsRoutes } from "./routes/events";
 import { type MediaDeps, mediaRoutes } from "./routes/media";
 
 export type AppDeps = {
@@ -11,6 +12,8 @@ export type AppDeps = {
   auth: { handler: (request: Request) => Promise<Response> } & SessionSource;
   /** Photos: database rows and object storage. */
   media: MediaDeps;
+  /** First-party audience events. */
+  events: EventsDeps;
 };
 
 const healthRoute = defineAccess(
@@ -43,7 +46,8 @@ export function createApp(deps: AppDeps) {
       } as const;
       return dbOk ? c.json(body, 200) : c.json(body, 503);
     })
-    .route("/", mediaRoutes(deps.media));
+    .route("/", mediaRoutes(deps.media))
+    .route("/", eventsRoutes(deps.events));
 
   app.doc31("/openapi.json", {
     openapi: "3.1.0",

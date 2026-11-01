@@ -117,6 +117,7 @@ describe("route coverage", () => {
       pingDb: async () => true,
       auth: { handler: async () => new Response(), getSession: async () => null },
       media: { db: {} as Database, store: memoryStore() }, // never reached: coverage reads the routes only
+      events: { db: {} as Database },
     });
   const openapi = async (app: ReturnType<typeof make>) =>
     (await (await app.request("/api/openapi.json")).json()) as OpenApiDocument;

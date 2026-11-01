@@ -7,4 +7,5 @@
 export * from "./auth";
 export * from "./auth-limits";
 export * from "./entitlements";
+export * from "./events";
 export * from "./media";

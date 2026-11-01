@@ -24,7 +24,7 @@ describe("owned tables of the API process", () => {
     registerOwnedTables(); // idempotent
     const tables = listOwnedColumns().map((o) => o.table);
     // Add future owned tables (media, wardrobe, ...) to this list.
-    expect(tables.sort()).toEqual(["media", "usage_counters", "user_plans"]);
+    expect(tables.sort()).toEqual(["events", "media", "usage_counters", "user_plans"]);
     expect(await findOwnedColumnsWithoutCascade(handle.db)).toEqual([]);
   });
 });
