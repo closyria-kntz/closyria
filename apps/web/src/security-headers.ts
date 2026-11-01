@@ -7,6 +7,9 @@
  * `style-src 'unsafe-inline'` stays: Next and React inject inline styles.
  * Photos will be served from the OVH S3 host (Gravelines), hence the `img-src` pattern.
  * Passkeys (WebAuthn) need nothing in the CSP.
+ *
+ * Framing is the exception, enforced now: a separate enforced CSP holding only `frame-ancestors 'none'`
+ * (nothing else, so Next's inline scripts keep working), and `X-Frame-Options: DENY` for older browsers.
  */
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -25,5 +28,7 @@ export const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
   { key: "Content-Security-Policy-Report-Only", value: contentSecurityPolicy },
 ];

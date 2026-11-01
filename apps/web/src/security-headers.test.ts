@@ -19,9 +19,13 @@ describe("securityHeaders", () => {
     });
   });
 
-  it("ships the CSP in report-only mode, never enforced yet", () => {
+  it("ships the full CSP in report-only mode; only frame-ancestors is enforced", () => {
     expect(headerMap()["Content-Security-Policy-Report-Only"]).toBeDefined();
-    expect(headerMap()["Content-Security-Policy"]).toBeUndefined();
+    expect(headerMap()["Content-Security-Policy"]).toBe("frame-ancestors 'none'");
+  });
+
+  it("forbids framing, also for browsers without frame-ancestors", () => {
+    expect(headerMap()["X-Frame-Options"]).toBe("DENY");
   });
 
   it("locks down framing, base, forms and plugins", () => {

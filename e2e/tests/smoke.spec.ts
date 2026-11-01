@@ -26,6 +26,7 @@ test("la page d'accueil envoie les en-têtes de sécurité de la tâche 13", asy
   expect(headers["permissions-policy"]).toBe("camera=(), microphone=(), geolocation=()");
   const csp = headers["content-security-policy-report-only"] ?? "";
   expect(csp.split(";").map((d) => d.trim())).toContain("frame-ancestors 'none'");
-  // Report-Only for now (task 13): an enforced CSP would block Next's inline bootstrap.
-  expect(headers["content-security-policy"]).toBeUndefined();
+  // Only framing is enforced: a full enforced CSP would block Next's inline bootstrap (task 13).
+  expect(headers["content-security-policy"]).toBe("frame-ancestors 'none'");
+  expect(headers["x-frame-options"]).toBe("DENY");
 });
