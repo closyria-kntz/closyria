@@ -22,6 +22,21 @@ describe("envSchema", () => {
     expect(env.MAIL_FROM).toEqual({ name: "Closyria", email: "bonjour@closyria.com" });
   });
 
+  it("requires APP_ENV explicitly in a production build", () => {
+    expect(envSchema.safeParse({ ...base, NODE_ENV: "production" }).success).toBe(false);
+    expect(envSchema.parse({ ...base, NODE_ENV: "production", APP_ENV: "development" }).APP_ENV).toBe("development");
+  });
+
+  it("accepts APP_ENV=test only with a loopback auth URL (R18)", () => {
+    const test = { ...base, APP_ENV: "test" };
+    for (const url of ["http://127.0.0.1:4000", "http://localhost:4000", "http://[::1]:4000"]) {
+      expect(envSchema.safeParse({ ...test, BETTER_AUTH_URL: url }).success, url).toBe(true);
+    }
+    for (const url of ["https://dev.closyria.com", "https://closyria.com", "http://10.0.0.5:4000"]) {
+      expect(envSchema.safeParse({ ...test, BETTER_AUTH_URL: url }).success, url).toBe(false);
+    }
+  });
+
   it("requires a secret of at least 32 characters", () => {
     expect(envSchema.safeParse({ ...base, BETTER_AUTH_SECRET: "short" }).success).toBe(false);
   });
