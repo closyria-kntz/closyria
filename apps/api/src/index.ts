@@ -1,10 +1,19 @@
+import { brevoMailer, createAuth, memoryMailer } from "@closyria/auth";
 import { createDb, pingDb } from "@closyria/db";
+import { parseEnv } from "@closyria/shared";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
-import { env } from "./env";
+import { envSchema } from "./env";
+
+const env = parseEnv(envSchema);
 
 const { db, pool } = createDb(env.DATABASE_URL);
-const app = createApp({ env: env.APP_ENV, version: env.APP_VERSION, pingDb: () => pingDb(db) });
+const mailer =
+  env.MAIL_TRANSPORT === "brevo" && env.BREVO_API_KEY
+    ? brevoMailer({ apiKey: env.BREVO_API_KEY, from: env.MAIL_FROM })
+    : memoryMailer();
+const auth = createAuth({ db, mailer, baseUrl: env.BETTER_AUTH_URL, secret: env.BETTER_AUTH_SECRET });
+const app = createApp({ env: env.APP_ENV, version: env.APP_VERSION, pingDb: () => pingDb(db), auth });
 
 const server = serve({ fetch: app.fetch, hostname: env.HOST, port: env.PORT }, (info) => {
   console.log(`api ${env.APP_VERSION} (${env.APP_ENV}) listening on ${info.address}:${info.port}`);

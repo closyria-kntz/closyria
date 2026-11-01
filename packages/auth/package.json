@@ -1,0 +1,26 @@
+{
+  "name": "@closyria/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "auth:generate": "pnpm dlx auth@1.7.14 generate --config auth.config.ts --output ../db/src/schema/auth.ts -y"
+  },
+  "dependencies": {
+    "@closyria/db": "workspace:*",
+    "@closyria/i18n": "workspace:*",
+    "better-auth": "1.7.14",
+    "drizzle-orm": "^0.45.4"
+  },
+  "devDependencies": {
+    "@closyria/config": "workspace:*",
+    "@closyria/testing": "workspace:*",
+    "vitest": "^5.0.5"
+  }
+}

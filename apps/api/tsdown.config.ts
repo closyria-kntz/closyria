@@ -11,6 +11,9 @@ export default defineConfig({
     neverBundle: ["pg-native"],
     onlyBundle: false,
   },
+  // Shared chunks (zod, better-auth's lazy adapters) otherwise import each other in a cycle
+  // and run before the runtime helpers they need are defined.
+  outputOptions: { strictExecutionOrder: true },
   dts: false,
   sourcemap: true,
 });

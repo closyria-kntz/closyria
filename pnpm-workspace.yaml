@@ -5,3 +5,6 @@ packages:
 
 allowBuilds:
   esbuild: true
+  # Transitive from next-intl; not needed at runtime.
+  "@parcel/watcher": false
+  "@swc/core": false

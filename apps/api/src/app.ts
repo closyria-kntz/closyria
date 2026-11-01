@@ -5,6 +5,8 @@ export type AppDeps = {
   env: string;
   version: string;
   pingDb: () => Promise<boolean>;
+  /** Better Auth, served under /api/auth/*. */
+  auth: { handler: (request: Request) => Promise<Response> };
 };
 
 const healthRoute = createRoute({
@@ -19,6 +21,8 @@ const healthRoute = createRoute({
 
 export function createApp(deps: AppDeps) {
   const app = new OpenAPIHono().basePath("/api");
+
+  app.on(["GET", "POST"], "/auth/*", (c) => deps.auth.handler(c.req.raw));
 
   const routes = app.openapi(healthRoute, async (c) => {
     const dbOk = await deps.pingDb();

@@ -23,7 +23,7 @@ describe("startTestDatabase", () => {
     await expect(after.connect()).rejects.toThrow();
   }, 60_000);
 
-  it("migrates without error while there is no migration yet", async () => {
+  it("applies the migrations without error", async () => {
     const database = await startTestDatabase();
     try {
       await expect(migrateTestDatabase(database.url)).resolves.toBeUndefined();
