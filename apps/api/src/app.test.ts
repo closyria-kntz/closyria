@@ -7,11 +7,11 @@ const auth = {
   getSession: async () => null,
   handler: async (req: Request) => Response.json({ method: req.method, path: new URL(req.url).pathname }),
 };
-// The media and events routes never run here: it needs no real database.
+// The media, events and admin routes never run here: it needs no real database.
 const media = { db: {} as Database, store: memoryStore() };
 const events = { db: {} as Database };
 const make = (dbOk: boolean) =>
-  createApp({ env: "test", version: "abc123", pingDb: async () => dbOk, auth, media, events });
+  createApp({ env: "test", version: "abc123", pingDb: async () => dbOk, auth, media, events, admin: events });
 
 describe("GET /api/health", () => {
   it("returns 200 when the database answers", async () => {

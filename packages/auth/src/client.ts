@@ -1,9 +1,10 @@
+import { passkeyClient } from "@better-auth/passkey/client";
 import { createAuthClient as createBetterAuthClient } from "better-auth/client";
 import { anonymousClient, emailOTPClient } from "better-auth/client/plugins";
 
 /** Browser auth client for the web app, pointing at the API's `/api/auth`. */
 export function createAuthClient(baseURL: string) {
-  return createBetterAuthClient({ baseURL, plugins: [anonymousClient(), emailOTPClient()] });
+  return createBetterAuthClient({ baseURL, plugins: [anonymousClient(), emailOTPClient(), passkeyClient()] });
 }
 
 /** The part of the auth client `ensureSession` needs. */

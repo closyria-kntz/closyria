@@ -1,6 +1,9 @@
 import { healthSchema } from "@closyria/shared";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { type AccessEnv, defineAccess, provideSession, type SessionSource } from "./access";
+import { auditMiddleware } from "./admin-audit";
+import { auditRoutes } from "./routes/admin/audit";
+import { type AdminDeps, overviewRoutes } from "./routes/admin/overview";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
 import { type MediaDeps, mediaRoutes } from "./routes/media";
 
@@ -14,6 +17,8 @@ export type AppDeps = {
   media: MediaDeps;
   /** First-party audience events. */
   events: EventsDeps;
+  /** Admin area: dashboard figures and the audit log. */
+  admin: AdminDeps;
 };
 
 const healthRoute = defineAccess(
@@ -32,6 +37,8 @@ const healthRoute = defineAccess(
 export function createApp(deps: AppDeps) {
   const app = new OpenAPIHono<AccessEnv>().basePath("/api");
   app.use("*", provideSession(deps.auth));
+  // Journals every admin mutation (spec §8): declared app-wide so no admin route can forget it.
+  app.use("*", auditMiddleware(deps.admin.db));
 
   app.on(["GET", "POST"], "/auth/*", (c) => deps.auth.handler(c.req.raw));
 
@@ -47,7 +54,9 @@ export function createApp(deps: AppDeps) {
       return dbOk ? c.json(body, 200) : c.json(body, 503);
     })
     .route("/", mediaRoutes(deps.media))
-    .route("/", eventsRoutes(deps.events));
+    .route("/", eventsRoutes(deps.events))
+    .route("/", overviewRoutes(deps.admin))
+    .route("/", auditRoutes(deps.admin));
 
   app.doc31("/openapi.json", {
     openapi: "3.1.0",

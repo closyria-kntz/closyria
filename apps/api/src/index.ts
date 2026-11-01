@@ -45,6 +45,7 @@ const app = createApp({
   auth,
   media: { db, store },
   events: { db },
+  admin: { db },
 });
 
 const server = serve({ fetch: app.fetch, hostname: env.HOST, port: env.PORT }, (info) => {

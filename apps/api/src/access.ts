@@ -1,6 +1,7 @@
 import type { Session } from "@closyria/auth";
 import { type RouteConfig, z } from "@hono/zod-openapi";
 import type { Env, Hono, MiddlewareHandler } from "hono";
+import { routePath } from "hono/route";
 
 /**
  * Who may call a route (spec §8, §9):
@@ -17,6 +18,8 @@ export type AccessEnv = {
     /** The caller's session, or null. Always set on routes declared with `defineAccess`. */
     session: Session | null;
     getSession: () => Promise<Session | null>;
+    /** Set once access is granted: the route's declared level and its pattern (e.g. `/api/admin/users/:id`). */
+    access?: { level: AccessLevel; route: string };
   };
 } & Env;
 
@@ -24,20 +27,27 @@ export type SessionSource = { getSession: (headers: Headers) => Promise<Session 
 
 /** Installs the (memoized) session lookup for the request. Register it with `app.use("*", …)` before any route. */
 export function provideSession(source: SessionSource): MiddlewareHandler<AccessEnv> {
-  const handler: MiddlewareHandler<AccessEnv> = async (c, next) => {
+  return appWide<AccessEnv>(async (c, next) => {
     let pending: Promise<Session | null> | undefined;
     c.set("getSession", () => {
       pending ??= source.getSession(c.req.raw.headers);
       return pending;
     });
     await next();
-  };
-  sessionProviders.add(handler);
-  return handler;
+  });
 }
 
-/** The handlers made by `provideSession`: the only app-wide handlers `findStrayRoutes` accepts. */
-const sessionProviders = new WeakSet<object>();
+/** App-wide handlers that `findStrayRoutes` accepts: the session provider and the admin audit. */
+const appWideHandlers = new WeakSet<object>();
+
+/**
+ * Marks a middleware as a legitimate app-wide handler (`app.use("*", …)`), never a route of its own.
+ * Only for cross-cutting middleware that answers nothing by itself.
+ */
+export function appWide<E extends Env>(handler: MiddlewareHandler<E>): MiddlewareHandler<E> {
+  appWideHandlers.add(handler);
+  return handler;
+}
 
 /** Per-route enforcement. 401 without a session, 403 when an admin route is not met by an admin passkey session. */
 export function accessMiddleware(level: AccessLevel): MiddlewareHandler<AccessEnv> {
@@ -55,6 +65,7 @@ export function accessMiddleware(level: AccessLevel): MiddlewareHandler<AccessEn
         return c.json({ error: "forbidden" }, 403);
       }
     }
+    c.set("access", { level, route: routePath(c) });
     await next();
   };
 }
@@ -106,7 +117,7 @@ export function findUndeclaredOperations(doc: OpenApiDocument): string[] {
 
 /**
  * Routes registered on `app` that are neither a documented OpenAPI operation, nor in the public
- * allowlist, nor the app-wide session provider (as "METHOD /path"). Must be empty.
+ * allowlist, nor an `appWide` middleware (as "METHOD /path"). Must be empty.
  */
 export function findStrayRoutes(app: Pick<Hono, "routes">, doc: OpenApiDocument): string[] {
   const documented = new Set(
@@ -116,7 +127,7 @@ export function findStrayRoutes(app: Pick<Hono, "routes">, doc: OpenApiDocument)
   );
   const allowed = new Set(PUBLIC_NON_OPENAPI_ROUTES.map((r) => `${r.method} ${r.path}`));
   return app.routes
-    .filter((r) => !sessionProviders.has(r.handler))
+    .filter((r) => !appWideHandlers.has(r.handler))
     .map((r) => `${r.method} ${r.path}`)
     .filter((id) => !documented.has(id) && !allowed.has(id));
 }

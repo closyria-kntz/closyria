@@ -118,6 +118,7 @@ describe("route coverage", () => {
       auth: { handler: async () => new Response(), getSession: async () => null },
       media: { db: {} as Database, store: memoryStore() }, // never reached: coverage reads the routes only
       events: { db: {} as Database },
+      admin: { db: {} as Database },
     });
   const openapi = async (app: ReturnType<typeof make>) =>
     (await (await app.request("/api/openapi.json")).json()) as OpenApiDocument;
@@ -131,6 +132,12 @@ describe("route coverage", () => {
   it("declares GET /api/health as public", async () => {
     const doc = await openapi(make());
     expect(doc.paths["/api/health"]?.get?.["x-access"]).toBe("public");
+  });
+
+  it("declares the admin routes as admin", async () => {
+    const doc = await openapi(make());
+    expect(doc.paths["/api/admin/overview"]?.get?.["x-access"]).toBe("admin");
+    expect(doc.paths["/api/admin/audit"]?.get?.["x-access"]).toBe("admin");
   });
 
   it("flags an operation registered without defineAccess", async () => {

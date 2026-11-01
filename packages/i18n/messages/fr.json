@@ -22,5 +22,67 @@
       "image_too_large": "Photo trop lourde, 20 Mo maximum",
       "invalid_upload": "Aucune photo reçue, réessayez"
     }
+  },
+  "Admin": {
+    "metadata": {
+      "title": "Administration · Closyria"
+    },
+    "shell": {
+      "title": "Administration",
+      "skipToContent": "Aller au contenu",
+      "navLabel": "Navigation de l’administration"
+    },
+    "nav": {
+      "dashboard": "Tableau de bord",
+      "audit": "Journal d’audit"
+    },
+    "palette": {
+      "open": "Commandes",
+      "shortcut": "Ctrl K",
+      "label": "Palette de commandes",
+      "placeholder": "Aller à…",
+      "empty": "Aucun résultat.",
+      "navigation": "Pages"
+    },
+    "theme": {
+      "toggle": "Thème : {mode, select, light {clair} dark {sombre} other {celui du système}}. Changer de thème"
+    },
+    "dashboard": {
+      "title": "Tableau de bord",
+      "usersTotal": "Utilisatrices",
+      "usersRegistered": "Comptes créés",
+      "usersAnonymous": "Sessions anonymes",
+      "eventsToday": "Événements aujourd’hui",
+      "signupsToday": "Inscriptions aujourd’hui",
+      "todayNote": "« Aujourd’hui » désigne la journée UTC en cours. Les inscriptions comptent les comptes créés ce jour, hors sessions anonymes."
+    },
+    "audit": {
+      "title": "Journal d’audit",
+      "intro": "Chaque action de l’administration qui modifie quelque chose est enregistrée ici, de la plus récente à la plus ancienne.",
+      "empty": "Aucune action enregistrée pour l’instant.",
+      "date": "Date (UTC)",
+      "admin": "Admin",
+      "action": "Action",
+      "target": "Cible",
+      "status": "Statut",
+      "deletedAdmin": "Compte supprimé",
+      "none": "—",
+      "pagination": "Pagination du journal",
+      "next": "Page suivante",
+      "first": "Revenir aux plus récentes"
+    },
+    "passkey": {
+      "title": "Connexion par passkey requise",
+      "intro": "L’administration n’est accessible qu’avec une session ouverte par passkey. Une passkey remplace le mot de passe : elle reste sur votre appareil et se déverrouille avec votre empreinte, votre visage ou votre code.",
+      "stepsTitle": "Comment faire",
+      "step1": "Sur cet appareil, cliquez sur « Enregistrer une passkey » et suivez les instructions de votre navigateur.",
+      "step2": "Cliquez ensuite sur « Se connecter avec une passkey » : l’administration s’ouvre.",
+      "step3": "Vous avez déjà une passkey sur un autre appareil ? Connectez-vous depuis cet appareil, ou utilisez l’option « autre appareil » proposée par votre navigateur (code QR).",
+      "register": "Enregistrer une passkey",
+      "signIn": "Se connecter avec une passkey",
+      "registered": "Passkey enregistrée. Connectez-vous maintenant avec elle.",
+      "registerFailed": "La passkey n’a pas pu être enregistrée. Si vous en avez déjà une, connectez-vous avec elle ; sinon, réessayez.",
+      "signInFailed": "La connexion par passkey a échoué ou a été annulée. Réessayez."
+    }
   }
 }

@@ -86,6 +86,7 @@ beforeAll(async () => {
     auth,
     media: { db: handle.db, store },
     events: { db: handle.db },
+    admin: { db: handle.db },
   });
 }, 60_000);
 
