@@ -89,6 +89,12 @@ export function bindFlushEvents(
  */
 export function track(name: EventName, props?: Props, path?: string): void {
   if (typeof window === "undefined") return;
+  try {
+    trackInBrowser(name, props, path);
+  } catch {} // audience measurement never throws into the page
+}
+
+function trackInBrowser(name: EventName, props?: Props, path?: string): void {
   browserTracker ??= createTracker({
     endpoint: "/api/events",
     path: () => window.location.pathname,

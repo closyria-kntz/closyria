@@ -127,6 +127,16 @@ describe("POST /api/events", () => {
     expect(row?.path).toBe("/items/42");
   });
 
+  it("stores a route template with brackets and dots verbatim", async () => {
+    const res = await post({
+      events: [event({ path: "/items/[id]" }), event({ path: "/docs/[...slug]" }), event({ path: "/[unknown]" })],
+    });
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ accepted: 3 });
+    const rows = await handle.db.select().from(schema.events);
+    expect(rows.map((r) => r.path).sort()).toEqual(["/[unknown]", "/docs/[...slug]", "/items/[id]"]);
+  });
+
   it("attaches the user of the session when there is one", async () => {
     const { cookie, userId } = await signIn();
     const res = await post({ events: [event()] }, { cookie });

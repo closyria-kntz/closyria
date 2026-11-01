@@ -18,7 +18,10 @@ export function PageViewTracker() {
   useEffect(() => {
     // React strict mode (dev) runs effects twice: one page_view per path.
     if (!once.current(pathname)) return;
-    track("page_view", undefined, routeTemplate(pathname, params));
+    // Audience measurement must never break the page.
+    try {
+      track("page_view", undefined, routeTemplate(pathname, params));
+    } catch {}
   }, [pathname]);
   return null;
 }
