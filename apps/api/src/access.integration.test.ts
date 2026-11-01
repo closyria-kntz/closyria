@@ -1,6 +1,7 @@
 import { createAuth, memoryMailer } from "@closyria/auth";
 import { createDb, eq, schema } from "@closyria/db";
-import { migrateTestDatabase, startTestDatabase, type TestDatabase } from "@closyria/testing";
+import type { TestDatabase } from "@closyria/testing";
+import { createTestDatabase } from "@closyria/testing/vitest";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { type AccessEnv, defineAccess, provideSession } from "./access";
@@ -34,8 +35,7 @@ async function signIn() {
 const get = (path: string, cookie?: string) => app.request(path, cookie ? { headers: { cookie } } : {});
 
 beforeAll(async () => {
-  database = await startTestDatabase();
-  await migrateTestDatabase(database.url);
+  database = await createTestDatabase();
   handle = createDb(database.url, { max: 5 });
   vi.spyOn(console, "log").mockImplementation(() => {});
   auth = createAuth({

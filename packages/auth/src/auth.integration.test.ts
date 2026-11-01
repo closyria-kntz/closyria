@@ -1,7 +1,8 @@
 import { createHash, createHmac } from "node:crypto";
 import { createDb } from "@closyria/db";
 import { loadMessages } from "@closyria/i18n";
-import { migrateTestDatabase, startTestDatabase, type TestDatabase } from "@closyria/testing";
+import type { TestDatabase } from "@closyria/testing";
+import { createTestDatabase } from "@closyria/testing/vitest";
 import { eq, sql } from "drizzle-orm";
 import { pgTable, serial, text } from "drizzle-orm/pg-core";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -100,8 +101,7 @@ async function countUsers() {
 const freshAuth = () => createAuth({ db: handle.db, mailer, baseUrl: BASE_URL, secret: SECRET });
 
 beforeAll(async () => {
-  database = await startTestDatabase();
-  await migrateTestDatabase(database.url);
+  database = await createTestDatabase();
   handle = createDb(database.url, { max: 5 });
   await handle.db.execute(
     sql`create table test_owned_items (

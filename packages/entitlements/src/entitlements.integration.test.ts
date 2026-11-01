@@ -1,6 +1,7 @@
 import { listOwnedColumns, reassignUserData } from "@closyria/auth";
 import { createDb, schema } from "@closyria/db";
-import { migrateTestDatabase, startTestDatabase, type TestDatabase } from "@closyria/testing";
+import type { TestDatabase } from "@closyria/testing";
+import { createTestDatabase } from "@closyria/testing/vitest";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createEntitlements, DEFAULT_PLAN_ID, entitlementKeys, registerEntitlementsOwnedTables } from "./index";
@@ -35,8 +36,7 @@ async function newPlan(
 }
 
 beforeAll(async () => {
-  database = await startTestDatabase();
-  await migrateTestDatabase(database.url);
+  database = await createTestDatabase();
   handle = createDb(database.url, { max: 30 });
   registerEntitlementsOwnedTables();
 }, 60_000);

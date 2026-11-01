@@ -1,5 +1,6 @@
 import { createDb } from "@closyria/db";
-import { migrateTestDatabase, startTestDatabase, type TestDatabase } from "@closyria/testing";
+import type { TestDatabase } from "@closyria/testing";
+import { createTestDatabase } from "@closyria/testing/vitest";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { type AuthDeps, authOptions, createAuth, memoryMailer } from "./index";
@@ -138,8 +139,7 @@ const countPasskeys = (email: string) =>
   countRows(sql`select count(*)::int as n from passkey p join "user" u on u.id = p.user_id where u.email = ${email}`);
 
 beforeAll(async () => {
-  database = await startTestDatabase();
-  await migrateTestDatabase(database.url);
+  database = await createTestDatabase();
   handle = createDb(database.url, { max: 5 });
   vi.spyOn(console, "log").mockImplementation(() => {}); // memoryMailer's log line
   mailer = memoryMailer();

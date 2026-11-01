@@ -2,7 +2,8 @@ import { createAuth, memoryMailer } from "@closyria/auth";
 import { createDb, eq, ne, schema } from "@closyria/db";
 import { adminAuditPageSchema, adminOverviewSchema } from "@closyria/shared";
 import { memoryStore } from "@closyria/storage";
-import { migrateTestDatabase, startTestDatabase, type TestDatabase } from "@closyria/testing";
+import type { TestDatabase } from "@closyria/testing";
+import { createTestDatabase } from "@closyria/testing/vitest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../app";
 
@@ -46,8 +47,7 @@ const fixtureUser = (createdAt: Date, isAnonymous: boolean) => {
 const fixtureEvent = (occurredAt: Date, name = "page_view") => ({ name, path: "/", occurredAt });
 
 beforeAll(async () => {
-  database = await startTestDatabase();
-  await migrateTestDatabase(database.url);
+  database = await createTestDatabase();
   handle = createDb(database.url, { max: 5 });
   vi.spyOn(console, "log").mockImplementation(() => {});
   auth = createAuth({

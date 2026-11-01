@@ -2,7 +2,7 @@ import type { Session } from "@closyria/auth";
 import type { Database } from "@closyria/db";
 import { memoryStore } from "@closyria/storage";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   type AccessEnv,
   defineAccess,
@@ -85,8 +85,11 @@ describe("accessMiddleware", () => {
     app.openapi(defineAccess(createRoute({ method: "get", path: "/x", responses: noContent }), "public"), (c) =>
       c.json({}, 200),
     );
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await app.request("/x");
     expect(res.status).toBe(500);
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
   });
 
   it("resolves the session once per request", async () => {

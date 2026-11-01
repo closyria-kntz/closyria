@@ -1,7 +1,7 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync, rmSync } from "node:fs";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,8 +16,21 @@ const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../db/m
 
 export type TestDatabase = {
   url: string;
+  /** Idempotent. */
   stop(): Promise<void>;
 };
+
+/** A PostgreSQL server for a whole test run, with a migrated template database to copy per test file. */
+export type TestServer = {
+  /** Serializable part, handed to test files through Vitest's `provide`/`inject`. */
+  info: TestServerInfo;
+  /** Best-effort synchronous stop, for `process.on("exit")` and signals. */
+  stopSync(): void;
+  /** Idempotent. */
+  stop(): Promise<void>;
+};
+
+export type TestServerInfo = { serverUrl: string; template: string };
 
 /**
  * Starts a disposable PostgreSQL database.
@@ -27,7 +40,8 @@ export type TestDatabase = {
  */
 export async function startTestDatabase(): Promise<TestDatabase> {
   const serverUrl = process.env.TEST_DATABASE_URL;
-  return serverUrl ? createThrowawayDatabase(serverUrl) : startEphemeralCluster();
+  if (!serverUrl) return startEphemeralCluster().then(({ url, stop }) => ({ url, stop }));
+  return createDatabase(serverUrl, `test_${randomBytes(8).toString("hex")}`);
 }
 
 /** Applies the packages/db migrations to `url`. No-op while no migration exists yet. */
@@ -36,19 +50,58 @@ export async function migrateTestDatabase(url: string): Promise<void> {
   await runMigrations(url, MIGRATIONS_DIR);
 }
 
-async function createThrowawayDatabase(serverUrl: string): Promise<TestDatabase> {
-  const name = `test_${randomBytes(8).toString("hex")}`;
-  await withAdminClient(serverUrl, (client) => client.query(`create database ${name}`));
+/**
+ * One server for a test run (vitest globalSetup): an ephemeral cluster, or TEST_DATABASE_URL in CI,
+ * holding a template database migrated once. Test files copy it with `createDatabaseFromTemplate`.
+ */
+export async function startTestServer(): Promise<TestServer> {
+  const template = `template_${randomBytes(8).toString("hex")}`;
+  const ciUrl = process.env.TEST_DATABASE_URL;
+  if (ciUrl) {
+    const database = await createDatabase(ciUrl, template);
+    await migrateTestDatabase(database.url);
+    return { info: { serverUrl: ciUrl, template }, stop: database.stop, stopSync: () => {} };
+  }
 
-  const url = new URL(serverUrl);
-  url.pathname = `/${name}`;
+  const cluster = await startEphemeralCluster();
+  try {
+    await withAdminClient(cluster.url, (client) => client.query(`create database ${ident(template)}`));
+    await migrateTestDatabase(databaseUrl(cluster.url, template));
+  } catch (error) {
+    await cluster.stop();
+    throw error;
+  }
+  return { info: { serverUrl: cluster.url, template }, stop: cluster.stop, stopSync: cluster.stopSync };
+}
 
+/** A fresh database copied from the migrated template: no migration per test file. */
+export async function createDatabaseFromTemplate({ serverUrl, template }: TestServerInfo): Promise<TestDatabase> {
+  return createDatabase(serverUrl, `test_${randomBytes(8).toString("hex")}`, template);
+}
+
+/** `url` pointing at database `name` instead (works for socket URLs with an empty host too). */
+export function databaseUrl(url: string, name: string): string {
+  const match = /^([a-z]+:\/\/[^/?]*)(\/[^?]*)?(\?.*)?$/.exec(url);
+  if (!match) throw new Error("Unrecognised PostgreSQL URL");
+  return `${match[1]}/${encodeURIComponent(name)}${match[3] ?? ""}`;
+}
+
+function ident(name: string): string {
+  return `"${name.replaceAll('"', '""')}"`;
+}
+
+async function createDatabase(serverUrl: string, name: string, template?: string): Promise<TestDatabase> {
+  const from = template ? ` template ${ident(template)}` : "";
+  await withAdminClient(serverUrl, (client) => client.query(`create database ${ident(name)}${from}`));
+  let stopping: Promise<void> | undefined;
   return {
-    url: url.toString(),
-    stop: () =>
-      withAdminClient(serverUrl, (client) => client.query(`drop database if exists ${name} with (force)`)).then(
-        () => undefined,
-      ),
+    url: databaseUrl(serverUrl, name),
+    stop: () => {
+      stopping ??= withAdminClient(serverUrl, (client) =>
+        client.query(`drop database if exists ${ident(name)} with (force)`),
+      ).then(() => undefined);
+      return stopping;
+    },
   };
 }
 
@@ -62,15 +115,20 @@ async function withAdminClient<T>(serverUrl: string, fn: (client: pg.Client) => 
   }
 }
 
-async function startEphemeralCluster(): Promise<TestDatabase> {
+type Cluster = TestDatabase & { stopSync(): void };
+
+/** Exported for tests; `config` lines are appended to postgresql.auto.conf. */
+export async function startEphemeralCluster(options: { config?: string[] } = {}): Promise<Cluster> {
   const root = await mkdtemp(join(tmpdir(), "closyria-pg-"));
   const dataDir = join(root, "data");
+  const logFile = join(root, "server.log");
   // The port only names the socket file (.s.PGSQL.<port>); pick one unlikely to clash.
   const port = 20000 + Math.floor(Math.random() * 40000);
   const user = "postgres";
-  let started = false;
 
-  const pgCtl = (...args: string[]) => run(join(PG_BIN, "pg_ctl"), ["-D", dataDir, ...args]);
+  const pgCtlArgs = (...args: string[]) => ["-D", dataDir, ...args];
+  const pgCtl = (...args: string[]) => run(join(PG_BIN, "pg_ctl"), pgCtlArgs(...args));
+  const stopArgs = pgCtlArgs("-w", "-s", "-m", "immediate", "stop");
 
   try {
     await run(join(PG_BIN, "initdb"), ["-D", dataDir, "-U", user, "--auth=trust", "--no-sync"]);
@@ -83,27 +141,49 @@ async function startEphemeralCluster(): Promise<TestDatabase> {
         "fsync = off",
         "synchronous_commit = off",
         "full_page_writes = off",
+        ...(options.config ?? []),
         "",
       ].join("\n"),
       { flag: "a" },
     );
-    await pgCtl("-w", "-s", "-l", join(root, "server.log"), "start");
-    started = true;
+    await pgCtl("-w", "-s", "-l", logFile, "start");
   } catch (error) {
+    // A postmaster may be up even though `pg_ctl start` failed (e.g. its wait timed out): stop it
+    // before removing its directory, and keep the server log, which holds the actual cause.
+    await pgCtl(...stopArgs.slice(2)).catch(() => {});
+    const serverLog = await readFile(logFile, "utf8").catch(() => "");
     await rm(root, { recursive: true, force: true });
-    throw error;
+    const detail = serverLog.trim() ? `\n--- server.log ---\n${serverLog.trim()}` : "";
+    throw new Error(`Could not start the test PostgreSQL cluster: ${(error as Error).message}${detail}`, {
+      cause: error,
+    });
   }
 
-  const url = `postgresql://${user}@/postgres?host=${encodeURIComponent(root)}&port=${port}`;
-
+  let stopping: Promise<void> | undefined;
+  let stopped = false;
   return {
-    url,
-    stop: async () => {
+    url: `postgresql://${user}@/postgres?host=${encodeURIComponent(root)}&port=${port}`,
+    stop: () => {
+      stopping ??= (async () => {
+        if (stopped) return; // already stopped by stopSync()
+        try {
+          await pgCtl(...stopArgs.slice(2));
+        } finally {
+          stopped = true;
+          await rm(root, { recursive: true, force: true });
+        }
+      })();
+      return stopping;
+    },
+    stopSync: () => {
+      if (stopped || stopping) return;
+      stopped = true;
       try {
-        if (started) await pgCtl("-w", "-s", "-m", "immediate", "stop");
-      } finally {
-        await rm(root, { recursive: true, force: true });
+        execFileSync(join(PG_BIN, "pg_ctl"), stopArgs, { stdio: "ignore" });
+      } catch {
+        // Best effort: the process is exiting anyway.
       }
+      rmSync(root, { recursive: true, force: true });
     },
   };
 }

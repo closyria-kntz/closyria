@@ -1,7 +1,8 @@
 import { createAuth, memoryMailer } from "@closyria/auth";
 import { createDb, eq, schema, trackServer } from "@closyria/db";
 import { memoryStore } from "@closyria/storage";
-import { migrateTestDatabase, startTestDatabase, type TestDatabase } from "@closyria/testing";
+import type { TestDatabase } from "@closyria/testing";
+import { createTestDatabase } from "@closyria/testing/vitest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app";
 
@@ -49,8 +50,7 @@ async function signIn() {
 }
 
 beforeAll(async () => {
-  database = await startTestDatabase();
-  await migrateTestDatabase(database.url);
+  database = await createTestDatabase();
   handle = createDb(database.url, { max: 5 });
   vi.spyOn(console, "log").mockImplementation(() => {});
   auth = createAuth({

@@ -2,7 +2,8 @@ import { createAuth, memoryMailer } from "@closyria/auth";
 import { createDb, eq, schema } from "@closyria/db";
 import fr from "@closyria/i18n/messages/fr.json" with { type: "json" };
 import { memoryStore, type ObjectStore } from "@closyria/storage";
-import { migrateTestDatabase, startTestDatabase, type TestDatabase } from "@closyria/testing";
+import type { TestDatabase } from "@closyria/testing";
+import { createTestDatabase } from "@closyria/testing/vitest";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app";
@@ -68,8 +69,7 @@ function heic(): Buffer {
 }
 
 beforeAll(async () => {
-  database = await startTestDatabase();
-  await migrateTestDatabase(database.url);
+  database = await createTestDatabase();
   handle = createDb(database.url, { max: 5 });
   vi.spyOn(console, "log").mockImplementation(() => {});
   auth = createAuth({

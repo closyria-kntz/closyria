@@ -1,6 +1,7 @@
 import { findOwnedColumnsWithoutCascade, listOwnedColumns } from "@closyria/auth";
 import { createDb } from "@closyria/db";
-import { migrateTestDatabase, startTestDatabase, type TestDatabase } from "@closyria/testing";
+import type { TestDatabase } from "@closyria/testing";
+import { createTestDatabase } from "@closyria/testing/vitest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { registerOwnedTables } from "./owned-tables";
 
@@ -8,8 +9,7 @@ let database: TestDatabase;
 let handle: ReturnType<typeof createDb>;
 
 beforeAll(async () => {
-  database = await startTestDatabase();
-  await migrateTestDatabase(database.url);
+  database = await createTestDatabase();
   handle = createDb(database.url, { max: 2 });
 }, 60_000);
 
