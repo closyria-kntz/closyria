@@ -1,0 +1,11 @@
+# Production site. Replaces the former "coming soon" block for closyria.com.
+closyria.com {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3001
+	}
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}

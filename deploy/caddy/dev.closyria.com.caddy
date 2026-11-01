@@ -1,5 +1,5 @@
 # Dev environment: password-protected, never indexed.
-# Replace HASH with the output of: caddy hash-password
+# Put the output of `caddy hash-password` in place of the placeholder below.
 dev.closyria.com {
 	basic_auth {
 		closyria HASH
