@@ -41,11 +41,11 @@ export function createTracker(env: TrackerEnv) {
 
   env.onHidden(flush);
 
-  function track(name: EventName, props?: Props) {
+  function track(name: EventName, props?: Props, path?: string) {
     if (env.optedOut()) return;
     queue.push({
       name,
-      path: env.path(),
+      path: path ?? env.path(),
       occurredAt: env.now().toISOString(),
       ...(props ? { props } : {}),
     });
@@ -66,8 +66,28 @@ const browserOptedOut = () =>
 
 let browserTracker: ReturnType<typeof createTracker> | undefined;
 
-/** Records an audience event (batched, sent with `sendBeacon`). Does nothing on the server. */
-export function track(name: EventName, props?: Props): void {
+/**
+ * Calls `fn` when the page is hidden (`visibilitychange`) or left (`pagehide`: Safari does not always fire the
+ * former when a tab closes). Both may fire for one departure; flushing an empty queue is a no-op.
+ */
+export function bindFlushEvents(
+  doc: Pick<EventTarget, "addEventListener"> & { visibilityState: string },
+  win: Pick<EventTarget, "addEventListener">,
+  fn: () => void,
+): void {
+  doc.addEventListener("visibilitychange", () => {
+    if (doc.visibilityState === "hidden") fn();
+  });
+  win.addEventListener("pagehide", fn);
+}
+
+/**
+ * Records an audience event (batched, sent with `sendBeacon`). Does nothing on the server.
+ * PRIVACY: the path must never carry personal data. Pass a route template (`/items/[id]`) as `path` when the
+ * URL holds identifiers; the default is the current pathname, fine for static routes only. Query strings are
+ * not sent by the default and are dropped by the server anyway.
+ */
+export function track(name: EventName, props?: Props, path?: string): void {
   if (typeof window === "undefined") return;
   browserTracker ??= createTracker({
     endpoint: "/api/events",
@@ -81,10 +101,7 @@ export function track(name: EventName, props?: Props): void {
       fetch(url, { method: "POST", body, headers: { "content-type": "application/json" }, keepalive: true }),
     setTimer: (fn, delayMs) => window.setTimeout(fn, delayMs),
     clearTimer: (handle) => window.clearTimeout(handle as number),
-    onHidden: (fn) =>
-      document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "hidden") fn();
-      }),
+    onHidden: (fn) => bindFlushEvents(document, window, fn),
   });
-  browserTracker.track(name, props);
+  browserTracker.track(name, props, path);
 }

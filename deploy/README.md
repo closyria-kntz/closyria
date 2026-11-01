@@ -25,6 +25,13 @@ déployer cette version. En développement local, sans elles, les photos restent
 place dans `api/node_modules` sharp et ses binaires linux-x64 (glibc), aux versions du lockfile, puis vérifie qu'il
 se charge. L'artefact doit donc être construit sur une machine linux-x64 glibc, comme le serveur.
 
+## Adresse du client et limite de débit
+
+La limite de débit de `POST /api/events` identifie le client par la **dernière** entrée de `X-Forwarded-For`
+(en mémoire, hachée, jamais stockée). Cela n'est sûr que parce que l'API écoute sur 127.0.0.1 derrière Caddy, qui
+**réécrit** `X-Forwarded-For` avec l'adresse qu'il voit (`reverse_proxy` le fait par défaut). L'API ne doit
+**jamais** être exposée directement. Caddy envoie `/api/*` de l'origine web vers l'API : le web appelle donc `/api/events` en même origine.
+
 ## Donner le rôle admin
 
 Le rôle ne se donne jamais par l'application : ni l'inscription ni la modification du profil ne peuvent le changer.

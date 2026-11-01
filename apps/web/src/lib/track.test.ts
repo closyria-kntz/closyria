@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createTracker, type TrackerEnv } from "./track";
+import { bindFlushEvents, createTracker, type TrackerEnv } from "./track";
 
 function setup(over: Partial<TrackerEnv> = {}) {
   let hidden: (() => void) | undefined;
@@ -91,5 +91,36 @@ describe("track", () => {
     fire();
     hide();
     expect(sent).toEqual([]);
+  });
+});
+
+describe("bindFlushEvents", () => {
+  it("flushes on pagehide and when the page becomes hidden, not when it becomes visible", () => {
+    const handlers: Record<string, () => void> = {};
+    const target = (store: Record<string, () => void>) => ({
+      addEventListener: (type: string, fn: () => void) => {
+        store[type] = fn;
+      },
+    });
+    const winHandlers: Record<string, () => void> = {};
+    const doc = { ...target(handlers), visibilityState: "visible" };
+    const fn = vi.fn();
+    bindFlushEvents(doc as never, target(winHandlers) as never, fn);
+    handlers.visibilitychange?.();
+    expect(fn).not.toHaveBeenCalled();
+    doc.visibilityState = "hidden";
+    handlers.visibilitychange?.();
+    expect(fn).toHaveBeenCalledTimes(1);
+    winHandlers.pagehide?.();
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("track path override", () => {
+  it("sends the given route template instead of the current path", () => {
+    const { tracker, sent, fire } = setup();
+    tracker.track("page_view", undefined, "/items/[id]");
+    fire();
+    expect((sent[0] as { events: { path: string }[] }).events[0]?.path).toBe("/items/[id]");
   });
 });

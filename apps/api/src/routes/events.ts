@@ -10,14 +10,14 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { type AccessEnv, defineAccess } from "../access";
-import { rateLimit } from "../rate-limit";
+import { type RateLimitOptions, rateLimit } from "../rate-limit";
 
 export type EventsDeps = {
   db: Database;
   /** Clock, injectable for tests. */
   now?: () => Date;
   /** Requests per client per window. Default: 60 per minute. */
-  rateLimit?: { max: number; windowMs: number };
+  rateLimit?: RateLimitOptions;
 };
 
 /** 20 events of the maximum size weigh about 55 KB. */
@@ -29,7 +29,7 @@ const errorContent = (description: string) => ({
   content: { "application/json": { schema: eventErrorSchema } },
 });
 
-const eventsRoute = (limits: { max: number; windowMs: number }) =>
+const eventsRoute = (limits: RateLimitOptions) =>
   defineAccess(
     createRoute({
       method: "post",
