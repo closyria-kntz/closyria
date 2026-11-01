@@ -340,6 +340,31 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/entitlements:
+    dependencies:
+      '@closyria/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@closyria/db':
+        specifier: workspace:*
+        version: link:../db
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(kysely@0.29.7)(pg@8.23.1)
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@closyria/config':
+        specifier: workspace:*
+        version: link:../config
+      '@closyria/testing':
+        specifier: workspace:*
+        version: link:../testing
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/i18n:
     devDependencies:
       '@closyria/config':

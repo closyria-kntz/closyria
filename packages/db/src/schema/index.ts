@@ -6,3 +6,4 @@
 // - passkey_credentialID_idx is UNIQUE (generated as a plain index).
 export * from "./auth";
 export * from "./auth-limits";
+export * from "./entitlements";
