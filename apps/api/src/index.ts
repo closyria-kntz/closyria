@@ -10,11 +10,9 @@ import { registerOwnedTables } from "./owned-tables";
 const env = parseEnv(envSchema);
 
 const { db, pool } = createDb(env.DATABASE_URL);
-const mailer =
-  env.MAIL_TRANSPORT === "brevo" && env.BREVO_API_KEY
-    ? brevoMailer({ apiKey: env.BREVO_API_KEY, from: env.MAIL_FROM })
-    : // The code is printed only in local development, so one can sign in without Brevo.
-      memoryMailer({ logContent: env.APP_ENV === "development" });
+// The code is printed only in local development, so one can sign in without Brevo.
+const memory = env.MAIL_TRANSPORT === "memory" ? memoryMailer({ logContent: env.APP_ENV === "development" }) : null;
+const mailer = memory ?? brevoMailer({ apiKey: env.BREVO_API_KEY ?? "", from: env.MAIL_FROM });
 const oauthClient = (clientId?: string, clientSecret?: string) =>
   clientId && clientSecret ? { clientId, clientSecret } : undefined;
 const google = oauthClient(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET);
@@ -46,6 +44,8 @@ const app = createApp({
   media: { db, store },
   events: { db },
   admin: { db },
+  // R18: the browser tests read their codes here; env.ts guarantees the memory mailer with APP_ENV=test.
+  ...(env.APP_ENV === "test" && memory ? { testMail: memory } : {}),
 });
 
 const server = serve({ fetch: app.fetch, hostname: env.HOST, port: env.PORT }, (info) => {

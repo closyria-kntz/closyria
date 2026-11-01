@@ -15,7 +15,7 @@ env:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:18
@@ -42,3 +42,19 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
       - run: pnpm build
+      # Browser journeys (task 14): Chromium only, against the built API and web app on a test database.
+      - run: pnpm --filter @closyria/e2e exec playwright install --with-deps chromium
+      - run: pnpm e2e
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-reports
+          path: |
+            e2e/reports/html
+            e2e/reports/test-results
+            e2e/reports/csp-violations.json
+            e2e/reports/servers.log
+          if-no-files-found: ignore
+          retention-days: 14

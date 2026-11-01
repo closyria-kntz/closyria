@@ -53,3 +53,39 @@ describe("API security headers", () => {
     }
   });
 });
+
+describe("GET /api/test/emails", () => {
+  const messages = [
+    { to: "a@example.com", subject: "Code", text: "123456", html: "<p>123456</p>" },
+    { to: "b@example.com", subject: "Code", text: "654321", html: "<p>654321</p>" },
+  ];
+  const withMail = (env: string) =>
+    createApp({
+      env,
+      version: "v",
+      pingDb: async () => true,
+      auth,
+      media,
+      events,
+      admin: events,
+      testMail: { messages },
+    });
+
+  it("does not exist without the test mailbox", async () => {
+    expect((await make(true).request("/api/test/emails?to=a@example.com")).status).toBe(404);
+  });
+
+  it("lists the messages sent to one address when APP_ENV=test", async () => {
+    const res = await withMail("test").request("/api/test/emails?to=a@example.com");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ messages: [{ to: "a@example.com", subject: "Code", text: "123456" }] });
+  });
+
+  it("requires an address", async () => {
+    expect((await withMail("test").request("/api/test/emails")).status).toBe(400);
+  });
+
+  it("refuses to be wired outside APP_ENV=test", () => {
+    for (const env of ["development", "dev", "prod"]) expect(() => withMail(env)).toThrow();
+  });
+});

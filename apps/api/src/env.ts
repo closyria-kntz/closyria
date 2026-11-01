@@ -38,9 +38,14 @@ export const envSchema = z
     S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
-    // Only local development may keep codes in memory; dev.closyria.com and prod send real e-mails.
-    // (appEnvSchema has no "test" value: tests build their mailer directly.)
-    if (env.APP_ENV !== "development" && env.MAIL_TRANSPORT !== "brevo") {
+    // Local development and the browser tests (disposable database, http, codes in memory).
+    const local = env.APP_ENV === "development" || env.APP_ENV === "test";
+    // Only local development and the browser tests keep codes in memory; dev.closyria.com and prod send
+    // real e-mails. The browser tests read their codes from memory (test e-mail route): never Brevo.
+    if (env.APP_ENV === "test" && env.MAIL_TRANSPORT === "brevo") {
+      ctx.addIssue({ code: "custom", path: ["MAIL_TRANSPORT"], message: "must be memory with APP_ENV=test" });
+    }
+    if (!local && env.MAIL_TRANSPORT !== "brevo") {
       ctx.addIssue({ code: "custom", path: ["MAIL_TRANSPORT"], message: "must be brevo outside development" });
     }
     if (env.MAIL_TRANSPORT === "brevo" && !env.BREVO_API_KEY) {
@@ -57,13 +62,13 @@ export const envSchema = z
     }
     // Photos must survive restarts outside local development; a partial S3 configuration is always a mistake.
     const s3Set = S3_VARIABLES.filter((name) => env[name]);
-    if (env.APP_ENV !== "development" || s3Set.length > 0) {
+    if (!local || s3Set.length > 0) {
       for (const name of S3_VARIABLES.filter((n) => !env[n])) {
         ctx.addIssue({ code: "custom", path: [name], message: "required (all S3_* variables go together)" });
       }
     }
     // Better Auth marks cookies secure for https URLs: required everywhere but local development.
-    if (env.APP_ENV !== "development" && !env.BETTER_AUTH_URL.startsWith("https://")) {
+    if (!local && !env.BETTER_AUTH_URL.startsWith("https://")) {
       ctx.addIssue({ code: "custom", path: ["BETTER_AUTH_URL"], message: "must be https outside development" });
     }
   })

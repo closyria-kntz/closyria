@@ -87,6 +87,14 @@ describe("envSchema", () => {
     }
   });
 
+  it("runs the browser tests (APP_ENV=test) on the memory mailer only, over http, without S3", () => {
+    const test = { ...base, APP_ENV: "test", BETTER_AUTH_URL: "http://127.0.0.1:4310" };
+    expect(envSchema.parse(test).MAIL_TRANSPORT).toBe("memory");
+    expect(envSchema.safeParse({ ...test, MAIL_TRANSPORT: "memory" }).success).toBe(true);
+    // The test e-mail route reads codes from memory: real e-mails are refused.
+    expect(envSchema.safeParse({ ...test, MAIL_TRANSPORT: "brevo", BREVO_API_KEY: "key" }).success).toBe(false);
+  });
+
   it("requires all S3 variables together, even in development", () => {
     expect(envSchema.safeParse({ ...base, S3_BUCKET: "closyria-dev" }).success).toBe(false);
     expect(envSchema.safeParse({ ...base, ...s3, S3_ENDPOINT: "not a url" }).success).toBe(false);

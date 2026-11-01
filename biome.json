@@ -26,6 +26,18 @@
       "quoteStyle": "double"
     }
   },
+  "overrides": [
+    {
+      "includes": ["e2e/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noEmptyPattern": "off"
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "enabled": true,
     "actions": {

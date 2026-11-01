@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
   - scripts
+  - e2e
 
 allowBuilds:
   esbuild: true

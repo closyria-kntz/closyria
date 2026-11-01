@@ -1,0 +1,7 @@
+{
+  "extends": "@closyria/config/tsconfig.node.json",
+  "compilerOptions": {
+    "lib": ["es2024", "dom", "dom.iterable"]
+  },
+  "include": ["playwright.config.ts", "fixtures", "tests"]
+}

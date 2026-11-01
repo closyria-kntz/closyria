@@ -140,6 +140,24 @@ describe("route coverage", () => {
     expect(doc.paths["/api/admin/audit"]?.get?.["x-access"]).toBe("admin");
   });
 
+  it("declares the APP_ENV=test e-mail route as public and registers nothing stray with it", async () => {
+    const app = createApp({
+      env: "test",
+      version: "t",
+      pingDb: async () => true,
+      auth: { handler: async () => new Response(), getSession: async () => null },
+      media: { db: {} as Database, store: memoryStore() },
+      events: { db: {} as Database },
+      admin: { db: {} as Database },
+      testMail: { messages: [] },
+    });
+    const doc = await openapi(app);
+    expect(doc.paths["/api/test/emails"]?.get?.["x-access"]).toBe("public");
+    expect(findUndeclaredOperations(doc)).toEqual([]);
+    expect(findStrayRoutes(app, doc)).toEqual([]);
+    expect((await openapi(make())).paths).not.toHaveProperty("/api/test/emails");
+  });
+
   it("flags an operation registered without defineAccess", async () => {
     const app = make();
     app.openapi(createRoute({ method: "get", path: "/leak", responses: noContent }), (c) => c.json({}, 200));

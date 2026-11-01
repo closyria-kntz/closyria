@@ -39,6 +39,7 @@ pnpm lint        # Biome
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm e2e         # parcours navigateur (Playwright + axe) ; une fois : pnpm --filter @closyria/e2e exec playwright install chromium
 ```
 
 ## Environnements

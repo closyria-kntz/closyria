@@ -11,6 +11,7 @@
     "dev": "turbo run dev",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "e2e": "turbo run e2e",
     "lint": "biome check . && node scripts/check-design-tokens.ts",
     "format": "biome check --write ."
   },

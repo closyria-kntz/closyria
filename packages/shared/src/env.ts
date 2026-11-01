@@ -14,5 +14,6 @@ export function parseEnv<T extends z.ZodType>(schema: T, source: NodeJS.ProcessE
   return result.data;
 }
 
-export const appEnvSchema = z.enum(["development", "dev", "prod"]);
+/** `test`: the browser tests (e2e), on a disposable database with codes kept in memory. */
+export const appEnvSchema = z.enum(["development", "test", "dev", "prod"]);
 export type AppEnv = z.infer<typeof appEnvSchema>;

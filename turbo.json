@@ -13,6 +13,11 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
+    "e2e": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "passThroughEnv": ["CI", "HOME", "PLAYWRIGHT_BROWSERS_PATH"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

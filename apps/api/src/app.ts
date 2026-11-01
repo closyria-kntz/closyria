@@ -6,6 +6,7 @@ import { auditRoutes } from "./routes/admin/audit";
 import { type AdminDeps, overviewRoutes } from "./routes/admin/overview";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
 import { type MediaDeps, mediaRoutes } from "./routes/media";
+import { type TestMailDeps, testMailRoutes } from "./routes/test-mail";
 
 export type AppDeps = {
   env: string;
@@ -19,6 +20,8 @@ export type AppDeps = {
   events: EventsDeps;
   /** Admin area: dashboard figures and the audit log. */
   admin: AdminDeps;
+  /** The memory mailer, exposed to the browser tests. Only ever given with APP_ENV=test (R18). */
+  testMail?: TestMailDeps;
 };
 
 const healthRoute = defineAccess(
@@ -35,6 +38,8 @@ const healthRoute = defineAccess(
 );
 
 export function createApp(deps: AppDeps) {
+  // Fail closed: the e-mail inspection route must never exist outside the browser tests.
+  if (deps.testMail && deps.env !== "test") throw new Error("testMail is only available with APP_ENV=test");
   const app = new OpenAPIHono<AccessEnv>().basePath("/api");
   // Baseline response headers (task 13). The CSP belongs to the pages, HSTS to Caddy.
   app.use(
@@ -66,6 +71,9 @@ export function createApp(deps: AppDeps) {
     .route("/", eventsRoutes(deps.events))
     .route("/", overviewRoutes(deps.admin))
     .route("/", auditRoutes(deps.admin));
+
+  // Not part of AppType: no client calls it, and it is absent from every real environment.
+  if (deps.testMail) app.route("/", testMailRoutes(deps.testMail));
 
   app.doc31("/openapi.json", {
     openapi: "3.1.0",
