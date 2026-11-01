@@ -43,7 +43,11 @@ function upload(body: Buffer | string | null, cookie?: string, field = "file") {
       typeof body === "string" ? body : new File([new Uint8Array(body)], "photo.jpg", { type: "image/jpeg" }),
     );
   }
-  return app.request("/api/media", { method: "POST", body: form, headers: cookie ? { cookie } : {} });
+  return app.request("/api/media", {
+    method: "POST",
+    body: form,
+    headers: { origin: BASE_URL, ...(cookie ? { cookie } : {}) },
+  });
 }
 
 const jpegWithGps = () =>
@@ -80,6 +84,7 @@ beforeAll(async () => {
   });
   store = memoryStore();
   app = createApp({
+    origin: BASE_URL,
     env: "test",
     version: "t",
     pingDb: async () => true,

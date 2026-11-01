@@ -1,5 +1,6 @@
 import { healthSchema } from "@closyria/shared";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
+import { csrf } from "hono/csrf";
 import { type AccessEnv, appWide, defineAccess, provideSession, type SessionSource } from "./access";
 import { auditMiddleware } from "./admin-audit";
 import { auditRoutes } from "./routes/admin/audit";
@@ -11,6 +12,8 @@ import { type TestMailDeps, testMailRoutes } from "./routes/test-mail";
 export type AppDeps = {
   env: string;
   version: string;
+  /** The site's origin (BETTER_AUTH_URL's), the only one allowed to send form-like requests. */
+  origin: string;
   pingDb: () => Promise<boolean>;
   /** Better Auth, served under /api/auth/*. */
   auth: { handler: (request: Request) => Promise<Response> } & SessionSource;
@@ -49,6 +52,15 @@ export function createApp(deps: AppDeps) {
       c.header("X-Content-Type-Options", "nosniff");
       c.header("Referrer-Policy", "strict-origin-when-cross-origin");
     }),
+  );
+  // CSRF: a form-like request (multipart, urlencoded, text/plain — the ones a foreign page can send
+  // without a CORS preflight) that changes something must come from the site itself. Better Auth checks
+  // its own routes against its trusted origins (Apple's form_post callback included), so it is skipped.
+  const origin = new URL(deps.origin).origin;
+  const csrfCheck = csrf({ origin });
+  app.use(
+    "*",
+    appWide(async (c, next) => (c.req.path.startsWith("/api/auth/") ? next() : csrfCheck(c, next))),
   );
   app.use("*", provideSession(deps.auth));
   // Journals every admin mutation (spec §8): declared app-wide so no admin route can forget it.

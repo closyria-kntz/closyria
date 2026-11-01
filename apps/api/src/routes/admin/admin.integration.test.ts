@@ -57,6 +57,7 @@ beforeAll(async () => {
     secret: "test-secret-that-is-long-enough-0123456789",
   });
   app = createApp({
+    origin: BASE_URL,
     env: "test",
     version: "test",
     pingDb: async () => true,

@@ -115,6 +115,7 @@ describe("accessMiddleware", () => {
 describe("route coverage", () => {
   const make = () =>
     createApp({
+      origin: "http://localhost:3001",
       env: "test",
       version: "t",
       pingDb: async () => true,
@@ -145,6 +146,7 @@ describe("route coverage", () => {
 
   it("declares the APP_ENV=test e-mail route as public and registers nothing stray with it", async () => {
     const app = createApp({
+      origin: "http://localhost:3001",
       env: "test",
       version: "t",
       pingDb: async () => true,

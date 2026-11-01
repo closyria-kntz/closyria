@@ -42,6 +42,7 @@ export function bootstrap(env: Env): Api {
   const app = createApp({
     env: env.APP_ENV,
     version: env.APP_VERSION,
+    origin: env.BETTER_AUTH_URL,
     pingDb: () => pingDb(db),
     auth,
     media: { db, store },

@@ -10,8 +10,18 @@ const auth = {
 // The media, events and admin routes never run here: it needs no real database.
 const media = { db: {} as Database, store: memoryStore() };
 const events = { db: {} as Database };
+const ORIGIN = "http://localhost:3001";
 const make = (dbOk: boolean) =>
-  createApp({ env: "test", version: "abc123", pingDb: async () => dbOk, auth, media, events, admin: events });
+  createApp({
+    env: "test",
+    version: "abc123",
+    origin: ORIGIN,
+    pingDb: async () => dbOk,
+    auth,
+    media,
+    events,
+    admin: events,
+  });
 
 describe("GET /api/health", () => {
   it("returns 200 when the database answers", async () => {
@@ -44,6 +54,37 @@ describe("/api/auth/*", () => {
   });
 });
 
+describe("CSRF origin check", () => {
+  const form = () => {
+    const body = new FormData();
+    body.set("file", new File([new Uint8Array([1])], "a.jpg", { type: "image/jpeg" }));
+    return body;
+  };
+  const post = (path: string, headers: Record<string, string>, body: FormData | string = form()) =>
+    make(true).request(path, { method: "POST", body, headers });
+
+  it("refuses a form-like POST from another origin, or with no origin at all", async () => {
+    for (const headers of [{ origin: "https://evil.example" }, {}, { "sec-fetch-site": "cross-site" }]) {
+      const res = await post("/api/media", headers);
+      expect(res.status, JSON.stringify(headers)).toBe(403);
+    }
+    const text = await post("/api/events", { origin: "https://evil.example", "content-type": "text/plain" }, "{}");
+    expect(text.status).toBe(403);
+  });
+
+  it("lets the configured origin and same-origin fetches through to the route", async () => {
+    // 401: the route ran (no session), the CSRF check did not answer.
+    expect((await post("/api/media", { origin: ORIGIN })).status).toBe(401);
+    expect((await post("/api/media", { "sec-fetch-site": "same-origin" })).status).toBe(401);
+  });
+
+  it("leaves safe methods and Better Auth (which checks its own origins) alone", async () => {
+    expect((await make(true).request("/api/health", { headers: { origin: "https://evil.example" } })).status).toBe(200);
+    const res = await post("/api/auth/sign-in/anonymous", { origin: "https://evil.example" });
+    expect(await res.json()).toEqual({ method: "POST", path: "/api/auth/sign-in/anonymous" });
+  });
+});
+
 describe("API security headers", () => {
   it("sets nosniff and a referrer policy on every response", async () => {
     for (const path of ["/api/health", "/api/openapi.json", "/api/nope"]) {
@@ -63,6 +104,7 @@ describe("GET /api/test/emails", () => {
     createApp({
       env,
       version: "v",
+      origin: ORIGIN,
       pingDb: async () => true,
       auth,
       media,
