@@ -14,12 +14,128 @@ Le script applique les migrations, bascule le lien `current`, redémarre `closyr
 | `systemd/*` | `/etc/systemd/system/` |
 | `caddy/*.caddy` | contenu ajouté à `/etc/caddy/Caddyfile` |
 
-Secrets : `/etc/closyria/<env>.env` (root:root 600), lus par systemd au démarrage.
+Secrets : `/etc/closyria/<env>.env` (root:root 600), lus par systemd au démarrage. L'API et le worker refusent de
+démarrer si une variable manque ou est invalide, et le journal (`journalctl -u closyria-<env>-api`) dit laquelle.
 
-Photos : l'API refuse de démarrer hors développement sans les cinq variables du stockage OVH (S3) :
-`S3_ENDPOINT` (par exemple `https://s3.gra.io.cloud.ovh.net`), `S3_REGION` (`gra`), `S3_BUCKET` (un bucket par
-environnement), `S3_ACCESS_KEY_ID` et `S3_SECRET_ACCESS_KEY`. Les ajouter à `/etc/closyria/<env>.env` **avant** de
-déployer cette version. En développement local, sans elles, les photos restent en mémoire jusqu'au redémarrage.
+## Variables d'environnement
+
+À mettre dans `/etc/closyria/prod.env` (prod) et `/etc/closyria/dev.env` (dev), une par ligne (`NOM=valeur`).
+`APP_VERSION` (fichier `release.env` de chaque version), `NODE_ENV`, `HOST`, `PORT` et `INTERNAL_API_URL` sont déjà
+fixés par les unités systemd : ne pas les mettre dans ces fichiers.
+
+| Variable | Sens | Prod | Dev |
+|---|---|---|---|
+| `APP_ENV` | Environnement. **Obligatoire** : les unités tournent en `NODE_ENV=production`, et sans `APP_ENV` l'API et le worker refusent de démarrer (jamais de repli silencieux sur `development`). `test` est réservé aux tests navigateur et refusé hors adresse locale. | `prod` | `dev` |
+| `DATABASE_URL` | Base PostgreSQL, par socket Unix (authentification peer). | `postgresql:///closyria?host=/var/run/postgresql` | `postgresql:///closyria_dev?host=/var/run/postgresql` |
+| `BETTER_AUTH_SECRET` | Clé qui signe les sessions. **32 caractères au moins**, différente par environnement, à ne jamais changer sans raison (la changer déconnecte tout le monde). Générer avec `openssl rand -base64 48`. | (secret) | (secret, un autre) |
+| `BETTER_AUTH_URL` | Adresse publique du site, **en https** (les cookies sont alors `Secure`). C'est aussi la seule origine autorisée à envoyer des formulaires à l'API (protection CSRF). | `https://closyria.com` | `https://dev.closyria.com` |
+| `MAIL_TRANSPORT` | Envoi des codes de connexion. **`brevo`** en prod comme en dev (la dev envoie de vrais codes). | `brevo` | `brevo` |
+| `BREVO_API_KEY` | Clé API Brevo (Brevo → SMTP & API → Clés API). | `xkeysib-…` | `xkeysib-…` |
+| `MAIL_FROM` | Expéditeur des e-mails, sous la forme `Nom <adresse>`. Par défaut `Closyria <bonjour@closyria.com>`. | `Closyria <bonjour@closyria.com>` | idem |
+| `S3_ENDPOINT` | Point d'accès du stockage OVH (S3). | `https://s3.gra.io.cloud.ovh.net` | idem |
+| `S3_REGION` | Région OVH. | `gra` | `gra` |
+| `S3_BUCKET` | Bucket des photos, **un par environnement**. | `closyria-prod` | `closyria-dev` |
+| `S3_ACCESS_KEY_ID` | Identifiant de l'utilisateur S3 OVH de l'environnement. | (clé) | (clé) |
+| `S3_SECRET_ACCESS_KEY` | Secret de cet utilisateur S3. | (secret) | (secret) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Facultatif : connexion avec Google. Les deux ensemble, ou aucune. | (Google Cloud) | (Google Cloud) |
+| `APPLE_CLIENT_ID`, `APPLE_CLIENT_SECRET` | Facultatif : connexion avec Apple. Les deux ensemble, ou aucune. | (Apple Developer) | (Apple Developer) |
+
+Exemple de `/etc/closyria/prod.env` :
+
+```bash
+APP_ENV=prod
+DATABASE_URL=postgresql:///closyria?host=/var/run/postgresql
+BETTER_AUTH_SECRET=… # openssl rand -base64 48
+BETTER_AUTH_URL=https://closyria.com
+MAIL_TRANSPORT=brevo
+BREVO_API_KEY=xkeysib-…
+MAIL_FROM=Closyria <bonjour@closyria.com>
+S3_ENDPOINT=https://s3.gra.io.cloud.ovh.net
+S3_REGION=gra
+S3_BUCKET=closyria-prod
+S3_ACCESS_KEY_ID=…
+S3_SECRET_ACCESS_KEY=…
+```
+
+**Brevo** : l'adresse de `MAIL_FROM` doit être un expéditeur validé dans Brevo (Expéditeurs, domaines et IP dédiées),
+et le domaine `closyria.com` **authentifié** : ajouter chez le registrar les enregistrements DNS que Brevo donne
+(SPF, DKIM, et un enregistrement DMARC), puis cliquer sur « Vérifier » dans Brevo. Sans cela, les codes arrivent en
+indésirables ou pas du tout.
+
+**Photos** : sans les cinq variables `S3_*`, l'API refuse de démarrer hors développement ; les ajouter **avant** de
+déployer. En développement local, sans elles, les photos restent en mémoire jusqu'au redémarrage. La politique de
+sécurité des pages (`img-src` dans `apps/web/src/security-headers.ts`) autorise `https://s3.gra.io.cloud.ovh.net` :
+changer de `S3_ENDPOINT` demande de la changer aussi.
+
+**Google** (facultatif) : dans Google Cloud Console → API et services → Identifiants, créer un « ID client OAuth »
+de type application Web, avec comme URI de redirection autorisée, exactement :
+`https://closyria.com/api/auth/callback/google` (prod) et `https://dev.closyria.com/api/auth/callback/google` (dev).
+
+**Apple** (facultatif) : dans Apple Developer, un Services ID (c'est `APPLE_CLIENT_ID`) avec le domaine et l'URL de
+retour, exactement : `https://closyria.com/api/auth/callback/apple` (prod) et
+`https://dev.closyria.com/api/auth/callback/apple` (dev). `APPLE_CLIENT_SECRET` est un jeton (JWT) signé avec la clé
+privée Apple, valable **6 mois au plus** : noter dans l'agenda de le régénérer avant son expiration, sinon la
+connexion avec Apple cesse de marcher du jour au lendemain.
+
+Fuseau horaire : l'application ouvre toutes ses connexions à la base en UTC, quel que soit le réglage du serveur
+PostgreSQL ; rien à configurer.
+
+## Premières migrations : droits sur la base
+
+Le script de déploiement applique les migrations en tant qu'utilisateur système de l'environnement (`closyria` en
+prod, `closyria-dev` en dev), qui doit pouvoir créer des tables. Avant le premier déploiement, vérifier que chaque base
+appartient au bon utilisateur :
+
+```bash
+sudo -u postgres psql -Atc "SELECT datname, pg_get_userbyid(datdba) FROM pg_database WHERE datname IN ('closyria', 'closyria_dev');"
+```
+
+La réponse attendue est :
+
+```
+closyria|closyria
+closyria_dev|closyria-dev
+```
+
+Sinon, au choix (le premier est le plus simple) :
+
+```bash
+# Donner la base à son utilisateur
+sudo -u postgres psql -c 'ALTER DATABASE closyria OWNER TO closyria;'
+sudo -u postgres psql -c 'ALTER DATABASE closyria_dev OWNER TO "closyria-dev";'
+# … ou seulement le droit de créer des tables dans le schéma public
+sudo -u postgres psql -d closyria -c 'GRANT CREATE ON SCHEMA public TO closyria;'
+sudo -u postgres psql -d closyria_dev -c 'GRANT CREATE ON SCHEMA public TO "closyria-dev";'
+```
+
+Vérification du droit de créer (doit répondre `t`) :
+
+```bash
+sudo -u postgres psql -d closyria -Atc "SELECT has_schema_privilege('closyria', 'public', 'CREATE');"
+sudo -u postgres psql -d closyria_dev -Atc "SELECT has_schema_privilege('closyria-dev', 'public', 'CREATE');"
+```
+
+## HSTS dans le Caddyfile en service
+
+Les fichiers `caddy/*.caddy` contiennent déjà l'en-tête HSTS. Dans `/etc/caddy/Caddyfile` en service, chaque bloc
+du site doit l'avoir **aussi**, y compris le bloc qui redirige `www` et `.fr` vers `closyria.com`. Ajouter cette ligne
+en tête de chacun de ces blocs (sans `preload`) :
+
+```caddy
+header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+```
+
+Par exemple, pour le bloc de redirection (garder les noms de domaine du bloc existant) :
+
+```caddy
+www.closyria.com, closyria.fr, www.closyria.fr {
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	redir https://closyria.com{uri} permanent
+}
+```
+
+Puis `sudo caddy validate --config /etc/caddy/Caddyfile` et `sudo systemctl reload caddy`. Contrôle :
+`curl -sI https://www.closyria.com | grep -i strict-transport` doit afficher la ligne.
 
 `sharp` (traitement des photos) contient du code natif et ne peut pas être intégré au bundle de l'API : `build.sh`
 place dans `api/node_modules` sharp et ses binaires linux-x64 (glibc), aux versions du lockfile, puis vérifie qu'il
@@ -27,7 +143,9 @@ se charge. L'artefact doit donc être construit sur une machine linux-x64 glibc,
 
 ## Adresse du client et limite de débit
 
-La limite de débit de `POST /api/events` identifie le client par la **dernière** entrée de `X-Forwarded-For`
+Limites en place : `POST /api/events`, 60 requêtes par minute et par adresse ; `POST /api/media`, 30 photos par heure
+et par compte, 60 par heure et par adresse, et 2 photos traitées à la fois par processus (8 autres attendent 5 s,
+puis « réessaie dans un instant »). Ces limites identifient le client par la **dernière** entrée de `X-Forwarded-For`
 (en mémoire, hachée, jamais stockée). Cela n'est sûr que parce que l'API écoute sur 127.0.0.1 derrière Caddy, qui
 **réécrit** `X-Forwarded-For` avec l'adresse qu'il voit (`reverse_proxy` le fait par défaut). L'API ne doit
 **jamais** être exposée directement. Caddy envoie `/api/*` de l'origine web vers l'API : le web appelle donc `/api/events` en même origine.
@@ -40,10 +158,10 @@ La fondatrice le donne **une seule fois**, à son propre compte, en SQL et en ta
 Les bases sont celles que la fondatrice a créées en tant que `postgres` : `closyria` pour la prod et `closyria_dev`
 pour la dev. Elles correspondent à `DATABASE_URL` dans `/etc/closyria/prod.env` et `/etc/closyria/dev.env`.
 
-1. **Se connecter** au site (code e-mail), puis **enregistrer une passkey** depuis le compte, **avant** la promotion.
-   Tant qu'un compte admin n'a aucune passkey, n'importe quelle session fraîche peut en enregistrer une première ;
-   une fois qu'il en a une, seule une session ouverte par passkey peut en ajouter, en renommer ou en supprimer.
-   Faire l'enregistrement avant la promotion évite donc toute fenêtre où l'accès à la boîte e-mail suffirait.
+Faire les cinq étapes d'une traite, sur l'appareil qui portera la passkey (quelques minutes en tout) :
+
+1. **Se connecter** sur `https://closyria.com/connexion` (dev : `https://dev.closyria.com/connexion`) : saisir son
+   e-mail, « Recevoir mon code », puis le code reçu et « Me connecter ». Cela crée le compte s'il n'existe pas.
 2. **Promouvoir** le compte, dans la bonne base, en remplaçant l'adresse :
 
    ```bash
@@ -55,17 +173,25 @@ pour la dev. Elles correspondent à `DATABASE_URL` dans `/etc/closyria/prod.env`
 
    La réponse doit être `UPDATE 1`. `UPDATE 0` veut dire qu'aucun compte n'a cette adresse : vérifier l'adresse et
    l'étape 1. La base refuse toute autre valeur que `user` ou `admin`.
+3. **Ouvrir** `https://closyria.com/admin/passkey-required` (dans le même navigateur, toujours connectée par code).
+4. **« Enregistrer une passkey »** et suivre le navigateur (empreinte, visage ou code de l'appareil).
+5. **« Se connecter avec une passkey »** : l'espace admin s'ouvre. Il exige le rôle `admin` **et** une session ouverte
+   par passkey ; une session ouverte par code e-mail, Google ou Apple n'y donne pas accès, même avec le rôle.
 
-   Vérifier ensuite que le compte ne porte que ses propres passkeys (une ligne par appareil enregistré) :
+Pourquoi d'une traite : tant qu'un compte admin n'a aucune passkey, une session ouverte par code e-mail peut en
+enregistrer une première (sans cela, impossible de démarrer). Entre l'étape 2 et l'étape 4, l'accès à la boîte e-mail
+suffirait donc pour enregistrer une passkey sur ce compte : cette fenêtre doit durer quelques minutes, pas plus. Dès
+qu'une passkey existe, seule une session ouverte par passkey peut en ajouter, en renommer ou en supprimer.
 
-   ```bash
-   sudo -u postgres psql -d closyria -c "SELECT name, created_at FROM passkey WHERE user_id = (SELECT id FROM \"user\" WHERE email = lower('adresse@exemple.fr'));"
-   ```
+Vérifier ensuite que le compte ne porte que ses propres passkeys (une ligne par appareil enregistré) :
 
-3. **Se reconnecter avec la passkey** pour entrer dans l'espace admin : il exige le rôle `admin` **et** une session
-   ouverte par passkey. Une session ouverte par code e-mail, Google ou Apple n'y donne pas accès, même avec le rôle.
+```bash
+sudo -u postgres psql -d closyria -c "SELECT name, created_at FROM passkey WHERE user_id = (SELECT id FROM \"user\" WHERE email = lower('adresse@exemple.fr'));"
+```
 
-Pour retirer le rôle : même commande avec `role = 'user'`.
+Une ligne inattendue : la supprimer (voir ci-dessous) et recommencer aux étapes 3 à 5.
+
+Pour retirer le rôle : même commande qu'à l'étape 2 avec `role = 'user'`.
 
 ### Toutes les passkeys de l'admin sont perdues
 
@@ -78,5 +204,6 @@ tant qu'il en reste une enregistrée. Pour repartir :
    sudo -u postgres psql -d closyria -c "DELETE FROM passkey WHERE user_id = (SELECT id FROM \"user\" WHERE email = lower('adresse@exemple.fr'));"
    ```
 
-2. **Aussitôt**, se connecter par code e-mail et enregistrer une nouvelle passkey (étape 1 ci-dessus) : tant que le
-   compte n'en a aucune, l'accès à la boîte e-mail suffit pour en enregistrer une.
+2. **Aussitôt**, refaire les étapes 1, 3, 4 et 5 ci-dessus (connexion par code sur `/connexion`, puis
+   `/admin/passkey-required`) : tant que le compte n'en a aucune, l'accès à la boîte e-mail suffit pour en enregistrer
+   une.
