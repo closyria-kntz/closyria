@@ -27,15 +27,6 @@ describe("findHardcodedStyles", () => {
     ]);
   });
 
-  it("rejects inline styles with a number and a unit", () => {
-    expect(rules('<div style={{ width: 12px, height: "3rem" }} />')).toEqual(["inline-style"]);
-    expect(rules("<div\n  style={{ margin: '4px' }}\n/>")).toEqual(["inline-style"]);
-  });
-
-  it("allows inline styles that use tokens", () => {
-    expect(rules('<div style={{ width: "var(--space-4)" }} />')).toEqual([]);
-  });
-
   it("allows token classes and structural utilities", () => {
     const source =
       '<main className="mx-auto flex min-h-dvh max-w-narrow gap-space-4 p-space-4 bg-surface text-ink font-strong text-lead text-display" />';
@@ -52,5 +43,95 @@ describe("findHardcodedStyles", () => {
 
   it("ignores the generated tokens.css", () => {
     expect(findHardcodedStyles("a { color: #fff }", "apps/web/src/styles/tokens.css")).toEqual([]);
+  });
+
+  describe("arbitrary values", () => {
+    it.each([
+      "w-[50%]",
+      "duration-[0.2s]",
+      "w-[calc(100%-2rem)]",
+      "h-[100vh]",
+      "rotate-[3deg]",
+      "shadow-[0_0_4px_black]",
+      "shadow-[0_0_4px_#000]",
+      "bg-[rgb(0,0,0)]",
+    ])("flags %s once", (cls) => {
+      expect(rules(`<p className="${cls}" />`)).toEqual(["arbitrary-value"]);
+    });
+
+    it("allows a bracket holding only a var() reference", () => {
+      expect(rules('<p className="bg-[var(--color-ink)]" />')).toEqual([]);
+    });
+  });
+
+  describe("css declarations", () => {
+    const css = (body: string) => rules(`a {\n  ${body}\n}`, "apps/web/src/app/x.css");
+
+    it.each([
+      ["transition: 200ms;", "literal-value"],
+      ["box-shadow: 0 1px 2px black;", "literal-value"],
+      ["padding: 12px;", "literal-value"],
+      ["height: 100dvh;", "literal-value"],
+      ["--gap: 1rem;", "literal-value"],
+      ["color: oklch(0.5 0.1 20);", "literal-color"],
+      ["color: color-mix(in oklch, red 40%, blue);", "literal-color"],
+      ["color: rgb(0 0 0 / 50%);", "literal-color"],
+    ])("flags %s", (decl, rule) => {
+      expect(css(decl)).toContain(rule);
+    });
+
+    it.each([
+      "padding: 0;",
+      "width: 100%;",
+      "color: var(--color-ink);",
+      "color: rgb(var(--ink-rgb) / .5);",
+      "padding: var(--space-4) var(--space-5);",
+      "transition: color var(--duration-fast) var(--ease-standard);",
+      "color: color-mix(in oklch, var(--color-ink), var(--color-surface));",
+    ])("allows %s", (decl) => {
+      expect(css(decl)).toEqual([]);
+    });
+
+    it("reports the line of the offending declaration", () => {
+      const found = findHardcodedStyles("a {\n  color: var(--c);\n  margin: 4px;\n}", "apps/web/src/app/x.css");
+      expect(found).toEqual([{ file: "apps/web/src/app/x.css", line: 3, match: "4px", rule: "literal-value" }]);
+    });
+  });
+
+  describe("inline styles", () => {
+    it.each([
+      "style={{ width: 12 }}",
+      'style={{ width: "12px" }}',
+      "style={someStyle}",
+      'style={{ ...rest, color: "var(--c)" }}',
+    ])("flags %s", (attr) => {
+      expect(rules(`<div ${attr} />`)).toEqual(["inline-style"]);
+    });
+
+    it("allows var() string values only", () => {
+      expect(rules("<div style={{ width: \"var(--space-4)\", color: 'var(--color-ink)' }} />")).toEqual([]);
+    });
+
+    it("reports the line of the offending value, not of the attribute", () => {
+      const source = '<div\n  style={{\n    color: "var(--c)",\n    width: 12,\n  }}\n/>';
+      expect(findHardcodedStyles(source, "apps/web/src/app/p.tsx")).toEqual([
+        { file: "apps/web/src/app/p.tsx", line: 4, match: "12", rule: "inline-style" },
+      ]);
+    });
+  });
+
+  describe("comments", () => {
+    it("ignores hex-looking text in comments", () => {
+      expect(rules("// fix #123\n/* #fff and 12px [50%] */\nconst a = 1;")).toEqual([]);
+      expect(rules("/* #fff */ a { color: var(--c); } /* 4px */", "x.css")).toEqual([]);
+    });
+
+    it("keeps line numbers after a comment", () => {
+      expect(findHardcodedStyles("/* a\nb */\nconst c = '#fff';", "x.ts")[0]?.line).toBe(3);
+    });
+
+    it("does not treat // inside a string as a comment", () => {
+      expect(rules('const u = "http://x"; const c = "#fff";')).toEqual(["literal-color"]);
+    });
   });
 });
