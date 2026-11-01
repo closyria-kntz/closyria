@@ -6,7 +6,11 @@ export function safeNext(value: string | string[] | undefined): string {
   const base = "https://closyria.invalid";
   const url = new URL(value, base);
   if (url.origin !== base) return "/";
-  return `${url.pathname}${url.search}${url.hash}`;
+  // Check the normalised result too: dot segments turn `/.//evil.example` into `//evil.example`, which a
+  // browser reads as another site.
+  const path = `${url.pathname}${url.search}${url.hash}`;
+  if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("/\\")) return "/";
+  return path;
 }
 
 export const isSixDigitCode = (value: string): boolean => /^\d{6}$/.test(value);

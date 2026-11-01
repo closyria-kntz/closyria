@@ -5,6 +5,7 @@ describe("safeNext", () => {
   it("keeps same-origin relative paths", () => {
     expect(safeNext("/admin/passkey-required")).toBe("/admin/passkey-required");
     expect(safeNext("/items?tri=prix#haut")).toBe("/items?tri=prix#haut");
+    expect(safeNext("/admin?x=1#y")).toBe("/admin?x=1#y");
   });
 
   it("falls back to / for anything else", () => {
@@ -19,6 +20,10 @@ describe("safeNext", () => {
       "javascript:alert(1)",
       "admin",
       "/\nfoo",
+      // Dot segments that normalise into a protocol-relative URL.
+      "/.//evil.example",
+      "/a/..//evil.example",
+      "/./\\evil.example",
     ]) {
       expect(safeNext(value), JSON.stringify(value)).toBe("/");
     }
