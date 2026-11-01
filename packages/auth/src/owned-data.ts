@@ -43,3 +43,27 @@ export async function reassignUserData(fromUserId: string, toUserId: string, tx:
 export function listOwnedColumns(): { table: string; column: string }[] {
   return [...ownedTables].map(([table, { column }]) => ({ table: getTableName(table), column: column.name }));
 }
+
+/**
+ * Registered columns that lack a single-column foreign key to `user(id)` with ON DELETE CASCADE
+ * (`table.column` names; empty when all are fine). Used by tests in every process that registers tables.
+ */
+export async function findOwnedColumnsWithoutCascade(db: Pick<Database, "execute">): Promise<string[]> {
+  const bad: string[] = [];
+  for (const { table, column } of listOwnedColumns()) {
+    const result = await db.execute<{ n: number }>(sql`
+      select count(*)::int as n
+      from pg_constraint c
+      join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
+      join pg_attribute r on r.attrelid = c.confrelid and r.attnum = c.confkey[1]
+      where c.contype = 'f'
+        and c.conrelid = ${table}::regclass
+        and c.confrelid = '"user"'::regclass
+        and cardinality(c.conkey) = 1
+        and a.attname = ${column}
+        and r.attname = 'id'
+        and c.confdeltype = 'c'`);
+    if (result.rows[0]?.n !== 1) bad.push(`${table}.${column}`);
+  }
+  return bad;
+}

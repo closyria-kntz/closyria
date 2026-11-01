@@ -25,7 +25,7 @@ export function createEntitlements({ db, now = () => new Date() }: EntitlementsD
    * The limit of the user's current plan. A user without a plan, or whose plan ended, is on « Gratuit ».
    * A key the plan does not list, or lists as disabled, is 0; a null limit is unlimited.
    */
-  async function getLimit(userId: string, key: EntitlementKey): Promise<Limit> {
+  async function getLimit(userId: string, key: EntitlementKey, at: Date = now()): Promise<Limit> {
     const result = await db.execute<{ limit_value: number | null; enabled: boolean }>(sql`
       select e.limit_value, e.enabled
       from plan_entitlements e
@@ -33,8 +33,8 @@ export function createEntitlements({ db, now = () => new Date() }: EntitlementsD
         and e.plan_id = coalesce(
           (select up.plan_id from user_plans up
            where up.user_id = ${userId}
-             and up.starts_at <= ${now()}
-             and (up.ends_at is null or up.ends_at > ${now()})),
+             and up.starts_at <= ${at}
+             and (up.ends_at is null or up.ends_at > ${at})),
           ${DEFAULT_PLAN_ID})`);
     const row = result.rows[0];
     if (!row?.enabled) return 0;
@@ -49,8 +49,9 @@ export function createEntitlements({ db, now = () => new Date() }: EntitlementsD
   async function checkAndConsume(userId: string, key: MonthlyKey, amount = 1): Promise<Remaining> {
     positiveInt(amount);
     monthlyKeySchema.parse(key);
-    const limit = await getLimit(userId, key);
-    const period = periodOf(now());
+    const at = now();
+    const limit = await getLimit(userId, key, at);
+    const period = periodOf(at);
     // `limit` is null for unlimited: the comparisons below then always pass.
     const max = limit === "unlimited" ? null : limit;
     const result = await db.execute<{ value: number }>(sql`

@@ -1,0 +1,9 @@
+import { registerEntitlementsOwnedTables } from "@closyria/entitlements";
+
+/**
+ * Registers, in the API process, every table holding a user's data, so that anonymous -> account linking
+ * (`onLinkAccount`, wired by `createAuth`) moves or merges it. New owned tables are added here.
+ */
+export function registerOwnedTables(): void {
+  registerEntitlementsOwnedTables();
+}

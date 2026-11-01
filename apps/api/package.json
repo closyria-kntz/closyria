@@ -16,6 +16,7 @@
   "dependencies": {
     "@closyria/auth": "workspace:*",
     "@closyria/db": "workspace:*",
+    "@closyria/entitlements": "workspace:*",
     "@closyria/shared": "workspace:*",
     "@hono/node-server": "^2.1.5",
     "@hono/zod-openapi": "^1.6.3",

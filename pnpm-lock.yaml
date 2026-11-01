@@ -187,6 +187,9 @@ importers:
       '@closyria/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@closyria/entitlements':
+        specifier: workspace:*
+        version: link:../../packages/entitlements
       '@closyria/shared':
         specifier: workspace:*
         version: link:../../packages/shared

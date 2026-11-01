@@ -3,7 +3,7 @@ import { createDb, schema } from "@closyria/db";
 import { migrateTestDatabase, startTestDatabase, type TestDatabase } from "@closyria/testing";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createEntitlements, DEFAULT_PLAN_ID, entitlementKeys } from "./index";
+import { createEntitlements, DEFAULT_PLAN_ID, entitlementKeys, registerEntitlementsOwnedTables } from "./index";
 
 let database: TestDatabase;
 let handle: ReturnType<typeof createDb>;
@@ -20,10 +20,23 @@ async function newUser(): Promise<string> {
 
 const ent = (now: () => Date = JANUARY) => createEntitlements({ db: handle.db, now });
 
+/** A plan of its own, so no test depends on another's fixtures. */
+async function newPlan(
+  entitlements: { key: (typeof entitlementKeys)[number]; limitValue: number | null; enabled?: boolean }[] = [],
+): Promise<string> {
+  const id = `plan-${++counter}`;
+  await handle.db.insert(schema.plans).values({ id, name: id });
+  if (entitlements.length > 0) {
+    await handle.db.insert(schema.planEntitlements).values(entitlements.map((e) => ({ planId: id, ...e })));
+  }
+  return id;
+}
+
 beforeAll(async () => {
   database = await startTestDatabase();
   await migrateTestDatabase(database.url);
   handle = createDb(database.url, { max: 30 });
+  registerEntitlementsOwnedTables();
 }, 60_000);
 
 afterAll(async () => {
@@ -45,16 +58,15 @@ describe("plans", () => {
   });
 
   it("uses the user's own plan while it runs, and falls back to « Gratuit » once it ended", async () => {
-    await handle.db.insert(schema.plans).values({ id: "pro", name: "Pro" });
-    await handle.db.insert(schema.planEntitlements).values([
-      { planId: "pro", key: "cutouts_per_month", limitValue: 500 },
-      { planId: "pro", key: "ai_calls_per_month", limitValue: null },
-      { planId: "pro", key: "active_alerts", limitValue: 10, enabled: false },
+    const pro = await newPlan([
+      { key: "cutouts_per_month", limitValue: 500 },
+      { key: "ai_calls_per_month", limitValue: null },
+      { key: "active_alerts", limitValue: 10, enabled: false },
     ]);
     const u = await newUser();
     await handle.db.insert(schema.userPlans).values({
       userId: u,
-      planId: "pro",
+      planId: pro,
       source: "gift",
       endsAt: new Date("2027-02-01T00:00:00Z"),
     });
@@ -103,7 +115,7 @@ describe("checkAndConsume", () => {
 
   it("refuses everything on a limit of 0 and never creates a counter", async () => {
     const u = await newUser();
-    await handle.db.insert(schema.userPlans).values({ userId: u, planId: "pro" });
+    await handle.db.insert(schema.userPlans).values({ userId: u, planId: await newPlan() });
     expect(await ent().checkAndConsume(u, "order_emails_per_month")).toEqual({ allowed: false, remaining: 0 });
   });
 
@@ -118,12 +130,9 @@ describe("checkAndConsume", () => {
   });
 
   it("counts without limit on an unlimited plan", async () => {
-    await handle.db.insert(schema.plans).values({ id: "max", name: "Max" });
-    await handle.db
-      .insert(schema.planEntitlements)
-      .values({ planId: "max", key: "ai_calls_per_month", limitValue: null });
+    const max = await newPlan([{ key: "ai_calls_per_month", limitValue: null }]);
     const u = await newUser();
-    await handle.db.insert(schema.userPlans).values({ userId: u, planId: "max" });
+    await handle.db.insert(schema.userPlans).values({ userId: u, planId: max });
     for (let i = 0; i < 30; i++) {
       expect(await ent().checkAndConsume(u, "ai_calls_per_month")).toEqual({ allowed: true, remaining: "unlimited" });
     }
@@ -151,6 +160,7 @@ describe("checkLimit (stock keys)", () => {
 
 describe("account linking", () => {
   it("registers its user-owned tables with a cascading foreign key to user(id)", async () => {
+    registerEntitlementsOwnedTables();
     const owned = listOwnedColumns().filter(({ table }) => ["user_plans", "usage_counters"].includes(table));
     expect(owned.map((o) => o.table).sort()).toEqual(["usage_counters", "user_plans"]);
     for (const { table, column } of owned) {
@@ -189,21 +199,22 @@ describe("account linking", () => {
   });
 
   it("keeps the account's plan on a conflict, and moves the anonymous plan otherwise", async () => {
+    const [gift, paid] = [await newPlan(), await newPlan()];
     const anonymous = await newUser();
     const account = await newUser();
     await handle.db.insert(schema.userPlans).values([
-      { userId: anonymous, planId: "max", source: "gift" },
-      { userId: account, planId: "pro", source: "stripe" },
+      { userId: anonymous, planId: gift, source: "gift" },
+      { userId: account, planId: paid, source: "stripe" },
     ]);
     await handle.db.transaction((tx) => reassignUserData(anonymous, account, tx));
     const [kept] = await handle.db.select().from(schema.userPlans).where(eq(schema.userPlans.userId, account));
-    expect(kept?.planId).toBe("pro");
+    expect(kept?.planId).toBe(paid);
 
     const anonymous2 = await newUser();
     const account2 = await newUser();
-    await handle.db.insert(schema.userPlans).values({ userId: anonymous2, planId: "max", source: "gift" });
+    await handle.db.insert(schema.userPlans).values({ userId: anonymous2, planId: gift, source: "gift" });
     await handle.db.transaction((tx) => reassignUserData(anonymous2, account2, tx));
     const [moved] = await handle.db.select().from(schema.userPlans).where(eq(schema.userPlans.userId, account2));
-    expect(moved?.planId).toBe("max");
+    expect(moved?.planId).toBe(gift);
   });
 });

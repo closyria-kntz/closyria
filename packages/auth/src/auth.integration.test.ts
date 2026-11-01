@@ -5,7 +5,15 @@ import { migrateTestDatabase, startTestDatabase, type TestDatabase } from "@clos
 import { eq, sql } from "drizzle-orm";
 import { pgTable, serial, text } from "drizzle-orm/pg-core";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { type Auth, createAuth, EMAIL_SEND_MAX, listOwnedColumns, memoryMailer, registerOwnedTable } from "./index";
+import {
+  type Auth,
+  createAuth,
+  EMAIL_SEND_MAX,
+  findOwnedColumnsWithoutCascade,
+  listOwnedColumns,
+  memoryMailer,
+  registerOwnedTable,
+} from "./index";
 
 // Test-only table standing in for the user data future chantiers will register.
 const ownedItems = pgTable("test_owned_items", {
@@ -357,21 +365,7 @@ describe("owned tables", () => {
   it("only registers user id columns with a cascading foreign key to user(id)", async () => {
     const owned = listOwnedColumns();
     expect(owned.length).toBeGreaterThan(0);
-    for (const { table, column } of owned) {
-      const result = await handle.db.execute<{ n: number }>(sql`
-        select count(*)::int as n
-        from pg_constraint c
-        join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
-        join pg_attribute r on r.attrelid = c.confrelid and r.attnum = c.confkey[1]
-        where c.contype = 'f'
-          and c.conrelid = ${table}::regclass
-          and c.confrelid = '"user"'::regclass
-          and cardinality(c.conkey) = 1
-          and a.attname = ${column}
-          and r.attname = 'id'
-          and c.confdeltype = 'c'`);
-      expect(result.rows[0]?.n, `${table}.${column}`).toBe(1);
-    }
+    expect(await findOwnedColumnsWithoutCascade(handle.db)).toEqual([]);
   });
 });
 

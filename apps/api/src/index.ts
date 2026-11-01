@@ -4,6 +4,7 @@ import { parseEnv } from "@closyria/shared";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
 import { envSchema } from "./env";
+import { registerOwnedTables } from "./owned-tables";
 
 const env = parseEnv(envSchema);
 
@@ -17,6 +18,7 @@ const oauthClient = (clientId?: string, clientSecret?: string) =>
   clientId && clientSecret ? { clientId, clientSecret } : undefined;
 const google = oauthClient(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET);
 const apple = oauthClient(env.APPLE_CLIENT_ID, env.APPLE_CLIENT_SECRET);
+registerOwnedTables(); // before sign-in can link accounts
 const auth = createAuth({
   db,
   mailer,

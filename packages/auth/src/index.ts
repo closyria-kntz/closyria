@@ -8,6 +8,7 @@ export {
 export { brevoMailer, type Mailer, type MailMessage, type MailSender, memoryMailer } from "./mailer";
 export {
   type DbExecutor,
+  findOwnedColumnsWithoutCascade,
   listOwnedColumns,
   type OwnedTableReassign,
   reassignUserData,

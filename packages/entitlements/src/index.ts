@@ -1,5 +1,3 @@
-import "./ownership";
-
 export {
   createEntitlements,
   type Entitlements,
@@ -20,3 +18,4 @@ export {
   stockKeySchema,
   stockKeys,
 } from "./keys";
+export { registerEntitlementsOwnedTables } from "./ownership";
