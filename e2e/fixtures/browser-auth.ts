@@ -1,8 +1,8 @@
 /**
  * Browser-side entry, bundled by the global setup (esbuild) and injected into every page with
  * `addInitScript`. It exposes the web app's real auth client and `ensureSession` (Web Locks included) to
- * the tests, which drive them with `page.evaluate`: the app has no sign-in screen yet, and nothing is
- * added to the app for the tests.
+ * the tests, which drive them with `page.evaluate` (the /connexion page has its own UI journey); nothing
+ * is added to the app for the tests.
  */
 import { createAuthClient, ensureSession } from "@closyria/auth/client";
 

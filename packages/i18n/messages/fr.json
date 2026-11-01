@@ -16,6 +16,30 @@
       "ignore": "Tu n’as pas demandé ce code ? Ignore simplement ce message."
     }
   },
+  "SignIn": {
+    "metadataTitle": "Connexion · Closyria",
+    "title": "Connexion",
+    "intro": "Pas de mot de passe : on t’envoie un code par e-mail.",
+    "emailLabel": "Ton e-mail",
+    "sendCode": "Recevoir mon code",
+    "codeSent": "Code envoyé à {email}. Regarde dans ta boîte mail, et dans les indésirables s’il n’arrive pas.",
+    "codeLabel": "Code à 6 chiffres",
+    "codeHint": "Il est valable 10 minutes.",
+    "signIn": "Me connecter",
+    "otherEmail": "Changer d’e-mail",
+    "resend": "Recevoir un nouveau code",
+    "busy": "Un instant…",
+    "errors": {
+      "invalidEmail": "Cette adresse ne semble pas complète. Vérifie-la.",
+      "invalidCodeFormat": "Le code compte 6 chiffres. Vérifie-le.",
+      "tooManyRequests": "Trop de demandes d’un coup. Attends quelques minutes, puis réessaie.",
+      "sendFailed": "Le code n’est pas parti. Vérifie ton e-mail, puis réessaie.",
+      "invalidCode": "Ce code ne marche pas. Vérifie-le, ou demande un nouveau code.",
+      "expiredCode": "Ce code a expiré. Demande un nouveau code.",
+      "tooManyAttempts": "Trop d’essais avec ce code. Demande un nouveau code.",
+      "signInFailed": "La connexion n’a pas marché. Réessaie dans un instant."
+    }
+  },
   "Media": {
     "errors": {
       "unsupported_image": "Format non pris en charge",
