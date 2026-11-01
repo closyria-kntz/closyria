@@ -1,26 +1,31 @@
 import { healthSchema } from "@closyria/shared";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
+import { type AccessEnv, defineAccess, provideSession, type SessionSource } from "./access";
 
 export type AppDeps = {
   env: string;
   version: string;
   pingDb: () => Promise<boolean>;
   /** Better Auth, served under /api/auth/*. */
-  auth: { handler: (request: Request) => Promise<Response> };
+  auth: { handler: (request: Request) => Promise<Response> } & SessionSource;
 };
 
-const healthRoute = createRoute({
-  method: "get",
-  path: "/health",
-  summary: "Service and database health",
-  responses: {
-    200: { description: "Healthy", content: { "application/json": { schema: healthSchema } } },
-    503: { description: "Database unreachable", content: { "application/json": { schema: healthSchema } } },
-  },
-});
+const healthRoute = defineAccess(
+  createRoute({
+    method: "get",
+    path: "/health",
+    summary: "Service and database health",
+    responses: {
+      200: { description: "Healthy", content: { "application/json": { schema: healthSchema } } },
+      503: { description: "Database unreachable", content: { "application/json": { schema: healthSchema } } },
+    },
+  }),
+  "public",
+);
 
 export function createApp(deps: AppDeps) {
-  const app = new OpenAPIHono().basePath("/api");
+  const app = new OpenAPIHono<AccessEnv>().basePath("/api");
+  app.use("*", provideSession(deps.auth));
 
   app.on(["GET", "POST"], "/auth/*", (c) => deps.auth.handler(c.req.raw));
 

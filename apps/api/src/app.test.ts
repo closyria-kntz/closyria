@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createApp } from "./app";
 
 const auth = {
+  getSession: async () => null,
   handler: async (req: Request) => Response.json({ method: req.method, path: new URL(req.url).pathname }),
 };
 const make = (dbOk: boolean) => createApp({ env: "test", version: "abc123", pingDb: async () => dbOk, auth });
