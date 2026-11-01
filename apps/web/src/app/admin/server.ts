@@ -12,7 +12,11 @@ async function internalApi(): Promise<InternalApi> {
 }
 
 /** The access decision for this request, computed once even if several layouts ask. */
-export const getAdminAccess = cache(async () => loadAdminAccess(async () => fetchAdminSession(await internalApi())));
+export const getAdminAccess = cache(async () => {
+  // Outside the try of loadAdminAccess: headers() must keep throwing Next's dynamic-rendering signal.
+  const api = await internalApi();
+  return loadAdminAccess(() => fetchAdminSession(api));
+});
 
 /**
  * Guard called by every admin page itself, not only by the layouts: a page must stay closed even if a

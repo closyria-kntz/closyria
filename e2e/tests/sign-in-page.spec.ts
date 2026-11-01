@@ -35,7 +35,8 @@ test("on se connecte depuis la page /connexion, et la session anonyme devient le
   // A wrong code first: a plain message, and one can try again.
   await codeField.fill("000000");
   await page.getByRole("button", { name: "Me connecter" }).click();
-  await expect(page.getByRole("alert")).toContainText("Ce code ne marche pas");
+  // (Next's route announcer is an alert too.)
+  await expect(page.getByRole("alert").filter({ hasText: "Ce code ne marche pas" })).toBeVisible();
 
   await codeField.fill(await readCode(request, email));
   await page.getByRole("button", { name: "Me connecter" }).click();
