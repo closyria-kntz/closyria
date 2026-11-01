@@ -1,3 +1,5 @@
+import { registerOwnedTable } from "@closyria/auth";
+import { schema } from "@closyria/db";
 import { registerEntitlementsOwnedTables } from "@closyria/entitlements";
 
 /**
@@ -6,4 +8,6 @@ import { registerEntitlementsOwnedTables } from "@closyria/entitlements";
  */
 export function registerOwnedTables(): void {
   registerEntitlementsOwnedTables();
+  // Photos simply move; their object keys keep the anonymous user's id (keys are opaque).
+  registerOwnedTable(schema.media, schema.media.userId);
 }

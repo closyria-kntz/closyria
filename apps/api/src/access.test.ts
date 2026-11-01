@@ -1,4 +1,6 @@
 import type { Session } from "@closyria/auth";
+import type { Database } from "@closyria/db";
+import { memoryStore } from "@closyria/storage";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { describe, expect, it } from "vitest";
 import {
@@ -114,6 +116,7 @@ describe("route coverage", () => {
       version: "t",
       pingDb: async () => true,
       auth: { handler: async () => new Response(), getSession: async () => null },
+      media: { db: {} as Database, store: memoryStore() }, // never reached: coverage reads the routes only
     });
   const openapi = async (app: ReturnType<typeof make>) =>
     (await (await app.request("/api/openapi.json")).json()) as OpenApiDocument;

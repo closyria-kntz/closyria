@@ -18,13 +18,16 @@
     "@closyria/db": "workspace:*",
     "@closyria/entitlements": "workspace:*",
     "@closyria/shared": "workspace:*",
+    "@closyria/storage": "workspace:*",
     "@hono/node-server": "^2.1.5",
     "@hono/zod-openapi": "^1.6.3",
     "hono": "^4.13.13",
+    "sharp": "^0.35.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@closyria/config": "workspace:*",
+    "@closyria/i18n": "workspace:*",
     "@closyria/testing": "workspace:*",
     "tsdown": "^0.23.1",
     "vitest": "^5.0.5"

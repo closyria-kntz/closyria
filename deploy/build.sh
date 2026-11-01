@@ -28,8 +28,12 @@ export NEXT_TELEMETRY_DISABLED=1
 cp -a "$SRC/apps/web/.next/standalone" "$OUT/web"
 cp -a "$SRC/apps/web/.next/static" "$OUT/web/apps/web/.next/static"
 [ -d "$SRC/apps/web/public" ] && cp -a "$SRC/apps/web/public" "$OUT/web/apps/web/public"
-# api and worker: self-contained bundles
+# api and worker: self-contained bundles. The api keeps sharp external (native libvips, cannot be bundled):
+# its release gets a minimal node_modules with sharp and the linux-x64 binaries, at the lockfile's versions.
 cp -a "$SRC/apps/api/dist" "$OUT/api"
+(cd "$SRC" && pnpm --filter @closyria/api deploy --prod --reporter=silent "$WORK/api-deploy")
+node "$SRC/deploy/native-deps.mjs" "$WORK/api-deploy" "$OUT/api/node_modules" sharp
+(cd "$OUT/api" && node --input-type=module -e 'import sharp from "sharp"; await sharp({ create: { width: 1, height: 1, channels: 3, background: "#000" } }).webp().toBuffer();')
 cp -a "$SRC/apps/worker/dist" "$OUT/worker"
 cp -a "$SRC/packages/db/migrations" "$OUT/migrations"
 printf 'APP_VERSION=%s\n' "$ID" > "$OUT/release.env"

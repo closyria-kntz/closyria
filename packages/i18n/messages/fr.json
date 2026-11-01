@@ -15,5 +15,12 @@
       "validity": "Ce code est valable 10 minutes.",
       "ignore": "Si vous n’avez pas demandé ce code, ignorez simplement ce message."
     }
+  },
+  "Media": {
+    "errors": {
+      "unsupported_image": "Format non pris en charge",
+      "image_too_large": "Photo trop lourde, 20 Mo maximum",
+      "invalid_upload": "Aucune photo reçue, réessayez"
+    }
   }
 }

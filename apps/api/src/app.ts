@@ -1,6 +1,7 @@
 import { healthSchema } from "@closyria/shared";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { type AccessEnv, defineAccess, provideSession, type SessionSource } from "./access";
+import { type MediaDeps, mediaRoutes } from "./routes/media";
 
 export type AppDeps = {
   env: string;
@@ -8,6 +9,8 @@ export type AppDeps = {
   pingDb: () => Promise<boolean>;
   /** Better Auth, served under /api/auth/*. */
   auth: { handler: (request: Request) => Promise<Response> } & SessionSource;
+  /** Photos: database rows and object storage. */
+  media: MediaDeps;
 };
 
 const healthRoute = defineAccess(
@@ -29,16 +32,18 @@ export function createApp(deps: AppDeps) {
 
   app.on(["GET", "POST"], "/auth/*", (c) => deps.auth.handler(c.req.raw));
 
-  const routes = app.openapi(healthRoute, async (c) => {
-    const dbOk = await deps.pingDb();
-    const body = {
-      status: dbOk ? "ok" : "degraded",
-      env: deps.env,
-      version: deps.version,
-      database: dbOk ? "ok" : "error",
-    } as const;
-    return dbOk ? c.json(body, 200) : c.json(body, 503);
-  });
+  const routes = app
+    .openapi(healthRoute, async (c) => {
+      const dbOk = await deps.pingDb();
+      const body = {
+        status: dbOk ? "ok" : "degraded",
+        env: deps.env,
+        version: deps.version,
+        database: dbOk ? "ok" : "error",
+      } as const;
+      return dbOk ? c.json(body, 200) : c.json(body, 503);
+    })
+    .route("/", mediaRoutes(deps.media));
 
   app.doc31("/openapi.json", {
     openapi: "3.1.0",

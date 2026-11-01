@@ -8,3 +8,5 @@ allowBuilds:
   # Transitive from next-intl; not needed at runtime.
   "@parcel/watcher": false
   "@swc/core": false
+  # sharp 0.35 ships prebuilt libvips binaries (@img/*) and has no build script; never compile it from source.
+  sharp: false

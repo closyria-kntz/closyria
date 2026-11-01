@@ -16,6 +16,15 @@ Le script applique les migrations, bascule le lien `current`, redémarre `closyr
 
 Secrets : `/etc/closyria/<env>.env` (root:root 600), lus par systemd au démarrage.
 
+Photos : l'API refuse de démarrer hors développement sans les cinq variables du stockage OVH (S3) :
+`S3_ENDPOINT` (par exemple `https://s3.gra.io.cloud.ovh.net`), `S3_REGION` (`gra`), `S3_BUCKET` (un bucket par
+environnement), `S3_ACCESS_KEY_ID` et `S3_SECRET_ACCESS_KEY`. Les ajouter à `/etc/closyria/<env>.env` **avant** de
+déployer cette version. En développement local, sans elles, les photos restent en mémoire jusqu'au redémarrage.
+
+`sharp` (traitement des photos) contient du code natif et ne peut pas être intégré au bundle de l'API : `build.sh`
+place dans `api/node_modules` sharp et ses binaires linux-x64 (glibc), aux versions du lockfile, puis vérifie qu'il
+se charge. L'artefact doit donc être construit sur une machine linux-x64 glibc, comme le serveur.
+
 ## Donner le rôle admin
 
 Le rôle ne se donne jamais par l'application : ni l'inscription ni la modification du profil ne peuvent le changer.

@@ -6,7 +6,14 @@ const base = {
   BETTER_AUTH_SECRET: "a".repeat(32),
   BETTER_AUTH_URL: "http://localhost:3001",
 };
-const prod = { ...base, APP_ENV: "prod", BETTER_AUTH_URL: "https://closyria.com" };
+const s3 = {
+  S3_ENDPOINT: "https://s3.gra.io.cloud.ovh.net",
+  S3_REGION: "gra",
+  S3_BUCKET: "closyria-prod",
+  S3_ACCESS_KEY_ID: "key-id",
+  S3_SECRET_ACCESS_KEY: "secret-key",
+};
+const prod = { ...base, ...s3, APP_ENV: "prod", BETTER_AUTH_URL: "https://closyria.com" };
 
 describe("envSchema", () => {
   it("defaults to the memory mailer and the Closyria sender outside prod", () => {
@@ -20,7 +27,7 @@ describe("envSchema", () => {
   });
 
   it("requires Brevo on dev.closyria.com too, which needs real codes", () => {
-    const dev = { ...base, APP_ENV: "dev", BETTER_AUTH_URL: "https://dev.closyria.com" };
+    const dev = { ...base, ...s3, APP_ENV: "dev", BETTER_AUTH_URL: "https://dev.closyria.com" };
     expect(envSchema.safeParse(dev).success).toBe(false);
     expect(envSchema.safeParse({ ...dev, MAIL_TRANSPORT: "memory" }).success).toBe(false);
     expect(envSchema.safeParse({ ...dev, MAIL_TRANSPORT: "brevo", BREVO_API_KEY: "key" }).success).toBe(true);
@@ -37,7 +44,7 @@ describe("envSchema", () => {
   });
 
   it("requires an https auth URL outside development, so cookies are secure", () => {
-    const dev = { ...base, APP_ENV: "dev", MAIL_TRANSPORT: "brevo", BREVO_API_KEY: "key" };
+    const dev = { ...base, ...s3, APP_ENV: "dev", MAIL_TRANSPORT: "brevo", BREVO_API_KEY: "key" };
     expect(envSchema.safeParse(dev).success).toBe(false);
     expect(envSchema.safeParse({ ...dev, BETTER_AUTH_URL: "https://dev.closyria.com" }).success).toBe(true);
   });
@@ -63,5 +70,25 @@ describe("envSchema", () => {
       expect(envSchema.safeParse({ ...base, [secret]: "secret" }).success).toBe(false);
       expect(envSchema.safeParse({ ...base, [id]: "id", [secret]: "secret" }).success).toBe(true);
     }
+  });
+
+  it("keeps photos in memory in local development when S3 is not configured", () => {
+    const env = envSchema.parse(base);
+    expect(env.S3_ENDPOINT).toBeUndefined();
+    expect(envSchema.parse({ ...base, ...s3 }).S3_BUCKET).toBe("closyria-prod");
+  });
+
+  it("requires every S3 variable outside development", () => {
+    const ready = { ...prod, MAIL_TRANSPORT: "brevo", BREVO_API_KEY: "key" };
+    expect(envSchema.safeParse(ready).success).toBe(true);
+    for (const name of Object.keys(s3)) {
+      const { [name as keyof typeof s3]: _, ...missing } = ready;
+      expect(envSchema.safeParse(missing).success, name).toBe(false);
+    }
+  });
+
+  it("requires all S3 variables together, even in development", () => {
+    expect(envSchema.safeParse({ ...base, S3_BUCKET: "closyria-dev" }).success).toBe(false);
+    expect(envSchema.safeParse({ ...base, ...s3, S3_ENDPOINT: "not a url" }).success).toBe(false);
   });
 });

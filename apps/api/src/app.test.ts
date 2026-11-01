@@ -1,3 +1,5 @@
+import type { Database } from "@closyria/db";
+import { memoryStore } from "@closyria/storage";
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app";
 
@@ -5,7 +7,9 @@ const auth = {
   getSession: async () => null,
   handler: async (req: Request) => Response.json({ method: req.method, path: new URL(req.url).pathname }),
 };
-const make = (dbOk: boolean) => createApp({ env: "test", version: "abc123", pingDb: async () => dbOk, auth });
+// The media route never runs here: it needs no real database.
+const media = { db: {} as Database, store: memoryStore() };
+const make = (dbOk: boolean) => createApp({ env: "test", version: "abc123", pingDb: async () => dbOk, auth, media });
 
 describe("GET /api/health", () => {
   it("returns 200 when the database answers", async () => {
