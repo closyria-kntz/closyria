@@ -158,7 +158,7 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
 
 **Interfaces :**
 - Produit : Google et Apple activés **seulement si leurs variables sont présentes**. Ça permet de démarrer avant d'avoir les comptes développeur (prérequis spec §13).
-- Produit : plugin `admin` (rôles `user` | `admin`) et plugin `passkey`. `session.authMethod` vaut `"passkey"` quand la session a été ouverte par passkey.
+- Produit : plugin `admin` (rôles `user` | `admin`) et plugin `passkey`. Champ additionnel de session `authMethod` (`"anonymous" | "email-otp" | "google" | "apple" | "passkey"`), renseigné par un crochet après chaque connexion.
 - Produit : `deploy/README.md`, section « Donner le rôle admin » : une commande SQL documentée que la fondatrice lance une fois.
 
 - [ ] **Étape 1 : tests qui échouent** — sans variables Google, `/api/auth/sign-in/social` avec `google` répond 404 ou 400, pas 500 ; un utilisateur promu `admin` a `role === "admin"` ; une session ouverte par passkey (authentificateur WebAuthn simulé) porte `authMethod === "passkey"`.
