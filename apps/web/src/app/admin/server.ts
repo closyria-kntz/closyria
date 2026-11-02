@@ -8,7 +8,13 @@ import { fetchAdminJson, fetchAdminSession, type InternalApi, internalApiUrl } f
 // Server only: imported by the admin layouts and pages, never by a client component.
 
 async function internalApi(): Promise<InternalApi> {
-  return { fetch, baseUrl: internalApiUrl(process.env), cookie: (await headers()).get("cookie") ?? "" };
+  const incoming = await headers();
+  return {
+    fetch,
+    baseUrl: internalApiUrl(process.env),
+    cookie: incoming.get("cookie") ?? "",
+    forwardedFor: incoming.get("x-forwarded-for") ?? undefined,
+  };
 }
 
 /** The access decision for this request, computed once even if several layouts ask. */

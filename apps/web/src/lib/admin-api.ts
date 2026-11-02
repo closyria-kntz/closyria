@@ -7,6 +7,12 @@ export type InternalApi = {
   baseUrl: string;
   /** The visitor's Cookie header, forwarded as is. */
   cookie: string;
+  /**
+   * The X-Forwarded-For header this page request came with. Caddy overwrites it with the visitor's address;
+   * passing it on lets the API's per-address limits (Better Auth's included) count this visitor, rather than
+   * one shared bucket for every server-side call.
+   */
+  forwardedFor?: string | undefined;
 };
 
 const envSchema = z.object({ INTERNAL_API_URL: z.url().default("http://127.0.0.1:3001") });
@@ -19,12 +25,23 @@ export function internalApiUrl(env: Record<string, string | undefined>): string 
 /** The API runs on the same machine: an answer slower than this means it is down or stuck. */
 const INTERNAL_TIMEOUT_MS = 5000;
 
-const request = (api: InternalApi, path: string) =>
-  api.fetch(`${api.baseUrl}${path}`, {
-    headers: { cookie: api.cookie },
+/** The last X-Forwarded-For entry: the address Caddy saw. Earlier entries are whatever the client sent. */
+function visitorAddress(forwardedFor: string | undefined): string | undefined {
+  return forwardedFor
+    ?.split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .at(-1);
+}
+
+const request = (api: InternalApi, path: string) => {
+  const visitor = visitorAddress(api.forwardedFor);
+  return api.fetch(`${api.baseUrl}${path}`, {
+    headers: { cookie: api.cookie, ...(visitor ? { "x-forwarded-for": visitor } : {}) },
     cache: "no-store",
     signal: AbortSignal.timeout(INTERNAL_TIMEOUT_MS),
   });
+};
 
 /** The caller's session as Better Auth sees it, reduced to role and sign-in method; null without one. */
 export async function fetchAdminSession(api: InternalApi): Promise<AdminSession> {

@@ -51,6 +51,27 @@ describe("fetchAdminSession", () => {
   });
 });
 
+describe("visitor address", () => {
+  it("forwards the visitor's address (last X-Forwarded-For entry, set by Caddy) to every internal call", async () => {
+    const { fetch, calls } = fakeFetch(200, overview);
+    const api = { fetch, baseUrl: "http://api", cookie: "", forwardedFor: "spoofed, 203.0.113.9" };
+    await fetchAdminJson(api, "/api/admin/overview", adminOverviewSchema);
+    const session = fakeFetch(200, null);
+    await fetchAdminSession({ ...api, fetch: session.fetch });
+    for (const call of [...calls, ...session.calls]) {
+      expect(new Headers(call.init?.headers).get("x-forwarded-for")).toBe("203.0.113.9");
+    }
+  });
+
+  it("sends no X-Forwarded-For when the request did not come through Caddy", async () => {
+    for (const forwardedFor of [undefined, "", " , "]) {
+      const { fetch, calls } = fakeFetch(200, null);
+      await fetchAdminSession({ fetch, baseUrl: "http://api", cookie: "", forwardedFor });
+      expect(new Headers(calls[0]?.init?.headers).has("x-forwarded-for")).toBe(false);
+    }
+  });
+});
+
 describe("fetchAdminJson", () => {
   it("returns the validated body", async () => {
     const { fetch, calls } = fakeFetch(200, overview);
