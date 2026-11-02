@@ -1,6 +1,6 @@
 import { adminOverviewSchema } from "@closyria/shared";
 import { describe, expect, it, vi } from "vitest";
-import { fetchAdminJson, fetchAdminSession, internalApiUrl } from "./admin-api";
+import { fetchAdminJson, fetchAdminSession, internalApiFor, internalApiUrl } from "./admin-api";
 
 type Call = { url: string; init: RequestInit | undefined };
 
@@ -52,9 +52,16 @@ describe("fetchAdminSession", () => {
 });
 
 describe("visitor address", () => {
-  it("forwards the visitor's address (last X-Forwarded-For entry, set by Caddy) to every internal call", async () => {
+  it("reads cookies and the visitor's address (last X-Forwarded-For entry) from the page request", () => {
+    const incoming = new Headers({ cookie: "a=1", "x-forwarded-for": "spoofed, 203.0.113.9" });
+    const api = internalApiFor(incoming, { INTERNAL_API_URL: "http://127.0.0.1:3101" });
+    expect(api).toMatchObject({ baseUrl: "http://127.0.0.1:3101", cookie: "a=1", visitorAddress: "203.0.113.9" });
+    expect(internalApiFor(new Headers(), {}).visitorAddress).toBeUndefined();
+  });
+
+  it("forwards the visitor's address to every internal call", async () => {
     const { fetch, calls } = fakeFetch(200, overview);
-    const api = { fetch, baseUrl: "http://api", cookie: "", forwardedFor: "spoofed, 203.0.113.9" };
+    const api = { fetch, baseUrl: "http://api", cookie: "", visitorAddress: "203.0.113.9" };
     await fetchAdminJson(api, "/api/admin/overview", adminOverviewSchema);
     const session = fakeFetch(200, null);
     await fetchAdminSession({ ...api, fetch: session.fetch });
@@ -63,12 +70,10 @@ describe("visitor address", () => {
     }
   });
 
-  it("sends no X-Forwarded-For when the request did not come through Caddy", async () => {
-    for (const forwardedFor of [undefined, "", " , "]) {
-      const { fetch, calls } = fakeFetch(200, null);
-      await fetchAdminSession({ fetch, baseUrl: "http://api", cookie: "", forwardedFor });
-      expect(new Headers(calls[0]?.init?.headers).has("x-forwarded-for")).toBe(false);
-    }
+  it("sends no X-Forwarded-For without a visitor address", async () => {
+    const { fetch, calls } = fakeFetch(200, null);
+    await fetchAdminSession({ fetch, baseUrl: "http://api", cookie: "" });
+    expect(new Headers(calls[0]?.init?.headers).has("x-forwarded-for")).toBe(false);
   });
 });
 

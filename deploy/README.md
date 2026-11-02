@@ -149,7 +149,15 @@ et par compte, 60 par heure et par adresse, et 2 photos traitées à la fois par
 puis « réessaie dans un instant »). Ces limites identifient le client par la **dernière** entrée de `X-Forwarded-For`
 (en mémoire, hachée, jamais stockée). Cela n'est sûr que parce que l'API écoute sur 127.0.0.1 derrière Caddy, qui
 **réécrit** `X-Forwarded-For` avec l'adresse qu'il voit (`reverse_proxy` le fait par défaut). L'API ne doit
-**jamais** être exposée directement. Caddy envoie `/api/*` de l'origine web vers l'API : le web appelle donc `/api/events` en même origine.
+**jamais** être exposée directement.
+
+Les pages admin lisent la session et les données admin **côté serveur** : le serveur web (Next) appelle alors l'API
+sur 127.0.0.1 et lui transmet l'adresse de la visiteuse (dernière entrée du `X-Forwarded-For` que Caddy lui a
+donné), pour que les limites de Better Auth comptent chaque visiteuse à part. Le web est donc lui aussi un relais de
+confiance : comme l'API, il doit écouter sur 127.0.0.1 (`HOSTNAME=127.0.0.1` dans l'unité systemd) et n'être
+joignable que par Caddy. Exposé directement, il laisserait un client choisir l'adresse transmise.
+
+Caddy envoie `/api/*` de l'origine web vers l'API : le web appelle donc `/api/events` en même origine.
 
 ## Donner le rôle admin
 

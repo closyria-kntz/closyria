@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { lastForwardedAddress } from "@closyria/shared";
 import type { Context, Env, MiddlewareHandler } from "hono";
 
 export type RateLimitOptions<E extends Env = Env> = {
@@ -19,8 +20,9 @@ const DEFAULT_MAX_TRACKED_CLIENTS = 10_000;
  * a file or the database: only counters live here, and only for one window.
  *
  * TRUST ASSUMPTION: the client is the last `X-Forwarded-For` entry. That is only safe because the API listens
- * on 127.0.0.1 behind Caddy, which overwrites `X-Forwarded-For` with the address it saw (see deploy/README.md).
- * The API must never be exposed directly: a client could then pick its own bucket.
+ * on 127.0.0.1 behind Caddy, which overwrites `X-Forwarded-For` with the address it saw, and the web server
+ * (also on 127.0.0.1, behind Caddy) passes that address on for its server-side calls (see deploy/README.md).
+ * Neither the API nor the web server may be exposed directly: a client could then pick its own bucket.
  */
 export function rateLimit<E extends Env = Env>(
   options: RateLimitOptions<E>,
@@ -60,5 +62,5 @@ export function rateLimit<E extends Env = Env>(
 
 /** The last `X-Forwarded-For` entry, set by Caddy (see the trust assumption above). Without it: one shared bucket. */
 function clientAddress(headers: Headers): string {
-  return headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() || "unknown";
+  return lastForwardedAddress(headers.get("x-forwarded-for")) ?? "unknown";
 }

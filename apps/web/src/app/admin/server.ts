@@ -3,18 +3,12 @@ import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import type { z } from "zod";
 import { loadAdminAccess } from "@/lib/admin-access";
-import { fetchAdminJson, fetchAdminSession, type InternalApi, internalApiUrl } from "@/lib/admin-api";
+import { fetchAdminJson, fetchAdminSession, type InternalApi, internalApiFor } from "@/lib/admin-api";
 
 // Server only: imported by the admin layouts and pages, never by a client component.
 
 async function internalApi(): Promise<InternalApi> {
-  const incoming = await headers();
-  return {
-    fetch,
-    baseUrl: internalApiUrl(process.env),
-    cookie: incoming.get("cookie") ?? "",
-    forwardedFor: incoming.get("x-forwarded-for") ?? undefined,
-  };
+  return internalApiFor(await headers(), process.env);
 }
 
 /** The access decision for this request, computed once even if several layouts ask. */

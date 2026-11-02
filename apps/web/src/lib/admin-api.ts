@@ -1,4 +1,4 @@
-import { type AdminSession, adminSessionSchema } from "@closyria/shared";
+import { type AdminSession, adminSessionSchema, lastForwardedAddress } from "@closyria/shared";
 import { z } from "zod";
 
 /** How the web server reaches the API: directly on the machine, never through the public URL. */
@@ -8,11 +8,12 @@ export type InternalApi = {
   /** The visitor's Cookie header, forwarded as is. */
   cookie: string;
   /**
-   * The X-Forwarded-For header this page request came with. Caddy overwrites it with the visitor's address;
-   * passing it on lets the API's per-address limits (Better Auth's included) count this visitor, rather than
-   * one shared bucket for every server-side call.
+   * The visitor's address (last X-Forwarded-For entry, written by Caddy), passed on so that the API's
+   * per-address limits, Better Auth's included, count this visitor rather than one bucket shared by every
+   * server-side call. A request that reached Next directly (local checks) carries the socket address, which
+   * Next fills in: 127.0.0.1 is a trusted proxy for Better Auth, so those calls stay in its shared bucket.
    */
-  forwardedFor?: string | undefined;
+  visitorAddress?: string | undefined;
 };
 
 const envSchema = z.object({ INTERNAL_API_URL: z.url().default("http://127.0.0.1:3001") });
@@ -22,22 +23,26 @@ export function internalApiUrl(env: Record<string, string | undefined>): string 
   return envSchema.parse(env).INTERNAL_API_URL.replace(/\/$/, "");
 }
 
+/** The internal API for one page request: its cookies and its visitor's address, read once. */
+export function internalApiFor(
+  incoming: Headers,
+  env: Record<string, string | undefined>,
+  fetchImpl: typeof globalThis.fetch = fetch,
+): InternalApi {
+  return {
+    fetch: fetchImpl,
+    baseUrl: internalApiUrl(env),
+    cookie: incoming.get("cookie") ?? "",
+    visitorAddress: lastForwardedAddress(incoming.get("x-forwarded-for")),
+  };
+}
+
 /** The API runs on the same machine: an answer slower than this means it is down or stuck. */
 const INTERNAL_TIMEOUT_MS = 5000;
 
-/** The last X-Forwarded-For entry: the address Caddy saw. Earlier entries are whatever the client sent. */
-function visitorAddress(forwardedFor: string | undefined): string | undefined {
-  return forwardedFor
-    ?.split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .at(-1);
-}
-
 const request = (api: InternalApi, path: string) => {
-  const visitor = visitorAddress(api.forwardedFor);
   return api.fetch(`${api.baseUrl}${path}`, {
-    headers: { cookie: api.cookie, ...(visitor ? { "x-forwarded-for": visitor } : {}) },
+    headers: { cookie: api.cookie, ...(api.visitorAddress ? { "x-forwarded-for": api.visitorAddress } : {}) },
     cache: "no-store",
     signal: AbortSignal.timeout(INTERNAL_TIMEOUT_MS),
   });
