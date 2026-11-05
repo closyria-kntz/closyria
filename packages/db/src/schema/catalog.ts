@@ -113,6 +113,10 @@ export const products = pgTable(
   },
   (t) => [
     index("products_shop_id_idx").on(t.shopId),
+    index("products_category_id_idx").on(t.categoryId),
+    index("products_color_id_idx").on(t.colorId),
+    index("products_material_id_idx").on(t.materialId),
+    index("products_pattern_id_idx").on(t.patternId),
     check("products_audience_check", sql`${t.audience} IS NULL OR ${oneOf(t.audience, audienceSchema.options)}`),
     check(
       "products_child_detail_check",

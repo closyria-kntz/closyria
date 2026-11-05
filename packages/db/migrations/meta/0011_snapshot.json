@@ -1,5 +1,5 @@
 {
-  "id": "8e2bc137-1abe-4445-b8fe-03cba0cccdc7",
+  "id": "44b87d44-9dd2-482e-aee2-d2cbc2869a41",
   "prevId": "c1c23508-e660-496b-ad97-7ac784346691",
   "version": "7",
   "dialect": "postgresql",
@@ -1299,6 +1299,66 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "products_category_id_idx": {
+          "name": "products_category_id_idx",
+          "columns": [
+            {
+              "expression": "category_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "products_color_id_idx": {
+          "name": "products_color_id_idx",
+          "columns": [
+            {
+              "expression": "color_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "products_material_id_idx": {
+          "name": "products_material_id_idx",
+          "columns": [
+            {
+              "expression": "material_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "products_pattern_id_idx": {
+          "name": "products_pattern_id_idx",
+          "columns": [
+            {
+              "expression": "pattern_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2098,7 +2158,23 @@
           "default": "'{}'::text[]"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "categories_parent_id_idx": {
+          "name": "categories_parent_id_idx",
+          "columns": [
+            {
+              "expression": "parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "categories_parent_id_categories_id_fk": {
           "name": "categories_parent_id_categories_id_fk",
@@ -2110,7 +2186,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },

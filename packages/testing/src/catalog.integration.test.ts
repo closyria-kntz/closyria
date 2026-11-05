@@ -192,4 +192,66 @@ describe("reference lists and product classification", () => {
     expect(after?.colorId).toBeNull();
     expect(after?.audience).toBe("child");
   });
+
+  it("refuses deleting a category that still has a child", async () => {
+    const n = ++counter;
+    const [parent] = await handle.db
+      .insert(schema.categories)
+      .values({ slug: `p-${n}`, name: "Parent", position: 0 })
+      .returning();
+    await handle.db
+      .insert(schema.categories)
+      .values({ parentId: parent?.id, slug: `c-${n}`, name: "Child", position: 0 });
+    await expect(
+      handle.db.delete(schema.categories).where(eq(schema.categories.id, parent?.id ?? "")),
+    ).rejects.toThrow();
+  });
+
+  it("refuses an invalid child_detail and classified_by", async () => {
+    const product = await newProduct((await newShop()).id);
+    const update = (set: Partial<typeof schema.products.$inferInsert>) =>
+      handle.db.update(schema.products).set(set).where(eq(schema.products.id, product.id));
+    await expect(update({ childDetail: "man" as never })).rejects.toThrow();
+    await expect(update({ classifiedBy: "ai" as never })).rejects.toThrow();
+  });
+
+  it("refuses a duplicate slug on colors, materials and patterns", async () => {
+    const n = ++counter;
+    await handle.db.insert(schema.colors).values({ slug: `c-${n}`, name: "A", hex: "#000000" });
+    await expect(
+      handle.db.insert(schema.colors).values({ slug: `c-${n}`, name: "B", hex: "#111111" }),
+    ).rejects.toThrow();
+    await handle.db.insert(schema.materials).values({ slug: `m-${n}`, name: "A" });
+    await expect(handle.db.insert(schema.materials).values({ slug: `m-${n}`, name: "B" })).rejects.toThrow();
+    await handle.db.insert(schema.patterns).values({ slug: `p-${n}`, name: "A" });
+    await expect(handle.db.insert(schema.patterns).values({ slug: `p-${n}`, name: "B" })).rejects.toThrow();
+  });
+
+  it("sets category_id, material_id and pattern_id to null when their row is deleted", async () => {
+    const n = ++counter;
+    const [category] = await handle.db
+      .insert(schema.categories)
+      .values({ slug: `k-${n}`, name: "K" })
+      .returning();
+    const [material] = await handle.db
+      .insert(schema.materials)
+      .values({ slug: `mat-${n}`, name: "M" })
+      .returning();
+    const [pattern] = await handle.db
+      .insert(schema.patterns)
+      .values({ slug: `pat-${n}`, name: "P" })
+      .returning();
+    const product = await newProduct((await newShop()).id);
+    await handle.db
+      .update(schema.products)
+      .set({ categoryId: category?.id, materialId: material?.id, patternId: pattern?.id })
+      .where(eq(schema.products.id, product.id));
+    await handle.db.delete(schema.categories).where(eq(schema.categories.id, category?.id ?? ""));
+    await handle.db.delete(schema.materials).where(eq(schema.materials.id, material?.id ?? ""));
+    await handle.db.delete(schema.patterns).where(eq(schema.patterns.id, pattern?.id ?? ""));
+    const [after] = await handle.db.select().from(schema.products).where(eq(schema.products.id, product.id));
+    expect(after?.categoryId).toBeNull();
+    expect(after?.materialId).toBeNull();
+    expect(after?.patternId).toBeNull();
+  });
 });
