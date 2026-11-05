@@ -54,8 +54,10 @@ describe("classify", () => {
   it("detects the child detail", () => {
     const r = classify({ ...base, name: "Robe", shopData: { breadcrumb: ["Enfant", "Fille"] } }, ref);
     expect(r).toMatchObject({ audience: "child", childDetail: "girl" });
-    expect(classify({ ...base, name: "Body", shopData: { tags: ["bébé"] } }, ref).childDetail).toBe("baby");
-    expect(classify({ ...base, name: "Pull", shopData: { tags: ["kids", "garçon"] } }, ref).childDetail).toBe("boy");
+    expect(classify({ ...base, name: "Body", shopData: { breadcrumb: ["Bébé"] } }, ref).childDetail).toBe("baby");
+    expect(classify({ ...base, name: "Pull", shopData: { breadcrumb: ["Kids", "Garçon"] } }, ref).childDetail).toBe(
+      "boy",
+    );
   });
 
   it("matches whole words only: menthe is not men, woman is not man", () => {
@@ -63,6 +65,17 @@ describe("classify", () => {
     expect(r.audience).toBeUndefined();
     expect(r.colorId).toBe("mint");
     expect(classify({ ...base, name: "Robe", shopData: { category: "Woman" } }, ref).audience).toBe("women");
+  });
+
+  it("ignores tags for the audience (brand names)", () => {
+    expect(
+      classify({ ...base, name: "Chemise", shopData: { tags: ["Comme des Garçons"] } }, ref).audience,
+    ).toBeUndefined();
+    const r = classify(
+      { ...base, name: "Chemise", shopData: { breadcrumb: ["Femme", "Comme des Garçons Homme Plus"] } },
+      ref,
+    );
+    expect(r.audience).toBe("women");
   });
 
   it("never guesses the audience from the name alone", () => {
@@ -78,6 +91,12 @@ describe("classify", () => {
     const r = classify({ ...base, name: "Baskets", shopData: { breadcrumb: ["Robes"], category: "Baskets" } }, ref);
     expect(r.categoryId).toBe("c-dresses");
     expect(classify({ ...base, name: "Robe", shopData: { category: "Baskets" } }, ref).categoryId).toBe("c-sneakers");
+  });
+
+  it("lets the breadcrumb beat the name for the category", () => {
+    expect(classify({ ...base, name: "Baskets", shopData: { breadcrumb: ["Robes"] } }, ref).categoryId).toBe(
+      "c-dresses",
+    );
   });
 
   it("sets the season from keywords", () => {

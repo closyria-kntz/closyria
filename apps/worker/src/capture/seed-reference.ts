@@ -37,25 +37,39 @@ export async function seedReference(db: Database): Promise<number> {
     added += 1;
   }
 
-  const insertMissing = async <T extends { slug: string }>(
-    table: typeof schema.colors | typeof schema.materials | typeof schema.patterns,
-    entries: readonly T[],
-    toRow: (entry: T) => Record<string, unknown>,
-  ) => {
-    const existing = new Set((await db.select({ slug: table.slug }).from(table)).map((r) => r.slug));
-    for (const entry of entries) {
-      if (existing.has(entry.slug)) continue;
-      const rows = await db
-        .insert(table)
-        .values(toRow(entry) as never)
-        .onConflictDoNothing({ target: table.slug })
-        .returning({ id: table.id });
-      added += rows.length;
-    }
-  };
-  await insertMissing(schema.colors, STARTING_REFERENCE.colors, (c) => ({ ...c, keywords: [...c.keywords] }));
-  await insertMissing(schema.materials, STARTING_REFERENCE.materials, (m) => ({ ...m, keywords: [...m.keywords] }));
-  await insertMissing(schema.patterns, STARTING_REFERENCE.patterns, (p) => ({ ...p, keywords: [...p.keywords] }));
+  const missing = async (table: typeof schema.colors | typeof schema.materials | typeof schema.patterns) =>
+    new Set((await db.select({ slug: table.slug }).from(table)).map((r) => r.slug));
+
+  const knownColors = await missing(schema.colors);
+  for (const c of STARTING_REFERENCE.colors) {
+    if (knownColors.has(c.slug)) continue;
+    const rows = await db
+      .insert(schema.colors)
+      .values({ slug: c.slug, name: c.name, hex: c.hex, keywords: [...c.keywords] })
+      .onConflictDoNothing({ target: schema.colors.slug })
+      .returning({ id: schema.colors.id });
+    added += rows.length;
+  }
+  const knownMaterials = await missing(schema.materials);
+  for (const m of STARTING_REFERENCE.materials) {
+    if (knownMaterials.has(m.slug)) continue;
+    const rows = await db
+      .insert(schema.materials)
+      .values({ slug: m.slug, name: m.name, keywords: [...m.keywords] })
+      .onConflictDoNothing({ target: schema.materials.slug })
+      .returning({ id: schema.materials.id });
+    added += rows.length;
+  }
+  const knownPatterns = await missing(schema.patterns);
+  for (const p of STARTING_REFERENCE.patterns) {
+    if (knownPatterns.has(p.slug)) continue;
+    const rows = await db
+      .insert(schema.patterns)
+      .values({ slug: p.slug, name: p.name, keywords: [...p.keywords] })
+      .onConflictDoNothing({ target: schema.patterns.slug })
+      .returning({ id: schema.patterns.id });
+    added += rows.length;
+  }
   return added;
 }
 

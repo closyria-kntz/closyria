@@ -1,7 +1,8 @@
 import { createDb, eq, schema } from "@closyria/db";
+import { classify } from "@closyria/shared";
 import { createTestDatabase } from "@closyria/testing/vitest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { seedReference } from "./seed-reference";
+import { loadReferenceSet, seedReference } from "./seed-reference";
 import { STARTING_REFERENCE } from "./starting-reference";
 
 let database: Awaited<ReturnType<typeof createTestDatabase>>;
@@ -31,6 +32,18 @@ describe("STARTING_REFERENCE", () => {
   });
 });
 
+describe("starting keywords", () => {
+  const all = STARTING_REFERENCE.categories.flatMap((c) => c.keywords);
+  it("has no ambiguous single words", () => {
+    for (const word of ["bas", "top", "short", "cap", "tee", "ring", "talon", "pump", "tennis", "flats"]) {
+      expect(all).not.toContain(word);
+    }
+  });
+  it("keeps the useful ones", () => {
+    for (const word of ["tops", "shorts", "casquette", "escarpins", "robe"]) expect(all).toContain(word);
+  });
+});
+
 describe("seedReference", () => {
   it("seeds once, adds nothing the second time, and leaves an admin edit intact", async () => {
     const first = await seedReference(handle.db);
@@ -52,5 +65,23 @@ describe("seedReference", () => {
     expect(await seedReference(handle.db)).toBe(0);
     const [edited] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "robe-longue"));
     expect(edited).toMatchObject({ name: "Maxi robes", keywords: ["custom"] });
+  });
+});
+
+describe("classification with the starting lists", () => {
+  it("does not misfile on ambiguous everyday words", async () => {
+    await seedReference(handle.db);
+    const ref = await loadReferenceSet(handle.db);
+    const slugOf = async (name: string) => {
+      const id = classify({ name, url: "https://shop.test/p", shopData: {} }, ref).categoryId;
+      const [row] = await handle.db
+        .select()
+        .from(schema.categories)
+        .where(eq(schema.categories.id, id ?? ""));
+      return row?.slug;
+    };
+    expect(await slugOf("Escarpins à talons bas")).toBe("escarpins");
+    expect(await slugOf("Robe short sleeve")).toBe("robes");
+    expect(await slugOf("Casquette Cap Ferret")).toBe("chapeaux-bonnets");
   });
 });

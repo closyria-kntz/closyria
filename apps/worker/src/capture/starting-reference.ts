@@ -26,22 +26,12 @@ const categories: StartingCategory[] = [
     parent: "robes",
     keywords: ["robe longue", "robes longues", "robe maxi", "maxi robe", "maxi dress", "long dress"],
   },
-  { slug: "hauts", name: "Hauts", parent: "vetements", keywords: ["haut", "hauts", "top", "tops"] },
+  { slug: "hauts", name: "Hauts", parent: "vetements", keywords: ["haut", "hauts", "tops"] },
   {
     slug: "t-shirts",
     name: "T-shirts",
     parent: "hauts",
-    keywords: [
-      "t-shirt",
-      "t-shirts",
-      "tee-shirt",
-      "tee-shirts",
-      "tee shirt",
-      "tee",
-      "débardeur",
-      "débardeurs",
-      "tank top",
-    ],
+    keywords: ["t-shirt", "t-shirts", "tee-shirt", "tee-shirts", "tee shirt", "débardeur", "débardeurs", "tank top"],
   },
   {
     slug: "chemises-blouses",
@@ -67,7 +57,7 @@ const categories: StartingCategory[] = [
       "hoodie",
     ],
   },
-  { slug: "bas", name: "Bas", parent: "vetements", keywords: ["bas", "bottoms"] },
+  { slug: "bas", name: "Bas", parent: "vetements", keywords: ["vêtements du bas", "bottoms"] },
   {
     slug: "pantalons",
     name: "Pantalons",
@@ -76,7 +66,7 @@ const categories: StartingCategory[] = [
   },
   { slug: "jeans", name: "Jeans", parent: "bas", keywords: ["jean", "jeans"] },
   { slug: "jupes", name: "Jupes", parent: "bas", keywords: ["jupe", "jupes", "skirt", "skirts"] },
-  { slug: "shorts", name: "Shorts", parent: "bas", keywords: ["short", "shorts", "bermuda", "bermudas"] },
+  { slug: "shorts", name: "Shorts", parent: "bas", keywords: ["shorts", "bermuda", "bermudas"] },
   {
     slug: "vestes-manteaux",
     name: "Vestes et manteaux",
@@ -125,7 +115,6 @@ const categories: StartingCategory[] = [
       "nuisette",
       "nightwear",
       "nightdress",
-      "bra",
       "underwear",
     ],
   },
@@ -134,19 +123,19 @@ const categories: StartingCategory[] = [
     slug: "baskets",
     name: "Baskets",
     parent: "chaussures",
-    keywords: ["basket", "baskets", "sneaker", "sneakers", "trainer", "trainers", "tennis"],
+    keywords: ["basket", "baskets", "sneaker", "sneakers", "trainer", "trainers"],
   },
   {
     slug: "bottines-bottes",
     name: "Bottines et bottes",
     parent: "chaussures",
-    keywords: ["bottine", "bottines", "botte", "bottes", "boot", "boots", "ankle boots", "chelsea"],
+    keywords: ["bottine", "bottines", "botte", "bottes", "boot", "boots", "ankle boots", "chelsea boots"],
   },
   {
     slug: "escarpins",
     name: "Escarpins",
     parent: "chaussures",
-    keywords: ["escarpin", "escarpins", "talon", "talons", "pump", "pumps", "heels", "high heels"],
+    keywords: ["escarpin", "escarpins", "heels", "high heels"],
   },
   {
     slug: "sandales",
@@ -158,7 +147,7 @@ const categories: StartingCategory[] = [
     slug: "ballerines",
     name: "Ballerines",
     parent: "chaussures",
-    keywords: ["ballerine", "ballerines", "ballet flat", "ballet flats", "flats"],
+    keywords: ["ballerine", "ballerines", "ballet flat", "ballet flats"],
   },
   {
     slug: "sacs",
@@ -196,7 +185,6 @@ const categories: StartingCategory[] = [
       "jewelry",
       "necklace",
       "earrings",
-      "ring",
     ],
   },
   {
@@ -215,19 +203,7 @@ const categories: StartingCategory[] = [
     slug: "chapeaux-bonnets",
     name: "Chapeaux et bonnets",
     parent: "accessoires",
-    keywords: [
-      "chapeau",
-      "chapeaux",
-      "bonnet",
-      "bonnets",
-      "casquette",
-      "casquettes",
-      "béret",
-      "hat",
-      "hats",
-      "cap",
-      "beanie",
-    ],
+    keywords: ["chapeau", "chapeaux", "bonnet", "bonnets", "casquette", "casquettes", "béret", "hat", "hats", "beanie"],
   },
 ];
 
@@ -241,7 +217,7 @@ const colors: StartingColor[] = [
     keywords: ["écru", "ecru", "crème", "cream", "ivoire", "ivory", "off-white"],
   },
   { slug: "gris", name: "Gris", hex: "#8A8A8A", keywords: ["gris", "grise", "grey", "gray", "anthracite"] },
-  { slug: "beige", name: "Beige", hex: "#D8C3A5", keywords: ["beige", "sable", "sand", "nude", "taupe"] },
+  { slug: "beige", name: "Beige", hex: "#D8C3A5", keywords: ["beige", "sable", "sand", "taupe"] },
   { slug: "camel", name: "Camel", hex: "#B98B54", keywords: ["camel", "cognac"] },
   { slug: "marron", name: "Marron", hex: "#6B4226", keywords: ["marron", "brun", "brown", "chocolat", "chocolate"] },
   { slug: "rouge", name: "Rouge", hex: "#C62828", keywords: ["rouge", "red"] },
@@ -276,7 +252,7 @@ const materials: StartingEntry[] = [
   { slug: "laine", name: "Laine", keywords: ["laine", "wool", "mérinos", "merino"] },
   { slug: "cachemire", name: "Cachemire", keywords: ["cachemire", "cashmere"] },
   { slug: "soie", name: "Soie", keywords: ["soie", "silk", "satin"] },
-  { slug: "viscose", name: "Viscose", keywords: ["viscose", "rayonne", "rayon", "lyocell", "tencel"] },
+  { slug: "viscose", name: "Viscose", keywords: ["viscose", "rayonne", "lyocell", "tencel"] },
   { slug: "polyester", name: "Polyester", keywords: ["polyester", "polyamide", "nylon"] },
   { slug: "cuir", name: "Cuir", keywords: ["cuir", "leather", "daim", "suede", "simili cuir"] },
   { slug: "denim", name: "Denim", keywords: ["denim"] },
@@ -284,7 +260,7 @@ const materials: StartingEntry[] = [
 ];
 
 const patterns: StartingEntry[] = [
-  { slug: "uni", name: "Uni", keywords: ["uni", "unie", "plain", "solid"] },
+  { slug: "uni", name: "Uni", keywords: ["uni", "unie"] },
   {
     slug: "raye",
     name: "Rayé",
@@ -293,7 +269,7 @@ const patterns: StartingEntry[] = [
   {
     slug: "carreaux",
     name: "À carreaux",
-    keywords: ["carreaux", "à carreaux", "vichy", "tartan", "écossais", "checked", "check", "plaid", "gingham"],
+    keywords: ["carreaux", "à carreaux", "vichy", "tartan", "écossais", "checked", "plaid", "gingham"],
   },
   { slug: "fleuri", name: "Fleuri", keywords: ["fleuri", "fleurie", "fleurs", "floral", "flowers"] },
   { slug: "pois", name: "À pois", keywords: ["pois", "à pois", "polka dot", "polka dots", "dotted"] },
@@ -302,7 +278,7 @@ const patterns: StartingEntry[] = [
     name: "Imprimé animal",
     keywords: ["imprimé animal", "léopard", "leopard", "zèbre", "zebra", "serpent", "animal print", "snake"],
   },
-  { slug: "imprime", name: "Imprimé", keywords: ["imprimé", "imprimée", "imprimés", "print", "printed", "motif"] },
+  { slug: "imprime", name: "Imprimé", keywords: ["imprimé", "imprimée", "imprimés", "print", "printed"] },
 ];
 
 export const STARTING_REFERENCE = { categories, colors, materials, patterns } as const;

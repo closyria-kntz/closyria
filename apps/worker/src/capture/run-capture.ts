@@ -67,17 +67,32 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
       if (!capture.productId) throw new Error("user capture without a product");
       const productId = capture.productId;
       const at = now();
+      // Small tables, read once per capture and only for a product the rules may still touch.
+      const [before] = await db
+        .select({ classifiedBy: schema.products.classifiedBy })
+        .from(schema.products)
+        .where(eq(schema.products.id, productId));
+      const reference = before?.classifiedBy === "admin" ? undefined : await loadReferenceSet(db);
       await db.transaction(async (tx) => {
-        // Small tables, read once per capture inside the write transaction.
-        const classification = classify(
-          { name: product.name, url: capture.url, shopData: product.shopData ?? {} },
-          await loadReferenceSet(tx),
-        );
         const [current] = await tx
-          .select({ classifiedBy: schema.products.classifiedBy })
+          .select({
+            classifiedBy: schema.products.classifiedBy,
+            audience: schema.products.audience,
+            childDetail: schema.products.childDetail,
+            categoryId: schema.products.categoryId,
+            colorId: schema.products.colorId,
+            materialId: schema.products.materialId,
+            patternId: schema.products.patternId,
+            season: schema.products.season,
+          })
           .from(schema.products)
           .where(eq(schema.products.id, productId))
           .for("update");
+        // Rule classification only; an admin-corrected product (also if it became one meanwhile) keeps its own.
+        const found =
+          current && current.classifiedBy !== "admin" && reference
+            ? classify({ name: product.name, url: capture.url, shopData: product.shopData ?? {} }, reference)
+            : undefined;
         await tx
           .update(schema.products)
           .set({
@@ -92,18 +107,18 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
             gtin: product.gtin ?? null,
             sku: product.sku ?? null,
             shopData: product.shopData ?? {},
-            // An admin-corrected product keeps its classification (the raw fields above are still refreshed).
-            ...(current?.classifiedBy === "admin"
-              ? {}
-              : {
-                  audience: classification.audience ?? null,
-                  childDetail: classification.childDetail ?? null,
-                  categoryId: classification.categoryId ?? null,
-                  colorId: classification.colorId ?? null,
-                  materialId: classification.materialId ?? null,
-                  patternId: classification.patternId ?? null,
-                  season: classification.season ?? null,
-                }),
+            // A field with no new match keeps its previous value; a new match overwrites it.
+            ...(found && current
+              ? {
+                  audience: found.audience ?? current.audience,
+                  childDetail: found.childDetail ?? current.childDetail,
+                  categoryId: found.categoryId ?? current.categoryId,
+                  colorId: found.colorId ?? current.colorId,
+                  materialId: found.materialId ?? current.materialId,
+                  patternId: found.patternId ?? current.patternId,
+                  season: found.season ?? current.season,
+                }
+              : {}),
             source: "captured",
             captureStatus: "ok",
             lastCapturedAt: at,

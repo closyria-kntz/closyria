@@ -267,6 +267,24 @@ describe("runCapture", () => {
     expect(Object.keys(r.product?.shopData ?? {}).length).toBeGreaterThan(0);
   });
 
+  it("keeps the previous classification when a re-capture finds less", async () => {
+    await seedReference(handle.db);
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const [robes] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "robes"));
+    const [noir] = await handle.db.select().from(schema.colors).where(eq(schema.colors.slug, "noir"));
+    const t = await setup("/products/produit-3679", {
+      shop: { platform: "shopify" },
+      product: { categoryId: robes?.id ?? null, colorId: noir?.id ?? null, audience: "women" },
+    });
+    // « PANTALON LEONIE » finds Pantalons (new match overwrites), no audience or colour (kept).
+    await runCapture(t.capture.id, deps);
+    const r = await load(t.capture.id, t.product.id);
+    const [pantalons] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "pantalons"));
+    expect(r.product?.categoryId).toBe(pantalons?.id);
+    expect(r.product?.colorId).toBe(noir?.id);
+    expect(r.product?.audience).toBe("women");
+  });
+
   it("falls back to the HTML page when the .js fails", async () => {
     servePage("/products/produit-3679", "real/mcb-paris.html");
     const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
@@ -528,12 +546,12 @@ describe("runCapture", () => {
     const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
     const select = handle.db.select.bind(handle.db);
     let calls = 0;
-    // The first select after the data transaction is copyImages' read of existing photos.
+    // Selects before the data transaction: shop, product classification, 4 reference lists; then copyImages' read.
     const db = new Proxy(handle.db, {
       get(target, prop) {
         if (prop === "select") {
           return (...args: Parameters<typeof select>) => {
-            if (++calls === 2) throw new Error("db down");
+            if (++calls === 7) throw new Error("db down");
             return select(...args);
           };
         }

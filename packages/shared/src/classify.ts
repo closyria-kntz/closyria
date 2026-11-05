@@ -62,8 +62,8 @@ const SEASON_WORDS: [RegExp, Season][] = [
 
 /**
  * Files a product into the reference lists by keywords. Pure: the caller passes the lists. Text searched
- * (in this order): breadcrumb, shop category, name, shop tags, address path. The audience is never guessed from
- * the name alone.
+ * (in this order): breadcrumb, shop category, name, shop tags, address path. The audience comes from the
+ * breadcrumb, shop category and address path only (never the name or the tags).
  */
 export function classify(input: ClassifyInput, ref: ReferenceSet): Classification {
   const { shopData } = input;
@@ -76,7 +76,8 @@ export function classify(input: ClassifyInput, ref: ReferenceSet): Classificatio
   const material = shopData.material ? [normalize(shopData.material)] : [];
 
   const allText = [...breadcrumb, ...category, ...name, ...tags, ...path];
-  const noName = [...breadcrumb, ...category, ...tags, ...path];
+  // Structure only: no name, no tags (a brand such as « Comme des Garçons » must not mean child).
+  const structure = [...breadcrumb, ...category, ...path];
   const result: Classification = {};
 
   // Category: the deepest one with a keyword; ties go to the first found in text order.
@@ -122,7 +123,7 @@ export function classify(input: ClassifyInput, ref: ReferenceSet): Classificatio
   const patternId = pick(ref.patterns, [...name, ...tags, ...category, ...breadcrumb, ...path]);
   if (patternId) result.patternId = patternId;
 
-  const audienceText = ` ${noName.join(" ")} `;
+  const audienceText = ` ${structure.join(" ")} `;
   const audience = AUDIENCE_WORDS.find(([re]) => re.test(audienceText))?.[1];
   if (audience) {
     result.audience = audience;
