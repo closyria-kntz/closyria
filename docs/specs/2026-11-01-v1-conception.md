@@ -43,7 +43,7 @@ Capture par lien · suivi des commandes · dressing virtuel · wishlists et favo
 | Domaine | Fonction |
 |---|---|
 | Avant l'achat | « Tu as déjà quelque chose de proche » (même catégorie et couleur) · calendrier des soldes |
-| Argent | Rappel de date limite de retour · suivi des remboursements · avoirs et cartes cadeaux avec rappel d'expiration · budget (dépensé ce mois-ci, retours en cours) · factures rangées avec l'article |
+| Argent | Rappel de date limite de retour · suivi des remboursements · avoirs et cartes cadeaux avec rappel d'expiration · budget (dépensé ce mois-ci, retours en cours) · historique par année (pièces achetées, retournées, dépenses ; chaque article garde ses dates dès le chantier 2) · factures rangées avec l'article |
 | Dressing | Ajout par photo avec détourage · mes tailles par marque · notes perso sur la taille · composition et entretien repris de la fiche |
 | Alertes | De retour dans ma taille · baisse de prix |
 | Annuaire | Fiches pratiques (livraison, retours, guide des tailles) · filtres (made in France, seconde main, éco-responsable, retours gratuits, gamme de prix) |
@@ -53,6 +53,16 @@ Capture par lien · suivi des commandes · dressing virtuel · wishlists et favo
 Tenues · coût par port · pièces jamais portées · rangement été/hiver · comparer deux articles · avis d'une amie ·
 avis sur les boutiques · « Mettre en vente sur Vinted » · articles similaires par IA · extension navigateur · application
 mobile native (Expo) · offre pour les boutiques.
+
+**Nouveautés des boutiques (idée du 2026-11-05)** : relever automatiquement, à une date et une heure réglables par
+boutique dans l'admin, les nouveaux articles mis en ligne, pour proposer « Nouveautés de mes boutiques préférées ».
+- Faisable pour les boutiques Shopify (liste publique des articles avec leur date, déjà testé en septembre : 6 852
+  articles) ; plus lourd pour Promod ou Zalando (plan du site, à limiter à des marques ou catégories) ; impossible pour
+  les enseignes qui bloquent les robots.
+- Précaution : recopier régulièrement un catalogue peut toucher au droit des bases de données de la boutique. Ne garder
+  que l'utile (nom, prix, lien, une photo), renvoyer vers la boutique, et de préférence avec l'accord des boutiques
+  (piste : partenariat avec les boutiques indépendantes, lié à l'offre pour les boutiques).
+- Place : après le chantier 2 (il faut des boutiques suivies), avec les alertes (chantier 4) ou l'annuaire (chantier 5).
 
 ## 4. Décisions
 
