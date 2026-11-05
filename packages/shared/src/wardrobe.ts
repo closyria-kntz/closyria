@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { productViewSchema } from "./catalog";
+import { currencySchema, productViewSchema } from "./catalog";
 
 export const itemStageSchema = z.enum(["spotted", "ordered", "owned", "for_sale", "sold", "returned"]);
 export const audienceSchema = z.enum(["women", "men", "child", "mixed"]);
@@ -91,7 +91,11 @@ export type ItemStageInput = z.infer<typeof itemStageInputSchema>;
 export const itemMoveSchema = z.object({ profileId: z.uuid() });
 export type ItemMove = z.infer<typeof itemMoveSchema>;
 
-const bulkIds = z.array(z.uuid()).min(1).max(MAX_BULK_ITEMS);
+const bulkIds = z
+  .array(z.uuid())
+  .min(1)
+  .max(MAX_BULK_ITEMS)
+  .refine((ids) => new Set(ids).size === ids.length, { error: "ids must be unique" });
 export const itemBulkSchema = z.discriminatedUnion("op", [
   z.object({ ids: bulkIds, op: z.literal("stage"), ...itemStageInputSchema.shape }),
   z.object({ ids: bulkIds, op: z.literal("addToList"), wishlistId: z.uuid() }),
@@ -125,6 +129,8 @@ export const itemListQuerySchema = z.object({
   color: z.uuid().optional(),
   audience: audienceSchema.optional(),
   sort: itemSortSchema.optional(),
+  /** Trash view: only deleted items. */
+  deleted: z.stringbool().optional(),
   cursor: z.string().min(1).max(500).optional(),
 });
 export type ItemListQuery = z.infer<typeof itemListQuerySchema>;
@@ -177,9 +183,9 @@ export const itemViewSchema = z.object({
   photos: z.array(itemPhotoViewSchema),
   tags: z.array(tagViewSchema),
   wishlistIds: z.array(z.uuid()),
-  deletedAt: z.string().nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  deletedAt: dateTimeSchema.nullable(),
+  createdAt: dateTimeSchema,
+  updatedAt: dateTimeSchema,
 });
 export type ItemView = z.infer<typeof itemViewSchema>;
 
@@ -190,9 +196,8 @@ export const wishlistViewSchema = z.object({
   id: z.uuid(),
   name: z.string(),
   itemIds: z.array(z.uuid()),
-  /** `/l/<token>` while shared; the token is only known at the moment of sharing. */
-  shareUrl: z.string().nullable(),
-  sharedAt: z.string().nullable(),
+  shared: z.boolean(),
+  sharedAt: dateTimeSchema.nullable(),
   position: z.number().int(),
 });
 export type WishlistView = z.infer<typeof wishlistViewSchema>;
@@ -205,7 +210,7 @@ export const sharedWishlistViewSchema = z.object({
       name: z.string().nullable(),
       brand: z.string().nullable(),
       priceCents: centsSchema.nullable(),
-      currency: z.string().length(3).nullable(),
+      currency: currencySchema.nullable(),
       imageUrl: z.string().nullable(),
       shopName: z.string(),
       url: z.string(),
@@ -214,9 +219,26 @@ export const sharedWishlistViewSchema = z.object({
 });
 export type SharedWishlistView = z.infer<typeof sharedWishlistViewSchema>;
 
-/** Answer of every action: what changed, and the inverse operation for "Undo" (run through `POST /api/me/items/bulk`). */
+/** Returned only by the share action: `/l/<token>`; the token is never stored, so it cannot be shown again. */
+export const shareResultSchema = z.object({ url: z.string().regex(/^\/l\/[A-Za-z0-9_-]+$/) });
+export type ShareResult = z.infer<typeof shareResultSchema>;
+
+/**
+ * What "Undo" replays through `POST /api/me/items/undo`, in one transaction: one inverse bulk op per distinct previous
+ * value, restricted to the items actually changed, and the history rows the action created (deleted, not completed).
+ */
+export const undoPayloadSchema = z.object({
+  ops: z
+    .array(itemBulkSchema)
+    .min(1)
+    .max(2 * MAX_BULK_ITEMS),
+  removeEventIds: z.array(z.uuid()).max(2 * MAX_BULK_ITEMS),
+});
+export type UndoPayload = z.infer<typeof undoPayloadSchema>;
+
+/** Answer of every action: what changed, and how to undo it. */
 export const mutationResultSchema = z.object({
   itemIds: z.array(z.uuid()),
-  undo: itemBulkSchema.nullable(),
+  undo: undoPayloadSchema.nullable(),
 });
 export type MutationResult = z.infer<typeof mutationResultSchema>;

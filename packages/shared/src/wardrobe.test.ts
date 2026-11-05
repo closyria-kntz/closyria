@@ -22,7 +22,9 @@ import {
   profileInputSchema,
   seasonSchema,
   sharedWishlistViewSchema,
+  shareResultSchema,
   tagInputSchema,
+  undoPayloadSchema,
   wishlistInputSchema,
   wishlistViewSchema,
 } from "./wardrobe";
@@ -102,11 +104,13 @@ describe("inputs", () => {
 });
 
 describe("bulk", () => {
-  const ids = (n: number) => Array.from({ length: n }, () => id);
+  const ids = (n: number) =>
+    Array.from({ length: n }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`);
   it("accepts 200 ids and refuses 201 or none", () => {
     expect(itemBulkSchema.safeParse({ ids: ids(200), op: "delete" }).success).toBe(true);
     expect(itemBulkSchema.safeParse({ ids: ids(201), op: "delete" }).success).toBe(false);
     expect(itemBulkSchema.safeParse({ ids: [], op: "delete" }).success).toBe(false);
+    expect(itemBulkSchema.safeParse({ ids: [id, id], op: "delete" }).success).toBe(false);
   });
   it("supports every operation with its payload", () => {
     const at = "2026-11-05T10:00:00.000Z";
@@ -134,6 +138,8 @@ describe("list query", () => {
     expect(itemListQuerySchema.safeParse({ stage: "nope" }).success).toBe(false);
     expect(itemListQuerySchema.safeParse({ cursor: "abc" }).success).toBe(true);
     expect(itemListQuerySchema.safeParse({}).success).toBe(true);
+    expect(itemListQuerySchema.parse({ deleted: "true" }).deleted).toBe(true);
+    expect(itemListQuerySchema.parse({ deleted: "false" }).deleted).toBe(false);
   });
 });
 
@@ -189,9 +195,16 @@ describe("views", () => {
     expect(itemPageSchema.safeParse({ items: [itemView], nextCursor: null }).success).toBe(true);
   });
   it("wishlist view", () => {
-    const w = { id, name: "Été", itemIds: [id], shareUrl: null, sharedAt: null, position: 0 };
+    const w = { id, name: "Été", itemIds: [id], shared: false, sharedAt: null, position: 0 };
     expect(wishlistViewSchema.safeParse(w).success).toBe(true);
-    expect(wishlistViewSchema.safeParse({ ...w, shareUrl: "/l/abc" }).success).toBe(true);
+    expect(wishlistViewSchema.safeParse({ ...w, shared: true, sharedAt: "2026-11-05T10:00:00.000Z" }).success).toBe(
+      true,
+    );
+    expect(Object.keys(wishlistViewSchema.shape)).not.toContain("shareUrl");
+  });
+  it("share result is a /l/<token> url", () => {
+    expect(shareResultSchema.safeParse({ url: "/l/abc_DEF-123" }).success).toBe(true);
+    expect(shareResultSchema.safeParse({ url: "/listes/abc" }).success).toBe(false);
   });
   it("shared wishlist exposes none of the private keys", () => {
     const keys = Object.keys(sharedWishlistViewSchema.shape);
@@ -201,12 +214,19 @@ describe("views", () => {
       expect(itemKeys).not.toContain(k);
     }
   });
-  it("mutation result carries an inverse bulk or null", () => {
+  it("mutation result carries an undo payload or null", () => {
     expect(mutationResultSchema.safeParse({ itemIds: [id], undo: null }).success).toBe(true);
-    expect(
-      mutationResultSchema.safeParse({ itemIds: [id], undo: { ids: [id], op: "setFavorite", favorite: false } })
-        .success,
-    ).toBe(true);
-    expect(mutationResultSchema.safeParse({ itemIds: [id], undo: { ids: [], op: "delete" } }).success).toBe(false);
+    const at = "2026-11-05T10:00:00.000Z";
+    const undo = {
+      ops: [
+        { ids: [id], op: "stage", stage: "spotted", at },
+        { ids: [id2], op: "stage", stage: "owned", at },
+      ],
+      removeEventIds: [id],
+    };
+    expect(mutationResultSchema.safeParse({ itemIds: [id, id2], undo }).success).toBe(true);
+    expect(undoPayloadSchema.safeParse({ ...undo, ops: [] }).success).toBe(false);
+    expect(undoPayloadSchema.safeParse({ ...undo, removeEventIds: ["x"] }).success).toBe(false);
+    expect(undoPayloadSchema.safeParse({ ...undo, ops: [{ ids: [], op: "delete" }] }).success).toBe(false);
   });
 });

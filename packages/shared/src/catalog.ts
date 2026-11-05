@@ -35,7 +35,7 @@ export type ProductCaptureStatus = z.infer<typeof productCaptureStatusSchema>;
 
 export const MAX_PRODUCT_IMAGES = 8;
 
-const currencySchema = z.string().length(3);
+export const currencySchema = z.string().length(3);
 const priceSchema = z.number().int().nonnegative();
 const sizeSchema = z.object({
   label: z.string().min(1).max(40),
