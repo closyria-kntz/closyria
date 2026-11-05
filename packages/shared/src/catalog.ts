@@ -107,6 +107,10 @@ export const CAPTURE_QUEUES = {
   monitor: "capture-monitor",
 } as const;
 
+/** Data of a capture job on the pg-boss queues. */
+export const captureJobSchema = z.object({ captureId: z.uuid() });
+export type CaptureJob = z.infer<typeof captureJobSchema>;
+
 /** 202 body of `POST /api/captures`. */
 export const captureAcceptedSchema = z.object({
   productId: z.uuid(),

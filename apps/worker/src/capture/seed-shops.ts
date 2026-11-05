@@ -34,7 +34,14 @@ export async function seedStartingShops(db: Database): Promise<number> {
         .onConflictDoNothing({ target: schema.shops.slug })
         .returning({ id: schema.shops.id });
       if (!row) return; // inserted concurrently by another worker
-      await tx.insert(schema.shopDomains).values({ domain: shop.domain, shopId: row.id }).onConflictDoNothing();
+      const domain = await tx
+        .insert(schema.shopDomains)
+        .values({ domain: shop.domain, shopId: row.id })
+        .onConflictDoNothing()
+        .returning({ domain: schema.shopDomains.domain });
+      if (domain.length === 0) {
+        console.warn(`seed: domain ${shop.domain} is already attached to another shop (starting shop ${shop.slug})`);
+      }
       added += 1;
     });
   }

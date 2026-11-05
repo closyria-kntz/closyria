@@ -284,6 +284,26 @@ describe("runCapture", () => {
     expect(shop.hits).not.toContain("/leggings.html");
   });
 
+  it("does not turn a capture already swept to failed back into succeeded", async () => {
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
+    const sweepDuringRun = {
+      allows: async () => {
+        await handle.db
+          .update(schema.captures)
+          .set({ status: "failed", errorCode: "timeout", finishedAt: new Date() })
+          .where(eq(schema.captures.id, t.capture.id));
+        return true;
+      },
+    };
+
+    await runCapture(t.capture.id, { ...deps, robots: sweepDuringRun });
+
+    const r = await load(t.capture.id, t.product.id);
+    expect(r.capture?.status).toBe("failed");
+    expect(r.capture?.errorCode).toBe("timeout");
+  });
+
   it("keeps a product that was already ok when a capture fails", async () => {
     routes["/p"] = { status: 403, headers: { "content-type": "text/html" }, body: "no" };
     const t = await setup("/p", { product: { captureStatus: "ok" } });

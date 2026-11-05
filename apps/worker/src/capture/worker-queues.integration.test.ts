@@ -1,10 +1,14 @@
 import { createDb, eq, schema } from "@closyria/db";
+import { memoryStore } from "@closyria/storage";
 import { createTestDatabase } from "@closyria/testing/vitest";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { scheduleMonitors } from "./monitor";
+import { captureHandler, monitorHandler } from "./queues";
+import { createRobotsCache } from "./robots";
 import { seedStartingShops } from "./seed-shops";
 import { STARTING_SHOPS } from "./starting-shops";
 import { sweepStuckCaptures } from "./sweep";
+import { createThrottle } from "./throttle";
 
 let database: Awaited<ReturnType<typeof createTestDatabase>>;
 let handle: ReturnType<typeof createDb>;
@@ -111,5 +115,54 @@ describe("sweepStuckCaptures", () => {
     expect(await status(pending)).toBe("failed");
     expect(await status(ok)).toBe("ok");
     expect(await status(manual)).toBe("manual");
+  });
+});
+
+describe("job handlers", () => {
+  const deps = () => ({
+    db: handle.db,
+    store: memoryStore(),
+    robots: createRobotsCache(async () => ({ kind: "absent" }), Date.now),
+    throttle: createThrottle(0),
+  });
+  const bad = [undefined, null, {}, { captureId: "nope" }, { captureId: 5 }, [], "x"];
+
+  it("capture-user/admin fail a job whose data does not validate, without running a capture", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const data of bad) await expect(captureHandler(deps(), "capture-user")([{ id: "j", data }])).rejects.toThrow();
+    expect(log).toHaveBeenCalledTimes(bad.length);
+    log.mockRestore();
+  });
+
+  it("capture-user runs a valid capture id (unknown capture is ignored)", async () => {
+    await expect(
+      captureHandler(deps())([{ data: { captureId: "7b0c1d52-0a1e-4f6b-8f3a-2c9d5e6f7a81" } }]),
+    ).resolves.toBeUndefined();
+  });
+
+  it("capture-monitor plans monitors on no data or {}, runs a valid capture, fails anything else", async () => {
+    const { db } = handle;
+    await seedStartingShops(db);
+    const sent: object[] = [];
+    const queue = {
+      send: async (_q: string, data: object) => {
+        sent.push(data);
+      },
+    };
+    const before = (await db.select().from(schema.captures)).length;
+    await monitorHandler(deps(), queue)([{ data: null }, { data: {} }]);
+    expect(sent.length).toBeGreaterThan(0);
+    expect((await db.select().from(schema.captures)).length).toBeGreaterThan(before);
+
+    const sentBefore = sent.length;
+    await monitorHandler(deps(), queue)([{ data: { captureId: "7b0c1d52-0a1e-4f6b-8f3a-2c9d5e6f7a81" } }]);
+    expect(sent.length).toBe(sentBefore);
+
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const data of [{ captureId: "nope" }, { other: 1 }, [], "x", 5]) {
+      await expect(monitorHandler(deps(), queue)([{ data }])).rejects.toThrow();
+    }
+    expect(sent.length).toBe(sentBefore);
+    log.mockRestore();
   });
 });

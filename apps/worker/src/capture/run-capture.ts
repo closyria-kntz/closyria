@@ -128,7 +128,8 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
         finishedAt,
         ...(capture.trigger === "user" ? {} : { result: product }),
       })
-      .where(eq(schema.captures.id, captureId));
+      // Not when the sweep already failed it (timeout): a late success must not undo that.
+      .where(and(eq(schema.captures.id, captureId), eq(schema.captures.status, "running")));
   } catch (error) {
     await recordFailure(capture, error, startedAt, deps);
   }
