@@ -87,7 +87,9 @@ describe("catalog tables", () => {
     await handle.db.insert(schema.productImages).values(image);
     await expect(handle.db.insert(schema.productImages).values({ ...image, key: "k2" })).rejects.toThrow();
     await expect(
-      handle.db.insert(schema.captures).values({ shopId: shop.id, trigger: "user", status: "bad" as never }),
+      handle.db
+        .insert(schema.captures)
+        .values({ shopId: shop.id, url: "https://shop.test/p", trigger: "user", status: "bad" as never }),
     ).rejects.toThrow();
   });
 
@@ -105,7 +107,7 @@ describe("catalog tables", () => {
       .values({ productId: product.id, priceCents: 100, sizes: { L: true } });
     const [capture] = await handle.db
       .insert(schema.captures)
-      .values({ shopId: shop.id, productId: product.id, trigger: "monitor" })
+      .values({ shopId: shop.id, productId: product.id, url: "https://shop.test/p", trigger: "monitor" })
       .returning();
     expect(capture?.status).toBe("queued");
 

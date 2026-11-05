@@ -57,6 +57,13 @@
       "when": 1793901831524,
       "tag": "0007_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793904439290,
+      "tag": "0008_capture_url",
+      "breakpoints": true
     }
   ]
 }

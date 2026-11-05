@@ -168,6 +168,8 @@ export const captures = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id),
+    /** The address the capture was requested for (canonicalised), read by the worker for every trigger. */
+    url: text("url").notNull(),
     trigger: text("trigger").notNull(),
     requestedBy: text("requested_by").references(() => user.id, { onDelete: "set null" }),
     status: text("status").notNull().default("queued"),
