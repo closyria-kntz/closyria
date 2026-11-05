@@ -252,6 +252,11 @@ describe("decoding and machine prices", () => {
     [12.5, 1250],
     ["-5,00", null],
     [-5, null],
+    ["€-5,00", null],
+    ["€-5", null],
+    ["\u22125", null],
+    ["29.999 EUR", 3000],
+    ["€ 1299.00", 129900],
   ])("machine price %s -> %s", (price, cents) => {
     const a = ld({ "@type": "Product", name: "n", offers: { price } });
     const b = extract({
@@ -264,7 +269,17 @@ describe("decoding and machine prices", () => {
       else expect(r.ok && r.product.priceCents).toBe(cents);
     }
   });
-  it("keeps parsePriceCents negative-safe", () => {
-    expect(parsePriceCents("-5,00")).toBeNull();
+  it.each(["-5,00", "€-5,00", "€-5", "\u22125"])("parsePriceCents %s is null", (v) => {
+    expect(parsePriceCents(v)).toBeNull();
+  });
+  it("keeps real < and > in text, strips only tag-like markup", () => {
+    const a = ld({
+      "@type": "Product",
+      name: "n",
+      description: "Longueur &lt;40 cm et largeur &gt;20 cm",
+      offers: { price: 1 },
+    });
+    if (!a.ok) throw new Error("not ok");
+    expect(a.product.description).toBe("Longueur <40 cm et largeur >20 cm");
   });
 });

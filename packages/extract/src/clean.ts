@@ -23,14 +23,17 @@ export function decodeEntities(text: string): string {
   });
 }
 
+const NEGATIVE = /^\D*[-\u2212]/;
+
+const stripMarkup = (value: string): string =>
+  value.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ").replace(/<\/?[a-zA-Z!][^<>]*>/g, " ");
+
 /** Strips tags (script/style with their content), decodes entities, normalizes whitespace, caps length. */
 export function cleanText(value: unknown, max: number): string | undefined {
   if (typeof value !== "string") return undefined;
-  // Decode exactly once, then strip: escaped markup ("&lt;p&gt;") is removed as well.
-  const decoded = decodeEntities(value);
-  const withoutBlocks = decoded.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ");
-  const text = withoutBlocks
-    .replace(/<[^>]*>/g, " ")
+  // Strip tag-like markup, decode exactly once, then strip again (escaped markup such as "&lt;p&gt;").
+  // Only "<" followed by a letter, "/" or "!" is a tag, so "&lt;40 cm" survives.
+  const text = stripMarkup(decodeEntities(stripMarkup(value)))
     .replace(/\s+/g, " ")
     .trim();
   return text === "" ? undefined : text.slice(0, max);
@@ -60,7 +63,7 @@ export function parsePriceCents(value: string | number): number | null {
   if (typeof value === "number") {
     return Number.isFinite(value) && value >= 0 ? Math.round(value * 100) : null;
   }
-  if (/^\s*-/.test(value)) return null;
+  if (NEGATIVE.test(value)) return null;
   const match = value.replace(/\s/g, "").match(/\d[\d.,]*/);
   if (!match) return null;
   const digits = match[0].replace(/[.,]+$/, "");
@@ -84,7 +87,8 @@ export function parsePriceCents(value: string | number): number | null {
  */
 export function parseMachinePriceCents(value: string | number): number | null {
   if (typeof value === "number") return parsePriceCents(value);
-  const plain = value.trim();
+  if (NEGATIVE.test(value)) return null;
+  const plain = value.replace(/[^\d.,]/g, "");
   if (/^\d+(\.\d+)?$/.test(plain)) return Math.round(Number(plain) * 100);
-  return parsePriceCents(plain);
+  return parsePriceCents(value);
 }
