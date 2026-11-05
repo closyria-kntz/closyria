@@ -82,7 +82,7 @@ sessions anonymes pour lever la limite.
     - `manualEntrySchema` : `name` (1–300), `priceCents` (entier ≥ 0, facultatif), `sizes` (chaînes 1–40, 30 au plus).
   - **Files** : `CAPTURE_QUEUES = { user: "capture-user", admin: "capture-admin", monitor: "capture-monitor" } as const`.
 
-- [ ] **Étape 1 : tests qui échouent.**
+- [x] **Étape 1 : tests qui échouent.**
   - `canonicalizeUrl` :
     - `"https://WWW.Shop.fr/products/a?utm_source=x&variant=2#top"` → `"https://www.shop.fr/products/a?variant=2"` ;
     - `"ftp://x"` → `null` ;
@@ -92,10 +92,10 @@ sessions anonymes pour lever la limite.
   - `domainCandidates("www2.hm.com")` → `["www2.hm.com", "hm.com"]`, et `domainCandidates("www.zara.com")` → `["zara.com"]`.
   - `nameFromUrl` : les cas `products/robe-camelia-rose` et `/fr/robe-x-p12345678.html` → `"Robe x"`.
   - `extractedProductSchema` refuse 9 photos.
-- [ ] **Étape 2 :** `pnpm --filter @closyria/shared test` → ÉCHEC.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** les tests passent.
-- [ ] **Étape 5 :** commit `feat(shared): catalog URLs and schemas`.
+- [x] **Étape 2 :** `pnpm --filter @closyria/shared test` → ÉCHEC.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** les tests passent.
+- [x] **Étape 5 :** commit `feat(shared): catalog URLs and schemas`.
 
 ### Tâche 2 : Tables du catalogue
 
@@ -118,14 +118,14 @@ sessions anonymes pour lever la limite.
   - `requested_by` vers `user.id` avec `on delete set null`.
 - La migration est générée par `pnpm --filter @closyria/db generate`, jamais écrite à la main.
 
-- [ ] **Étape 1 : test d'intégration qui échoue** (base de test migrée).
+- [x] **Étape 1 : test d'intégration qui échoue** (base de test migrée).
   - Une deuxième fiche avec la même `canonical_url` est refusée.
   - `capture_mode = 'other'` est refusé par le `CHECK`.
   - Supprimer une fiche supprime ses tailles et met `captures.product_id` à `null`.
-- [ ] **Étape 2 :** le test échoue.
-- [ ] **Étape 3 :** écrire le schéma, générer la migration, puis la relire.
-- [ ] **Étape 4 :** le test passe et `pnpm --filter @closyria/db typecheck` passe.
-- [ ] **Étape 5 :** commit `feat(db): catalog tables`.
+- [x] **Étape 2 :** le test échoue.
+- [x] **Étape 3 :** écrire le schéma, générer la migration, puis la relire.
+- [x] **Étape 4 :** le test passe et `pnpm --filter @closyria/db typecheck` passe.
+- [x] **Étape 5 :** commit `feat(db): catalog tables`.
 
 ### Tâche 3 : `packages/extract` — JSON-LD et Open Graph
 
@@ -153,7 +153,7 @@ sessions anonymes pour lever la limite.
 - La devise vaut `EUR` quand aucune n'est donnée.
 - Couverture ≥ 90 % (lignes et branches) imposée dans `vitest.config.ts`.
 
-- [ ] **Étape 1 : tests qui échouent**, sur des fixtures synthétiques.
+- [x] **Étape 1 : tests qui échouent**, sur des fixtures synthétiques.
   - JSON-LD simple → `method: "jsonld"`, `priceCents: 2999`.
   - `ProductGroup` à 3 variantes → 3 tailles avec leur disponibilité.
   - JSON-LD cassé suivi d'un JSON-LD valide → le valide est lu.
@@ -163,10 +163,10 @@ sessions anonymes pour lever la limite.
   - Nom de 400 caractères → tronqué à 300.
   - 12 photos → 8.
   - `<script>` dans la description → retiré.
-- [ ] **Étape 2 :** `pnpm --filter @closyria/extract test` → ÉCHEC.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests au vert et couverture ≥ 90 %.
-- [ ] **Étape 5 :** commit `feat(extract): JSON-LD and Open Graph extraction`.
+- [x] **Étape 2 :** `pnpm --filter @closyria/extract test` → ÉCHEC.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests au vert et couverture ≥ 90 %.
+- [x] **Étape 5 :** commit `feat(extract): JSON-LD and Open Graph extraction`.
 
 ### Tâche 4 : `extract` — Shopify et pages réelles enregistrées
 
@@ -198,14 +198,14 @@ Pages de référence (celles de la mesure) :
 
 Si une page a disparu, prendre un autre article de la même boutique et noter l'adresse dans le rapport de tâche.
 
-- [ ] **Étape 1 : tests qui échouent.**
+- [x] **Étape 1 : tests qui échouent.**
   - `shopify.test.ts` : un `.js` synthétique avec l'option « Taille » (S, M, L ; M épuisée) donne 3 tailles, `M` indisponible, `priceCents` égal à `price`.
   - Option nommée « Color » seule : les tailles sont tirées de la première option.
   - `real-pages.test.ts` : pour chacune des 8 pages, `ok: true`, un nom non vide, un prix > 0 et au moins une photo. Méthode `shopify` pour les 6 Shopify ; au moins une taille pour les Shopify et Zalando.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter `shopify.ts`, enregistrer les 8 pages, vérifier qu'aucun cookie ni jeton n'est resté dans les fichiers.
-- [ ] **Étape 4 :** tests au vert et couverture ≥ 90 %.
-- [ ] **Étape 5 :** commit `feat(extract): Shopify products and recorded shop pages`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter `shopify.ts`, enregistrer les 8 pages, vérifier qu'aucun cookie ni jeton n'est resté dans les fichiers.
+- [x] **Étape 4 :** tests au vert et couverture ≥ 90 %.
+- [x] **Étape 5 :** commit `feat(extract): Shopify products and recorded shop pages`.
 
 ### Tâche 5 : Fausse boutique de test
 
@@ -220,11 +220,11 @@ Si une page a disparu, prendre un autre article de la même boutique et noter l'
   - `file` est relatif à `packages/extract/fixtures`.
   - `hits` enregistre chaque chemin demandé, dans l'ordre.
 
-- [ ] **Étape 1 : test qui échoue** : une route `file` sert la fixture, une route `redirect` répond 302 avec `Location`, `delayMs` retarde la réponse, et `hits` contient les chemins.
-- [ ] **Étape 2 :** le test échoue.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** le test passe.
-- [ ] **Étape 5 :** commit `test: fake shop server`.
+- [x] **Étape 1 : test qui échoue** : une route `file` sert la fixture, une route `redirect` répond 302 avec `Location`, `delayMs` retarde la réponse, et `hits` contient les chemins.
+- [x] **Étape 2 :** le test échoue.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** le test passe.
+- [x] **Étape 5 :** commit `test: fake shop server`.
 
 ### Tâche 6 : `safeFetch` et règle d'adresses
 
@@ -254,7 +254,7 @@ Si une page a disparu, prendre un autre article de la même boutique et noter l'
     - type de contenu inattendu → `invalid_data`.
 - `apps/worker/src/capture/policy-guard.test.ts` : vérifie que le code du worker (hors tests) ne référence `loopbackForTests` nulle part, en parcourant les sources `apps/worker/src` sans `*.test.ts`.
 
-- [ ] **Étape 1 : tests qui échouent.**
+- [x] **Étape 1 : tests qui échouent.**
   - `strictPolicy` refuse :
     - `127.0.0.1`, `10.1.2.3`, `172.16.0.1`, `192.168.1.1`, `169.254.169.254`, `100.64.0.1`, `0.0.0.0` ;
     - `::1`, `fc00::1`, `fe80::1`, `::ffff:127.0.0.1`, `64:ff9b::7f00:1`.
@@ -272,10 +272,10 @@ Si une page a disparu, prendre un autre article de la même boutique et noter l'
     - l'en-tête `user-agent` reçu est exact.
   - Avec `strictPolicy` (défaut), la fausse boutique sur `127.0.0.1` donne `forbidden_address`.
   - Le garde de règle passe.
-- [ ] **Étape 2 :** `pnpm --filter @closyria/worker test` → ÉCHEC.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests au vert.
-- [ ] **Étape 5 :** commit `feat(worker): safe fetch with address policy`.
+- [x] **Étape 2 :** `pnpm --filter @closyria/worker test` → ÉCHEC.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests au vert.
+- [x] **Étape 5 :** commit `feat(worker): safe fetch with address policy`.
 
 ### Tâche 7 : `robots.txt` et rythme par domaine
 
@@ -294,16 +294,16 @@ Si une page a disparu, prendre un autre article de la même boutique et noter l'
   - Les appels successifs sur un même domaine sont espacés d'au moins 2 s.
   - Les domaines différents ne s'attendent pas.
 
-- [ ] **Étape 1 : tests qui échouent.**
+- [x] **Étape 1 : tests qui échouent.**
   - `Disallow: /checkout` interdit `/checkout/x` et autorise `/products/a`.
   - Un groupe `ClosyriaBot` prioritaire sur `*`.
   - `Allow: /products/` plus long que `Disallow: /` : autorisé.
   - Le cache ne redemande pas avant 24 h, puis redemande.
   - Throttle avec horloge simulée : 2 appels sur `a.fr` espacés de 2 000 ms ; `b.fr` immédiat.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** les tests passent.
-- [ ] **Étape 5 :** commit `feat(worker): robots.txt and per-domain pacing`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** les tests passent.
+- [x] **Étape 5 :** commit `feat(worker): robots.txt and per-domain pacing`.
 
 ### Tâche 8 : Tâche de capture
 
@@ -332,7 +332,7 @@ Si une page a disparu, prendre un autre article de la même boutique et noter l'
     - aucune exception ne remonte à pg-boss : pas de nouvel essai automatique.
   - Chaque domaine lu passe par `throttle.wait` puis `robots.allows`.
 
-- [ ] **Étape 1 : tests d'intégration qui échouent** (base migrée, `memoryStore`, fausse boutique, `loopbackForTests`).
+- [x] **Étape 1 : tests d'intégration qui échouent** (base migrée, `memoryStore`, fausse boutique, `loopbackForTests`).
   - Fixture Shopify réelle → fiche `ok`, tailles, 1 ligne d'historique, photos stockées en WebP, capture `succeeded` avec `method: "shopify"`.
   - Fixture JSON-LD Zalando → `jsonld`.
   - Page d'accueil → `failed` / `not_a_product`, fiche `failed`.
@@ -342,10 +342,10 @@ Si une page a disparu, prendre un autre article de la même boutique et noter l'
   - `admin_test` → `result` rempli, aucune fiche modifiée.
   - Deuxième capture du même article → photos non retéléchargées (`hits`).
   - Page en `ISO-8859-1` avec « é » → nom correct.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** les tests passent.
-- [ ] **Étape 5 :** commit `feat(worker): capture job`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** les tests passent.
+- [x] **Étape 5 :** commit `feat(worker): capture job`.
 
 ### Tâche 9 : API — capture et fiche
 
@@ -387,7 +387,7 @@ Si une page a disparu, prendre un autre article de la même boutique et noter l'
     Si la fiche n'a aucune donnée capturée, elle passe en `source = manual`. Les mêmes limites que la capture s'appliquent. Réponse : `productViewSchema`.
   - `GET /api/catalog-images/:id` (`public`) → l'image WebP du stockage, avec `Cache-Control: public, max-age=31536000, immutable`. 404 si inconnue.
 
-- [ ] **Étape 1 : tests d'intégration qui échouent.**
+- [x] **Étape 1 : tests d'intégration qui échouent.**
   - Création :
     - lien d'une boutique de test `auto` → 202, une tâche dans la file ;
     - même lien avec `utm_source` → même `productId` ;
@@ -407,10 +407,10 @@ Si une page a disparu, prendre un autre article de la même boutique et noter l'
     - `GET /api/products/:id` répond sans session ;
     - `GET /api/catalog-images/:id` renvoie `image/webp` et l'en-tête `immutable`.
   - Le test existant des routes non déclarées (`findStrayRoutes`) passe toujours.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** les tests passent.
-- [ ] **Étape 5 :** commit `feat(api): captures and product pages`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** les tests passent.
+- [x] **Étape 5 :** commit `feat(api): captures and product pages`.
 
 ### Tâche 10 : API — admin des boutiques et des captures
 
@@ -440,7 +440,7 @@ Si une page a disparu, prendre un autre article de la même boutique et noter l'
   - `POST /api/admin/captures/:id/retry` : nouvelle capture avec le même déclencheur, la même fiche et la même boutique.
 - `GET /api/admin/overview` gagne `captures: { last24h, last7d, successRate7d, byMethod: { shopify, jsonld, opengraph }, medianDurationMs }` et `shops: { pending, down }`.
 
-- [ ] **Étape 1 : tests qui échouent.**
+- [x] **Étape 1 : tests qui échouent.**
   - `shopHealth` :
     - `[false, false]` → `down` ;
     - `[true]` avec un taux de 0,7 → `degraded` ;
@@ -453,10 +453,10 @@ Si une page a disparu, prendre un autre article de la même boutique et noter l'
     - `retry` crée une nouvelle capture en file ;
     - les chiffres de `overview` sur un jeu de captures connu ;
     - chaque mutation admin écrit une ligne dans le journal admin.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** les tests passent.
-- [ ] **Étape 5 :** commit `feat(api): shop and capture administration`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** les tests passent.
+- [x] **Étape 5 :** commit `feat(api): shop and capture administration`.
 
 ### Tâche 11 : Worker — files, surveillance, boutiques de départ, barrière réseau
 
@@ -501,14 +501,14 @@ Plateforme : `shopify` pour les 6 premières, `other` pour les autres.
   - `EPERM` ou `EACCES` → `active` ; tout autre résultat → `absent`.
   - Au démarrage, le worker l'écrit dans le journal : `network barrier: active`, ou un avertissement `network barrier: ABSENT` hors `development` et `test`.
 
-- [ ] **Étape 1 : tests qui échouent.**
+- [x] **Étape 1 : tests qui échouent.**
   - `seedStartingShops` deux fois → 18 boutiques, puis 0 ajout. Une boutique renommée par l'admin n'est pas écrasée.
   - `scheduleMonitors` ignore les `manual`, les `draft` et celles sans `test_url`.
   - `checkNetworkBarrier` en local → `absent`.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter et brancher dans `index.ts`, en gardant `heartbeat` et l'arrêt propre.
-- [ ] **Étape 4 :** les tests passent. `pnpm --filter @closyria/worker build` passe, et le bundle inclut sharp comme celui de l'API (`deploy/native-deps.mjs`).
-- [ ] **Étape 5 :** commit `feat(worker): capture queues, daily monitor and starting shops`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter et brancher dans `index.ts`, en gardant `heartbeat` et l'arrêt propre.
+- [x] **Étape 4 :** les tests passent. `pnpm --filter @closyria/worker build` passe, et le bundle inclut sharp comme celui de l'API (`deploy/native-deps.mjs`).
+- [x] **Étape 5 :** commit `feat(worker): capture queues, daily monitor and starting shops`.
 
 ### Tâche 12 : Web — coller, partager, fiche produit
 
@@ -548,14 +548,14 @@ Plateforme : `shopify` pour les 6 premières, `other` pour les autres.
   - adresse invalide : « Ce lien n'est pas valide. » ;
   - 429 : « Trop d'ajouts d'un coup. Réessaie dans une heure. ».
 
-- [ ] **Étape 1 : tests qui échouent.**
+- [x] **Étape 1 : tests qui échouent.**
   - `extractSharedUrl({ text: "Regarde ça https://zara.com/fr/x.html !" })` → `"https://zara.com/fr/x.html"`.
   - `extractSharedUrl({ text: "rien" })` → `null`.
   - `pollCapture` avec une horloge simulée : arrêt sur `succeeded` ; `onSoftTimeout` appelé après 15 s, puis passage à 3 s.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter les pages et les messages dans les 3 langues.
-- [ ] **Étape 4 :** tests, `pnpm lint` (tokens) et `pnpm --filter @closyria/web build` au vert.
-- [ ] **Étape 5 :** commit `feat(web): paste or share a link, product page`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter les pages et les messages dans les 3 langues.
+- [x] **Étape 4 :** tests, `pnpm lint` (tokens) et `pnpm --filter @closyria/web build` au vert.
+- [x] **Étape 5 :** commit `feat(web): paste or share a link, product page`.
 
 ### Tâche 13 : Web — admin des boutiques et des captures
 
@@ -579,11 +579,11 @@ Plateforme : `shopify` pour les 6 premières, `other` pour les autres.
 - « Tester un lien » interroge `GET /api/admin/captures/:id` toutes les 500 ms. Il affiche ensuite la méthode, la durée, le nom, le prix, les tailles et les miniatures (adresses d'origine affichées en texte, **jamais chargées** dans l'admin).
 - La fusion demande une confirmation qui nomme les deux boutiques.
 
-- [ ] **Étape 1 : tests qui échouent.** `nav.test.ts` contient les entrées `shops` et `captures`. Test unitaire des appels admin ajoutés dans `admin-api.test.ts` (adresse et validation de la réponse).
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter les écrans.
-- [ ] **Étape 4 :** tests, lint et build au vert.
-- [ ] **Étape 5 :** commit `feat(web): shop and capture admin`.
+- [x] **Étape 1 : tests qui échouent.** `nav.test.ts` contient les entrées `shops` et `captures`. Test unitaire des appels admin ajoutés dans `admin-api.test.ts` (adresse et validation de la réponse).
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter les écrans.
+- [x] **Étape 4 :** tests, lint et build au vert.
+- [x] **Étape 5 :** commit `feat(web): shop and capture admin`.
 
 ### Tâche 14 : Bout en bout
 
@@ -609,11 +609,11 @@ Plateforme : `shopify` pour les 6 premières, `other` pour les autres.
     - axe sans violation sur la fiche.
   - `admin-shops.spec.ts` : admin avec passkey (fixture existante) → « Ajouter une boutique » depuis une adresse de la fausse boutique → brouillon créé ; « Tester un lien » → méthode et nom affichés.
 
-- [ ] **Étape 1 : test qui échoue** : `fs.test.ts` (`put`, `get`, `delete`, `ObjectNotFoundError`), puis les deux parcours.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter `fsStore`, le branchement de l'API et les fixtures.
-- [ ] **Étape 4 :** `pnpm build && pnpm e2e` au vert.
-- [ ] **Étape 5 :** commit `test(e2e): capture and shop admin journeys`.
+- [x] **Étape 1 : test qui échoue** : `fs.test.ts` (`put`, `get`, `delete`, `ObjectNotFoundError`), puis les deux parcours.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter `fsStore`, le branchement de l'API et les fixtures.
+- [x] **Étape 4 :** `pnpm build && pnpm e2e` au vert.
+- [x] **Étape 5 :** commit `test(e2e): capture and shop admin journeys`.
 
 ### Tâche 15 : Barrière systemd et mise en service
 
@@ -633,9 +633,9 @@ Plateforme : `shopify` pour les 6 premières, `other` pour les autres.
   6. Le lendemain : la surveillance de 04:00 UTC est passée pour les 8 boutiques.
   7. Mêmes étapes en prod.
 
-- [ ] **Étape 1 :** `systemd-analyze verify deploy/systemd/closyria-dev-worker.service` ne signale aucune erreur sur les nouvelles lignes. Les avertissements liés aux chemins absents en local sont acceptés et notés.
-- [ ] **Étape 2 :** écrire la liste de mise en service et mettre à jour `deploy/README.md` (rôle de la barrière, vérification dans le journal).
-- [ ] **Étape 3 :** commit `deploy: network barrier for the worker`.
+- [x] **Étape 1 :** `systemd-analyze verify deploy/systemd/closyria-dev-worker.service` ne signale aucune erreur sur les nouvelles lignes. Les avertissements liés aux chemins absents en local sont acceptés et notés.
+- [x] **Étape 2 :** écrire la liste de mise en service et mettre à jour `deploy/README.md` (rôle de la barrière, vérification dans le journal).
+- [x] **Étape 3 :** commit `deploy: network barrier for the worker`.
 
 ---
 
@@ -643,3 +643,22 @@ Plateforme : `shopify` pour les 6 premières, `other` pour les autres.
 
 - Revue de toute la branche, puis fusion dans `dev` après accord de l'utilisatrice.
 - Mise en service (tâche 15), puis cocher le chantier 1 dans la conception V1 une fois en prod.
+
+## Bilan de l'exécution (2026-11-05)
+
+Toutes les tâches sont faites, relues une par une, puis relues sur l'ensemble de la branche. Fusion dans `dev` : `9e5dc96`.
+
+Écarts au plan décidés en cours de route :
+- `captures.url` ajoutée (migration 0008) : les tests de lien et la surveillance n'ont pas de fiche.
+- `products.name`, `currency`, `price_cents` facultatifs (0009) : la fiche existe avant la première capture.
+- Code d'erreur `queue_unavailable` (0010) : une capture dont l'envoi à la file échoue est gardée en échec.
+- Ménage toutes les 5 min des captures restées `queued` ou `running` plus de 5 min (échec, `timeout`).
+- Photos lues 4 par 4, sans espacement par domaine ni `robots.txt` (sinon 16 s pour 8 photos).
+- Boutique Shopify connue : seulement `<adresse>.js` ; page HTML en secours.
+- `robots.txt` lu par `safeFetch` (type « texte simple ») ; correspondance linéaire des jokers, encodage RFC 9309.
+- Page de test de MCB Paris : `https://www.mcb-paris.fr/products/produit-3679` (l'ancienne n'existe plus).
+- Textes de capture en français seulement (`en`/`es` vides tant que ces langues ne sont pas activées).
+- Session admin des tests de bout en bout créée en base (WebAuthn impossible sur `http://127.0.0.1`).
+- Tests instables corrigés : cache Vitest par paquet, bases de test supprimées après la fermeture des connexions.
+
+À trancher plus tard : `robots.txt` en erreur 5xx → capture autorisée (la RFC dit l'inverse).
