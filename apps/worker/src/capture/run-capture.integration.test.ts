@@ -1,3 +1,4 @@
+import type dns from "node:dns";
 import { readFileSync } from "node:fs";
 import { createDb, eq, schema } from "@closyria/db";
 import { memoryStore } from "@closyria/storage";
@@ -37,6 +38,13 @@ const loopbackOnly: AddressPolicy = Object.assign((ip: string): boolean => ip ==
   anyPortOnLoopback: true as const,
 });
 
+/** No DNS in tests: every hostname fails (the fake shop is an IP literal and never gets here). */
+const noDns = ((host: string, _options: unknown, callback: (error: Error | null, addresses: never[]) => void) => {
+  callback(Object.assign(new Error(`no DNS in tests: ${host}`), { code: "ENOTFOUND" }), []);
+}) as unknown as typeof dns.lookup;
+
+const EXPECTED_ZALANDO_PHOTOS = 6;
+
 let shop: FakeShop;
 let routes: Record<string, FakeRoute>;
 let store: ReturnType<typeof memoryStore>;
@@ -48,7 +56,7 @@ function localImages(text: string, origin: string): string {
   // JSON recordings escape slashes (`\/\/cdn…`); unescaped they are still valid JSON.
   return text
     .replaceAll("\\/", "/")
-    .replace(/(?:https?:)?\/\/[^"'\s<>\\]+?\.(?:jpe?g|png|webp)(?:\?[^"'\s<>\\]*)?/g, (match) => {
+    .replace(/(?:https?:)?\/\/(?!127\.0\.0\.1|schema\.org|www\.w3\.org)[^"'\s<>\\]+/g, (match) => {
       if (!seen.has(match)) seen.set(match, seen.size);
       const path = `/img/${seen.get(match)}.png`;
       routes[path] = { headers: { "content-type": "image/png" }, body: PNG };
@@ -64,6 +72,7 @@ beforeEach(async () => {
     db: handle.db,
     store,
     policy: loopbackOnly,
+    lookup: noDns,
     robots: createRobotsCache(safeRobotsFetcher(loopbackOnly), Date.now),
     throttle: createThrottle(0),
   };
@@ -176,6 +185,11 @@ describe("runCapture", () => {
 
   it("reads the page, then the .js of an unknown shop whose page is Shopify, and detects the platform", async () => {
     servePage("/products/produit-3679", "real/mcb-paris.html");
+    // The rewrite of CDN addresses removes the marker the worker looks for: put one back.
+    routes["/products/produit-3679"] = {
+      ...routes["/products/produit-3679"],
+      body: `${routes["/products/produit-3679"]?.body}<script>var Shopify = { shop: "x" }; Shopify.shop = "x";</script>`,
+    };
     serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
     const t = await setup("/products/produit-3679");
 
@@ -212,8 +226,7 @@ describe("runCapture", () => {
     expect(r.capture?.status).toBe("succeeded");
     expect(r.capture?.method).toBe("jsonld");
     expect(r.sizes.length).toBeGreaterThan(0);
-    expect(r.images.length).toBeGreaterThan(0);
-    expect(r.images.length).toBeLessThanOrEqual(8);
+    expect(r.images).toHaveLength(EXPECTED_ZALANDO_PHOTOS);
     const [s] = await handle.db.select().from(schema.shops).where(eq(schema.shops.id, t.shop.id));
     expect(s?.platform).toBe("other");
   });
@@ -376,6 +389,61 @@ describe("runCapture", () => {
 
     expect((await load(t.capture.id, t.product.id)).images).toHaveLength(8);
     expect(imageHits()).toHaveLength(2);
+  });
+
+  it("gives new photos unique positions after the existing ones", async () => {
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
+    await handle.db.insert(schema.productImages).values(
+      [0, 1].map((i) => ({
+        productId: t.product.id,
+        position: i,
+        key: `k${i}`,
+        width: 1,
+        height: 1,
+        sourceHash: `old${i}`,
+      })),
+    );
+    await runCapture(t.capture.id, deps);
+    const second = await newCapture(t.shop.id, t.product.id, t.url, "user");
+    await runCapture(second.id, deps);
+
+    const positions = (await load(second.id, t.product.id)).images.map((i) => i.position).sort((a, b) => a - b);
+    expect(positions).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  });
+
+  it("still succeeds when the photo step hits a store error", async () => {
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
+    const failing = { ...store, put: () => Promise.reject(new Error("store down")) };
+    await runCapture(t.capture.id, { ...deps, store: failing });
+    const r = await load(t.capture.id, t.product.id);
+    expect(r.capture?.status).toBe("succeeded");
+    expect(r.product?.captureStatus).toBe("ok");
+  });
+
+  it("still succeeds when the photo step hits a database error", async () => {
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
+    const select = handle.db.select.bind(handle.db);
+    let calls = 0;
+    // The first select after the data transaction is copyImages' read of existing photos.
+    const db = new Proxy(handle.db, {
+      get(target, prop) {
+        if (prop === "select") {
+          return (...args: Parameters<typeof select>) => {
+            if (++calls === 2) throw new Error("db down");
+            return select(...args);
+          };
+        }
+        return Reflect.get(target, prop, target);
+      },
+    });
+    await runCapture(t.capture.id, { ...deps, db });
+    const r = await load(t.capture.id, t.product.id);
+    expect(r.capture?.status).toBe("succeeded");
+    expect(r.product?.captureStatus).toBe("ok");
+    expect(r.images).toEqual([]);
   });
 
   it("decodes an ISO-8859-1 page", async () => {

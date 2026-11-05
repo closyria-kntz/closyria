@@ -1,3 +1,4 @@
+import type dns from "node:dns";
 import { and, type Database, eq, ne, schema } from "@closyria/db";
 import { extract, isShopifyPage, shopifyJsUrl } from "@closyria/extract";
 import { type CaptureErrorCode, type CaptureMethod, type ExtractedProduct, shopDomain } from "@closyria/shared";
@@ -18,6 +19,8 @@ export type CaptureDeps = {
   robots: RobotsCache;
   throttle: Throttle;
   now?: () => Date;
+  /** Injectable DNS resolver (tests). */
+  lookup?: typeof dns.lookup;
 };
 
 type Outcome = { method: CaptureMethod; product: ExtractedProduct; httpStatus: number };
@@ -101,11 +104,17 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
             .where(and(eq(schema.shops.id, shop.id), eq(schema.shops.platform, "unknown")));
         }
       });
-      await copyImages(productId, product.images, {
-        db,
-        store: deps.store,
-        ...(deps.policy ? { policy: deps.policy } : {}),
-      });
+      try {
+        await copyImages(productId, product.images, {
+          db,
+          store: deps.store,
+          ...(deps.policy ? { policy: deps.policy } : {}),
+          ...(deps.lookup ? { lookup: deps.lookup } : {}),
+        });
+      } catch (error) {
+        // The data is committed: a photo-step failure must not fail the capture.
+        console.error(`capture ${captureId}: photo step failed`, error);
+      }
     }
 
     const finishedAt = now();
@@ -181,7 +190,7 @@ async function fetchAndExtract(url: string, platform: string, deps: CaptureDeps)
   async function fetchPaced(target: string, accept: SafeFetchAccept) {
     await deps.throttle.wait(domain);
     if (!(await deps.robots.allows(target))) throw new CaptureError("robots_disallowed");
-    return safeFetch(target, { accept, policy });
+    return safeFetch(target, { accept, policy, ...(deps.lookup ? { lookup: deps.lookup } : {}) });
   }
 
   async function fromShopifyJs(jsUrl: string, page?: { finalUrl: string; contentType: string; html: string }) {
@@ -196,16 +205,29 @@ async function fetchAndExtract(url: string, platform: string, deps: CaptureDeps)
   }
 
   const jsUrl = shopifyJsUrl(url);
+  let jsFailure: string | undefined;
   if (platform === "shopify" && jsUrl) {
     try {
       const { result, status } = await fromShopifyJs(jsUrl);
       if (result.ok) return { method: result.method, product: result.product, httpStatus: status };
-    } catch {
+      jsFailure = result.error;
+    } catch (error) {
       // Fall back to the HTML page below.
+      jsFailure = error instanceof CaptureError ? error.message : "unexpected error";
     }
   }
+  // One line, no address and no personal data: only the reason the `.js` was not usable.
+  const logJsFailure = () => {
+    if (jsFailure) console.debug(`shopify .js unusable (${jsFailure}), HTML fallback failed too`);
+  };
 
-  const page = await fetchPaced(url, "page");
+  let page: Awaited<ReturnType<typeof fetchPaced>>;
+  try {
+    page = await fetchPaced(url, "page");
+  } catch (error) {
+    logJsFailure();
+    throw error;
+  }
   const html = decodeBody(page.body, page.contentType);
   const pageInfo = { finalUrl: page.finalUrl, contentType: page.contentType, html };
   let result = extract({ url: page.finalUrl, contentType: page.contentType, body: html });
@@ -221,6 +243,9 @@ async function fetchAndExtract(url: string, platform: string, deps: CaptureDeps)
       // Keep what the page alone gives.
     }
   }
-  if (!result.ok) throw new CaptureError(result.error, page.status);
+  if (!result.ok) {
+    logJsFailure();
+    throw new CaptureError(result.error, page.status);
+  }
   return { method: result.method, product: result.product, httpStatus: status };
 }
