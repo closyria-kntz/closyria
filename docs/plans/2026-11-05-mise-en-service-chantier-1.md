@@ -38,9 +38,11 @@
    Attendu : `network barrier: active`. Si `network barrier: ABSENT` : l'unité n'a pas été recopiée ou
    `daemon-reload` a été oublié ; ne pas passer à la suite.
 4. [ ] Journal sans erreur ni avertissement inattendu : `sudo journalctl -u 'closyria-dev-*' -p warning -n 50`.
-   À chercher en particulier : `seed: domain … is already attached to another shop (starting shop …)` (un domaine
-   de départ est déjà rattaché à une boutique créée avant). Action : dans l'admin, fusionner la boutique en
-   attente dans la boutique de départ.
+   Puis, à part (Node écrit ses avertissements au niveau « info », que `-p warning` masque) :
+   `sudo journalctl -u closyria-dev-worker --no-pager | grep 'seed:'` doit être vide. Sinon,
+   `seed: domain … is already attached to another shop (starting shop …)` signale un domaine de départ déjà
+   rattaché à une boutique créée avant. Action : dans l'admin, fusionner la boutique en attente dans la boutique
+   de départ.
 5. [ ] Sur https://dev.closyria.com, coller un lien d'article d'une des boutiques de départ : la fiche se remplit
    (nom, prix, photos)
 6. [ ] Admin (connexion par passkey) : la santé des boutiques est visible
@@ -65,9 +67,10 @@ Mêmes étapes, avec les noms de prod :
 6. [ ] Coller un lien Shopify sur https://closyria.com et voir la fiche
 7. [ ] Admin : santé visible
 8. [ ] Le lendemain : surveillance de 04:00 UTC passée pour les 8 boutiques
-9. [ ] Journal sans erreur pendant 15 min : `sudo journalctl -u 'closyria-prod-*' -p warning`, avec l'avertissement
-   `seed: domain … is already attached to another shop (starting shop …)` en particulier : fusionner la boutique
-   en attente dans la boutique de départ dans l'admin
+9. [ ] Journal sans erreur pendant 15 min : `sudo journalctl -u 'closyria-prod-*' -p warning`. Puis
+   `sudo journalctl -u closyria-prod-worker --no-pager | grep 'seed:'` doit être vide ; sinon
+   (`seed: domain … is already attached to another shop (starting shop …)`), fusionner la boutique en attente dans
+   la boutique de départ dans l'admin
 
 ## Retour arrière
 
