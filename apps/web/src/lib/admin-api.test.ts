@@ -13,7 +13,19 @@ function fakeFetch(status: number, body: unknown) {
   return { fetch: fetch as typeof globalThis.fetch, calls };
 }
 
-const overview = { users: { total: 3, anonymous: 1, registered: 2 }, eventsToday: 4, signupsToday: 1 };
+const overview = {
+  users: { total: 3, anonymous: 1, registered: 2 },
+  eventsToday: 4,
+  signupsToday: 1,
+  captures: {
+    last24h: 0,
+    last7d: 0,
+    successRate7d: null,
+    byMethod: { shopify: 0, jsonld: 0, opengraph: 0 },
+    medianDurationMs: null,
+  },
+  shops: { pending: 0, down: 0 },
+};
 
 describe("internalApiUrl", () => {
   it("defaults to the local API and accepts a configured URL", () => {

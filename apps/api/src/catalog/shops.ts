@@ -67,3 +67,40 @@ export async function findOrCreateShop(db: Database, url: string): Promise<Shop>
   }
   throw new Error(`no free slug for ${domain}`);
 }
+
+export type CreatedShop = { shop: Shop } | { taken: string };
+
+/**
+ * A `draft` shop named after the domain of `url` (slug suffixed on collision, like `findOrCreateShop`),
+ * or the id of the shop that already owns that exact domain.
+ */
+export async function createDraftShop(db: Database, url: string): Promise<CreatedShop> {
+  const domain = shopDomain(url);
+  const baseSlug = domain.replaceAll(".", "-");
+  for (let attempt = 1; attempt <= MAX_SLUG_ATTEMPTS; attempt++) {
+    const [owner] = await db.select().from(schema.shopDomains).where(eq(schema.shopDomains.domain, domain));
+    if (owner) return { taken: owner.shopId };
+    const slug = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
+    try {
+      const created = await db.transaction(async (tx) => {
+        const [shop] = await tx
+          .insert(schema.shops)
+          .values({ name: domain, slug, status: "draft" })
+          .onConflictDoNothing({ target: schema.shops.slug })
+          .returning();
+        if (!shop) return null; // the slug is taken
+        const [owned] = await tx
+          .insert(schema.shopDomains)
+          .values({ domain, shopId: shop.id })
+          .onConflictDoNothing({ target: schema.shopDomains.domain })
+          .returning();
+        if (!owned) throw new LostRace();
+        return shop;
+      });
+      if (created) return { shop: created };
+    } catch (error) {
+      if (!(error instanceof LostRace)) throw error;
+    }
+  }
+  throw new Error(`no free slug for ${domain}`);
+}
