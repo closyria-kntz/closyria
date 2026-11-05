@@ -16,7 +16,8 @@ let clientCounter = 0;
  * - every test is a distinct visitor (own client address through the proxy, own user agent tag), so the
  *   database rows of one test can be found without seeing the others' (`userAgentTag`);
  * - every page gets the browser auth helpers (`window.closyriaE2E`, see browser-auth.ts);
- * - every test's CSP violations are written for the suite's artefact (R17).
+ * - every test's CSP violations are written for the suite's artefact (R17);
+ * - no request leaves the stack's origin: they are aborted, and the test fails.
  */
 export const test = base.extend<Fixtures, WorkerFixtures>({
   baseURL: async ({}, use) => use(setupValue("E2E_BASE_URL")),
@@ -30,10 +31,21 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     const n = ++clientCounter;
     await use({ [CLIENT_IP_HEADER]: `10.${testInfo.workerIndex % 250}.${(n >> 8) % 250}.${(n % 250) + 1}` });
   },
-  context: async ({ context, browserAuthScript }, use, testInfo) => {
+  context: async ({ context, browserAuthScript, baseURL }, use, testInfo) => {
+    // No Internet: anything but the stack's own origin is aborted, and a test that tried fails.
+    const origin = new URL(baseURL ?? setupValue("E2E_BASE_URL")).origin;
+    const outside: string[] = [];
+    await context.route(
+      (url) => (url.protocol === "http:" || url.protocol === "https:") && url.origin !== origin,
+      (route) => {
+        outside.push(route.request().url());
+        return route.abort("blockedbyclient");
+      },
+    );
     await context.addInitScript({ content: browserAuthScript });
     const violations = await collectCspViolations(context);
     await use(context);
+    expect(outside, "requests outside the test stack").toEqual([]);
     const record: CspRecord = { test: testInfo.titlePath.join(" › "), project: testInfo.project.name, violations };
     const file = `${testInfo.testId}-${testInfo.repeatEachIndex}-${testInfo.retry}.json`;
     await writeFile(join(CSP_DIR, file), JSON.stringify(record));

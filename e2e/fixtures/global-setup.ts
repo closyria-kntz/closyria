@@ -1,8 +1,11 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { build } from "esbuild";
+import pg from "pg";
+import { startCaptureWorker } from "./capture-worker";
 import type { CspRecord } from "./csp";
 import { BROWSER_AUTH_BUNDLE, CSP_DIR, CSP_REPORT, REPORTS_DIR, SERVER_LOG } from "./paths";
+import { seedShops } from "./shops";
 import { startStack } from "./stack";
 
 /** Starts the stack once for the whole run; the returned function is the global teardown. */
@@ -22,11 +25,28 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   });
 
   const stack = await startStack(SERVER_LOG);
+  let worker: Awaited<ReturnType<typeof startCaptureWorker>>;
+  try {
+    const client = new pg.Client({ connectionString: stack.databaseUrl });
+    await client.connect();
+    try {
+      await seedShops(client);
+    } finally {
+      await client.end();
+    }
+    // The capture worker runs here, in the Playwright process, for the whole run.
+    worker = await startCaptureWorker(stack.databaseUrl, stack.storageDir);
+  } catch (error) {
+    await stack.stop();
+    throw error;
+  }
   // Inherited by the test workers, which start after the global setup.
   process.env.E2E_BASE_URL = stack.baseUrl;
   process.env.E2E_DATABASE_URL = stack.databaseUrl;
+  process.env.E2E_FAKE_SHOP_URL = worker.shop.origin;
 
   return async () => {
+    await worker.stop();
     await stack.stop();
     await writeCspReport();
   };

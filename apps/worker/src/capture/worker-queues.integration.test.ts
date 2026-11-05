@@ -1,9 +1,10 @@
 import { createDb, eq, schema } from "@closyria/db";
 import { memoryStore } from "@closyria/storage";
 import { createTestDatabase } from "@closyria/testing/vitest";
+import type { PgBoss } from "pg-boss";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { scheduleMonitors } from "./monitor";
-import { captureHandler, monitorHandler } from "./queues";
+import { captureHandler, monitorHandler, registerCaptureQueues } from "./queues";
 import { createRobotsCache } from "./robots";
 import { seedStartingShops } from "./seed-shops";
 import { STARTING_SHOPS } from "./starting-shops";
@@ -207,5 +208,50 @@ describe("job handlers", () => {
     }
     expect(sent).toHaveLength(0);
     log.mockRestore();
+  });
+});
+
+describe("registerCaptureQueues", () => {
+  it("hands an injected DNS lookup and throttle to the captures (browser tests: loopback names, no spacing)", async () => {
+    const { db } = handle;
+    await seedStartingShops(db);
+    const [shop] = await db.select().from(schema.shops).limit(1);
+    if (!shop) throw new Error("no shop");
+    // localhost resolves from /etc/hosts without the network: the real lookup would be used without injection.
+    const [capture] = await db
+      .insert(schema.captures)
+      .values({ shopId: shop.id, url: "https://localhost/products/robe", trigger: "admin_test", status: "queued" })
+      .returning();
+    if (!capture) throw new Error("no capture");
+
+    const handlers = new Map<string, (jobs: { id?: string; data: unknown }[]) => Promise<void>>();
+    const boss = {
+      createQueue: async () => {},
+      schedule: async () => {},
+      work: async (name: string, _options: object, handler: (jobs: { data: unknown }[]) => Promise<void>) => {
+        handlers.set(name, handler);
+        return name;
+      },
+    } as unknown as PgBoss;
+    const looked: string[] = [];
+    const lookup = ((host: string, _options: unknown, callback: (error: Error | null) => void) => {
+      looked.push(host);
+      callback(Object.assign(new Error(`no DNS in tests: ${host}`), { code: "ENOTFOUND" }));
+    }) as unknown as typeof import("node:dns").lookup;
+    const waited: string[] = [];
+    const throttle = {
+      wait: async (domain: string) => {
+        waited.push(domain);
+      },
+    };
+
+    await registerCaptureQueues(boss, { db, store: memoryStore(), lookup, throttle });
+    await handlers.get("capture-admin")?.([{ id: "j", data: { captureId: capture.id } }]);
+
+    expect(waited.length).toBeGreaterThan(0);
+    expect(new Set(waited)).toEqual(new Set(["localhost"]));
+    expect(looked).toContain("localhost");
+    const [row] = await db.select().from(schema.captures).where(eq(schema.captures.id, capture.id));
+    expect(row?.status).toBe("failed");
   });
 });

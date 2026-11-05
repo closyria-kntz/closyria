@@ -1,3 +1,4 @@
+export { fsStore } from "./fs";
 export {
   ImageTooLargeError,
   MAX_IMAGE_BYTES,

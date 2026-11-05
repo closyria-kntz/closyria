@@ -1,7 +1,9 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createWriteStream, existsSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { migrateTestDatabase, startTestDatabase } from "@closyria/testing";
@@ -19,12 +21,14 @@ export type Stack = {
   /** The same-origin front (proxy): what the browser opens. */
   baseUrl: string;
   databaseUrl: string;
+  /** Where the API keeps photos (TEST_STORAGE_DIR); the capture worker writes them there. */
+  storageDir: string;
   stop(): Promise<void>;
 };
 
 /**
  * Starts everything the browser tests need, on free ports: a disposable PostgreSQL (migrated), the built
- * API (APP_ENV=test, memory mailer), the built web app and the same-origin proxy. Server output goes to
+ * API (APP_ENV=test, memory mailer, photos in a temporary directory), the built web app and the same-origin proxy. Server output goes to
  * `logFile`, so the test output stays clean. `stop` undoes only what was started, in reverse order.
  */
 export async function startStack(logFile: string): Promise<Stack> {
@@ -45,6 +49,8 @@ export async function startStack(logFile: string): Promise<Stack> {
     const database = await startTestDatabase();
     cleanups.push(() => database.stop());
     await migrateTestDatabase(database.url);
+    const storageDir = await mkdtemp(join(tmpdir(), "closyria-e2e-storage-"));
+    cleanups.push(() => rm(storageDir, { recursive: true, force: true }));
 
     const [apiPort, webPort] = [await freePort(), await freePort()];
     const api = `http://127.0.0.1:${apiPort}`;
@@ -62,6 +68,7 @@ export async function startStack(logFile: string): Promise<Stack> {
       BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
       BETTER_AUTH_URL: proxy.url,
       MAIL_TRANSPORT: "memory",
+      TEST_STORAGE_DIR: storageDir,
     });
     cleanups.push(() => terminate(apiProcess));
     const webProcess = launch(
@@ -78,7 +85,7 @@ export async function startStack(logFile: string): Promise<Stack> {
     cleanups.push(() => terminate(webProcess));
 
     await Promise.all([waitForOk(`${api}/api/health`, apiProcess, logFile), waitForOk(`${web}/`, webProcess, logFile)]);
-    return { baseUrl: proxy.url, databaseUrl: database.url, stop };
+    return { baseUrl: proxy.url, databaseUrl: database.url, storageDir, stop };
   } catch (error) {
     await stop();
     throw error;

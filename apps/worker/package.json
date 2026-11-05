@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./capture": "./src/capture/queues.ts",
+    "./capture/testing": "./src/capture/testing.ts"
+  },
   "scripts": {
     "dev": "tsdown --watch --on-success \"node --env-file-if-exists=.env --enable-source-maps dist/index.mjs\"",
     "build": "tsdown",

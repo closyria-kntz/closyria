@@ -1,3 +1,4 @@
+import type dns from "node:dns";
 import type { Database } from "@closyria/db";
 import { CAPTURE_QUEUES, captureJobSchema } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
@@ -7,7 +8,7 @@ import { type MonitorQueue, scheduleMonitors } from "./monitor";
 import { createRobotsCache, safeRobotsFetcher } from "./robots";
 import { type CaptureDeps, runCapture } from "./run-capture";
 import { sweepStuckCaptures } from "./sweep";
-import { createThrottle } from "./throttle";
+import { createThrottle, type Throttle } from "./throttle";
 
 type JobLike = { id?: string; data: unknown };
 
@@ -44,18 +45,26 @@ export function monitorHandler(deps: CaptureDeps, queue: MonitorQueue) {
 
 export const SWEEP_QUEUE = "capture-sweep";
 
-export type CaptureQueueDeps = { db: Database; store: ObjectStore; policy?: AddressPolicy };
+export type CaptureQueueDeps = {
+  db: Database;
+  store: ObjectStore;
+  policy?: AddressPolicy;
+  /** Browser tests only: resolves their loopback shop names without DNS. Defaults to the system resolver. */
+  lookup?: typeof dns.lookup;
+  /** Browser tests only: no spacing between requests to their one local shop. Defaults to 2 s per domain. */
+  throttle?: Throttle;
+};
 
 /**
  * Creates the capture queues (same default options as the API, which creates them too), processes them and
  * schedules the daily monitor (04:00) and the 5-minute sweep of stuck captures.
  */
 export async function registerCaptureQueues(boss: PgBoss, deps: CaptureQueueDeps): Promise<void> {
-  const { db, store } = deps;
+  const { db, store, lookup } = deps;
   const policy = deps.policy ?? strictPolicy;
-  const robots = createRobotsCache(safeRobotsFetcher(policy), Date.now);
-  const throttle = createThrottle();
-  const captureDeps = { db, store, policy, robots, throttle };
+  const robots = createRobotsCache(safeRobotsFetcher(policy, lookup), Date.now);
+  const throttle = deps.throttle ?? createThrottle();
+  const captureDeps: CaptureDeps = { db, store, policy, robots, throttle, ...(lookup ? { lookup } : {}) };
 
   for (const name of [CAPTURE_QUEUES.user, CAPTURE_QUEUES.admin, CAPTURE_QUEUES.monitor, SWEEP_QUEUE]) {
     await boss.createQueue(name);

@@ -1,3 +1,4 @@
+import type dns from "node:dns";
 import type { AddressPolicy } from "./address-policy";
 import { CaptureError } from "./capture-error";
 import { safeFetch } from "./safe-fetch";
@@ -151,10 +152,17 @@ export function createRobotsCache(fetchText: (url: string) => Promise<RobotsFetc
 }
 
 /** robots.txt through `safeFetch`: text on 2xx, `absent` on 404/410, `failed` on any other problem. */
-export function safeRobotsFetcher(policy?: AddressPolicy): (url: string) => Promise<RobotsFetch> {
+export function safeRobotsFetcher(
+  policy?: AddressPolicy,
+  lookup?: typeof dns.lookup,
+): (url: string) => Promise<RobotsFetch> {
   return async (url) => {
     try {
-      const response = await safeFetch(url, { accept: "text", ...(policy ? { policy } : {}) });
+      const response = await safeFetch(url, {
+        accept: "text",
+        ...(policy ? { policy } : {}),
+        ...(lookup ? { lookup } : {}),
+      });
       return { kind: "text", text: response.body.toString("utf8") };
     } catch (error) {
       if (!(error instanceof CaptureError)) throw error;

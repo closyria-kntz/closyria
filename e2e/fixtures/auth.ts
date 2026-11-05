@@ -52,3 +52,27 @@ export async function sessionsOf(db: pg.Pool, userAgentTag: string): Promise<Ses
   );
   return rows;
 }
+
+/**
+ * An admin session as the access rule sees it: role `admin`, session opened with a passkey. The browser
+ * signs in with an e-mail code, then the test database marks the user admin and this test's session
+ * (`userAgentTag`) as a passkey one. A real WebAuthn ceremony is impossible here: the suite runs on
+ * http://127.0.0.1, and an IP address is never a valid WebAuthn relying party.
+ */
+export async function signInAsAdmin(
+  page: Page,
+  request: APIRequestContext,
+  db: pg.Pool,
+  userAgentTag: string,
+): Promise<void> {
+  const email = uniqueEmail();
+  await page.goto("/");
+  await signInWithEmailCode(page, request, email);
+  await db.query(`update "user" set role = 'admin' where email = $1`, [email]);
+  const { rowCount } = await db.query(
+    `update session s set auth_method = 'passkey' from "user" u
+      where u.id = s.user_id and u.email = $1 and right(s.user_agent, length($2)) = $2`,
+    [email, userAgentTag],
+  );
+  expect(rowCount).toBe(1);
+}

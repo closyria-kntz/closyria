@@ -1,6 +1,6 @@
 import { brevoMailer, createAuth, memoryMailer } from "@closyria/auth";
 import { createDb, type Database, pingDb } from "@closyria/db";
-import { memoryStore, s3Store } from "@closyria/storage";
+import { fsStore, memoryStore, type ObjectStore, s3Store } from "@closyria/storage";
 import { PgBoss } from "pg-boss";
 import { createApp } from "./app";
 import { pgBossQueue } from "./catalog/capture-queue";
@@ -36,17 +36,7 @@ export function bootstrap(env: Env): Api {
     secret: env.BETTER_AUTH_SECRET,
     social: { ...(google ? { google } : {}), ...(apple ? { apple } : {}) },
   });
-  // env.ts requires every S3 variable outside development; locally, photos may live in memory until restart.
-  const store =
-    env.S3_ENDPOINT && env.S3_REGION && env.S3_BUCKET && env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY
-      ? s3Store({
-          endpoint: env.S3_ENDPOINT,
-          region: env.S3_REGION,
-          bucket: env.S3_BUCKET,
-          accessKeyId: env.S3_ACCESS_KEY_ID,
-          secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-        })
-      : memoryStore();
+  const store = objectStoreFor(env);
   // Sending only: no supervision (maintenance) and no scheduling, which stay with the worker. It connects on
   // the first capture, so the API starts without it.
   const boss = new PgBoss({ connectionString: env.DATABASE_URL, max: 2, supervise: false, schedule: false });
@@ -65,4 +55,22 @@ export function bootstrap(env: Env): Api {
     ...(env.APP_ENV === "test" && memory ? { testMail: memory } : {}),
   });
   return { app, db, pool, stopQueue: () => boss.stop({ graceful: true, timeout: 5_000 }) };
+}
+
+/**
+ * Where photos live. The browser tests (APP_ENV=test with TEST_STORAGE_DIR, which env.ts refuses anywhere
+ * else) keep them on disk, shared with their in-process capture worker. Otherwise S3; env.ts requires every
+ * S3 variable outside development, so locally photos may live in memory until restart.
+ */
+export function objectStoreFor(env: Env): ObjectStore {
+  if (env.APP_ENV === "test" && env.TEST_STORAGE_DIR) return fsStore(env.TEST_STORAGE_DIR);
+  return env.S3_ENDPOINT && env.S3_REGION && env.S3_BUCKET && env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY
+    ? s3Store({
+        endpoint: env.S3_ENDPOINT,
+        region: env.S3_REGION,
+        bucket: env.S3_BUCKET,
+        accessKeyId: env.S3_ACCESS_KEY_ID,
+        secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+      })
+    : memoryStore();
 }
