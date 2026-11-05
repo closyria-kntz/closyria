@@ -4,7 +4,7 @@ import type { ProfileView } from "@closyria/shared";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { type ReactNode, Suspense, useEffect, useId, useState } from "react";
+import { type ReactNode, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
 import { fetchSummary } from "@/lib/catalog-client";
 import { ProfilesContext, profileHref, useCurrentProfile } from "@/lib/profile-context";
 import { type AppNavItem, desktopNav, isCurrent, moreNav, phoneTabs, tabletTabs } from "./app-nav";
@@ -29,10 +29,15 @@ function NavLink({ item, className }: { item: AppNavItem; className: string }) {
   );
 }
 
-function BottomTabs() {
+function BottomTabs({
+  open,
+  setOpen,
+}: {
+  open: boolean;
+  setOpen: (open: boolean | ((open: boolean) => boolean)) => void;
+}) {
   const t = useTranslations("Shell.nav");
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
   const panel = useId();
   // biome-ignore lint/correctness/useExhaustiveDependencies: the « Plus » panel closes on every navigation.
   useEffect(() => setOpen(false), [pathname]);
@@ -41,7 +46,7 @@ function BottomTabs() {
     <nav
       aria-label={t("tabs")}
       data-testid="app-nav-bottom"
-      className="fixed inset-x-space-0 bottom-space-0 z-20 border-t border-line bg-surface-raised md:hidden"
+      className="tabbar-safe fixed inset-x-space-0 bottom-space-0 z-20 border-t border-line bg-surface-raised md:hidden"
     >
       {open && (
         <ul id={panel} aria-label={t("moreMenu")} className="flex flex-col gap-space-1 border-b border-line p-space-2">
@@ -81,11 +86,29 @@ function AddLink() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const panel = useId();
+  const button = useRef<HTMLButtonElement>(null);
+  const field = useRef<HTMLDivElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: opening a sheet closes the field.
   useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (open) field.current?.querySelector("input")?.focus();
+  }, [open]);
+  const close = useCallback(() => {
+    setOpen(false);
+    button.current?.focus();
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, close]);
   return (
     <>
       <button
+        ref={button}
         type="button"
         aria-expanded={open}
         aria-controls={panel}
@@ -97,11 +120,12 @@ function AddLink() {
       {open && (
         <div
           id={panel}
+          ref={field}
           className="absolute inset-x-space-0 top-full border-b border-line bg-surface-raised px-space-4 py-space-4 shadow-lifted"
         >
           <div className="mx-auto flex max-w-measure flex-col items-end gap-space-2">
             <CaptureForm />
-            <button type="button" className={buttonClass} onClick={() => setOpen(false)}>
+            <button type="button" className={buttonClass} onClick={close}>
               {t("close")}
             </button>
           </div>
@@ -118,17 +142,33 @@ function AddLink() {
 export function AppShell({ children }: { children: ReactNode }) {
   const t = useTranslations("Shell");
   const [profiles, setProfiles] = useState<readonly ProfileView[]>([]);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const alive = useRef(true);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchSummary(undefined, controller.signal).then((summary) => {
-      if (summary && !controller.signal.aborted) setProfiles(summary.profiles);
-    });
-    return () => controller.abort();
+  const refreshProfiles = useCallback(async () => {
+    const summary = await fetchSummary();
+    if (summary && alive.current) setProfiles(summary.profiles);
   }, []);
 
+  // Read on arrival, and again whenever the window regains focus (profiles may have changed in another tab).
+  useEffect(() => {
+    alive.current = true;
+    void refreshProfiles();
+    window.addEventListener("focus", refreshProfiles);
+    return () => {
+      alive.current = false;
+      window.removeEventListener("focus", refreshProfiles);
+    };
+  }, [refreshProfiles]);
+
   return (
-    <ProfilesContext.Provider value={profiles}>
+    <ProfilesContext.Provider value={{ profiles, refreshProfiles }}>
+      <a
+        href="#app-content"
+        className={`sr-only rounded-button bg-surface-raised px-space-3 py-space-2 focus:not-sr-only focus:absolute focus:top-space-2 focus:left-space-2 focus:z-30 ${focusRing}`}
+      >
+        {t("skipToContent")}
+      </a>
       <div className="flex min-h-dvh bg-surface text-ink">
         <aside className="sticky top-space-0 hidden h-dvh w-sidebar shrink-0 flex-col gap-space-5 border-r border-line bg-surface-sunken p-space-4 lg:flex">
           <Link href="/" className={`font-display text-title font-strong ${focusRing}`}>
@@ -177,13 +217,17 @@ export function AppShell({ children }: { children: ReactNode }) {
             </nav>
           </header>
 
-          <main className="flex-1 px-space-4 pt-space-5 pb-space-8 md:px-space-5 md:pb-space-6 lg:px-space-6">
+          <main
+            id="app-content"
+            tabIndex={-1}
+            className={`flex-1 px-space-4 pt-space-5 focus:outline-none md:px-space-5 md:pb-space-6 lg:px-space-6 ${moreOpen ? "tabbar-clearance-open" : "tabbar-clearance"}`}
+          >
             <div className="mx-auto w-full max-w-app">{children}</div>
           </main>
         </div>
       </div>
       <Suspense>
-        <BottomTabs />
+        <BottomTabs open={moreOpen} setOpen={setMoreOpen} />
       </Suspense>
     </ProfilesContext.Provider>
   );

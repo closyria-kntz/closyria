@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useId } from "react";
-import { PROFILE_PARAM, useCurrentProfile, useProfiles } from "@/lib/profile-context";
+import { PROFILE_PARAM, resolveCurrentProfile, useCurrentProfile, useProfiles } from "@/lib/profile-context";
 import { focusRing } from "./ui";
 
 /** Header control: who the wardrobe is for. The choice goes into the address (`?profil=`), so it can be shared and kept. */
@@ -27,7 +27,7 @@ export function ProfileSwitcher() {
 
   const choose = (profileId: string) => {
     const params = new URLSearchParams(search.toString());
-    if (profileId === profiles[0]?.id) params.delete(PROFILE_PARAM);
+    if (resolveCurrentProfile(profiles, null).id === profileId) params.delete(PROFILE_PARAM);
     else params.set(PROFILE_PARAM, profileId);
     const query = params.toString();
     router.push(query ? `${pathname}?${query}` : pathname);

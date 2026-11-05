@@ -32,11 +32,21 @@ export function profileHref(path: string, profileId: string | null, isDefault: b
   return profileId && !isDefault ? `${path}?${PROFILE_PARAM}=${profileId}` : path;
 }
 
+export type ProfilesState = {
+  profiles: readonly ProfileView[];
+  /** Re-reads the profiles; the settings pages call it after creating, renaming or deleting one. */
+  refreshProfiles: () => Promise<void>;
+};
+
 /** The profiles of the signed-in (or anonymous) account; filled by the app shell. */
-export const ProfilesContext = createContext<readonly ProfileView[]>([]);
+export const ProfilesContext = createContext<ProfilesState>({ profiles: [], refreshProfiles: async () => {} });
 
 export function useProfiles(): readonly ProfileView[] {
-  return useContext(ProfilesContext);
+  return useContext(ProfilesContext).profiles;
+}
+
+export function useRefreshProfiles(): () => Promise<void> {
+  return useContext(ProfilesContext).refreshProfiles;
 }
 
 export function useCurrentProfile(): CurrentProfile {

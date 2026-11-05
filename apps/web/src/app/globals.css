@@ -1,6 +1,26 @@
 @import "tailwindcss";
 @import "../styles/tokens.css";
 
+/* Phone tab bar: its own padding for the home indicator, and the room the page keeps clear below it. */
+@utility tabbar-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility tabbar-clearance {
+  padding-bottom: calc(var(--spacing-space-8) + env(safe-area-inset-bottom));
+}
+
+/* Same, with the « Plus » panel open above the bar (three links, their gaps and padding). */
+@utility tabbar-clearance-open {
+  padding-bottom: calc(
+    var(--spacing-space-8) +
+    3 *
+    var(--spacing-touch-target) +
+    var(--spacing-space-5) +
+    env(safe-area-inset-bottom)
+  );
+}
+
 body {
   background: var(--color-surface);
   color: var(--color-ink);

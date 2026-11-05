@@ -160,6 +160,28 @@ describe("adaptive layout tokens", () => {
     expect(base["text-sm"]).not.toMatch(/clamp/);
   });
 
+  it("runs every fluid size exactly from its minimum at 20rem to its maximum at 64rem", () => {
+    const at = (clamp: string, rem: number): number => {
+      const m = /^clamp\(([\d.]+)rem, ([\d.]+)rem \+ ([\d.]+)vw, ([\d.]+)rem\)$/.exec(clamp);
+      if (!m) throw new Error(`unexpected clamp ${clamp}`);
+      const [min, intercept, slope, max] = m.slice(1).map(Number) as [number, number, number, number];
+      return Math.min(max, Math.max(min, intercept + (slope * rem) / 100));
+    };
+    const ranges: Record<string, [number, number]> = {
+      "text-body": [1, 1.125],
+      "text-lead": [1.25, 1.5],
+      "text-title": [1.75, 2.5],
+      "text-display": [2.5, 4],
+    };
+    for (const [key, [min, max]] of Object.entries(ranges)) {
+      const value = base[key as keyof typeof base];
+      expect(Math.abs(at(value, 20) - min), `${key} at 20rem`).toBeLessThanOrEqual(0.01);
+      expect(Math.abs(at(value, 64) - max), `${key} at 64rem`).toBeLessThanOrEqual(0.01);
+      // The unclamped line itself must hit both ends (no early plateau): halfway is halfway.
+      expect(Math.abs(at(value, 42) - (min + max) / 2), `${key} at 42rem`).toBeLessThanOrEqual(0.01);
+    }
+  });
+
   it("emits them in the generated stylesheet", () => {
     const css = renderTokensCss();
     expect(css).toContain("--container-app: 90rem;");

@@ -1,11 +1,14 @@
 import "@fontsource-variable/cormorant-garamond/wght.css";
 import "@fontsource-variable/jost/wght.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { PageViewTracker } from "@/components/page-view-tracker";
 import "./globals.css";
+
+// `cover` lets the page reach under the notch and home indicator; the phone tab bar pads itself with the safe area.
+export const viewport: Viewport = { viewportFit: "cover" };
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("Metadata");

@@ -57,7 +57,7 @@ export const primitives = {
     body: "clamp(1rem, 0.9432rem + 0.2841vw, 1.125rem)",
     lead: "clamp(1.25rem, 1.1364rem + 0.5682vw, 1.5rem)",
     title: "clamp(1.75rem, 1.4091rem + 1.7045vw, 2.5rem)",
-    display: "clamp(2.5rem, 2.1591rem + 3.4091vw, 4rem)",
+    display: "clamp(2.5rem, 1.8182rem + 3.4091vw, 4rem)",
   },
   fontWeight: { regular: "400", medium: "500", strong: "600" },
   duration: { instant: "0ms", fast: "150ms", base: "250ms", slow: "400ms" },

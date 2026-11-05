@@ -22,7 +22,7 @@ async function box(page: Page, selector: string) {
 test.describe("1440 px", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("à 1440 px la fiche a deux colonnes, le menu latéral et un contenu large", async ({ page }) => {
+  test("la fiche a deux colonnes, le menu latéral et un contenu large", async ({ page }) => {
     await openSheet(page);
 
     const side = page.getByRole("navigation", { name: "Menu principal" });
@@ -35,27 +35,77 @@ test.describe("1440 px", () => {
       "Listes",
       "Réglages",
     ]);
+    // The product sheet is not one of the six places: no entry claims to be the current page.
+    await expect(side.locator("[aria-current=page]")).toHaveCount(0);
     await expect(page.getByTestId("app-nav-bottom")).toBeHidden();
 
     const gallery = await box(page, "[data-testid=product-gallery]");
     const info = await box(page, "[data-testid=product-info]");
     expect(info.x).toBeGreaterThan(gallery.x + gallery.width - 1);
     expect(Math.abs(info.y - gallery.y)).toBeLessThan(2 * REM);
-    const content = await box(page, "main > div");
-    expect(content.width).toBeGreaterThan(60 * REM);
+    // The sheet itself (gallery + information columns) uses the width, it is not a narrow strip in the middle.
+    expect(info.x + info.width - gallery.x).toBeGreaterThan(60 * REM);
+  });
+
+  test("« + Ajouter » ouvre le champ « Coller un lien », Échap le ferme et rend le focus au bouton", async ({
+    page,
+  }) => {
+    await openSheet(page);
+    const button = page.getByRole("button", { name: "+ Ajouter" });
+    await button.click();
+    const field = page.getByLabel("Coller un lien");
+    await expect(field).toBeVisible();
+    await expect(field).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(field).toHaveCount(0);
+    await expect(button).toBeFocused();
+  });
+
+  test("« Aller au contenu » est le premier arrêt au clavier et mène au contenu", async ({ page }) => {
+    await openSheet(page);
+    await page.locator("body").press("Tab");
+    const skip = page.getByRole("link", { name: "Aller au contenu" });
+    await expect(skip).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("main#app-content")).toBeFocused();
+  });
+
+  test("?profil=<id> choisit ce profil dans le sélecteur", async ({ page }) => {
+    await openSheet(page);
+    const created = await page.request.post("/api/me/profiles", {
+      data: { name: "Léa", audience: "women", color: "rose" },
+    });
+    expect(created.ok()).toBe(true);
+    const { id } = (await created.json()) as { id: string };
+    const summary = (await (await page.request.get("/api/me/summary")).json()) as { profiles: { id: string }[] };
+    const first = summary.profiles[0]?.id;
+    expect(summary.profiles.length).toBeGreaterThanOrEqual(2);
+
+    const switcher = page.getByRole("combobox", { name: "Profil" });
+    await page.goto(`${page.url()}&profil=${id}`);
+    await expect(switcher).toHaveValue(id);
+    await page.goto(page.url().replace(/&profil=[^&]+/, ""));
+    await expect(switcher).toHaveValue(first ?? "");
+  });
+
+  test("la page d'accueil donne un champ confortable sur ordinateur", async ({ page }) => {
+    await page.goto("/");
+    const field = await page.getByLabel("Coller un lien").boundingBox();
+    expect(field?.width ?? 0).toBeGreaterThan(32 * REM);
   });
 });
 
 test.describe("390 px", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("à 390 px la barre d'onglets est en bas, la fiche sur une colonne", async ({ page }) => {
+  test("la barre d'onglets est en bas, la fiche sur une colonne", async ({ page }) => {
     await openSheet(page);
 
     const bar = page.getByRole("navigation", { name: "Onglets" });
     await expect(bar).toBeVisible();
     await expect(bar.getByRole("link")).toHaveText(["Envies", "Commandé", "Dressing"]);
     await expect(bar.getByRole("button", { name: "Plus" })).toBeVisible();
+    await expect(bar.locator("[aria-current=page]")).toHaveCount(0);
     const barBox = await box(page, "[data-testid=app-nav-bottom]");
     expect(barBox.y + barBox.height).toBeGreaterThan(844 - 2);
     for (const target of await bar.locator("a, button").all()) {
@@ -71,12 +121,35 @@ test.describe("390 px", () => {
     await expect(page.getByRole("link", { name: "Listes" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Réglages" })).toBeVisible();
   });
+
+  test("tout en bas de la page, le dernier élément reste visible au-dessus de la barre, « Plus » ouvert ou non", async ({
+    page,
+  }) => {
+    await openSheet(page);
+    const last = page.locator("[data-testid=product-info] > :last-child");
+    const bar = page.getByTestId("app-nav-bottom");
+
+    const expectLastAboveBar = async () => {
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await expect.poll(() => page.evaluate(() => window.scrollY + window.innerHeight)).toBeGreaterThan(0);
+      const lastBox = await last.boundingBox();
+      const barBox = await bar.boundingBox();
+      expect(lastBox && barBox ? lastBox.y + lastBox.height : Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
+        barBox?.y ?? 0,
+      );
+    };
+
+    await expectLastAboveBar();
+    await bar.getByRole("button", { name: "Plus" }).click();
+    await expect(page.getByRole("link", { name: "Listes" })).toBeVisible();
+    await expectLastAboveBar();
+  });
 });
 
 test.describe("820 px", () => {
   test.use({ viewport: { width: 820, height: 1180 } });
 
-  test("à 820 px les onglets sont en haut", async ({ page }) => {
+  test("les onglets sont en haut", async ({ page }) => {
     await openSheet(page);
 
     const tabs = page.getByRole("navigation", { name: "Onglets" });
@@ -85,25 +158,5 @@ test.describe("820 px", () => {
     expect((await box(page, "[data-testid=app-nav-top]")).y).toBeLessThan(6 * REM);
     await expect(page.getByTestId("app-nav-bottom")).toBeHidden();
     await expect(page.getByRole("navigation", { name: "Menu principal" })).toBeHidden();
-  });
-});
-
-test.describe("1440 px", () => {
-  test.use({ viewport: { width: 1440, height: 900 } });
-
-  test("« + Ajouter » ouvre le champ « Coller un lien » depuis la fiche", async ({ page }) => {
-    await openSheet(page);
-    await page.getByRole("button", { name: "+ Ajouter" }).click();
-    await expect(page.getByLabel("Coller un lien")).toBeVisible();
-  });
-});
-
-test.describe("1440 px", () => {
-  test.use({ viewport: { width: 1440, height: 900 } });
-
-  test("la page d'accueil donne un champ confortable sur ordinateur", async ({ page }) => {
-    await page.goto("/");
-    const field = await page.getByLabel("Coller un lien").boundingBox();
-    expect(field?.width ?? 0).toBeGreaterThan(32 * REM);
   });
 });
