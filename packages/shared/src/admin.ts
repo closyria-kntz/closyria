@@ -181,6 +181,8 @@ export const adminCaptureSchema = z.object({
   finishedAt: isoDate.nullable(),
 });
 
+export type AdminCapture = z.infer<typeof adminCaptureSchema>;
+
 export const adminCaptureFailureSchema = z.object({
   id: z.uuid(),
   shopId: z.uuid(),

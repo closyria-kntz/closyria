@@ -1,1 +1,1 @@
-export { buttonClass, focusRing, primaryButtonClass } from "@/components/ui";
+export { buttonClass, focusRing, inputClass, primaryButtonClass } from "@/components/ui";

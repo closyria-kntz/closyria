@@ -60,6 +60,8 @@
     },
     "nav": {
       "dashboard": "Tableau de bord",
+      "shops": "Boutiques",
+      "captures": "Captures",
       "audit": "Journal d’audit"
     },
     "palette": {
@@ -80,7 +82,22 @@
       "usersAnonymous": "Sessions anonymes",
       "eventsToday": "Événements aujourd’hui",
       "signupsToday": "Inscriptions aujourd’hui",
-      "todayNote": "« Aujourd’hui » désigne la journée UTC en cours. Les inscriptions comptent les comptes créés ce jour, hors sessions anonymes."
+      "todayNote": "« Aujourd’hui » désigne la journée UTC en cours. Les inscriptions comptent les comptes créés ce jour, hors sessions anonymes.",
+      "capturesTitle": "Captures",
+      "captures24h": "Captures sur 24 h",
+      "captures7d": "Captures sur 7 jours",
+      "successRate": "Taux de réussite sur 7 jours",
+      "byMethod": "Réussites par méthode sur 7 jours",
+      "medianDuration": "Durée médiane",
+      "shopsPending": "Boutiques à valider",
+      "shopsDown": "Boutiques en panne",
+      "none": "—",
+      "durationMs": "{ms} ms",
+      "methods": {
+        "shopify": "Shopify",
+        "jsonld": "JSON-LD",
+        "opengraph": "Open Graph"
+      }
     },
     "audit": {
       "title": "Journal d’audit",
@@ -109,6 +126,165 @@
       "registered": "Passkey enregistrée. Connecte-toi maintenant avec elle.",
       "registerFailed": "La passkey n’a pas pu être enregistrée. Si tu en as déjà une, connecte-toi avec elle ; sinon, réessaie.",
       "signInFailed": "La connexion par passkey a échoué ou a été annulée. Réessaie."
+    },
+    "common": {
+      "none": "—",
+      "all": "Tous",
+      "methods": {
+        "shopify": "Shopify",
+        "jsonld": "JSON-LD",
+        "opengraph": "Open Graph"
+      },
+      "errorCodes": {
+        "blocked": "Accès bloqué",
+        "timeout": "Délai dépassé",
+        "too_large": "Page trop volumineuse",
+        "forbidden_address": "Adresse refusée",
+        "robots_disallowed": "Refusé par robots.txt",
+        "not_a_product": "Pas une fiche produit",
+        "http_error": "Erreur HTTP",
+        "invalid_data": "Données invalides",
+        "queue_unavailable": "File indisponible"
+      },
+      "triggers": {
+        "user": "Utilisatrice",
+        "admin_test": "Test admin",
+        "monitor": "Surveillance"
+      },
+      "health": {
+        "ok": "OK",
+        "degraded": "Dégradée",
+        "down": "En panne",
+        "not_applicable": "—"
+      },
+      "errors": {
+        "slugTaken": "Ce slug est déjà pris.",
+        "domainTaken": "Ce domaine appartient déjà à une boutique.",
+        "domainTakenLink": "Voir cette boutique",
+        "captureActive": "Cette capture est encore en cours.",
+        "invalidMerge": "Cette fusion n’est pas possible.",
+        "invalidUrl": "Ce lien n’est pas valide.",
+        "generic": "L’action a échoué. Réessaie."
+      }
+    },
+    "shops": {
+      "title": "Boutiques",
+      "intro": "Les boutiques à valider passent en tête, classées par nombre de fiches créées sur 30 jours.",
+      "add": "Ajouter une boutique",
+      "empty": "Aucune boutique ne correspond à ces filtres.",
+      "filters": "Filtres",
+      "filterStatus": "Statut",
+      "filterMode": "Mode de capture",
+      "filterHealth": "Santé",
+      "apply": "Filtrer",
+      "reset": "Réinitialiser",
+      "name": "Nom",
+      "domains": "Domaines",
+      "status": "Statut",
+      "mode": "Mode",
+      "kind": "Type",
+      "health": "Santé",
+      "recentProducts": "Fiches (30 j)",
+      "lastCapture": "Dernière capture",
+      "statuses": {
+        "pending": "À valider",
+        "draft": "Brouillon",
+        "published": "Publiée"
+      },
+      "modes": {
+        "auto": "Automatique",
+        "manual": "Manuelle"
+      },
+      "kinds": {
+        "catalog": "Catalogue",
+        "secondhand": "Seconde main"
+      },
+      "platforms": {
+        "shopify": "Shopify",
+        "other": "Autre",
+        "unknown": "Inconnue"
+      },
+      "back": "Retour aux boutiques",
+      "settings": "Réglages",
+      "slug": "Slug",
+      "testUrl": "Page de test",
+      "testUrlHint": "Laisser vide pour ne pas en avoir.",
+      "domainsField": "Domaines (un par ligne)",
+      "platform": "Plateforme",
+      "save": "Enregistrer",
+      "saved": "Réglages enregistrés.",
+      "healthTitle": "Santé",
+      "successRate": "Taux de réussite sur 7 jours",
+      "lastMonitor": "Dernière surveillance",
+      "noMonitor": "Aucune surveillance pour l’instant.",
+      "recentErrors": "10 dernières erreurs",
+      "noErrors": "Aucune erreur.",
+      "errorLine": "{code} · HTTP {status}",
+      "date": "Date (UTC)",
+      "tester": {
+        "title": "Tester un lien",
+        "intro": "Lance une capture de test : aucune fiche n’est créée.",
+        "url": "Adresse du produit",
+        "run": "Lancer le test",
+        "running": "Capture en cours…",
+        "timeout": "La capture met trop de temps. Réessaie dans un moment.",
+        "failed": "La capture a échoué : {code}.",
+        "skipped": "Cette boutique est en mode manuel : aucune capture n’a eu lieu.",
+        "badResult": "La capture a réussi, mais ses données sont illisibles.",
+        "method": "Méthode",
+        "duration": "Durée",
+        "durationValue": "{ms} ms",
+        "name": "Nom",
+        "price": "Prix",
+        "sizes": "Tailles",
+        "available": "disponible",
+        "unavailable": "épuisée",
+        "photos": "Photos (adresses d’origine, non chargées)",
+        "noPhotos": "Aucune photo.",
+        "siteName": "Nom du site"
+      },
+      "merge": {
+        "title": "Fusionner dans…",
+        "intro": "Les domaines et les fiches de cette boutique passent à la boutique gardée ; celle-ci est masquée.",
+        "target": "Boutique gardée",
+        "choose": "Choisir une boutique",
+        "none": "Aucune autre boutique à laquelle fusionner.",
+        "start": "Fusionner",
+        "confirm": "Fusionner {source} dans {target} ? Les domaines et les fiches de {source} passeront à {target}.",
+        "confirmButton": "Confirmer la fusion",
+        "cancel": "Annuler"
+      },
+      "new": {
+        "title": "Ajouter une boutique",
+        "intro": "Colle l’adresse d’un produit : la boutique est créée en brouillon et une capture de test pré-remplit ses réglages.",
+        "url": "Adresse d’un produit de la boutique",
+        "submit": "Ajouter",
+        "created": "Boutique créée en brouillon.",
+        "openShop": "Ouvrir la boutique",
+        "takeName": "Reprendre le nom",
+        "useTestUrl": "Utiliser comme page de test",
+        "nameTaken": "Nom repris : {name}.",
+        "testUrlSet": "Page de test enregistrée.",
+        "noSuggestion": "La capture n’a rien proposé à reprendre."
+      }
+    },
+    "captures": {
+      "title": "Captures en échec",
+      "intro": "Les 100 derniers échecs, du plus récent au plus ancien.",
+      "empty": "Aucune capture en échec.",
+      "filterShop": "Boutique",
+      "filterCause": "Cause",
+      "apply": "Filtrer",
+      "reset": "Réinitialiser",
+      "date": "Date (UTC)",
+      "shop": "Boutique",
+      "address": "Adresse",
+      "trigger": "Origine",
+      "cause": "Cause",
+      "httpStatus": "HTTP",
+      "retry": "Relancer",
+      "retrying": "Relance…",
+      "retried": "Capture relancée."
     }
   },
   "Capture": {
