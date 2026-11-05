@@ -31,17 +31,17 @@ export function canonicalizeUrl(input: string): string | null {
   return result.length > MAX_URL_LENGTH ? null : result;
 }
 
-/** Host of an address, without `www.`. */
+/** Host of an address, without `www.`. Expects a canonicalised URL (throws on an invalid one). */
 export function shopDomain(url: string): string {
   return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
 }
 
 /** The host without `www.`, then each parent domain down to two labels. */
 export function domainCandidates(host: string): string[] {
-  const labels = host
-    .toLowerCase()
-    .replace(/^www\./, "")
-    .split(".");
+  const lower = host.toLowerCase();
+  // IP literals have no parent domains.
+  if (lower.includes(":") || /^\d{1,3}(\.\d{1,3}){3}$/.test(lower)) return [lower];
+  const labels = lower.replace(/^www\./, "").split(".");
   const out: string[] = [];
   for (let i = 0; i <= labels.length - 2; i++) out.push(labels.slice(i).join("."));
   return out.length > 0 ? out : [labels.join(".")];

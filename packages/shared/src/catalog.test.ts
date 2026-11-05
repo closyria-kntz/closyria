@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { CAPTURE_QUEUES, captureErrorCodeSchema, extractedProductSchema, manualEntrySchema } from "./catalog";
+import {
+  CAPTURE_QUEUES,
+  captureErrorCodeSchema,
+  extractedProductSchema,
+  manualEntrySchema,
+  productSourceSchema,
+  productViewSchema,
+} from "./catalog";
 
 const product = {
   name: "Robe",
@@ -38,5 +45,14 @@ describe("constants", () => {
     expect(CAPTURE_QUEUES.admin).toBe("capture-admin");
     expect(captureErrorCodeSchema.safeParse("blocked").success).toBe(true);
     expect(captureErrorCodeSchema.safeParse("nope").success).toBe(false);
+  });
+});
+
+describe("productViewSchema source", () => {
+  it("is captured or manual", () => {
+    expect(productSourceSchema.safeParse("captured").success).toBe(true);
+    expect(productSourceSchema.safeParse("manual").success).toBe(true);
+    expect(productSourceSchema.safeParse("jsonld").success).toBe(false);
+    expect(productViewSchema.shape.source).toBe(productSourceSchema);
   });
 });

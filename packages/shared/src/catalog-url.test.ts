@@ -57,6 +57,14 @@ describe("domainCandidates", () => {
   });
 });
 
+describe("domainCandidates with IP hosts", () => {
+  it("returns only the host", () => {
+    expect(domainCandidates("127.0.0.1")).toEqual(["127.0.0.1"]);
+    expect(domainCandidates("1.2.3.4")).toEqual(["1.2.3.4"]);
+    expect(domainCandidates("[::1]")).toEqual(["[::1]"]);
+  });
+});
+
 describe("nameFromUrl", () => {
   it("uses the last path segment", () => {
     expect(nameFromUrl("https://x.fr/products/robe-camelia-rose")).toBe("Robe camelia rose");

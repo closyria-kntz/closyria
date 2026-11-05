@@ -26,6 +26,9 @@ export type CaptureStatus = z.infer<typeof captureStatusSchema>;
 export type CaptureMethod = z.infer<typeof captureMethodSchema>;
 export type CaptureErrorCode = z.infer<typeof captureErrorCodeSchema>;
 
+export const productSourceSchema = z.enum(["captured", "manual"]);
+export type ProductSource = z.infer<typeof productSourceSchema>;
+
 export const MAX_PRODUCT_IMAGES = 8;
 
 const currencySchema = z.string().length(3);
@@ -71,7 +74,7 @@ export const productViewSchema = z.object({
       height: z.number().int().positive(),
     }),
   ),
-  source: z.union([captureMethodSchema, z.literal("manual")]),
+  source: productSourceSchema,
   captureStatus: captureStatusSchema,
   lastCapturedAt: z.string().nullable(),
 });
