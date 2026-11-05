@@ -234,6 +234,44 @@ describe("/api/me/wishlists", () => {
   });
 });
 
+describe("POST /api/me/wishlists/order", () => {
+  const ordered = async (cookie: string) =>
+    ((await (await call("GET", "/api/me/wishlists", cookie)).json()) as { wishlists: WishlistView[] }).wishlists.map(
+      (w) => w.id,
+    );
+
+  it("reorders her lists; a wrong set answers 400", async () => {
+    const { cookie } = await t.signIn();
+    const [a, b, c] = [await createList(cookie, "A"), await createList(cookie, "B"), await createList(cookie, "C")];
+    const ids = [c, a, b].map((w) => w.id);
+    const res = await call("POST", "/api/me/wishlists/order", cookie, { ids });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { wishlists: WishlistView[] }).wishlists.map((w) => w.id)).toEqual(ids);
+    expect(await ordered(cookie)).toEqual(ids);
+    for (const bad of [ids.slice(1), [...ids, a.id], []]) {
+      const r = await call("POST", "/api/me/wishlists/order", cookie, { ids: bad });
+      expect(r.status).toBe(400);
+    }
+    expect(await ordered(cookie)).toEqual(ids);
+  });
+
+  it("answers 404 for a foreign or unknown list and changes nothing", async () => {
+    const mine = await t.signIn();
+    const other = await t.signIn();
+    const a = await createList(mine.cookie, "A");
+    const b = await createList(mine.cookie, "B");
+    const theirs = await createList(other.cookie, "X");
+    for (const ids of [[b.id, a.id, theirs.id], [UNKNOWN_ID]]) {
+      const res = await call("POST", "/api/me/wishlists/order", mine.cookie, { ids });
+      expect(res.status).toBe(404);
+    }
+    const res = await call("POST", "/api/me/wishlists/order", other.cookie, { ids: [a.id] });
+    expect(res.status).toBe(404);
+    expect(await ordered(mine.cookie)).toEqual([a.id, b.id]);
+    expect(await ordered(other.cookie)).toEqual([theirs.id]);
+  });
+});
+
 describe("sharing", () => {
   it("returns /l/<token> once, stores only its SHA-256, and records one wishlist_shared event without ids", async () => {
     const { cookie, userId } = await t.signIn();
@@ -284,7 +322,13 @@ describe("sharing", () => {
       expect(res.status, token).toBe(404);
       expect(await res.json()).toEqual({ error: "not_found" });
       expect(res.headers.get("x-robots-tag")).toBe("noindex");
+      expect(res.headers.get("cache-control")).toContain("no-store");
     }
+    const long = await t.app.request(`/api/shared/${"a".repeat(300)}`);
+    expect(long.status).toBe(404);
+    expect(await long.json()).toEqual({ error: "not_found" });
+    expect(long.headers.get("x-robots-tag")).toBe("noindex");
+    expect(long.headers.get("cache-control")).toContain("no-store");
   });
 
   it("deleting the list ends the share", async () => {

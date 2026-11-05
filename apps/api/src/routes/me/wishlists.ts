@@ -6,6 +6,7 @@ import {
   wishlistItemInputSchema,
   wishlistListSchema,
   wishlistOrderSchema,
+  wishlistsOrderSchema,
   wishlistViewSchema,
 } from "@closyria/shared";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
@@ -136,6 +137,22 @@ const orderRoute = defineAccess(
   "user",
 );
 
+const listsOrderRoute = defineAccess(
+  createRoute({
+    method: "post",
+    path: "/me/wishlists/order",
+    summary: "Reorder her lists",
+    description: "`ids`: every one of her lists, exactly once, in the new order.",
+    request: body(wishlistsOrderSchema),
+    responses: {
+      200: json("Her lists in the new order", wishlistListSchema),
+      400: errorContent("Not exactly her lists (invalid_request)"),
+      404: notFoundContent,
+    },
+  }),
+  "user",
+);
+
 const shareRoute = defineAccess(
   createRoute({
     method: "post",
@@ -205,6 +222,34 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
       const view = await viewOf(userId, created.id);
       if (!view) throw new Error("wishlist not readable");
       return c.json(view, 201);
+    })
+    .openapi(listsOrderRoute, async (c) => {
+      const userId = userIdOf(c);
+      const { ids } = c.req.valid("json");
+      const outcome = await db.transaction(async (tx) => {
+        // The lock of the creation: no list appears while we order.
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`wishlists:${userId}`}, 0))`);
+        const owned = await tx
+          .select({ id: schema.wishlists.id })
+          .from(schema.wishlists)
+          .where(eq(schema.wishlists.userId, userId))
+          .orderBy(asc(schema.wishlists.id))
+          .for("update");
+        const ownIds = new Set(owned.map((w) => w.id));
+        if (ids.some((id) => !ownIds.has(id))) return "not_found" as const;
+        if (ids.length !== ownIds.size) return "invalid_request" as const;
+        await tx.execute(sql`
+          update wishlists set position = o.position
+          from (values ${sql.join(
+            ids.map((id, position) => sql`(${id}::uuid, ${position}::int)`),
+            sql`, `,
+          )}) as o(id, position)
+          where wishlists.id = o.id`);
+        return "ok" as const;
+      });
+      if (outcome === "not_found") return c.json(notFound, 404);
+      if (outcome === "invalid_request") return c.json(invalidRequest, 400);
+      return c.json({ wishlists: await listWishlistViews(db, userId) }, 200);
     })
     .openapi(patchListRoute, async (c) => {
       const userId = userIdOf(c);
@@ -284,11 +329,14 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
           .orderBy(asc(schema.wishlistItems.itemId));
         const held = new Set(current.map((r) => r.itemId));
         if (ids.length !== held.size || ids.some((itemId) => !held.has(itemId))) return "invalid_request" as const;
-        for (const [position, itemId] of ids.entries()) {
-          await tx
-            .update(schema.wishlistItems)
-            .set({ position })
-            .where(and(eq(schema.wishlistItems.wishlistId, id), eq(schema.wishlistItems.itemId, itemId)));
+        if (ids.length > 0) {
+          await tx.execute(sql`
+            update wishlist_items set position = o.position
+            from (values ${sql.join(
+              ids.map((itemId, position) => sql`(${itemId}::uuid, ${position}::int)`),
+              sql`, `,
+            )}) as o(item_id, position)
+            where wishlist_items.wishlist_id = ${id} and wishlist_items.item_id = o.item_id`);
         }
         return "ok" as const;
       });

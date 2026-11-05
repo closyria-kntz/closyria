@@ -1,6 +1,6 @@
 import { and, asc, type Database, eq, inArray, isNull, schema } from "@closyria/db";
 import type { SharedWishlistView, WishlistView } from "@closyria/shared";
-import { loadProductViews } from "../catalog/product-view";
+import { catalogImageUrl } from "../catalog/product-view";
 import type { Tx } from "./events";
 
 type WishlistRow = typeof schema.wishlists.$inferSelect;
@@ -56,32 +56,46 @@ function toWishlistView(row: WishlistRow, itemIds: string[]): WishlistView {
  * left out; every other stage (sold included) stays.
  */
 export async function loadSharedView(db: Database, list: { id: string; name: string }): Promise<SharedWishlistView> {
+  // Narrow: only the public columns, and the first shop photo of each product (not all images, not the sizes).
   const members = await db
-    .select({ productId: schema.items.productId })
+    .select({
+      productId: schema.products.id,
+      name: schema.products.name,
+      brand: schema.products.brand,
+      priceCents: schema.products.priceCents,
+      currency: schema.products.currency,
+      url: schema.products.canonicalUrl,
+      shopName: schema.shops.name,
+    })
     .from(schema.wishlistItems)
     .innerJoin(schema.items, eq(schema.items.id, schema.wishlistItems.itemId))
+    .innerJoin(schema.products, eq(schema.products.id, schema.items.productId))
+    .innerJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
     .where(and(eq(schema.wishlistItems.wishlistId, list.id), isNull(schema.items.deletedAt)))
     .orderBy(asc(schema.wishlistItems.position), asc(schema.wishlistItems.addedAt), asc(schema.wishlistItems.itemId));
-  const products = await loadProductViews(
-    db,
-    members.flatMap((m) => (m.productId ? [m.productId] : [])),
-  );
+  const productIds = [...new Set(members.map((m) => m.productId))];
+  const firstImages =
+    productIds.length === 0
+      ? []
+      : await db
+          .selectDistinctOn([schema.productImages.productId], {
+            productId: schema.productImages.productId,
+            id: schema.productImages.id,
+          })
+          .from(schema.productImages)
+          .where(inArray(schema.productImages.productId, productIds))
+          .orderBy(asc(schema.productImages.productId), asc(schema.productImages.position));
+  const imageOf = new Map(firstImages.map((i) => [i.productId, catalogImageUrl(i.id)]));
   return {
     name: list.name,
-    items: members.flatMap((m) => {
-      const product = m.productId ? products.get(m.productId) : undefined;
-      if (!product) return [];
-      return [
-        {
-          name: product.name,
-          brand: product.brand,
-          priceCents: product.priceCents,
-          currency: product.currency,
-          imageUrl: product.images[0]?.url ?? null,
-          shopName: product.shop.name,
-          url: product.canonicalUrl,
-        },
-      ];
-    }),
+    items: members.map((m) => ({
+      name: m.name,
+      brand: m.brand,
+      priceCents: m.priceCents,
+      currency: m.currency,
+      imageUrl: imageOf.get(m.productId) ?? null,
+      shopName: m.shopName,
+      url: m.url,
+    })),
   };
 }

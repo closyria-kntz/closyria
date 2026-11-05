@@ -306,6 +306,16 @@ export const wishlistOrderSchema = z.object({
 });
 export type WishlistOrder = z.infer<typeof wishlistOrderSchema>;
 
+/** New order of her lists: every one of her list ids, exactly once. */
+export const wishlistsOrderSchema = z.object({
+  ids: z
+    .array(z.uuid())
+    .min(1)
+    .max(1000)
+    .refine((ids) => new Set(ids).size === ids.length, { error: "ids must be unique" }),
+});
+export type WishlistsOrder = z.infer<typeof wishlistsOrderSchema>;
+
 export const wishlistListSchema = z.object({ wishlists: z.array(wishlistViewSchema) });
 export type WishlistList = z.infer<typeof wishlistListSchema>;
 

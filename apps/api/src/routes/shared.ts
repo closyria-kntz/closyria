@@ -15,7 +15,7 @@ const sharedRoute = defineAccess(
     description:
       "Public. Product data only (no notes, sizes, profiles or private photos). Never cached, never indexed. " +
       "A malformed, unknown or stopped token answers 404.",
-    request: { params: z.object({ token: z.string().max(200) }) },
+    request: { params: z.object({ token: z.string() }) },
     responses: {
       200: { description: "The list", content: { "application/json": { schema: sharedWishlistViewSchema } } },
       404: {
