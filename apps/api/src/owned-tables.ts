@@ -12,8 +12,10 @@ export function registerOwnedTables(): void {
   registerOwnedTable(schema.media, schema.media.userId);
   // Audience events with a user move too; those with no user (null) stay anonymous.
   registerOwnedTable(schema.events, schema.events.userId);
-  // Wardrobe: generic move for now; the merge functions (same product, same tag name...) come with the migration of
-  // anonymous data (chantier 2a, task 10). Order matters: profiles and tags before the items that point to them.
+  // Wardrobe: generic move for now. The order (profiles and tags before the items that point to them) is a convention
+  // for the merge functions of chantier 2a task 10, not a requirement of the generic move.
+  // Known interim gap until task 10: linking an anonymous account to one that already has the same product (items) or
+  // the same tag name (tags) may hit a unique violation.
   registerOwnedTable(schema.profiles, schema.profiles.userId);
   registerOwnedTable(schema.tags, schema.tags.userId);
   registerOwnedTable(schema.items, schema.items.userId);

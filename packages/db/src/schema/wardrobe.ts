@@ -14,6 +14,7 @@ import {
 } from "@closyria/shared";
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   check,
   index,
@@ -36,9 +37,9 @@ const owner = () =>
   text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" });
-const lengthBetween = (column: Parameters<typeof sql>[1], max: number) =>
+const lengthBetween = (column: AnyPgColumn, max: number) =>
   sql`char_length(${column}) BETWEEN 1 AND ${sql.raw(String(max))}`;
-const atMost = (column: Parameters<typeof sql>[1], max: number) =>
+const atMost = (column: AnyPgColumn, max: number) =>
   sql`${column} IS NULL OR char_length(${column}) <= ${sql.raw(String(max))}`;
 
 /** A person she keeps items for ("Moi", a child...). Owned by the user. */
@@ -91,8 +92,8 @@ export const items = pgTable(
     brandOverride: text("brand_override"),
     categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
     colorId: uuid("color_id").references(() => colors.id, { onDelete: "set null" }),
-    /** Null = the shop's first photo. No FK: the cover is checked against the item's photos by the API. */
-    coverMediaId: uuid("cover_media_id"),
+    /** Null = the shop's first photo. The API checks the cover is one of the item's photos. */
+    coverMediaId: uuid("cover_media_id").references(() => media.id, { onDelete: "set null" }),
     /** Trash: set when deleted, purged after 30 days. */
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: createdAt(),

@@ -1,5 +1,5 @@
 {
-  "id": "cc52b096-6f92-415b-87b3-38735756a1bb",
+  "id": "4cf8636e-211f-430c-93d3-9d78688ab2ed",
   "prevId": "44b87d44-9dd2-482e-aee2-d2cbc2869a41",
   "version": "7",
   "dialect": "postgresql",
@@ -2944,6 +2944,19 @@
           "tableTo": "colors",
           "columnsFrom": [
             "color_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "items_cover_media_id_media_id_fk": {
+          "name": "items_cover_media_id_media_id_fk",
+          "tableFrom": "items",
+          "tableTo": "media",
+          "columnsFrom": [
+            "cover_media_id"
           ],
           "columnsTo": [
             "id"
