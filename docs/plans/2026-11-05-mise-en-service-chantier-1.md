@@ -10,42 +10,42 @@
 - [ ] `pnpm format`, `pnpm lint`, `pnpm typecheck`, `pnpm test` au vert ; CI GitHub au vert sur la branche
 - [ ] Les cinq variables `S3_*` sont dans `/etc/closyria/dev.env` et `/etc/closyria/prod.env` (le worker lit le même
       fichier que l'API ; toutes ensemble, sinon refus de démarrer)
-- [ ] `/etc/resolv.conf` pointe toujours vers `127.0.0.53` (`grep nameserver /etc/resolv.conf`) : c'est la seule
+- [x] `/etc/resolv.conf` pointe toujours vers `127.0.0.53` (`grep nameserver /etc/resolv.conf`) : c'est la seule
       adresse locale autorisée par la barrière ; sinon le worker ne résout plus aucun nom
-- [ ] Artefact construit depuis une copie à jour : `deploy/build.sh origin/<branche>` → noter l'identifiant ; `sharp`
+- [x] Artefact construit depuis une copie à jour : `deploy/build.sh origin/<branche>` → noter l'identifiant ; `sharp`
       est bien dans l'artefact du worker (le script le vérifie)
 - [ ] Prod seulement : sauvegarde de la base (`pg_dump`) juste avant
 
 ## Dev
 
-1. [ ] Copier les unités et recharger systemd :
+1. [x] Copier les unités et recharger systemd :
    ```bash
    sudo cp deploy/systemd/closyria-dev-worker.service /etc/systemd/system/
    sudo systemctl daemon-reload
    ```
-2. [ ] Déployer : `sudo closyria-deploy dev <id>` (migrations 0007 à 0010 appliquées avant le redémarrage ; au
+2. [x] Déployer : `sudo closyria-deploy dev <id>` (migrations 0007 à 0010 appliquées avant le redémarrage ; au
    démarrage, le worker crée les 18 boutiques de départ). Le contrôle de santé du déploiement ne couvre que l'API et
    le web, **pas le worker** : un échec du worker n'entraîne aucun retour automatique (voir l'étape suivante)
-   - [ ] `systemctl is-active closyria-dev-worker` affiche `active`
-   - [ ] `sudo journalctl -u closyria-dev-worker -n 50 --no-pager | grep 'started'` montre la ligne de démarrage,
+   - [x] `systemctl is-active closyria-dev-worker` affiche `active`
+   - [x] `sudo journalctl -u closyria-dev-worker -n 50 --no-pager | grep 'started'` montre la ligne de démarrage,
      de la forme `worker <version> (dev) started`
    - Un worker qui redémarre en boucle (échec de l'amorçage des boutiques, variables `S3_*`, DNS derrière la
      barrière) doit mener à `sudo closyria-deploy dev rollback`, à lancer à la main.
-3. [ ] Lire la barrière dans le journal du worker dev :
+3. [x] Lire la barrière dans le journal du worker dev :
    ```bash
    sudo journalctl -u closyria-dev-worker -n 50 --no-pager | grep 'network barrier'
    ```
    Attendu : `network barrier: active (ETIMEDOUT)`. Si `network barrier: ABSENT (…)` : l'unité n'a pas été recopiée ou
    `daemon-reload` a été oublié ; ne pas passer à la suite.
-4. [ ] Journal sans erreur ni avertissement inattendu : `sudo journalctl -u 'closyria-dev-*' -p warning -n 50`.
+4. [x] Journal sans erreur ni avertissement inattendu : `sudo journalctl -u 'closyria-dev-*' -p warning -n 50`.
    Puis, à part (Node écrit ses avertissements au niveau « info », que `-p warning` masque) :
    `sudo journalctl -u closyria-dev-worker --no-pager | grep 'seed:'` doit être vide. Sinon,
    `seed: domain … is already attached to another shop (starting shop …)` signale un domaine de départ déjà
    rattaché à une boutique créée avant. Action : dans l'admin, fusionner la boutique en attente dans la boutique
    de départ.
-5. [ ] Sur https://dev.closyria.com, coller un lien d'article d'une des boutiques de départ : la fiche se remplit
+5. [x] Sur https://dev.closyria.com, coller un lien d'article d'une des boutiques de départ : la fiche se remplit
    (nom, prix, photos)
-6. [ ] Admin (connexion par passkey) : la santé des boutiques est visible
+6. [x] Admin (connexion par passkey) : la santé des boutiques est visible
 7. [ ] Le lendemain : la surveillance de 04:00 UTC est passée pour les 8 boutiques publiées (dernière surveillance
    à jour dans l'admin, pas de boutique « en panne »)
 
