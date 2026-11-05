@@ -34,6 +34,7 @@ export const ITEMS_PAGE_SIZE = 48;
 export const MAX_PROFILE_NAME = 40;
 export const MAX_WISHLIST_NAME = 80;
 export const MAX_TAG_NAME = 40;
+export const MAX_TAGS_PER_ACCOUNT = 200;
 export const MAX_SIZE_LABEL = 40;
 export const MAX_SIZE_NOTE = 200;
 export const MAX_NOTES = 2000;
@@ -320,6 +321,7 @@ export const wardrobeErrorCodes = [
   "item_deleted",
   "item_not_deleted",
   "tag_exists",
+  "tag_limit",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];

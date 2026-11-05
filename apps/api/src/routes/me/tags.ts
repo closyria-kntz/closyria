@@ -1,5 +1,6 @@
-import { and, asc, eq, schema } from "@closyria/db";
+import { and, asc, count, eq, schema, sql } from "@closyria/db";
 import {
+  MAX_TAGS_PER_ACCOUNT,
   type ProfileColor,
   type TagView,
   tagInputSchema,
@@ -17,6 +18,7 @@ import type { WardrobeDeps } from "../../wardrobe/deps";
 const invalidRequest = { error: "invalid_request" } as const;
 const notFound = { error: "not_found" } as const;
 const tagExists = { error: "tag_exists" } as const;
+const tagLimit = { error: "tag_limit" } as const;
 const errorContent = (description: string) => ({
   description,
   content: { "application/json": { schema: wardrobeErrorSchema } },
@@ -48,11 +50,12 @@ const createTagRoute = defineAccess(
     method: "post",
     path: "/me/tags",
     summary: "Create a tag",
+    description: "At most 200 tags per account.",
     request: body(tagInputSchema),
     responses: {
       201: json("Created", tagViewSchema),
       400: errorContent("Invalid body (invalid_request)"),
-      409: existsContent,
+      409: errorContent("Name taken, case ignored (tag_exists), or already 200 tags (tag_limit)"),
     },
   }),
   "user",
@@ -135,15 +138,25 @@ export function tagsRoutes(deps: WardrobeDeps) {
       return c.json({ tags: rows.map(toTagView) }, 200);
     })
     .openapi(createTagRoute, async (c) => {
+      const userId = userIdOf(c);
       const input = c.req.valid("json");
       const created = await unlessNameTaken(() =>
-        db
-          .insert(schema.tags)
-          .values({ userId: userIdOf(c), name: input.name, color: input.color ?? null })
-          .returning(),
+        db.transaction(async (tx) => {
+          // Count and insert under a per-user lock: two creations at once cannot both pass the cap.
+          await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`tags:${userId}`}, 0))`);
+          const [held] = await tx.select({ n: count() }).from(schema.tags).where(eq(schema.tags.userId, userId));
+          if ((held?.n ?? 0) >= MAX_TAGS_PER_ACCOUNT) return "limit" as const;
+          const [tag] = await tx
+            .insert(schema.tags)
+            .values({ userId, name: input.name, color: input.color ?? null })
+            .returning();
+          if (!tag) throw new Error("tag not inserted");
+          return tag;
+        }),
       );
-      const tag = created?.[0];
-      return tag ? c.json(toTagView(tag), 201) : c.json(tagExists, 409);
+      if (created === null) return c.json(tagExists, 409);
+      if (created === "limit") return c.json(tagLimit, 409);
+      return c.json(toTagView(created), 201);
     })
     .openapi(patchTagRoute, async (c) => {
       const userId = userIdOf(c);

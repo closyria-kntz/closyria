@@ -70,6 +70,25 @@ describe("/api/me/tags", () => {
     await create(other.cookie, { name: "Vinted" });
   });
 
+  it("caps her tags at 200: the 201st answers 409 tag_limit, even when two are created at once", async () => {
+    const { cookie, userId } = await t.signIn();
+    await t.db.insert(schema.tags).values(Array.from({ length: 199 }, (_, i) => ({ userId, name: `Tag ${i}` })));
+    const [a, b] = await Promise.all([
+      call("POST", "/api/me/tags", cookie, { name: "Dernière A" }),
+      call("POST", "/api/me/tags", cookie, { name: "Dernière B" }),
+    ]);
+    expect([a?.status, b?.status].toSorted()).toEqual([201, 409]);
+    const refused = a?.status === 409 ? a : b;
+    expect(await refused?.json()).toEqual({ error: "tag_limit" });
+    const over = await call("POST", "/api/me/tags", cookie, { name: "Encore" });
+    expect(over.status).toBe(409);
+    expect(await over.json()).toEqual({ error: "tag_limit" });
+    expect(await t.db.select().from(schema.tags).where(eq(schema.tags.userId, userId))).toHaveLength(200);
+    // Another account is not concerned.
+    const other = await t.signIn();
+    expect((await call("POST", "/api/me/tags", other.cookie, { name: "Encore" })).status).toBe(201);
+  });
+
   it("refuses an invalid name with 400", async () => {
     const { cookie } = await t.signIn();
     for (const name of ["", "   ", "x".repeat(41)]) {

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { asc, eq, inArray, schema } from "@closyria/db";
+import { and, asc, eq, inArray, schema } from "@closyria/db";
 import type { ItemBulk, ItemView, MutationResult, UndoPayload } from "@closyria/shared";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { BASE_URL, createCatalogHarness } from "../../catalog/test-app";
@@ -124,6 +124,13 @@ describe("POST /api/me/items/bulk — move and undo", () => {
         { op: "move", profileId: lea.id, ids: expect.any(Array) },
       ]),
     );
+
+    const moves = await t.db
+      .select()
+      .from(schema.events)
+      .where(and(eq(schema.events.userId, userId), eq(schema.events.name, "item_moved")));
+    expect(moves).toHaveLength(190);
+    expect(new Set(moves.map((e) => e.occurredAt.toISOString())).size).toBe(1);
 
     const undone = await undo(cookie, payload ?? null);
     expect(undone.undo).toBeNull();
@@ -375,6 +382,19 @@ describe("POST /api/me/items/bulk — stage and fields", () => {
     expect(events.every((e) => e.stage === "for_sale" && e.amountCents === 2000 && e.at.toISOString() === AT)).toBe(
       true,
     );
+    // One audience row per item changed (stats count rows), written in a single insert.
+    const audience = await t.db
+      .select()
+      .from(schema.events)
+      .where(and(eq(schema.events.userId, userId), eq(schema.events.name, "item_stage_changed")));
+    expect(audience.map((e) => e.props).toSorted((x, y) => JSON.stringify(x).localeCompare(JSON.stringify(y)))).toEqual(
+      [
+        { from: "owned", to: "for_sale" },
+        { from: "owned", to: "for_sale" },
+        { from: "spotted", to: "for_sale" },
+      ],
+    );
+    expect(new Set(audience.map((e) => e.occurredAt.toISOString())).size).toBe(1);
     const ops = result.undo?.ops ?? [];
     expect(ops).toEqual(
       expect.arrayContaining([

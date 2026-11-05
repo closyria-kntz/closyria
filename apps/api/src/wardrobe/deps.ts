@@ -1,4 +1,4 @@
-import { type Database, trackServer } from "@closyria/db";
+import { type Database, type TrackedEvent, trackServer } from "@closyria/db";
 import type { EventName } from "@closyria/shared";
 import { MAX_ITEMS_CREATED_PER_HOUR } from "@closyria/shared";
 
@@ -28,5 +28,24 @@ export async function trackItemEvent(
     await trackServer(db, { name, path: "/api/me/items", userId, props });
   } catch (error) {
     console.error("audience event not recorded:", error);
+  }
+}
+
+/**
+ * Audience events of a batch: one row per item changed (the stats count rows), written in a single INSERT. A failure
+ * is logged, never fails the action that already happened.
+ */
+export async function trackItemEvents(
+  db: Database,
+  userId: string,
+  events: { name: Extract<EventName, "item_stage_changed" | "item_moved">; props: Record<string, string> }[],
+  occurredAt: Date,
+): Promise<void> {
+  if (events.length === 0) return;
+  const rows: TrackedEvent[] = events.map((e) => ({ ...e, path: "/api/me/items", userId, occurredAt }));
+  try {
+    await trackServer(db, rows);
+  } catch (error) {
+    console.error("audience events not recorded:", error);
   }
 }

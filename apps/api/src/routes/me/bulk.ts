@@ -3,7 +3,7 @@ import { createRoute, OpenAPIHono, type z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { type AccessEnv, defineAccess } from "../../access";
 import { type BulkOutcome, runBulk, runUndo } from "../../wardrobe/bulk";
-import { trackItemEvent, type WardrobeDeps } from "../../wardrobe/deps";
+import { trackItemEvents, type WardrobeDeps } from "../../wardrobe/deps";
 
 const invalidRequest = { error: "invalid_request" } as const;
 const errorContent = (description: string) => ({
@@ -87,13 +87,22 @@ export function bulkRoutes(deps: WardrobeDeps) {
   return app
     .openapi(bulkRoute, async (c) => {
       const userId = userIdOf(c);
-      const outcome = await runBulk(db, userId, c.req.valid("json"), now());
+      const at = now();
+      const outcome = await runBulk(db, userId, c.req.valid("json"), at);
       if (!("error" in outcome)) {
-        // Audience events (spec §6), one per item as on the single-item routes.
-        for (const change of outcome.trace.stageChanges) {
-          await trackItemEvent(db, userId, "item_stage_changed", { from: change.from, to: change.to });
-        }
-        for (let i = 0; i < outcome.trace.moves; i++) await trackItemEvent(db, userId, "item_moved", {});
+        // Audience events (spec §6): one row per item, as on the single-item routes, in one insert.
+        await trackItemEvents(
+          db,
+          userId,
+          [
+            ...outcome.trace.stageChanges.map((change) => ({
+              name: "item_stage_changed" as const,
+              props: { from: change.from, to: change.to },
+            })),
+            ...Array.from({ length: outcome.trace.moves }, () => ({ name: "item_moved" as const, props: {} })),
+          ],
+          at,
+        );
       }
       return respond(c, outcome);
     })
