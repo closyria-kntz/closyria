@@ -1,7 +1,17 @@
 import { z } from "zod";
 
 /** Closed list of audience events, completed by each chantier. */
-export const eventNames = ["page_view", "signup_started", "signup_completed"] as const;
+export const eventNames = [
+  "page_view",
+  "signup_started",
+  "signup_completed",
+  "item_saved",
+  "item_stage_changed",
+  "item_moved",
+  "wishlist_shared",
+  "account_prompt_shown",
+  "account_created_from_prompt",
+] as const;
 export type EventName = (typeof eventNames)[number];
 
 export const deviceFamilies = ["mobile", "desktop", "tablet"] as const;

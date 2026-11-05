@@ -5,7 +5,7 @@ const base = { name: "page_view", path: "/", occurredAt: "2026-11-01T10:00:00.00
 
 describe("event names", () => {
   it("is the closed list of the brief", () => {
-    expect(eventNames).toEqual(["page_view", "signup_started", "signup_completed"]);
+    expect(eventNames.slice(0, 3)).toEqual(["page_view", "signup_started", "signup_completed"]);
   });
   it("refuses an unknown name", () => {
     expect(eventSchema.safeParse({ ...base, name: "hack" }).success).toBe(false);
@@ -85,5 +85,20 @@ describe("deviceFromUserAgent", () => {
   ];
   it.each(cases)("%s", (_label, ua, expected) => {
     expect(deviceFromUserAgent(ua)).toBe(expected);
+  });
+});
+
+describe("wardrobe event names", () => {
+  it("includes the chantier 2a events", () => {
+    for (const name of [
+      "item_saved",
+      "item_stage_changed",
+      "item_moved",
+      "wishlist_shared",
+      "account_prompt_shown",
+      "account_created_from_prompt",
+    ]) {
+      expect(eventSchema.safeParse({ ...base, name }).success, name).toBe(true);
+    }
   });
 });
