@@ -272,6 +272,13 @@ describe("decoding and machine prices", () => {
   it.each(["-5,00", "€-5,00", "€-5", "\u22125"])("parsePriceCents %s is null", (v) => {
     expect(parsePriceCents(v)).toBeNull();
   });
+  it.each(["1 000 - 2 000", "12 à 29.99"])("machine price %s is not glued into one number", (v) => {
+    const a = ld({ "@type": "Product", name: "n", offers: { price: v } });
+    const expected = parsePriceCents(v);
+    expect(a.ok ? a.product.priceCents : null).toBe(expected);
+    expect(expected).not.toBe(1000200000);
+    expect(expected).not.toBe(122999);
+  });
   it("keeps real < and > in text, strips only tag-like markup", () => {
     const a = ld({
       "@type": "Product",

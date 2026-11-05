@@ -88,7 +88,7 @@ export function parsePriceCents(value: string | number): number | null {
 export function parseMachinePriceCents(value: string | number): number | null {
   if (typeof value === "number") return parsePriceCents(value);
   if (NEGATIVE.test(value)) return null;
-  const plain = value.replace(/[^\d.,]/g, "");
-  if (/^\d+(\.\d+)?$/.test(plain)) return Math.round(Number(plain) * 100);
+  const single = value.match(/^\s*[^\d\s\-\u2212]*\s*(\d+(?:\.\d+)?)\s*[^\d\s]*\s*$/);
+  if (single?.[1]) return Math.round(Number(single[1]) * 100);
   return parsePriceCents(value);
 }
