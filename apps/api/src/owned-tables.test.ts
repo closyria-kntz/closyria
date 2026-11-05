@@ -44,7 +44,16 @@ afterAll(async () => {
 describe("owned tables of the API process", () => {
   it("registers every table holding user data, each with a cascading foreign key to user(id)", async () => {
     const tables = listOwnedColumns().map((o) => o.table);
-    expect(tables.sort()).toEqual(["events", "media", "usage_counters", "user_plans"]);
+    expect(tables.sort()).toEqual([
+      "events",
+      "items",
+      "media",
+      "profiles",
+      "tags",
+      "usage_counters",
+      "user_plans",
+      "wishlists",
+    ]);
     expect(await findOwnedColumnsWithoutCascade(api.db)).toEqual([]);
   });
 

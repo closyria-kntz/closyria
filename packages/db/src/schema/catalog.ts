@@ -14,7 +14,7 @@ import {
   seasonSchema,
   shopStatusSchema,
 } from "@closyria/shared";
-import { type SQL, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   boolean,
@@ -29,14 +29,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
+import { oneOf } from "./helpers";
 import { categories, colors, materials, patterns } from "./reference";
-
-/** `column IN ('a', 'b')` built from a closed value set shared with the API, so the lists never drift. */
-const oneOf = (column: AnyPgColumn, values: readonly string[]): SQL =>
-  sql`${column} IN (${sql.join(
-    values.map((v) => sql.raw(`'${v}'`)),
-    sql.raw(", "),
-  )})`;
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).defaultNow().notNull();
