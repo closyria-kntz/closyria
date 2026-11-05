@@ -84,16 +84,28 @@ describe("startFakeShop", () => {
 
   it("clears pending delays on close", async () => {
     const shop = await startFakeShop({ "/slow": { body: "x", delayMs: 5000 } });
-    const clear = vi.spyOn(globalThis, "clearTimeout");
-    const controller = new AbortController();
-    const pending = fetch(`${shop.origin}/slow`, { signal: controller.signal }).catch(() => null);
-    await new Promise((r) => setTimeout(r, 100));
-    controller.abort();
-    await pending;
-    const start = Date.now();
-    await shop.close();
-    expect(Date.now() - start).toBeLessThan(1000);
-    expect(clear).toHaveBeenCalled();
-    clear.mockRestore();
+    const created: unknown[] = [];
+    const realSetTimeout = globalThis.setTimeout;
+    const setSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation(((...args: Parameters<typeof setTimeout>) => {
+      const handle = realSetTimeout(...args);
+      if (args[1] === 5000) created.push(handle);
+      return handle;
+    }) as typeof setTimeout);
+    const clearSpy = vi.spyOn(globalThis, "clearTimeout");
+    try {
+      const controller = new AbortController();
+      const pending = fetch(`${shop.origin}/slow`, { signal: controller.signal }).catch(() => null);
+      await new Promise((r) => realSetTimeout(r, 100));
+      controller.abort();
+      await pending;
+      expect(created).toHaveLength(1);
+      const start = Date.now();
+      await shop.close();
+      expect(Date.now() - start).toBeLessThan(1000);
+      expect(clearSpy.mock.calls.map(([handle]) => handle)).toContain(created[0]);
+    } finally {
+      setSpy.mockRestore();
+      clearSpy.mockRestore();
+    }
   });
 });
