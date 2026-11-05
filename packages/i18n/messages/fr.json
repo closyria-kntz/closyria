@@ -7,6 +7,30 @@
     "title": "Closyria",
     "tagline": "Ton dressing en ligne arrive bientôt."
   },
+  "Shell": {
+    "brand": "Closyria",
+    "skipToContent": "Aller au contenu",
+    "nav": {
+      "desktop": "Menu principal",
+      "tabs": "Onglets",
+      "wishes": "Envies",
+      "ordered": "Commandé",
+      "wardrobe": "Dressing",
+      "forSale": "À vendre",
+      "lists": "Listes",
+      "settings": "Réglages",
+      "more": "Plus",
+      "moreMenu": "Autres pages"
+    },
+    "profile": {
+      "label": "Profil",
+      "me": "Moi"
+    },
+    "add": {
+      "open": "+ Ajouter",
+      "close": "Fermer"
+    }
+  },
   "Auth": {
     "email": {
       "subject": "Ton code de connexion Closyria",

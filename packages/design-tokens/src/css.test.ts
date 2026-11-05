@@ -143,3 +143,26 @@ describe("Équilibré themes", () => {
     });
   });
 });
+
+describe("adaptive layout tokens", () => {
+  const base = defaultSemanticTokens;
+
+  it("lets the content grow up to 90rem, with a 70ch reading measure and 44px touch targets", () => {
+    expect(base["container-app"]).toBe("90rem");
+    expect(base["container-measure"]).toBe("70ch");
+    expect(base["spacing-touch-target"]).toBe("44px");
+  });
+
+  it("grows the text with the screen between the phone and the large breakpoint", () => {
+    for (const key of ["text-body", "text-lead", "text-title", "text-display"] as const) {
+      expect(base[key]).toMatch(/^clamp\(/);
+    }
+    expect(base["text-sm"]).not.toMatch(/clamp/);
+  });
+
+  it("emits them in the generated stylesheet", () => {
+    const css = renderTokensCss();
+    expect(css).toContain("--container-app: 90rem;");
+    expect(css).toContain("--text-display: clamp(");
+  });
+});

@@ -6,6 +6,8 @@ import {
   type ManualEntry,
   type ProductView,
   productViewSchema,
+  type SummaryView,
+  summaryViewSchema,
 } from "@closyria/shared";
 
 /** Browser calls to the API (same origin, under /api); every answer is validated with the shared schemas. */
@@ -88,4 +90,16 @@ export async function saveManual(
     // Falls through to the generic error.
   }
   return { ok: false, error: "failed" };
+}
+
+/** The app shell's summary (profiles, item count). Null without a session or on any unexpected answer. */
+export async function fetchSummary(deps: ClientDeps = defaultDeps, signal?: AbortSignal): Promise<SummaryView | null> {
+  try {
+    const response = await deps.fetch("/api/me/summary", { cache: "no-store", signal: signal ?? null });
+    if (!response.ok) return null;
+    const parsed = summaryViewSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }

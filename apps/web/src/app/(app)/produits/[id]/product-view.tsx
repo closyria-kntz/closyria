@@ -19,6 +19,9 @@ const FAILURE_KEYS = {
   robots_disallowed: "robots_disallowed",
 } as const;
 
+/** One column on a phone and in portrait; photos left, details right from 48rem in landscape and on desktop. */
+const TWO_COLUMNS = "grid grid-cols-1 md:landscape:grid-cols-2 md:landscape:gap-space-6 lg:grid-cols-2 lg:gap-space-6";
+
 const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
 
 function Skeleton({ className }: { className: string }) {
@@ -116,11 +119,13 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   }
   if (!product) {
     return (
-      <div role="status" aria-busy="true" className="flex flex-col gap-space-4">
+      <div role="status" aria-busy="true" className={`${TWO_COLUMNS} gap-space-4`}>
         <h1 className="sr-only">{t("busy")}</h1>
-        <Skeleton className="aspect-square w-full" />
-        <Skeleton className="h-space-6 w-3/4" />
-        <Skeleton className="h-space-5 w-1/3" />
+        <Skeleton className="aspect-3/4 w-full" />
+        <div className="flex flex-col gap-space-4">
+          <Skeleton className="h-space-6 w-3/4" />
+          <Skeleton className="h-space-5 w-1/3" />
+        </div>
       </div>
     );
   }
@@ -141,112 +146,121 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   const noPhotoYet = product.images.length === 0 && (capturing || reloadedPending);
 
   return (
-    <article className="flex flex-col gap-space-5" aria-busy={capturing || reloadedPending || undefined}>
-      {product.images.length > 0 ? (
-        <div className="grid grid-cols-2 gap-space-2">
-          {product.images.map((image, index) => (
-            // biome-ignore lint/performance/noImgElement: photos come from our own /api/catalog-images, sized by the API.
-            <img
-              key={image.id}
-              src={image.url}
-              width={image.width}
-              height={image.height}
-              alt={product.name ?? ""}
-              loading={index === 0 ? "eager" : "lazy"}
-              className={`h-auto w-full rounded-card bg-media-backdrop object-cover ${index === 0 ? "col-span-2" : ""}`}
-            />
-          ))}
-        </div>
-      ) : noPhotoYet ? (
-        <Skeleton className="aspect-square w-full" />
-      ) : null}
-
-      <header className="flex flex-col gap-space-2">
-        <p className="text-sm text-ink-muted">
-          {waiting ? <span role="status">{t("product.loading", { shop })}</span> : shop}
-        </p>
-        {hasName && product.brand && <p className="text-sm font-strong uppercase text-ink-muted">{product.brand}</p>}
-        <h1
-          ref={heading}
-          tabIndex={-1}
-          className={waiting ? "sr-only" : "font-display text-title font-strong focus:outline-none"}
-        >
-          {product.name ?? shop}
-        </h1>
-        {waiting && <Skeleton className="h-space-6 w-3/4" />}
-      </header>
-
-      {hasName && product.priceCents !== null && (
-        <p className="flex items-baseline gap-space-3 tabular-nums">
-          <span className="text-lead font-strong">{formatPrice(locale, product.priceCents, currency)}</span>
-          {product.compareAtCents !== null && product.compareAtCents > product.priceCents && (
-            <s className="text-ink-muted">
-              <span className="sr-only">{t("product.comparePrice")} </span>
-              {formatPrice(locale, product.compareAtCents, currency)}
-            </s>
-          )}
-        </p>
-      )}
-      {waiting && <Skeleton className="h-space-5 w-1/3" />}
-
-      {product.sizes.length > 0 && (
-        <section aria-labelledby="sizes-title" className="flex flex-col gap-space-2">
-          <h2 id="sizes-title" className="text-sm font-strong">
-            {t("product.sizes")}
-          </h2>
-          <ul className="flex flex-wrap gap-space-2">
-            {product.sizes.map((size) => (
-              <li
-                key={size.label}
-                className={`rounded-button border border-line px-space-3 py-space-1 text-sm ${size.available ? "bg-surface-raised" : "text-ink-muted line-through"}`}
+    <article className={`${TWO_COLUMNS} gap-space-5`} aria-busy={capturing || reloadedPending || undefined}>
+      <div data-testid="product-gallery" className="lg:sticky lg:top-space-8 lg:self-start">
+        {product.images.length > 0 ? (
+          <div className="grid grid-cols-2 gap-space-2">
+            {product.images.map((image, index) => (
+              // The whole photo in a 3:4 frame on the media backdrop, never cropped (visual direction §6).
+              <div
+                key={image.id}
+                className={`aspect-3/4 overflow-hidden rounded-card bg-media-backdrop ${index === 0 && product.images.length === 1 ? "col-span-2" : index === 0 ? "col-span-2 md:landscape:col-span-1 lg:col-span-1" : ""}`}
               >
-                {size.label}
-                {!size.available && <span className="sr-only"> ({t("product.unavailable")})</span>}
-              </li>
+                {/* biome-ignore lint/performance/noImgElement: photos come from our own /api/catalog-images, sized by the API. */}
+                <img
+                  src={image.url}
+                  width={image.width}
+                  height={image.height}
+                  alt={product.name ?? ""}
+                  loading={index === 0 ? "eager" : "lazy"}
+                  className="size-full object-contain"
+                />
+              </div>
             ))}
-          </ul>
-        </section>
-      )}
-      {waiting && <Skeleton className="h-space-6 w-1/2" />}
+          </div>
+        ) : noPhotoYet ? (
+          <Skeleton className="aspect-3/4 w-full" />
+        ) : null}
+      </div>
 
-      {!hasName && (failed || manualShop) && (
-        <p role="status" className="text-ink-muted">
-          {manualShop ? t("product.manualShop", { shop }) : t(`product.failure.${failureKey}`)}
-        </p>
-      )}
-      {!hasName && slow && (capturing || reloadedPending) && (
-        <p role="status" className="text-ink-muted">
-          {t("product.slow")}
-        </p>
-      )}
-      {showForm && (
-        <ManualForm
-          productId={product.id}
-          canonicalUrl={product.canonicalUrl}
-          onSaved={(saved) => {
-            setProduct(saved);
-            setLoad("ready");
-            setFocusHeading(true);
-          }}
-        />
-      )}
-
-      <footer className="flex flex-col items-start gap-space-3">
-        {isHttpUrl(product.canonicalUrl) && (
-          <a href={product.canonicalUrl} target="_blank" rel="noopener noreferrer" className={primaryButtonClass}>
-            {t("product.viewAt", { shop })}
-          </a>
-        )}
-        {product.lastCapturedAt && (
+      <div data-testid="product-info" className="flex flex-col gap-space-5">
+        <header className="flex flex-col gap-space-2">
           <p className="text-sm text-ink-muted">
-            <time dateTime={product.lastCapturedAt}>
-              {t("product.updatedAt", {
-                date: format.dateTime(new Date(product.lastCapturedAt), { dateStyle: "long" }),
-              })}
-            </time>
+            {waiting ? <span role="status">{t("product.loading", { shop })}</span> : shop}
+          </p>
+          {hasName && product.brand && <p className="text-sm font-strong uppercase text-ink-muted">{product.brand}</p>}
+          <h1
+            ref={heading}
+            tabIndex={-1}
+            className={waiting ? "sr-only" : "font-display text-title font-strong focus:outline-none"}
+          >
+            {product.name ?? shop}
+          </h1>
+          {waiting && <Skeleton className="h-space-6 w-3/4" />}
+        </header>
+
+        {hasName && product.priceCents !== null && (
+          <p className="flex items-baseline gap-space-3 tabular-nums">
+            <span className="text-lead font-strong">{formatPrice(locale, product.priceCents, currency)}</span>
+            {product.compareAtCents !== null && product.compareAtCents > product.priceCents && (
+              <s className="text-ink-muted">
+                <span className="sr-only">{t("product.comparePrice")} </span>
+                {formatPrice(locale, product.compareAtCents, currency)}
+              </s>
+            )}
           </p>
         )}
-      </footer>
+        {waiting && <Skeleton className="h-space-5 w-1/3" />}
+
+        {product.sizes.length > 0 && (
+          <section aria-labelledby="sizes-title" className="flex flex-col gap-space-2">
+            <h2 id="sizes-title" className="text-sm font-strong">
+              {t("product.sizes")}
+            </h2>
+            <ul className="flex flex-wrap gap-space-2">
+              {product.sizes.map((size) => (
+                <li
+                  key={size.label}
+                  className={`rounded-button border border-line px-space-3 py-space-1 text-sm ${size.available ? "bg-surface-raised" : "text-ink-muted line-through"}`}
+                >
+                  {size.label}
+                  {!size.available && <span className="sr-only"> ({t("product.unavailable")})</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {waiting && <Skeleton className="h-space-6 w-1/2" />}
+
+        {!hasName && (failed || manualShop) && (
+          <p role="status" className="text-ink-muted">
+            {manualShop ? t("product.manualShop", { shop }) : t(`product.failure.${failureKey}`)}
+          </p>
+        )}
+        {!hasName && slow && (capturing || reloadedPending) && (
+          <p role="status" className="text-ink-muted">
+            {t("product.slow")}
+          </p>
+        )}
+        {showForm && (
+          <ManualForm
+            productId={product.id}
+            canonicalUrl={product.canonicalUrl}
+            onSaved={(saved) => {
+              setProduct(saved);
+              setLoad("ready");
+              setFocusHeading(true);
+            }}
+          />
+        )}
+
+        <footer className="flex flex-col items-start gap-space-3">
+          {isHttpUrl(product.canonicalUrl) && (
+            <a href={product.canonicalUrl} target="_blank" rel="noopener noreferrer" className={primaryButtonClass}>
+              {t("product.viewAt", { shop })}
+            </a>
+          )}
+          {product.lastCapturedAt && (
+            <p className="text-sm text-ink-muted">
+              <time dateTime={product.lastCapturedAt}>
+                {t("product.updatedAt", {
+                  date: format.dateTime(new Date(product.lastCapturedAt), { dateStyle: "long" }),
+                })}
+              </time>
+            </p>
+          )}
+        </footer>
+      </div>
     </article>
   );
 }

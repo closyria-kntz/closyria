@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { primitives as p } from "./primitives";
 
-const { palette, space, radius, font, fontSize, fontWeight, duration, easing, shadow, breakpoint, container } = p;
+const { palette, space, radius, font, fontSize, fontWeight, duration, easing, shadow, breakpoint, container, size } = p;
 
 /**
  * Layer 2 (semantic) and layer 3 (component) tokens. Keys are the CSS variable names without `--`;
@@ -54,7 +54,7 @@ export const defaultSemanticTokens = {
   "font-body": font.body,
   "font-display": font.display,
   "text-sm": fontSize.sm,
-  "text-base": fontSize.base,
+  "text-body": fontSize.body,
   "text-lead": fontSize.lead,
   "text-title": fontSize.title,
   "text-display": fontSize.display,
@@ -77,6 +77,10 @@ export const defaultSemanticTokens = {
   "breakpoint-lg": breakpoint.lg,
   "container-narrow": container.narrow,
   "container-wide": container.wide,
+  "container-app": container.app,
+  "container-measure": container.measure,
+  "container-sidebar": container.sidebar,
+  "spacing-touch-target": size.touchTarget,
 } as const;
 
 export type SemanticTokenKey = keyof typeof defaultSemanticTokens;

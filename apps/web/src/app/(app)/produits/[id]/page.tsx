@@ -19,12 +19,12 @@ export default async function ProductPage({ params, searchParams }: Props) {
   const { capture } = await searchParams;
   const captureId = z.uuid().safeParse(Array.isArray(capture) ? capture[0] : capture);
   return (
-    <main className="mx-auto flex min-h-dvh max-w-narrow flex-col gap-space-5 px-space-5 py-space-6">
+    <div className="flex flex-col gap-space-5">
       <ProductView
         key={viewKey(id, captureId.success ? captureId.data : null)}
         productId={id}
         captureId={captureId.success ? captureId.data : null}
       />
-    </main>
+    </div>
   );
 }
