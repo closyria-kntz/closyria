@@ -146,6 +146,8 @@ export type ItemSort = z.infer<typeof itemSortSchema>;
 export const itemListQuerySchema = z.object({
   stage: itemStageSchema.optional(),
   profile: z.uuid().optional(),
+  /** Her item for one product (the product sheet asks whether she keeps it). */
+  product: z.uuid().optional(),
   favorite: z.stringbool().optional(),
   tag: z.uuid().optional(),
   shop: z.string().min(1).max(100).optional(),

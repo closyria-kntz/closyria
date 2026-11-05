@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPrice, parsePriceCents, parseSizes } from "./price";
+import { formatOptionalPrice, formatPrice, parsePriceCents, parseSizes } from "./price";
 
 describe("parsePriceCents", () => {
   it.each([
@@ -32,5 +32,13 @@ describe("formatPrice", () => {
   it("formats cents as a currency amount in the locale", () => {
     expect(formatPrice("fr", 2999, "EUR").replace(/\s/g, " ")).toBe("29,99 €");
     expect(formatPrice("en", 2999, "EUR")).toBe("€29.99");
+  });
+});
+
+describe("formatOptionalPrice", () => {
+  it("shows the fallback, never NaN, when there is no price", () => {
+    expect(formatOptionalPrice("fr", null, "EUR", "Prix non renseigné")).toBe("Prix non renseigné");
+    expect(formatOptionalPrice("fr", Number.NaN, "EUR", "Prix non renseigné")).toBe("Prix non renseigné");
+    expect(formatOptionalPrice("fr", 2999, "EUR", "x")).toMatch(/^29,99\s€$/);
   });
 });

@@ -228,6 +228,7 @@ export async function listItems(db: Database, userId: string, query: ItemListQue
   ];
   if (query.stage) conditions.push(eq(schema.items.stage, query.stage));
   if (query.profile) conditions.push(eq(schema.items.profileId, query.profile));
+  if (query.product) conditions.push(eq(schema.items.productId, query.product));
   if (query.favorite !== undefined) conditions.push(eq(schema.items.favorite, query.favorite));
   if (query.tag) {
     conditions.push(

@@ -619,6 +619,8 @@ describe("GET /api/me/items", () => {
       );
     expect(await ids("stage=ordered")).toEqual([dear.item.id]);
     expect(await ids(`profile=${lea.id}`)).toEqual([dear.item.id]);
+    expect(await ids(`product=${dear.item.product.id}`)).toEqual([dear.item.id]);
+    expect(await ids(`product=${UNKNOWN_ID}`)).toEqual([]);
     expect(await ids("favorite=true&sort=price_asc")).toEqual([cheap.item.id, noPriceId]);
     expect(await ids("sort=price_asc")).toEqual([cheap.item.id, dear.item.id, noPriceId]);
     expect(await ids("sort=price_desc")).toEqual([dear.item.id, cheap.item.id, noPriceId]);

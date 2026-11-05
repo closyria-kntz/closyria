@@ -11,6 +11,7 @@ import { type AppNavItem, desktopNav, isCurrent, moreNav, phoneTabs, tabletTabs 
 import { CaptureForm } from "./capture-form";
 import { ProfileSwitcher } from "./profile-switcher";
 import { buttonClass, focusRing } from "./ui";
+import { UndoToast } from "./undo-toast";
 
 const linkBase = `flex min-h-touch-target items-center justify-center rounded-button px-space-3 text-sm hover:bg-surface-strong aria-[current=page]:bg-surface-strong aria-[current=page]:font-strong aria-[current=page]:text-accent ${focusRing}`;
 
@@ -220,7 +221,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main
             id="app-content"
             tabIndex={-1}
-            className={`flex-1 px-space-4 pt-space-5 focus:outline-none md:px-space-5 md:pb-space-6 lg:px-space-6 ${moreOpen ? "tabbar-clearance-open" : "tabbar-clearance"}`}
+            className={`flex-1 px-space-4 pt-space-5 focus:outline-none md:px-space-5 lg:px-space-6 ${moreOpen ? "tabbar-clearance-open" : "tabbar-clearance"}`}
           >
             <div className="mx-auto w-full max-w-app">{children}</div>
           </main>
@@ -229,6 +230,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Suspense>
         <BottomTabs open={moreOpen} setOpen={setMoreOpen} />
       </Suspense>
+      <UndoToast />
     </ProfilesContext.Provider>
   );
 }

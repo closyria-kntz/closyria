@@ -1,13 +1,18 @@
 "use client";
 
-import type { CaptureView, ProductView as Product } from "@closyria/shared";
+import type { CaptureView, ItemView, ProductView as Product } from "@closyria/shared";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { buttonClass, primaryButtonClass } from "@/components/ui";
 import { pollCapture, pollUntil } from "@/lib/capture-poll";
 import { fetchCaptureView, fetchProduct } from "@/lib/catalog-client";
-import { formatPrice } from "@/lib/price";
+import { formatOptionalPrice, formatPrice } from "@/lib/price";
+import { useCurrentProfile, useProfiles } from "@/lib/profile-context";
+import { fetchItemForProduct } from "@/lib/wardrobe-client";
+import { ItemPanel } from "./item-panel";
+import { KeepActions } from "./keep-actions";
 import { ManualForm } from "./manual-form";
+import { PhotoManager, PhotoPlaceholder } from "./photo-manager";
 
 type Load = "loading" | "ready" | "not_found" | "error";
 type CaptureState = { status: CaptureView["status"]; errorCode: CaptureView["errorCode"] };
@@ -35,6 +40,7 @@ function Skeleton({ className }: { className: string }) {
  */
 export function ProductView({ productId, captureId }: { productId: string; captureId: string | null }) {
   const t = useTranslations("Capture");
+  const tItem = useTranslations("Item");
   const locale = useLocale();
   const format = useFormatter();
   const [product, setProduct] = useState<Product | null>(null);
@@ -45,6 +51,21 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   const [gaveUp, setGaveUp] = useState(false);
   const [focusHeading, setFocusHeading] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
+  const current = useCurrentProfile();
+  const profiles = useProfiles();
+  const [item, setItem] = useState<ItemView | null>(null);
+
+  /** Her item for this sheet, if she keeps it (a failed read leaves the sheet as if she did not). */
+  const reloadItem = useCallback(async () => {
+    try {
+      setItem(await fetchItemForProduct(productId));
+    } catch {
+      setItem(null);
+    }
+  }, [productId]);
+  useEffect(() => {
+    void reloadItem();
+  }, [reloadItem]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` re-runs the load on « Réessayer ».
   useEffect(() => {
@@ -147,8 +168,10 @@ export function ProductView({ productId, captureId }: { productId: string; captu
 
   return (
     <article className={`${TWO_COLUMNS} gap-space-5`} aria-busy={capturing || reloadedPending || undefined}>
-      <div data-testid="product-gallery" className="lg:sticky lg:top-space-8 lg:self-start">
-        {product.images.length > 0 ? (
+      <div data-testid="product-gallery" className={item ? "lg:self-start" : "lg:sticky lg:top-space-8 lg:self-start"}>
+        {item ? (
+          <PhotoManager item={item} onChange={setItem} />
+        ) : product.images.length > 0 ? (
           <div className="grid grid-cols-2 gap-space-2">
             {product.images.map((image, index) => (
               // The whole photo in a 3:4 frame on the media backdrop, never cropped (visual direction §6).
@@ -170,6 +193,8 @@ export function ProductView({ productId, captureId }: { productId: string; captu
           </div>
         ) : noPhotoYet ? (
           <Skeleton className="aspect-3/4 w-full" />
+        ) : !waiting ? (
+          <PhotoPlaceholder label={t("product.noPhoto")} />
         ) : null}
       </div>
 
@@ -189,6 +214,9 @@ export function ProductView({ productId, captureId }: { productId: string; captu
           {waiting && <Skeleton className="h-space-6 w-3/4" />}
         </header>
 
+        {hasName && product.priceCents === null && (
+          <p className="text-ink-muted">{formatOptionalPrice(locale, null, currency, t("product.priceMissing"))}</p>
+        )}
         {hasName && product.priceCents !== null && (
           <p className="flex items-baseline gap-space-3 tabular-nums">
             <span className="text-lead font-strong">{formatPrice(locale, product.priceCents, currency)}</span>
@@ -221,6 +249,18 @@ export function ProductView({ productId, captureId }: { productId: string; captu
           </section>
         )}
         {waiting && <Skeleton className="h-space-6 w-1/2" />}
+
+        {hasName && item && current.id && item.profileId !== current.id && (
+          <p role="status" className="rounded-card border border-line bg-hint px-space-3 py-space-2 text-sm">
+            {tItem("keep.alreadyIn", { name: profiles.find((p) => p.id === item.profileId)?.name ?? "" })}
+          </p>
+        )}
+        {hasName &&
+          (item ? (
+            <ItemPanel item={item} onChange={setItem} onGone={() => setItem(null)} reload={reloadItem} />
+          ) : (
+            <KeepActions product={product} profileId={current.id} onKept={setItem} reload={reloadItem} />
+          ))}
 
         {!hasName && (failed || manualShop) && (
           <p role="status" className="text-ink-muted">

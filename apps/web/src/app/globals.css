@@ -8,6 +8,11 @@
 
 @utility tabbar-clearance {
   padding-bottom: calc(var(--spacing-space-8) + env(safe-area-inset-bottom));
+
+  /* No tab bar from the tablet up: the usual bottom padding. */
+  @variant md {
+    padding-bottom: var(--spacing-space-6);
+  }
 }
 
 /* Same, with the « Plus » panel open above the bar (three links, their gaps and padding). */
@@ -19,6 +24,10 @@
     var(--spacing-space-5) +
     env(safe-area-inset-bottom)
   );
+
+  @variant md {
+    padding-bottom: var(--spacing-space-6);
+  }
 }
 
 body {

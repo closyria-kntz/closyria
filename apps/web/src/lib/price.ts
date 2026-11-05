@@ -22,3 +22,13 @@ export function parseSizes(input: string): string[] {
     .map((label) => label.trim())
     .filter((label) => label !== "");
 }
+
+/** The formatted price, or `fallback` (« Prix non renseigné ») when there is none: never « NaN € ». */
+export function formatOptionalPrice(
+  locale: string,
+  cents: number | null | undefined,
+  currency: string,
+  fallback: string,
+): string {
+  return typeof cents === "number" && Number.isFinite(cents) ? formatPrice(locale, cents, currency) : fallback;
+}
