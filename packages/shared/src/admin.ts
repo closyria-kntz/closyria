@@ -7,9 +7,11 @@ import {
   captureTriggerSchema,
   listingKindSchema,
   platformSchema,
+  productCaptureStatusSchema,
   shopStatusSchema,
 } from "./catalog";
 import { canonicalizeUrl } from "./catalog-url";
+import { audienceSchema, childDetailSchema, classifiedBySchema, seasonSchema } from "./wardrobe";
 
 const count = z.number().int().nonnegative();
 
@@ -83,6 +85,8 @@ export const adminCatalogErrorSchema = z.object({
     "slug_taken",
     "invalid_merge",
     "capture_active",
+    "cycle",
+    "has_children",
   ]),
   /** With `domain_taken` on shop creation: the shop that owns the domain. */
   shopId: z.uuid().optional(),
@@ -196,3 +200,162 @@ export const adminCaptureFailureSchema = z.object({
 });
 export const adminCaptureFailuresSchema = z.object({ failures: z.array(adminCaptureFailureSchema) });
 export const ADMIN_FAILURES_LIMIT = 100;
+
+// ---- Product sheets and reference lists (chantier 2a, admin) ----
+
+/** Number of products per page of `GET /api/admin/products`. */
+export const ADMIN_PRODUCTS_PAGE_SIZE = 50;
+export const adminClassifiedFilterSchema = z.enum(["rule", "admin", "none"]);
+
+export const adminProductsQuerySchema = z.object({
+  q: z.string().trim().min(1).max(200).optional(),
+  shopId: z.uuid().optional(),
+  captureStatus: productCaptureStatusSchema.optional(),
+  classified: adminClassifiedFilterSchema.optional(),
+  cursor: z.string().min(1).max(200).optional(),
+});
+
+const adminProductBase = z.object({
+  id: z.uuid(),
+  shopId: z.uuid(),
+  shopName: z.string(),
+  name: z.string().nullable(),
+  brand: z.string().nullable(),
+  currency: z.string().nullable(),
+  priceCents: z.number().int().nullable(),
+  captureStatus: productCaptureStatusSchema,
+  classifiedBy: classifiedBySchema,
+  categoryId: z.uuid().nullable(),
+  /** Number of active wardrobe items kept from this sheet; never who. */
+  keptBy: count,
+  createdAt: isoDate,
+});
+
+export const adminProductListItemSchema = adminProductBase.extend({ imageUrl: z.string().nullable() });
+export const adminProductListSchema = z.object({
+  products: z.array(adminProductListItemSchema),
+  nextCursor: z.string().nullable(),
+});
+export type AdminProductList = z.infer<typeof adminProductListSchema>;
+
+export const adminProductDetailSchema = adminProductBase.extend({
+  canonicalUrl: z.string(),
+  externalId: z.string().nullable(),
+  description: z.string().nullable(),
+  compareAtCents: z.number().int().nullable(),
+  source: z.string(),
+  gtin: z.string().nullable(),
+  sku: z.string().nullable(),
+  shopData: z.record(z.string(), z.unknown()),
+  audience: audienceSchema.nullable(),
+  childDetail: childDetailSchema.nullable(),
+  colorId: z.uuid().nullable(),
+  materialId: z.uuid().nullable(),
+  patternId: z.uuid().nullable(),
+  season: seasonSchema.nullable(),
+  publishedAt: isoDate.nullable(),
+  lastCapturedAt: isoDate.nullable(),
+  updatedAt: isoDate,
+  images: z.array(z.object({ id: z.uuid(), url: z.string(), width: z.number().int(), height: z.number().int() })),
+  sizes: z.array(z.object({ label: z.string(), available: z.boolean(), priceCents: z.number().int().nullable() })),
+});
+export type AdminProductDetail = z.infer<typeof adminProductDetailSchema>;
+
+/** Fields an admin corrects; any key sets `classified_by` to `admin`. */
+export const adminProductPatchSchema = z
+  .object({
+    name: z.string().trim().min(1).max(300),
+    brand: z.string().trim().min(1).max(120).nullable(),
+    priceCents: z.number().int().min(0).max(100_000_000).nullable(),
+    audience: audienceSchema.nullable(),
+    childDetail: childDetailSchema.nullable(),
+    categoryId: z.uuid().nullable(),
+    colorId: z.uuid().nullable(),
+    materialId: z.uuid().nullable(),
+    patternId: z.uuid().nullable(),
+    season: seasonSchema.nullable(),
+  })
+  .partial()
+  .refine((v) => Object.keys(v).length > 0);
+export type AdminProductPatch = z.infer<typeof adminProductPatchSchema>;
+
+export const adminRecaptureSchema = z.object({ captureId: z.uuid() });
+
+export const referenceKindSchema = z.enum(["categories", "colors", "materials", "patterns"]);
+export type ReferenceKind = z.infer<typeof referenceKindSchema>;
+
+export const MAX_KEYWORDS = 100;
+export const MAX_KEYWORD_LENGTH = 60;
+const keywordsSchema = z
+  .array(z.string().trim().min(1).max(MAX_KEYWORD_LENGTH))
+  .max(MAX_KEYWORDS)
+  .transform((list) => {
+    const seen = new Set<string>();
+    return list.filter((k) => {
+      const key = k.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  });
+const refSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(60)
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+const refName = z.string().trim().min(1).max(80);
+const hexSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
+
+const entryFields = { slug: refSlugSchema, name: refName };
+const createFields = { ...entryFields, keywords: keywordsSchema.default([]) };
+const patchFields = { ...entryFields, keywords: keywordsSchema };
+export const referenceCreateSchemas = {
+  categories: z.object({
+    ...createFields,
+    parentId: z.uuid().nullable().default(null),
+    position: z.number().int().min(0).max(100_000).default(0),
+  }),
+  colors: z.object({ ...createFields, hex: hexSchema }),
+  materials: z.object(createFields),
+  patterns: z.object(createFields),
+} as const;
+export const referencePatchSchemas = {
+  categories: z
+    .object({
+      slug: refSlugSchema,
+      name: refName,
+      keywords: keywordsSchema,
+      parentId: z.uuid().nullable(),
+      position: z.number().int().min(0).max(100_000),
+    })
+    .partial()
+    .refine((v) => Object.keys(v).length > 0),
+  colors: z
+    .object({ ...patchFields, hex: hexSchema })
+    .partial()
+    .refine((v) => Object.keys(v).length > 0),
+  materials: z
+    .object(patchFields)
+    .partial()
+    .refine((v) => Object.keys(v).length > 0),
+  patterns: z
+    .object(patchFields)
+    .partial()
+    .refine((v) => Object.keys(v).length > 0),
+} as const;
+
+export const referenceEntrySchema = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  name: z.string(),
+  keywords: z.array(z.string()),
+  /** Categories only. */
+  parentId: z.uuid().nullable().optional(),
+  position: z.number().int().optional(),
+  /** Colours only. */
+  hex: z.string().optional(),
+});
+export type ReferenceEntry = z.infer<typeof referenceEntrySchema>;
+export const referenceListSchema = z.object({ entries: z.array(referenceEntrySchema) });
+export const referenceDeletedSchema = z.object({ deleted: z.literal(true) });
