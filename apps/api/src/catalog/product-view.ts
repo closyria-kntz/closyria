@@ -23,7 +23,7 @@ export async function loadProductViews(db: Database, productIds: string[]): Prom
       .select()
       .from(schema.productImages)
       .where(inArray(schema.productImages.productId, ids))
-      .orderBy(asc(schema.productImages.position)),
+      .orderBy(asc(schema.productImages.position), asc(schema.productImages.id)),
     db
       .select()
       .from(schema.productSizes)

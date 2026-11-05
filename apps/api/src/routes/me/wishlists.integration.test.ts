@@ -255,6 +255,17 @@ describe("POST /api/me/wishlists/order", () => {
     expect(await ordered(cookie)).toEqual(ids);
   });
 
+  it("answers 400 invalid_request for a strict subset of her lists and changes nothing", async () => {
+    const { cookie } = await t.signIn();
+    const a = await createList(cookie, "A");
+    const b = await createList(cookie, "B");
+    const c = await createList(cookie, "C");
+    const res = await call("POST", "/api/me/wishlists/order", cookie, { ids: [c.id, a.id] });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_request" });
+    expect(await ordered(cookie)).toEqual([a.id, b.id, c.id]);
+  });
+
   it("answers 404 for a foreign or unknown list and changes nothing", async () => {
     const mine = await t.signIn();
     const other = await t.signIn();

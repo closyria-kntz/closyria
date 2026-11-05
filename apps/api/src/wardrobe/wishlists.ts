@@ -84,7 +84,11 @@ export async function loadSharedView(db: Database, list: { id: string; name: str
           })
           .from(schema.productImages)
           .where(inArray(schema.productImages.productId, productIds))
-          .orderBy(asc(schema.productImages.productId), asc(schema.productImages.position));
+          .orderBy(
+            asc(schema.productImages.productId),
+            asc(schema.productImages.position),
+            asc(schema.productImages.id),
+          );
   const imageOf = new Map(firstImages.map((i) => [i.productId, catalogImageUrl(i.id)]));
   return {
     name: list.name,
