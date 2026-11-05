@@ -3,10 +3,16 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { csrf } from "hono/csrf";
 import { type AccessEnv, appWide, defineAccess, provideSession, type SessionSource } from "./access";
 import { auditMiddleware } from "./admin-audit";
+import type { CatalogDeps } from "./catalog/deps";
+import { catalogLimiter } from "./catalog/limiter";
 import { auditRoutes } from "./routes/admin/audit";
+import { adminCapturesRoutes } from "./routes/admin/captures";
 import { type AdminDeps, overviewRoutes } from "./routes/admin/overview";
+import { adminShopsRoutes } from "./routes/admin/shops";
+import { capturesRoutes } from "./routes/captures";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
 import { type MediaDeps, mediaRoutes } from "./routes/media";
+import { productsRoutes } from "./routes/products";
 import { type TestMailDeps, testMailRoutes } from "./routes/test-mail";
 
 export type AppDeps = {
@@ -19,6 +25,8 @@ export type AppDeps = {
   auth: { handler: (request: Request) => Promise<Response> } & SessionSource;
   /** Photos: database rows and object storage. */
   media: MediaDeps;
+  /** Captures, product pages and catalog photos. */
+  catalog: CatalogDeps;
   /** First-party audience events. */
   events: EventsDeps;
   /** Admin area: dashboard figures and the audit log. */
@@ -68,6 +76,8 @@ export function createApp(deps: AppDeps) {
 
   app.on(["GET", "POST"], "/auth/*", (c) => deps.auth.handler(c.req.raw));
 
+  // One limiter for the captures and the manual entry: they count in the same hour.
+  const captureLimiter = catalogLimiter(deps.catalog.limits);
   const routes = app
     .openapi(healthRoute, async (c) => {
       const dbOk = await deps.pingDb();
@@ -80,9 +90,13 @@ export function createApp(deps: AppDeps) {
       return dbOk ? c.json(body, 200) : c.json(body, 503);
     })
     .route("/", mediaRoutes(deps.media))
+    .route("/", capturesRoutes(deps.catalog, captureLimiter))
+    .route("/", productsRoutes(deps.catalog, captureLimiter))
     .route("/", eventsRoutes(deps.events))
     .route("/", overviewRoutes(deps.admin))
-    .route("/", auditRoutes(deps.admin));
+    .route("/", auditRoutes(deps.admin))
+    .route("/", adminShopsRoutes(deps.catalog))
+    .route("/", adminCapturesRoutes(deps.catalog));
 
   // Not part of AppType: no client calls it, and it is absent from every real environment.
   if (deps.testMail) app.route("/", testMailRoutes(deps.testMail));

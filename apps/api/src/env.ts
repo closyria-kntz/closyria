@@ -37,6 +37,8 @@ export const envSchema = appEnvObject({
   S3_BUCKET: z.string().min(1).optional(),
   S3_ACCESS_KEY_ID: z.string().min(1).optional(),
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  // Browser tests only: photos as files in this directory, shared with the capture worker of the test run.
+  TEST_STORAGE_DIR: z.string().min(1).optional(),
 })
   .superRefine((env, ctx) => {
     // Local development and the browser tests (disposable database, http, codes in memory).
@@ -49,6 +51,10 @@ export const envSchema = appEnvObject({
     // APP_ENV=test opens the e-mail inspection route: refuse it anywhere but on this machine.
     if (env.APP_ENV === "test" && !LOOPBACK_HOSTS.has(new URL(env.BETTER_AUTH_URL).hostname)) {
       ctx.addIssue({ code: "custom", path: ["BETTER_AUTH_URL"], message: "must be a loopback URL with APP_ENV=test" });
+    }
+    // Photos on disk are a test fixture: refuse to start with them anywhere else.
+    if (env.TEST_STORAGE_DIR && env.APP_ENV !== "test") {
+      ctx.addIssue({ code: "custom", path: ["TEST_STORAGE_DIR"], message: "only allowed with APP_ENV=test" });
     }
     if (!local && env.MAIL_TRANSPORT !== "brevo") {
       ctx.addIssue({ code: "custom", path: ["MAIL_TRANSPORT"], message: "must be brevo outside development" });

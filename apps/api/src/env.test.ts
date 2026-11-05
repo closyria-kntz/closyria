@@ -114,4 +114,18 @@ describe("envSchema", () => {
     expect(envSchema.safeParse({ ...base, S3_BUCKET: "closyria-dev" }).success).toBe(false);
     expect(envSchema.safeParse({ ...base, ...s3, S3_ENDPOINT: "not a url" }).success).toBe(false);
   });
+
+  it("accepts TEST_STORAGE_DIR only with APP_ENV=test (browser tests: photos on disk, shared with the worker)", () => {
+    const test = { ...base, APP_ENV: "test", BETTER_AUTH_URL: "http://127.0.0.1:4310" };
+    expect(envSchema.parse({ ...test, TEST_STORAGE_DIR: "/tmp/closyria-e2e" }).TEST_STORAGE_DIR).toBe(
+      "/tmp/closyria-e2e",
+    );
+    expect(envSchema.safeParse({ ...base, TEST_STORAGE_DIR: "/tmp/x" }).success).toBe(false);
+    expect(envSchema.safeParse({ ...base, APP_ENV: "development", TEST_STORAGE_DIR: "/tmp/x" }).success).toBe(false);
+    const dev = { ...base, ...s3, APP_ENV: "dev", BETTER_AUTH_URL: "https://dev.closyria.com" };
+    const brevo = { MAIL_TRANSPORT: "brevo", BREVO_API_KEY: "key" };
+    expect(envSchema.safeParse({ ...dev, ...brevo, TEST_STORAGE_DIR: "/tmp/x" }).success).toBe(false);
+    expect(envSchema.safeParse({ ...prod, ...brevo, TEST_STORAGE_DIR: "/tmp/x" }).success).toBe(false);
+    expect(envSchema.safeParse({ ...test, TEST_STORAGE_DIR: "" }).success).toBe(false);
+  });
 });

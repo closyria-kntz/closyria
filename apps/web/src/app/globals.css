@@ -6,3 +6,24 @@ body {
   color: var(--color-ink);
   font-family: var(--font-body);
 }
+
+/* Skeleton: a slow breathing, on motion tokens only. Reduced motion zeroes the durations (tokens) and drops it here too. */
+@keyframes skeleton-breathe {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
+}
+
+.skeleton {
+  background: var(--color-surface-strong);
+  animation: skeleton-breathe calc(var(--motion-duration-slow) * 3) var(--ease-standard) infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

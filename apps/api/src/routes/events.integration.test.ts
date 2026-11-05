@@ -66,6 +66,7 @@ beforeAll(async () => {
     pingDb: async () => true,
     auth,
     media: { db: handle.db, store: memoryStore() },
+    catalog: { db: handle.db, store: memoryStore(), queue: { enqueue: async () => {} } },
     events: { db: handle.db, now: () => NOW, rateLimit: { max: RATE_LIMIT, windowMs: 60_000 } },
     admin: { db: handle.db },
   });

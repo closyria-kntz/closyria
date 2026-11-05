@@ -9,7 +9,12 @@ import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("Metadata");
-  return { title: t("title"), description: t("description") };
+  return {
+    title: t("title"),
+    description: t("description"),
+    // The manifest itself is app/manifest.ts (linked by Next); iOS ignores it, so the icon is declared too.
+    icons: { apple: "/icons/icon-192.png" },
+  };
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {

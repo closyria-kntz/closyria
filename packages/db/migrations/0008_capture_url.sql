@@ -1,0 +1,1 @@
+ALTER TABLE "captures" ADD COLUMN "url" text NOT NULL;

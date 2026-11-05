@@ -1,4 +1,11 @@
-import { type AdminSession, adminSessionSchema, lastForwardedAddress } from "@closyria/shared";
+import {
+  type AdminSession,
+  adminCaptureFailuresSchema,
+  adminSessionSchema,
+  adminShopDetailSchema,
+  adminShopListSchema,
+  lastForwardedAddress,
+} from "@closyria/shared";
 import { z } from "zod";
 
 /** How the web server reaches the API: directly on the machine, never through the public URL. */
@@ -64,3 +71,31 @@ export async function fetchAdminJson<T>(api: InternalApi, path: string, schema: 
   if (!res.ok) throw new Error(`${path} answered ${res.status}`);
   return { ok: true, data: schema.parse(await res.json()) };
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A query string from the filters that are set; an empty filter means "all". */
+function withQuery(path: string, filters: Record<string, string | undefined>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value);
+  const text = query.toString();
+  return text ? `${path}?${text}` : path;
+}
+
+export type ShopFilters = { status?: string | undefined; mode?: string | undefined; health?: string | undefined };
+export type FailureFilters = { shopId?: string | undefined; errorCode?: string | undefined };
+
+export const adminShopsPath = (filters: ShopFilters) => withQuery("/api/admin/shops", filters);
+export const adminFailuresPath = (filters: FailureFilters) => withQuery("/api/admin/captures/failures", filters);
+
+export const fetchAdminShops = (api: InternalApi, filters: ShopFilters) =>
+  fetchAdminJson(api, adminShopsPath(filters), adminShopListSchema);
+
+/** One shop; an id that is not a UUID is an unknown shop (it never reaches the API path). */
+export async function fetchAdminShop(api: InternalApi, id: string) {
+  if (!UUID.test(id)) return { ok: false, status: 404 } as const;
+  return fetchAdminJson(api, `/api/admin/shops/${id}`, adminShopDetailSchema);
+}
+
+export const fetchAdminFailures = (api: InternalApi, filters: FailureFilters) =>
+  fetchAdminJson(api, adminFailuresPath(filters), adminCaptureFailuresSchema);

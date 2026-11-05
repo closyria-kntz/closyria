@@ -1,0 +1,178 @@
+{
+  "id": 15149026574662,
+  "title": "PANTALON LEONIE",
+  "handle": "produit-3679",
+  "description": "\u003cul\u003e\n\u003cli\u003ePantalon droit jambes larges\u003c\/li\u003e\n\u003cli\u003eDeux boutons à la tailles \u003c\/li\u003e\n\u003cli\u003ePoches latérales\u003c\/li\u003e\n\u003c\/ul\u003e\n\u003cp\u003e\u003cem\u003e\u003cspan style=\"text-decoration: underline;\"\u003e\u003cstrong\u003eMesures à plat en CM : \u003c\/strong\u003e\u003c\/span\u003e\u003c\/em\u003e\u003c\/p\u003e\n\u003cul\u003e\n\u003cli\u003eTour de taille : S 36 M 38 L 40\u003c\/li\u003e\n\u003cli\u003eLongueur à partir de l'entre jambe : S 76 M 77 L 78\u003c\/li\u003e\n\u003c\/ul\u003e\n\u003cp\u003e\u003cem\u003eLa mannequin mesure 173cm et porte une taille S.\u003c\/em\u003e\u003c\/p\u003e",
+  "published_at": "2026-02-11T20:48:06+01:00",
+  "created_at": "2025-09-12T14:24:15+02:00",
+  "vendor": "PURPLE QUEEN",
+  "type": "SETUP",
+  "tags": [
+    "BFNOV2025",
+    "BLACK10",
+    "BRADFEV26",
+    "CHOOSE0326",
+    "CO1725",
+    "JEAN\u0026PANTALONS_ARCHIVES",
+    "MID",
+    "PANTALON_ARCHIVES",
+    "SALEJANV26",
+    "SALEJUIN26"
+  ],
+  "price": 2300,
+  "price_min": 2300,
+  "price_max": 2300,
+  "available": true,
+  "price_varies": false,
+  "compare_at_price": 3990,
+  "compare_at_price_min": 3990,
+  "compare_at_price_max": 3990,
+  "compare_at_price_varies": false,
+  "variants": [
+    {
+      "id": 55079738278214,
+      "title": "S \/ MARRON",
+      "option1": "S",
+      "option2": "MARRON",
+      "option3": null,
+      "sku": "1725_PANTALON_RUBY_CHOCO_S",
+      "requires_shipping": true,
+      "taxable": true,
+      "featured_image": null,
+      "available": false,
+      "name": "PANTALON LEONIE - S \/ MARRON",
+      "public_title": "S \/ MARRON",
+      "options": ["S", "MARRON"],
+      "price": 2300,
+      "weight": 0,
+      "compare_at_price": 3990,
+      "inventory_management": "shopify",
+      "barcode": null,
+      "quantity_rule": { "min": 1, "max": null, "increment": 1 },
+      "quantity_price_breaks": [],
+      "requires_selling_plan": false,
+      "selling_plan_allocations": []
+    },
+    {
+      "id": 55079738310982,
+      "title": "M \/ MARRON",
+      "option1": "M",
+      "option2": "MARRON",
+      "option3": null,
+      "sku": "1725_PANTALON_RUBY_CHOCO_M",
+      "requires_shipping": true,
+      "taxable": true,
+      "featured_image": null,
+      "available": true,
+      "name": "PANTALON LEONIE - M \/ MARRON",
+      "public_title": "M \/ MARRON",
+      "options": ["M", "MARRON"],
+      "price": 2300,
+      "weight": 0,
+      "compare_at_price": 3990,
+      "inventory_management": "shopify",
+      "barcode": null,
+      "quantity_rule": { "min": 1, "max": null, "increment": 1 },
+      "quantity_price_breaks": [],
+      "requires_selling_plan": false,
+      "selling_plan_allocations": []
+    }
+  ],
+  "images": [
+    "\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/pantalon-leonie-setup-3622952.jpg?v=1764325982",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/pantalon-leonie-setup-1291957.jpg?v=1764325982",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/pantalon-leonie-setup-5490938.jpg?v=1764325982",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/DSC08043.jpg?v=1757945742",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/pantalon-leonie-setup-7573622.jpg?v=1758149865"
+  ],
+  "featured_image": "\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/pantalon-leonie-setup-3622952.jpg?v=1764325982",
+  "options": [
+    { "name": "Option 1", "position": 1, "values": ["S", "M"] },
+    { "name": "Option 2", "position": 2, "values": ["MARRON"] }
+  ],
+  "url": "\/products\/produit-3679",
+  "media": [
+    {
+      "alt": "PANTALON LEONIE - SETUP",
+      "id": 67966259593542,
+      "position": 1,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 2048,
+        "width": 1365,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/pantalon-leonie-setup-3622952.jpg?v=1764325982"
+      },
+      "aspect_ratio": 0.667,
+      "height": 2048,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/pantalon-leonie-setup-3622952.jpg?v=1764325982",
+      "width": 1365
+    },
+    {
+      "alt": "PANTALON LEONIE - SETUP",
+      "id": 67966258348358,
+      "position": 2,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 2048,
+        "width": 1365,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/pantalon-leonie-setup-1291957.jpg?v=1764325982"
+      },
+      "aspect_ratio": 0.667,
+      "height": 2048,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/pantalon-leonie-setup-1291957.jpg?v=1764325982",
+      "width": 1365
+    },
+    {
+      "alt": "PANTALON LEONIE - SETUP",
+      "id": 67966258315590,
+      "position": 3,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 2048,
+        "width": 1365,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/pantalon-leonie-setup-5490938.jpg?v=1764325982"
+      },
+      "aspect_ratio": 0.667,
+      "height": 2048,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/pantalon-leonie-setup-5490938.jpg?v=1764325982",
+      "width": 1365
+    },
+    {
+      "alt": null,
+      "id": 67966259626310,
+      "position": 4,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 2048,
+        "width": 1365,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/DSC08043.jpg?v=1757945742"
+      },
+      "aspect_ratio": 0.667,
+      "height": 2048,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/DSC08043.jpg?v=1757945742",
+      "width": 1365
+    },
+    {
+      "alt": "PANTALON LEONIE - SETUP",
+      "id": 67966259659078,
+      "position": 5,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 2048,
+        "width": 1365,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/pantalon-leonie-setup-7573622.jpg?v=1758149865"
+      },
+      "aspect_ratio": 0.667,
+      "height": 2048,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0562\/6413\/0765\/files\/pantalon-leonie-setup-7573622.jpg?v=1758149865",
+      "width": 1365
+    }
+  ],
+  "requires_selling_plan": false,
+  "selling_plan_groups": []
+}

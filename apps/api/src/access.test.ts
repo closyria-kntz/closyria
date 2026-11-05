@@ -122,6 +122,7 @@ describe("route coverage", () => {
       auth: { handler: async () => new Response(), getSession: async () => null },
       media: { db: {} as Database, store: memoryStore() }, // never reached: coverage reads the routes only
       events: { db: {} as Database },
+      catalog: { db: {} as Database, store: memoryStore(), queue: { enqueue: async () => {} } },
       admin: { db: {} as Database },
     });
   const openapi = async (app: ReturnType<typeof make>) =>
@@ -153,6 +154,7 @@ describe("route coverage", () => {
       auth: { handler: async () => new Response(), getSession: async () => null },
       media: { db: {} as Database, store: memoryStore() },
       events: { db: {} as Database },
+      catalog: { db: {} as Database, store: memoryStore(), queue: { enqueue: async () => {} } },
       admin: { db: {} as Database },
       testMail: { messages: [] },
     });

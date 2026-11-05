@@ -17,6 +17,41 @@ Le script applique les migrations, bascule le lien `current`, redémarre `closyr
 Secrets : `/etc/closyria/<env>.env` (root:root 600), lus par systemd au démarrage. L'API et le worker refusent de
 démarrer si une variable manque ou est invalide, et le journal (`journalctl -u closyria-<env>-api`) dit laquelle.
 
+## Barrière réseau du worker
+
+Le worker télécharge des pages de boutiques à partir d'adresses collées par des visiteurs. `safeFetch` refuse déjà
+les adresses privées ; l'unité systemd du worker ajoute une **seconde barrière**, au niveau du noyau, qui tient même
+si le code avait un défaut :
+
+```ini
+IPAddressDeny=0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 ::1/128 fc00::/7 fe80::/10
+IPAddressAllow=127.0.0.53/32
+```
+
+Tout ce qui est privé, local ou de liaison locale est refusé, sauf `127.0.0.53` (résolveur DNS du serveur,
+`systemd-resolved`). PostgreSQL passe par une socket Unix, donc n'est pas concerné. L'API et le web n'ont pas cette
+barrière : ils parlent à `127.0.0.1`.
+
+Avant d'activer, `/etc/resolv.conf` doit pointer vers `127.0.0.53` (`grep nameserver /etc/resolv.conf`) : sinon le
+worker ne résout plus aucun nom.
+
+Installer (compte avec sudo), pour la dev puis, plus tard, la prod :
+
+```bash
+sudo cp deploy/systemd/closyria-dev-worker.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo closyria-deploy dev <id>   # le redémarrage prend la nouvelle unité
+```
+
+Vérifier dans le journal (au démarrage, le worker écrit `network barrier: active`, ou l'avertissement
+`network barrier: ABSENT` si la barrière n'est pas en place) :
+
+```bash
+sudo journalctl -u closyria-dev-worker -n 50 --no-pager | grep 'network barrier'
+```
+
+Étapes complètes : `docs/plans/2026-11-05-mise-en-service-chantier-1.md`.
+
 ## Variables d'environnement
 
 À mettre dans `/etc/closyria/prod.env` (prod) et `/etc/closyria/dev.env` (dev), une par ligne (`NOM=valeur`).
@@ -63,7 +98,7 @@ et le domaine `closyria.com` **authentifié** : ajouter chez le registrar les en
 (SPF, DKIM, et un enregistrement DMARC), puis cliquer sur « Vérifier » dans Brevo. Sans cela, les codes arrivent en
 indésirables ou pas du tout.
 
-**Photos** : sans les cinq variables `S3_*`, l'API refuse de démarrer hors développement ; les ajouter **avant** de
+**Photos** : le worker lit le même fichier d'environnement et a besoin des mêmes `S3_*` (copie des photos de capture). Sans les cinq variables `S3_*`, l'API refuse de démarrer hors développement ; les ajouter **avant** de
 déployer. En développement local, sans elles, les photos restent en mémoire jusqu'au redémarrage. La politique de
 sécurité des pages (`img-src` dans `apps/web/src/security-headers.ts`) autorise `https://s3.gra.io.cloud.ovh.net` :
 changer de `S3_ENDPOINT` demande de la changer aussi.

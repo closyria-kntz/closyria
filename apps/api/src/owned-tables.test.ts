@@ -17,6 +17,8 @@ const NOT_OWNED: Record<string, string> = {
   "passkey.user_id": "Better Auth",
   // R16: the audit log outlives the admin account (ON DELETE SET NULL) and holds no user content.
   "admin_audit_log.admin_id": "R16",
+  // Capture log: an operational record that outlives the user (ON DELETE SET NULL) and holds no user content.
+  "captures.requested_by": "capture log: outlives the user (ON DELETE SET NULL), no user content",
 };
 
 let database: TestDatabase;

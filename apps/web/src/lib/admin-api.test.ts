@@ -1,6 +1,16 @@
 import { adminOverviewSchema } from "@closyria/shared";
 import { describe, expect, it, vi } from "vitest";
-import { fetchAdminJson, fetchAdminSession, internalApiFor, internalApiUrl } from "./admin-api";
+import {
+  adminFailuresPath,
+  adminShopsPath,
+  fetchAdminFailures,
+  fetchAdminJson,
+  fetchAdminSession,
+  fetchAdminShop,
+  fetchAdminShops,
+  internalApiFor,
+  internalApiUrl,
+} from "./admin-api";
 
 type Call = { url: string; init: RequestInit | undefined };
 
@@ -13,7 +23,19 @@ function fakeFetch(status: number, body: unknown) {
   return { fetch: fetch as typeof globalThis.fetch, calls };
 }
 
-const overview = { users: { total: 3, anonymous: 1, registered: 2 }, eventsToday: 4, signupsToday: 1 };
+const overview = {
+  users: { total: 3, anonymous: 1, registered: 2 },
+  eventsToday: 4,
+  signupsToday: 1,
+  captures: {
+    last24h: 0,
+    last7d: 0,
+    successRate7d: null,
+    byMethod: { shopify: 0, jsonld: 0, opengraph: 0 },
+    medianDurationMs: null,
+  },
+  shops: { pending: 0, down: 0 },
+};
 
 describe("internalApiUrl", () => {
   it("defaults to the local API and accepts a configured URL", () => {
@@ -117,5 +139,81 @@ describe("internal API timeout", () => {
     expect(timeout).toHaveBeenCalledWith(5000);
     for (const call of [...calls, ...session.calls]) expect(call.init?.signal).toBeInstanceOf(AbortSignal);
     timeout.mockRestore();
+  });
+});
+
+const shopId = "11111111-1111-4111-8111-111111111111";
+const shop = {
+  id: shopId,
+  name: "Mango",
+  slug: "mango",
+  status: "published",
+  platform: "other",
+  captureMode: "auto",
+  listingKind: "catalog",
+  testUrl: null,
+  domains: ["mango.com"],
+  health: "ok",
+  createdAt: "2026-11-01T10:00:00.000Z",
+};
+
+describe("shop and capture reads", () => {
+  const api = (fetch: typeof globalThis.fetch) => ({ fetch, baseUrl: "http://api", cookie: "c=1" });
+
+  it("builds the list path from the filters, leaving out the empty ones", () => {
+    expect(adminShopsPath({})).toBe("/api/admin/shops");
+    expect(adminShopsPath({ status: "pending", mode: "", health: "down" })).toBe(
+      "/api/admin/shops?status=pending&health=down",
+    );
+    expect(adminFailuresPath({ shopId, errorCode: "blocked" })).toBe(
+      `/api/admin/captures/failures?shopId=${shopId}&errorCode=blocked`,
+    );
+    expect(adminFailuresPath({})).toBe("/api/admin/captures/failures");
+  });
+
+  it("reads and validates the shop list", async () => {
+    const { fetch, calls } = fakeFetch(200, { shops: [{ ...shop, recentProducts: 2, lastCapture: null }] });
+    const result = await fetchAdminShops(api(fetch), { status: "published" });
+    expect(calls[0]?.url).toBe("http://api/api/admin/shops?status=published");
+    expect(result.ok && result.data.shops[0]?.name).toBe("Mango");
+  });
+
+  it("rejects a shop list that does not match the schema", async () => {
+    const { fetch } = fakeFetch(200, { shops: [{ id: "x" }] });
+    await expect(fetchAdminShops(api(fetch), {})).rejects.toThrow();
+  });
+
+  it("reads a shop and reports an unknown one", async () => {
+    const detail = { ...shop, successRate7d: 0.9, lastMonitors: [true], lastMonitor: null, recentErrors: [] };
+    const ok = fakeFetch(200, detail);
+    const found = await fetchAdminShop(api(ok.fetch), shopId);
+    expect(ok.calls[0]?.url).toBe(`http://api/api/admin/shops/${shopId}`);
+    expect(found.ok && found.data.successRate7d).toBe(0.9);
+    const missing = fakeFetch(404, { error: "not_found" });
+    expect(await fetchAdminShop(api(missing.fetch), shopId)).toEqual({ ok: false, status: 404 });
+  });
+
+  it("reads the failed captures", async () => {
+    const failure = {
+      id: shopId,
+      shopId,
+      shopName: "Mango",
+      productId: null,
+      url: "https://mango.com/p",
+      trigger: "user",
+      errorCode: "blocked",
+      httpStatus: 403,
+      createdAt: "2026-11-01T10:00:00.000Z",
+    };
+    const { fetch, calls } = fakeFetch(200, { failures: [failure] });
+    const result = await fetchAdminFailures(api(fetch), { errorCode: "blocked" });
+    expect(calls[0]?.url).toBe("http://api/api/admin/captures/failures?errorCode=blocked");
+    expect(result.ok && result.data.failures).toHaveLength(1);
+  });
+
+  it("refuses a shop id that is not a UUID before calling the API", async () => {
+    const { fetch, calls } = fakeFetch(200, shop);
+    expect(await fetchAdminShop(api(fetch), "../audit")).toEqual({ ok: false, status: 404 });
+    expect(calls).toHaveLength(0);
   });
 });

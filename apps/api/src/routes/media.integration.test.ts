@@ -99,6 +99,7 @@ beforeAll(async () => {
     auth,
     media: { db: handle.db, store },
     events: { db: handle.db },
+    catalog: { db: handle.db, store: memoryStore(), queue: { enqueue: async () => {} } },
     admin: { db: handle.db },
   });
 }, 60_000);
@@ -187,6 +188,7 @@ describe("upload limits", () => {
       auth,
       media: { db: handle.db, store, ...media },
       events: { db: handle.db },
+      catalog: { db: handle.db, store: memoryStore(), queue: { enqueue: async () => {} } },
       admin: { db: handle.db },
     });
 

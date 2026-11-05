@@ -97,12 +97,31 @@ async function createDatabase(serverUrl: string, name: string, template?: string
   return {
     url: databaseUrl(serverUrl, name),
     stop: () => {
-      stopping ??= withAdminClient(serverUrl, (client) =>
-        client.query(`drop database if exists ${ident(name)} with (force)`),
-      ).then(() => undefined);
+      stopping ??= withAdminClient(serverUrl, async (client) => {
+        await waitForSessionsToEnd(client, name);
+        await client.query(`drop database if exists ${ident(name)} with (force)`);
+      });
       return stopping;
     },
   };
+}
+
+/**
+ * `pool.end()` resolves once the pool has sent its Terminate messages, not once the backends are gone.
+ * Dropping with `(force)` in that window kills a backend whose client is still closing, and `pg` raises
+ * the resulting FATAL 57P01 as an uncaught error in the test run. So wait (bounded) until the sessions
+ * have left on their own; `with (force)` stays as the fallback for a test that leaked a connection.
+ */
+async function waitForSessionsToEnd(client: pg.Client, name: string, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const { rows } = await client.query<{ n: number }>(
+      "select count(*)::int as n from pg_stat_activity where datname = $1 and pid <> pg_backend_pid()",
+      [name],
+    );
+    if (rows[0]?.n === 0 || Date.now() >= deadline) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
 }
 
 async function withAdminClient<T>(serverUrl: string, fn: (client: pg.Client) => Promise<T>): Promise<T> {

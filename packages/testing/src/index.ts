@@ -1,3 +1,4 @@
+export { type FakeRoute, type FakeShop, startFakeShop } from "./fake-shop";
 export {
   createDatabaseFromTemplate,
   databaseUrl,

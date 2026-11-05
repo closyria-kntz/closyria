@@ -1,0 +1,22 @@
+{
+  "name": "@closyria/extract",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@closyria/shared": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@closyria/config": "workspace:*",
+    "@vitest/coverage-v8": "5.0.5",
+    "vitest": "^5.0.5"
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "id": 15686578569481,
+  "title": "Veste fourrure Bambi\u0026bleu (Pré-commande)",
+  "handle": "veste-fourrure-bambi",
+  "description": "\u003cp\u003ePré-commande - Expédition le 20\/11\u003c\/p\u003e\n\u003cp\u003e\u003cspan\u003eMerci de noter que si votre commande contient un article en précommande, \u003c\/span\u003e\u003cb\u003el’ensemble de votre commande sera expédié en une seule fois\u003c\/b\u003e\u003cspan\u003e, à partir du 27\/10.\u003c\/span\u003e\u003cbr\u003e\u003cspan\u003eUne question ? N’hésitez pas à contacter notre service client au \u003c\/span\u003e\u003ca href=\"tel:04%2022%2073%2092%2035\"\u003e\u003cspan class=\"s2\"\u003e\u003cb\u003e04 22 73 92 35\u003c\/b\u003e\u003c\/span\u003e\u003c\/a\u003e\u003cspan\u003e.\u003c\/span\u003e\u003c\/p\u003e\n\u003cp\u003e \u003c\/p\u003e\n\u003cul\u003e\n\u003cli\u003eCoupe droite\u003c\/li\u003e\n\u003cli\u003e Col rond et bout des manches en fausse fourrure bleu\u003c\/li\u003e\n\u003cli\u003eEntièrement doublée\u003c\/li\u003e\n\u003cli\u003eFermeture à boutons\u003c\/li\u003e\n\u003cli\u003eMatière qualité premium.\u003c\/li\u003e\n\u003cli\u003eConseils de lavage: Lavage à la main \u003cstrong\u003eà 30°C\u003c\/strong\u003e - Repassage max \u003cstrong\u003e110°C.\u003c\/strong\u003e\n\u003c\/li\u003e\n\u003cli\u003eGuide des tailles: S\/M: 34\/36 - M\/L: 38\/40\u003c\/li\u003e\n\u003cli\u003eVic porte un S\/M pour son 36 et mesure 1m64.\u003c\/li\u003e\n\u003c\/ul\u003e",
+  "published_at": "2026-11-01T11:12:06+01:00",
+  "created_at": "2026-09-28T16:01:45+02:00",
+  "vendor": "Ohlala..!",
+  "type": "Veste",
+  "tags": ["Nouvelle collection"],
+  "price": 8900,
+  "price_min": 8900,
+  "price_max": 8900,
+  "available": true,
+  "price_varies": false,
+  "compare_at_price": null,
+  "compare_at_price_min": 0,
+  "compare_at_price_max": 0,
+  "compare_at_price_varies": false,
+  "variants": [
+    {
+      "id": 57363599327497,
+      "title": "S\/M",
+      "option1": "S\/M",
+      "option2": null,
+      "option3": null,
+      "sku": null,
+      "requires_shipping": true,
+      "taxable": true,
+      "featured_image": null,
+      "available": true,
+      "name": "Veste fourrure Bambi\u0026bleu (Pré-commande) - S\/M",
+      "public_title": "S\/M",
+      "options": ["S\/M"],
+      "price": 8900,
+      "weight": 150,
+      "compare_at_price": null,
+      "inventory_management": "shopify",
+      "barcode": null,
+      "quantity_rule": { "min": 1, "max": null, "increment": 1 },
+      "quantity_price_breaks": [],
+      "requires_selling_plan": false,
+      "selling_plan_allocations": []
+    },
+    {
+      "id": 57363599360265,
+      "title": "M\/L",
+      "option1": "M\/L",
+      "option2": null,
+      "option3": null,
+      "sku": null,
+      "requires_shipping": true,
+      "taxable": true,
+      "featured_image": null,
+      "available": true,
+      "name": "Veste fourrure Bambi\u0026bleu (Pré-commande) - M\/L",
+      "public_title": "M\/L",
+      "options": ["M\/L"],
+      "price": 8900,
+      "weight": 150,
+      "compare_at_price": null,
+      "inventory_management": "shopify",
+      "barcode": null,
+      "quantity_rule": { "min": 1, "max": null, "increment": 1 },
+      "quantity_price_breaks": [],
+      "requires_selling_plan": false,
+      "selling_plan_allocations": []
+    }
+  ],
+  "images": [
+    "\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/D82C4DB1-8AB0-44E7-AC2F-8248CDEE209B.jpg?v=1793526660",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/B4592F08-55CD-4F3B-A51D-028F9142D1D1.jpg?v=1793526661",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/C21B2011-3853-4E4A-9243-2A13D5BA7441.jpg?v=1793526660",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/54C60FEC-9239-490C-B526-B0803CC07903.jpg?v=1793526659",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/26FC849E-7E27-42D5-9E10-77D15A6B2F82.jpg?v=1793526659",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/2CF9DB07-F6EB-4800-A17A-A0E32F17B753.jpg?v=1793526660"
+  ],
+  "featured_image": "\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/D82C4DB1-8AB0-44E7-AC2F-8248CDEE209B.jpg?v=1793526660",
+  "options": [{ "name": "Taille", "position": 1, "values": ["S\/M", "M\/L"] }],
+  "url": "\/products\/veste-fourrure-bambi",
+  "media": [
+    {
+      "alt": null,
+      "id": 70036197703945,
+      "position": 1,
+      "preview_image": {
+        "aspect_ratio": 0.75,
+        "height": 4032,
+        "width": 3024,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/D82C4DB1-8AB0-44E7-AC2F-8248CDEE209B.jpg?v=1793526660"
+      },
+      "aspect_ratio": 0.75,
+      "height": 4032,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/D82C4DB1-8AB0-44E7-AC2F-8248CDEE209B.jpg?v=1793526660",
+      "width": 3024
+    },
+    {
+      "alt": null,
+      "id": 70036197769481,
+      "position": 2,
+      "preview_image": {
+        "aspect_ratio": 0.75,
+        "height": 5712,
+        "width": 4284,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/B4592F08-55CD-4F3B-A51D-028F9142D1D1.jpg?v=1793526661"
+      },
+      "aspect_ratio": 0.75,
+      "height": 5712,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/B4592F08-55CD-4F3B-A51D-028F9142D1D1.jpg?v=1793526661",
+      "width": 4284
+    },
+    {
+      "alt": null,
+      "id": 70036197638409,
+      "position": 3,
+      "preview_image": {
+        "aspect_ratio": 0.75,
+        "height": 4032,
+        "width": 3024,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/C21B2011-3853-4E4A-9243-2A13D5BA7441.jpg?v=1793526660"
+      },
+      "aspect_ratio": 0.75,
+      "height": 4032,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/C21B2011-3853-4E4A-9243-2A13D5BA7441.jpg?v=1793526660",
+      "width": 3024
+    },
+    {
+      "alt": null,
+      "id": 70036197605641,
+      "position": 4,
+      "preview_image": {
+        "aspect_ratio": 0.75,
+        "height": 4032,
+        "width": 3024,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/54C60FEC-9239-490C-B526-B0803CC07903.jpg?v=1793526659"
+      },
+      "aspect_ratio": 0.75,
+      "height": 4032,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/54C60FEC-9239-490C-B526-B0803CC07903.jpg?v=1793526659",
+      "width": 3024
+    },
+    {
+      "alt": null,
+      "id": 70036197671177,
+      "position": 5,
+      "preview_image": {
+        "aspect_ratio": 0.75,
+        "height": 4032,
+        "width": 3024,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/26FC849E-7E27-42D5-9E10-77D15A6B2F82.jpg?v=1793526659"
+      },
+      "aspect_ratio": 0.75,
+      "height": 4032,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/26FC849E-7E27-42D5-9E10-77D15A6B2F82.jpg?v=1793526659",
+      "width": 3024
+    },
+    {
+      "alt": null,
+      "id": 70036197736713,
+      "position": 6,
+      "preview_image": {
+        "aspect_ratio": 0.75,
+        "height": 5712,
+        "width": 4284,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/2CF9DB07-F6EB-4800-A17A-A0E32F17B753.jpg?v=1793526660"
+      },
+      "aspect_ratio": 0.75,
+      "height": 5712,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0940\/2495\/8217\/files\/2CF9DB07-F6EB-4800-A17A-A0E32F17B753.jpg?v=1793526660",
+      "width": 4284
+    }
+  ],
+  "requires_selling_plan": false,
+  "selling_plan_groups": []
+}

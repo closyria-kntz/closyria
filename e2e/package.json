@@ -12,12 +12,16 @@
     "@closyria/api": "workspace:*",
     "@closyria/auth": "workspace:*",
     "@closyria/config": "workspace:*",
+    "@closyria/db": "workspace:*",
+    "@closyria/storage": "workspace:*",
     "@closyria/testing": "workspace:*",
     "@closyria/web": "workspace:*",
+    "@closyria/worker": "workspace:*",
     "@playwright/test": "1.64.1",
     "@types/pg": "^8.23.1",
     "esbuild": "^0.28.2",
     "pg": "^8.23.1",
+    "pg-boss": "^12.38.0",
     "zod": "^4.6.7"
   }
 }
