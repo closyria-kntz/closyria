@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import type { AddressPolicy } from "./address-policy";
 import { createRobotsCache, safeRobotsFetcher } from "./robots";
 import { type CaptureDeps, runCapture } from "./run-capture";
+import { seedReference } from "./seed-reference";
 import { loopbackForTests } from "./testing";
 import { createThrottle } from "./throttle";
 
@@ -227,6 +228,43 @@ describe("runCapture", () => {
       expect(r.history).toEqual([]);
       expect(r.images).toEqual([]);
     }
+  });
+
+  it("files a rule-classified product and stores the raw shop fields", async () => {
+    await seedReference(handle.db);
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
+
+    await runCapture(t.capture.id, deps);
+
+    const r = await load(t.capture.id, t.product.id);
+    const [pantalons] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "pantalons"));
+    expect(r.product?.categoryId).toBe(pantalons?.id);
+    expect(r.product?.classifiedBy).toBe("rule");
+    expect(r.product?.publishedAt).toBeInstanceOf(Date);
+    expect(r.product?.shopData).toBeTypeOf("object");
+    expect(Object.keys(r.product?.shopData ?? {}).length).toBeGreaterThan(0);
+  });
+
+  it("never changes the classification of an admin-corrected product, but refreshes the raw fields", async () => {
+    await seedReference(handle.db);
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const [sacs] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "sacs"));
+    const t = await setup("/products/produit-3679", {
+      shop: { platform: "shopify" },
+      product: { classifiedBy: "admin", categoryId: sacs?.id ?? null, audience: "men", season: "all" },
+    });
+
+    await runCapture(t.capture.id, deps);
+
+    const r = await load(t.capture.id, t.product.id);
+    expect(r.product?.categoryId).toBe(sacs?.id);
+    expect(r.product?.audience).toBe("men");
+    expect(r.product?.season).toBe("all");
+    expect(r.product?.classifiedBy).toBe("admin");
+    expect(r.product?.name).toBe("PANTALON LEONIE");
+    expect(r.product?.publishedAt).toBeInstanceOf(Date);
+    expect(Object.keys(r.product?.shopData ?? {}).length).toBeGreaterThan(0);
   });
 
   it("falls back to the HTML page when the .js fails", async () => {

@@ -1,7 +1,13 @@
 import type dns from "node:dns";
 import { and, type Database, eq, ne, schema } from "@closyria/db";
 import { extract, isShopifyPage, shopifyJsUrl } from "@closyria/extract";
-import { type CaptureErrorCode, type CaptureMethod, type ExtractedProduct, shopDomain } from "@closyria/shared";
+import {
+  type CaptureErrorCode,
+  type CaptureMethod,
+  classify,
+  type ExtractedProduct,
+  shopDomain,
+} from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import { type AddressPolicy, strictPolicy } from "./address-policy";
 import { CaptureError } from "./capture-error";
@@ -9,6 +15,7 @@ import { copyImages } from "./copy-images";
 import { decodeBody } from "./decode";
 import type { RobotsCache } from "./robots";
 import { type SafeFetchAccept, safeFetch } from "./safe-fetch";
+import { loadReferenceSet } from "./seed-reference";
 import type { Throttle } from "./throttle";
 
 export type CaptureDeps = {
@@ -61,6 +68,16 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
       const productId = capture.productId;
       const at = now();
       await db.transaction(async (tx) => {
+        // Small tables, read once per capture inside the write transaction.
+        const classification = classify(
+          { name: product.name, url: capture.url, shopData: product.shopData ?? {} },
+          await loadReferenceSet(tx),
+        );
+        const [current] = await tx
+          .select({ classifiedBy: schema.products.classifiedBy })
+          .from(schema.products)
+          .where(eq(schema.products.id, productId))
+          .for("update");
         await tx
           .update(schema.products)
           .set({
@@ -71,6 +88,22 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
             priceCents: product.priceCents,
             compareAtCents: product.compareAtCents ?? null,
             externalId: product.externalId ?? null,
+            publishedAt: product.publishedAt ? new Date(product.publishedAt) : null,
+            gtin: product.gtin ?? null,
+            sku: product.sku ?? null,
+            shopData: product.shopData ?? {},
+            // An admin-corrected product keeps its classification (the raw fields above are still refreshed).
+            ...(current?.classifiedBy === "admin"
+              ? {}
+              : {
+                  audience: classification.audience ?? null,
+                  childDetail: classification.childDetail ?? null,
+                  categoryId: classification.categoryId ?? null,
+                  colorId: classification.colorId ?? null,
+                  materialId: classification.materialId ?? null,
+                  patternId: classification.patternId ?? null,
+                  season: classification.season ?? null,
+                }),
             source: "captured",
             captureStatus: "ok",
             lastCapturedAt: at,
