@@ -1,4 +1,4 @@
-import { cleanImages, cleanText, parsePriceCents } from "./clean";
+import { cleanImages, cleanText, parseMachinePriceCents } from "./clean";
 import type { Candidate } from "./types";
 
 type Json = Record<string, unknown>;
@@ -36,7 +36,7 @@ function priceOf(offer: Json): number | null {
   for (const key of ["price", "lowPrice"]) {
     const raw = offer[key];
     if (typeof raw === "string" || typeof raw === "number") {
-      const cents = parsePriceCents(raw);
+      const cents = parseMachinePriceCents(raw);
       if (cents !== null) return cents;
     }
   }

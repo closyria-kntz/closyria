@@ -26,9 +26,13 @@ export function decodeEntities(text: string): string {
 /** Strips tags (script/style with their content), decodes entities, normalizes whitespace, caps length. */
 export function cleanText(value: unknown, max: number): string | undefined {
   if (typeof value !== "string") return undefined;
-  const withoutBlocks = value.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ");
-  const withoutTags = withoutBlocks.replace(/<[^>]*>/g, " ");
-  const text = decodeEntities(withoutTags).replace(/\s+/g, " ").trim();
+  // Decode exactly once, then strip: escaped markup ("&lt;p&gt;") is removed as well.
+  const decoded = decodeEntities(value);
+  const withoutBlocks = decoded.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ");
+  const text = withoutBlocks
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return text === "" ? undefined : text.slice(0, max);
 }
 
@@ -56,6 +60,7 @@ export function parsePriceCents(value: string | number): number | null {
   if (typeof value === "number") {
     return Number.isFinite(value) && value >= 0 ? Math.round(value * 100) : null;
   }
+  if (/^\s*-/.test(value)) return null;
   const match = value.replace(/\s/g, "").match(/\d[\d.,]*/);
   if (!match) return null;
   const digits = match[0].replace(/[.,]+$/, "");
@@ -71,4 +76,15 @@ export function parsePriceCents(value: string | number): number | null {
   }
   const amount = Number(normalized);
   return Number.isFinite(amount) ? Math.round(amount * 100) : null;
+}
+
+/**
+ * Machine-formatted amount (JSON-LD, product:price:amount): dot is the decimal mark, no locale heuristic.
+ * Falls back to the locale-aware parser for text such as "89,90". Negative amounts give null.
+ */
+export function parseMachinePriceCents(value: string | number): number | null {
+  if (typeof value === "number") return parsePriceCents(value);
+  const plain = value.trim();
+  if (/^\d+(\.\d+)?$/.test(plain)) return Math.round(Number(plain) * 100);
+  return parsePriceCents(plain);
 }

@@ -118,7 +118,7 @@ describe("cleaning limits", () => {
     }).replaceAll("</script>", "\\u003c/script>")}</script>`;
     const r = extract({ url: "https://a.com/x", contentType: "text/html", body });
     if (!r.ok) throw new Error("not ok");
-    expect(r.product.description).toBe("a b <i> A B c");
+    expect(r.product.description).toBe("a b A B c");
     expect(r.product.images).toEqual(["https://a.com/i.jpg"]);
     expect(r.product.sizes).toHaveLength(1);
     expect(r.product.sizes[0]?.label).toHaveLength(40);
@@ -212,5 +212,59 @@ describe("edge cases", () => {
     expect(parsePriceCents("12,")).toBe(1200);
     expect(parsePriceCents("1.2.3")).toBe(12300);
     expect(parsePriceCents("1e999999")).toBe(100);
+  });
+});
+
+describe("decoding and machine prices", () => {
+  const ld = (o: object) =>
+    extract({
+      url: "https://a.com/p",
+      contentType: "text/html",
+      body: `<script type="application/ld+json">${JSON.stringify(o).replaceAll("</", "<\\/")}</script>`,
+    });
+  const og = (title: string, extra = "") =>
+    extract({
+      url: "https://a.com/p",
+      contentType: "text/html",
+      body: `<meta property="og:title" content="T"><meta property="og:description" content="${title}"><meta property="og:image" content="https://a.com/i.jpg?a=1&amp;b=2">${extra}<meta property="product:price:amount" content="5">`,
+    });
+  it("decodes before stripping, on JSON-LD and Open Graph", () => {
+    const text = "&lt;p&gt;Hello&lt;/p&gt; <b>x</b>";
+    const a = ld({ "@type": "Product", name: "n", description: text, offers: { price: 1 } });
+    const b = og(text);
+    if (!a.ok || !b.ok) throw new Error("not ok");
+    expect(a.product.description).toBe("Hello x");
+    expect(b.product.description).toBe("Hello x");
+    expect(b.product.images).toEqual(["https://a.com/i.jpg?a=1&b=2"]);
+  });
+  it("decodes exactly once", () => {
+    const a = ld({ "@type": "Product", name: "n", description: "A &amp;amp; B", offers: { price: 1 } });
+    const b = og("A &amp;amp; B");
+    if (!a.ok || !b.ok) throw new Error("not ok");
+    expect(a.product.description).toBe("A &amp; B");
+    expect(b.product.description).toBe("A &amp; B");
+  });
+  it.each([
+    ["29.999", 3000],
+    ["1299", 129900],
+    ["1299.00", 129900],
+    ["89,90", 8990],
+    [12.5, 1250],
+    ["-5,00", null],
+    [-5, null],
+  ])("machine price %s -> %s", (price, cents) => {
+    const a = ld({ "@type": "Product", name: "n", offers: { price } });
+    const b = extract({
+      url: "https://a.com/p",
+      contentType: "text/html",
+      body: `<meta property="og:title" content="T"><meta property="product:price:amount" content="${price}">`,
+    });
+    for (const r of [a, b]) {
+      if (cents === null) expect(r).toEqual({ ok: false, error: "not_a_product" });
+      else expect(r.ok && r.product.priceCents).toBe(cents);
+    }
+  });
+  it("keeps parsePriceCents negative-safe", () => {
+    expect(parsePriceCents("-5,00")).toBeNull();
   });
 });
