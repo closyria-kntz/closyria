@@ -14,7 +14,7 @@ export const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
 export const DEFAULT_TIMEOUT_MS = 15_000;
 export const DEFAULT_MAX_REDIRECTS = 5;
 
-export type SafeFetchAccept = "page" | "json" | "image";
+export type SafeFetchAccept = "page" | "json" | "image" | "text";
 
 export type SafeFetchOptions = {
   /** Strict by default. Never read from the environment. */
@@ -35,6 +35,7 @@ const ACCEPT_HEADER: Record<SafeFetchAccept, string> = {
   page: "text/html,application/xhtml+xml;q=0.9",
   json: "application/json,text/javascript;q=0.9",
   image: "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8",
+  text: "text/plain",
 };
 
 const ACCEPTED_TYPES: Record<SafeFetchAccept, (mime: string) => boolean> = {
@@ -42,6 +43,8 @@ const ACCEPTED_TYPES: Record<SafeFetchAccept, (mime: string) => boolean> = {
   // Shopify serves `/products/<handle>.js` as JSON under a JavaScript type.
   json: (mime) => mime === "application/json" || mime === "text/javascript" || mime === "application/javascript",
   // Raster images only: the photo pipeline re-encodes them, SVG would carry markup and scripts.
+  // Plain text only (robots.txt); the charset parameter is ignored by `mimeOf`.
+  text: (mime) => mime === "text/plain",
   image: (mime) => /^image\/[a-z0-9][a-z0-9.+-]*$/.test(mime) && !mime.startsWith("image/svg"),
 };
 

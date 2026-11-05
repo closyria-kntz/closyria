@@ -424,4 +424,23 @@ describe("safeFetch URL rules", () => {
     const error = await captureError(safeFetch("http://nowhere.test/", { accept: "page", lookup: fakeLookup({}) }));
     expect(error.code).toBe("http_error");
   });
+
+  describe("accept: text", () => {
+    it.each(["text/plain", "text/plain; charset=utf-8", "TEXT/PLAIN;charset=ISO-8859-1"])(
+      "accepts %s",
+      async (type) => {
+        const s = await serve({ "/robots.txt": { headers: { "content-type": type }, body: "User-agent: *" } });
+        const res = await safeFetch(`${s.origin}/robots.txt`, { accept: "text", policy: loopbackForTests });
+        expect(res.body.toString("utf8")).toBe("User-agent: *");
+      },
+    );
+
+    it.each(["text/html", "application/json", "image/png"])("refuses %s", async (type) => {
+      const s = await serve({ "/robots.txt": { headers: { "content-type": type }, body: "x" } });
+      const error = await captureError(
+        safeFetch(`${s.origin}/robots.txt`, { accept: "text", policy: loopbackForTests }),
+      );
+      expect(error.code).toBe("invalid_data");
+    });
+  });
 });
