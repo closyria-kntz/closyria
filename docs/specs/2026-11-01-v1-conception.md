@@ -242,7 +242,7 @@ Chaque chantier est livré en dev, testé par la fondatrice, puis mis en prod. C
 
 | # | Chantier | Contenu |
 |---|---|---|
-| 0 | Socle V1 | Direction visuelle (spec dédiée, maquettes), comptes, droits, traductions, photos OVH, mesure d'audience, coque de l'admin, HSTS |
+| 0 | Socle V1 ✅ (en prod le 2026-11-05) | Direction visuelle (spec dédiée, maquettes), comptes, droits, traductions, photos OVH, mesure d'audience, coque de l'admin, HSTS |
 | 1 | Capture et boutiques | `extract`, worker sécurisé, fiche produit, admin boutiques et santé |
 | 2 | Mon dressing | Favoris, wishlists, dressing, photo et détourage, « déjà quelque chose de proche », mes tailles, recherche, hors ligne, PWA et partage |
 | 3 | Commandes et argent | Transfert d'e-mail, colis, retours, remboursements, avoirs, budget, admin IA et coûts |

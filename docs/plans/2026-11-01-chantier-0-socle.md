@@ -55,11 +55,11 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
 - Produit : `startTestDatabase(): Promise<{ url: string; stop(): Promise<void> }>`. Si `TEST_DATABASE_URL` est défini (CI), crée une base jetable `test_<aléatoire>` dans ce serveur. Sinon, lance un cluster éphémère avec `initdb`/`pg_ctl` de `/usr/lib/postgresql/18/bin` dans un dossier temporaire, sur un socket Unix, sans sudo.
 - Produit : `migrateTestDatabase(url: string): Promise<void>` qui applique `packages/db/migrations` via `runMigrations`.
 
-- [ ] **Étape 1 : test qui échoue** — `postgres.test.ts` : `startTestDatabase()` renvoie une URL, `select 1` y répond `1`, `stop()` rend l'URL injoignable.
-- [ ] **Étape 2 :** `pnpm --filter @closyria/testing test` → ÉCHEC (module absent).
-- [ ] **Étape 3 :** implémenter `startTestDatabase` et `migrateTestDatabase`.
-- [ ] **Étape 4 :** le test passe en local (cluster éphémère) et en CI (service).
-- [ ] **Étape 5 :** commit `test: add disposable PostgreSQL for integration tests`.
+- [x] **Étape 1 : test qui échoue** — `postgres.test.ts` : `startTestDatabase()` renvoie une URL, `select 1` y répond `1`, `stop()` rend l'URL injoignable.
+- [x] **Étape 2 :** `pnpm --filter @closyria/testing test` → ÉCHEC (module absent).
+- [x] **Étape 3 :** implémenter `startTestDatabase` et `migrateTestDatabase`.
+- [x] **Étape 4 :** le test passe en local (cluster éphémère) et en CI (service).
+- [x] **Étape 5 :** commit `test: add disposable PostgreSQL for integration tests`.
 
 ### Tâche 2 : Tokens de design et mécanisme de thèmes
 
@@ -74,11 +74,11 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
 - Produit : thèmes `equilibre-light` et `equilibre-dark` (valeurs définitives de la direction visuelle « Équilibré », ex-thèmes provisoires « Atelier »).
 - Tailwind : `@theme { --*: initial; … }`, si bien que seules les classes issues de nos tokens existent (`bg-surface`, `text-ink`, `p-space-4`…).
 
-- [ ] **Étape 1 : tests qui échouent** — `renderThemeCss(equilibreLight)` contient `--color-surface:` et ne contient aucune clé primitive ; un thème avec une clé inconnue est refusé par `themeSchema` ; la sortie contient `prefers-reduced-motion` avec `--motion-duration-base: 0ms`.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter les tokens, le schéma et `renderThemeCss` ; générer `apps/web/src/styles/tokens.css`.
-- [ ] **Étape 4 :** tests au vert ; `pnpm --filter @closyria/web build` passe ; la page d'accueil n'utilise plus que des classes issues des tokens.
-- [ ] **Étape 5 :** commit `feat(design): token layers and theme mechanism`.
+- [x] **Étape 1 : tests qui échouent** — `renderThemeCss(equilibreLight)` contient `--color-surface:` et ne contient aucune clé primitive ; un thème avec une clé inconnue est refusé par `themeSchema` ; la sortie contient `prefers-reduced-motion` avec `--motion-duration-base: 0ms`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter les tokens, le schéma et `renderThemeCss` ; générer `apps/web/src/styles/tokens.css`.
+- [x] **Étape 4 :** tests au vert ; `pnpm --filter @closyria/web build` passe ; la page d'accueil n'utilise plus que des classes issues des tokens.
+- [x] **Étape 5 :** commit `feat(design): token layers and theme mechanism`.
 
 ### Tâche 3 : Garde « aucune valeur en dur »
 
@@ -92,20 +92,20 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
   - les valeurs Tailwind arbitraires : `[…px]`, `[#…]`, `[…ms]` ;
   - les attributs `style={{…}}` qui contiennent un nombre suivi d'une unité.
 
-- [ ] **Étape 1 : tests qui échouent** — `className="bg-[#fff]"` donne 1 violation `arbitrary-value` ; `color: #1e1b15;` dans un `.css` du web donne `literal-color` ; `className="bg-surface p-space-4"` donne 0 ; le fichier généré `tokens.css` est ignoré.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter (expressions régulières par règle, numéros de ligne).
-- [ ] **Étape 4 :** tests au vert ; `pnpm lint` passe sur le dépôt.
-- [ ] **Étape 5 :** commit `chore(lint): forbid hard-coded style values in web`.
+- [x] **Étape 1 : tests qui échouent** — `className="bg-[#fff]"` donne 1 violation `arbitrary-value` ; `color: #1e1b15;` dans un `.css` du web donne `literal-color` ; `className="bg-surface p-space-4"` donne 0 ; le fichier généré `tokens.css` est ignoré.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter (expressions régulières par règle, numéros de ligne).
+- [x] **Étape 4 :** tests au vert ; `pnpm lint` passe sur le dépôt.
+- [x] **Étape 5 :** commit `chore(lint): forbid hard-coded style values in web`.
 
 ### Tâche 4 : Spec « Direction visuelle » (sans code)
 
 **Livrable :** `docs/specs/2026-11-xx-direction-visuelle.md`, validée par la fondatrice.
 
-- [ ] **Étape 1 :** brainstorming (`superpowers:brainstorming`, avec le compagnon visuel et des maquettes) et `frontend-design` : personnalité, palette, typographies, échelle, rayons, ombres, mouvements, iconographie, ton (`design:ux-copy`), écrans clés de la V1 sur mobile puis ordinateur, mode sombre.
-- [ ] **Étape 2 :** spec des **thèmes saisonniers** : ce qu'un thème peut changer (tokens, illustrations, animations, images, textes), règles de lisibilité et de contraste, budget de poids et de performance, désactivation par l'utilisatrice, programmation par dates. Le moteur et l'admin des thèmes sont livrés au **chantier 4**, avec le calendrier.
-- [ ] **Étape 3 :** remplacer les valeurs provisoires de la tâche 2 par les valeurs validées ; contrôle des contrastes AA (`design:accessibility-review`).
-- [ ] **Étape 4 :** commit `docs: visual direction spec` puis `feat(design): final token values`.
+- [x] **Étape 1 :** brainstorming (`superpowers:brainstorming`, avec le compagnon visuel et des maquettes) et `frontend-design` : personnalité, palette, typographies, échelle, rayons, ombres, mouvements, iconographie, ton (`design:ux-copy`), écrans clés de la V1 sur mobile puis ordinateur, mode sombre.
+- [x] **Étape 2 :** spec des **thèmes saisonniers** : ce qu'un thème peut changer (tokens, illustrations, animations, images, textes), règles de lisibilité et de contraste, budget de poids et de performance, désactivation par l'utilisatrice, programmation par dates. Le moteur et l'admin des thèmes sont livrés au **chantier 4**, avec le calendrier.
+- [x] **Étape 3 :** remplacer les valeurs provisoires de la tâche 2 par les valeurs validées ; contrôle des contrastes AA (`design:accessibility-review`).
+- [x] **Étape 4 :** commit `docs: visual direction spec` puis `feat(design): final token values`.
 
 ### Tâche 5 : Traductions
 
@@ -117,11 +117,11 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
 - Produit : `locales = ["fr", "en", "es"] as const`, `enabledLocales = ["fr"]`, `defaultLocale = "fr"`, `loadMessages(locale): Messages`. Une clé absente en `en`/`es` retombe sur `fr`.
 - L'URL ne contient pas la langue en V1 : la langue vient du profil ou, à défaut, de `fr`.
 
-- [ ] **Étape 1 : tests qui échouent** — chaque langue de `enabledLocales` possède toutes les clés de `fr.json` ; toutes les clés de `en.json` et `es.json` existent dans `fr.json` (pas de clé orpheline) ; chaque message se compile en ICU sans erreur.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter ; déplacer les textes de `layout.tsx` et `page.tsx` dans `fr.json`.
-- [ ] **Étape 4 :** tests au vert, build du web au vert.
-- [ ] **Étape 5 :** commit `feat(i18n): message catalogs and next-intl`.
+- [x] **Étape 1 : tests qui échouent** — chaque langue de `enabledLocales` possède toutes les clés de `fr.json` ; toutes les clés de `en.json` et `es.json` existent dans `fr.json` (pas de clé orpheline) ; chaque message se compile en ICU sans erreur.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter ; déplacer les textes de `layout.tsx` et `page.tsx` dans `fr.json`.
+- [x] **Étape 4 :** tests au vert, build du web au vert.
+- [x] **Étape 5 :** commit `feat(i18n): message catalogs and next-intl`.
 
 ### Tâche 6 : Comptes — anonyme puis code e-mail
 
@@ -136,7 +136,7 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
 - Produit : `registerOwnedTable(table, userIdColumn)` et `reassignUserData(fromUserId, toUserId, tx)`, appelés par le crochet `onLinkAccount` du plugin anonyme. Chaque chantier y enregistre ses tables d'utilisatrice.
 - Produit : `getSession(headers): Promise<Session | null>` pour l'API.
 
-- [ ] **Étape 1 : tests qui échouent** (vraie base, tâche 1) :
+- [x] **Étape 1 : tests qui échouent** (vraie base, tâche 1) :
   - une connexion anonyme crée une session ;
   - deux connexions anonymes simultanées avec le même cookie de départ ne créent qu'un seul utilisateur (point de vigilance 1) ;
   - un code envoyé fait 6 chiffres ;
@@ -145,10 +145,10 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
   - un code de plus de 10 minutes est refusé ;
   - une ligne d'une table enregistrée appartenant à l'anonyme appartient au compte après connexion par code ;
   - si l'e-mail a déjà un compte, les lignes rejoignent ce compte existant (point de vigilance 2).
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter `createAuth`, les mailers, le registre de tables, le montage dans l'API.
-- [ ] **Étape 4 :** tests au vert.
-- [ ] **Étape 5 :** commit `feat(auth): anonymous sessions and email one-time codes`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter `createAuth`, les mailers, le registre de tables, le montage dans l'API.
+- [x] **Étape 4 :** tests au vert.
+- [x] **Étape 5 :** commit `feat(auth): anonymous sessions and email one-time codes`.
 
 ### Tâche 7 : Comptes — Google, Apple, passkey, rôle admin
 
@@ -161,11 +161,11 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
 - Produit : plugin `admin` (rôles `user` | `admin`) et plugin `passkey`. Champ additionnel de session `authMethod` (`"anonymous" | "email-otp" | "google" | "apple" | "passkey"`), renseigné par un crochet après chaque connexion.
 - Produit : `deploy/README.md`, section « Donner le rôle admin » : une commande SQL documentée que la fondatrice lance une fois.
 
-- [ ] **Étape 1 : tests qui échouent** — sans variables Google, `/api/auth/sign-in/social` avec `google` répond 404 ou 400, pas 500 ; un utilisateur promu `admin` a `role === "admin"` ; une session ouverte par passkey (authentificateur WebAuthn simulé) porte `authMethod === "passkey"`.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests au vert.
-- [ ] **Étape 5 :** commit `feat(auth): social providers, passkeys and admin role`.
+- [x] **Étape 1 : tests qui échouent** — sans variables Google, `/api/auth/sign-in/social` avec `google` répond 404 ou 400, pas 500 ; un utilisateur promu `admin` a `role === "admin"` ; une session ouverte par passkey (authentificateur WebAuthn simulé) porte `authMethod === "passkey"`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests au vert.
+- [x] **Étape 5 :** commit `feat(auth): social providers, passkeys and admin role`.
 
 ### Tâche 8 : Classement des routes et tests d'isolation
 
@@ -176,9 +176,9 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
 - Produit : `defineAccess(route, level: "public" | "user" | "admin")` et `accessMiddleware`. Une route `user` sans session répond 401 ; une route `admin` sans rôle admin ou sans passkey répond 403.
 - Produit : un test qui parcourt `/api/openapi.json` et **échoue si une route n'a pas de niveau déclaré**. C'est le socle des tests d'isolation de chaque chantier (spec §11 : 100 % des routes).
 
-- [ ] **Étape 1 : tests qui échouent** — une route sans `defineAccess` fait échouer le test de parcours ; `GET /api/health` est `public` ; une route `user` sans cookie répond 401.
-- [ ] **Étape 2 → 4 :** implémenter, tests au vert.
-- [ ] **Étape 5 :** commit `feat(api): declared access levels for every route`.
+- [x] **Étape 1 : tests qui échouent** — une route sans `defineAccess` fait échouer le test de parcours ; `GET /api/health` est `public` ; une route `user` sans cookie répond 401.
+- [x] **Étape 2 → 4 :** implémenter, tests au vert.
+- [x] **Étape 5 :** commit `feat(api): declared access levels for every route`.
 
 ### Tâche 9 : Droits et limites
 
@@ -191,9 +191,9 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
 - Produit : `getLimit(userId, key): Promise<number | "unlimited">`, `checkAndConsume(userId, key, amount = 1): Promise<{ allowed: boolean; remaining: number | "unlimited" }>`, atomique (une seule requête `UPDATE … WHERE valeur + amount <= limite`).
 - Produit : formule par défaut « Gratuit », créée par la migration avec des **valeurs de départ** (300 pièces, 50 alertes ; les autres à 20 par mois). Ces valeurs se changeront dans l'admin au chantier 6.
 
-- [ ] **Étape 1 : tests qui échouent** — 20 appels de `checkAndConsume(u, "cutouts_per_month")` sont acceptés, le 21e est refusé ; 25 appels simultanés n'en acceptent que 20 ; un nouveau mois remet le compteur à zéro ; une utilisatrice sans formule reçoit « Gratuit ».
-- [ ] **Étape 2 → 4 :** implémenter, tests au vert.
-- [ ] **Étape 5 :** commit `feat(entitlements): plans, limits and atomic usage counters`.
+- [x] **Étape 1 : tests qui échouent** — 20 appels de `checkAndConsume(u, "cutouts_per_month")` sont acceptés, le 21e est refusé ; 25 appels simultanés n'en acceptent que 20 ; un nouveau mois remet le compteur à zéro ; une utilisatrice sans formule reçoit « Gratuit ».
+- [x] **Étape 2 → 4 :** implémenter, tests au vert.
+- [x] **Étape 5 :** commit `feat(entitlements): plans, limits and atomic usage counters`.
 
 ### Tâche 10 : Photos — stockage OVH et nettoyage
 
@@ -211,14 +211,14 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
   - réorientation EXIF, puis ré-encodage en WebP, plus grand côté 2 048 px, **aucune métadonnée conservée**.
 - Produit : table `media` (id, user_id, clé, type, taille, dimensions, créé le), enregistrée dans `registerOwnedTable`. Clés S3 : `users/<userId>/<uuid>.webp`.
 
-- [ ] **Étape 1 : tests qui échouent** (point de vigilance 3) :
+- [x] **Étape 1 : tests qui échouent** (point de vigilance 3) :
   - un JPEG avec GPS EXIF ressort sans aucune métadonnée (`sharp(out).metadata()` n'a ni `exif` ni `xmp`) ;
   - un fichier HEIC lève `UnsupportedImageError`, et la route répond 415 « Format non pris en charge » ;
   - 21 Mo donnent 413 « Photo trop lourde, 20 Mo maximum » ;
   - un PDF donne 415 ;
   - la route sans session répond 401.
-- [ ] **Étape 2 → 4 :** implémenter, tests au vert.
-- [ ] **Étape 5 :** commit `feat(media): image normalization and object storage`.
+- [x] **Étape 2 → 4 :** implémenter, tests au vert.
+- [x] **Étape 5 :** commit `feat(media): image normalization and object storage`.
 
 ### Tâche 11 : Mesure d'audience
 
@@ -230,9 +230,9 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
 - Produit : `POST /api/events` reçoit au plus 20 événements par lot. Chaque événement contient `{ name, path, occurredAt, props? }`. Le serveur ajoute `user_id` si une session existe, et **ne stocke jamais l'adresse IP ni le user-agent complet** : seulement la famille d'appareil (`mobile` | `desktop` | `tablet`).
 - Produit : `track(name, props?)` côté web, envoyé par `navigator.sendBeacon` ; `trackServer(db, event)` côté API et worker.
 
-- [ ] **Étape 1 : tests qui échouent** — un lot de 21 événements répond 400 ; un nom inconnu répond 400 ; la ligne stockée n'a pas de colonne d'IP et `device` vaut `mobile` pour un user-agent d'iPhone.
-- [ ] **Étape 2 → 4 :** implémenter, tests au vert.
-- [ ] **Étape 5 :** commit `feat(analytics): first-party events without IP`.
+- [x] **Étape 1 : tests qui échouent** — un lot de 21 événements répond 400 ; un nom inconnu répond 400 ; la ligne stockée n'a pas de colonne d'IP et `device` vaut `mobile` pour un user-agent d'iPhone.
+- [x] **Étape 2 → 4 :** implémenter, tests au vert.
+- [x] **Étape 5 :** commit `feat(analytics): first-party events without IP`.
 
 ### Tâche 12 : Coque de l'admin
 
@@ -246,9 +246,9 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
 - Produit : l'interface admin, avec un menu (tableau de bord, puis une entrée par chantier), une palette ⌘K (cmdk) et le mode sombre. Elle utilise uniquement les tokens.
 - Un admin sans session passkey est redirigé vers `/admin/passkey-required`, qui explique comment enregistrer une passkey (point de vigilance 4).
 
-- [ ] **Étape 1 : tests qui échouent** — `GET /api/admin/overview` répond 403 pour une utilisatrice, 403 pour un admin connecté par code, 200 pour un admin connecté par passkey ; un `POST` admin crée une ligne dans `admin_audit_log` ; les chiffres de `overview` correspondent aux données insérées.
-- [ ] **Étape 2 → 4 :** implémenter, tests au vert.
-- [ ] **Étape 5 :** commit `feat(admin): shell, overview and audit log`.
+- [x] **Étape 1 : tests qui échouent** — `GET /api/admin/overview` répond 403 pour une utilisatrice, 403 pour un admin connecté par code, 200 pour un admin connecté par passkey ; un `POST` admin crée une ligne dans `admin_audit_log` ; les chiffres de `overview` correspondent aux données insérées.
+- [x] **Étape 2 → 4 :** implémenter, tests au vert.
+- [x] **Étape 5 :** commit `feat(admin): shell, overview and audit log`.
 
 ### Tâche 13 : En-têtes de sécurité et HSTS
 
@@ -263,9 +263,9 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
   - `Content-Security-Policy` avec `frame-ancestors 'none'`, d'abord en `Report-Only`, puis appliquée à la fin du chantier si aucun rapport.
 - Produit : Caddy ajoute `Strict-Transport-Security "max-age=31536000; includeSubDomains"` (sans `preload`). La fondatrice l'installe avec la commande admin de la tâche 15.
 
-- [ ] **Étape 1 : test qui échoue** — test Playwright (tâche 14) : la réponse de `/` porte les quatre en-têtes.
-- [ ] **Étape 2 → 4 :** implémenter, test au vert.
-- [ ] **Étape 5 :** commit `feat(security): baseline headers and HSTS`.
+- [x] **Étape 1 : test qui échoue** — test Playwright (tâche 14) : la réponse de `/` porte les quatre en-têtes.
+- [x] **Étape 2 → 4 :** implémenter, test au vert.
+- [x] **Étape 5 :** commit `feat(security): baseline headers and HSTS`.
 
 ### Tâche 14 : Tests de bout en bout et accessibilité
 
@@ -281,24 +281,24 @@ Playwright 1.64 + `@axe-core/playwright`, cmdk.
   - `/admin` refusé à une utilisatrice ;
   - les en-têtes de la tâche 13.
 
-- [ ] **Étape 1 :** écrire les tests ; ils échouent.
-- [ ] **Étape 2 :** compléter ce qui manque (route de test des e-mails, scripts).
-- [ ] **Étape 3 :** au vert en local et en CI.
-- [ ] **Étape 4 :** commit `test(e2e): Playwright journeys with axe checks`.
+- [x] **Étape 1 :** écrire les tests ; ils échouent.
+- [x] **Étape 2 :** compléter ce qui manque (route de test des e-mails, scripts).
+- [x] **Étape 3 :** au vert en local et en CI.
+- [x] **Étape 4 :** commit `test(e2e): Playwright journeys with axe checks`.
 
 ### Tâche 15 : Mise en ligne du chantier 0
 
 **Fichiers :**
 - Modifier : `deploy/README.md` (nouvelles variables, rôle admin, HSTS), `apps/worker` si besoin (aucune tâche nouvelle dans ce chantier)
 
-- [ ] **Étape 1 :** préparer les **commandes admin** pour la fondatrice :
+- [x] **Étape 1 :** préparer les **commandes admin** pour la fondatrice :
   - variables à ajouter à `dev.env` puis `prod.env` (`BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `BREVO_API_KEY`, les cinq `S3_*`, plus Google et Apple quand les comptes existent) ;
   - mise à jour du Caddyfile (HSTS) ;
   - SQL de rôle admin.
-- [ ] **Étape 2 :** `deploy/build.sh origin/dev` puis `sudo closyria-deploy dev <id>` ; vérifier la santé, une connexion par code e-mail réelle, l'admin avec passkey, et un envoi de photo dont le GPS a disparu.
-- [ ] **Étape 3 :** la fondatrice teste sur dev.closyria.com.
-- [ ] **Étape 4 :** revue de code (`code-review`) et `superpowers:verification-before-completion`, fusion de `dev` dans `main`, `deploy-checklist`, puis déploiement prod par la fondatrice.
-- [ ] **Étape 5 :** cocher le chantier 0 dans la spec et noter les écarts éventuels.
+- [x] **Étape 2 :** `deploy/build.sh origin/dev` puis `sudo closyria-deploy dev <id>` ; vérifier la santé, une connexion par code e-mail réelle, l'admin avec passkey, et un envoi de photo dont le GPS a disparu.
+- [x] **Étape 3 :** la fondatrice teste sur dev.closyria.com.
+- [x] **Étape 4 :** revue de code (`code-review`) et `superpowers:verification-before-completion`, fusion de `dev` dans `main`, `deploy-checklist`, puis déploiement prod par la fondatrice.
+- [x] **Étape 5 :** cocher le chantier 0 dans la spec et noter les écarts éventuels.
 
 ## Prérequis de la fondatrice pour ce chantier
 
