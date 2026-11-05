@@ -34,6 +34,7 @@ export function MergeDialog({ source, options }: { source: Option; options: Opti
   };
 
   const merge = async () => {
+    if (busy) return;
     setBusy(true);
     setError(null);
     const res = await adminRequest("POST", `/api/admin/shops/${source.id}/merge`, { targetId });
@@ -116,10 +117,21 @@ export function MergeDialog({ source, options }: { source: Option; options: Opti
           </p>
           <p id="merge-confirm-text">{t("confirm", { source: source.name, target: target.name })}</p>
           <div className="flex flex-wrap gap-space-2">
-            <button ref={confirmRef} type="button" className={primaryButtonClass} disabled={busy} onClick={merge}>
+            <button
+              ref={confirmRef}
+              type="button"
+              className={`${primaryButtonClass} aria-disabled:opacity-60`}
+              aria-disabled={busy}
+              onClick={merge}
+            >
               {t("confirmButton")}
             </button>
-            <button type="button" className={buttonClass} disabled={busy} onClick={cancel}>
+            <button
+              type="button"
+              className={`${buttonClass} aria-disabled:opacity-60`}
+              aria-disabled={busy}
+              onClick={cancel}
+            >
               {t("cancel")}
             </button>
           </div>
