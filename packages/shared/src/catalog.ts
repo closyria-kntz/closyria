@@ -43,6 +43,19 @@ const sizeSchema = z.object({
   priceCents: priceSchema.optional(),
 });
 
+const shopText = z.string().max(200);
+/** Raw shop data read from the page (not interpreted): strings ≤ 200 characters, lists ≤ 20 items. */
+export const shopDataSchema = z.object({
+  category: shopText.optional(),
+  breadcrumb: z.array(shopText).max(20).optional(),
+  tags: z.array(shopText).max(20).optional(),
+  colors: z.array(shopText).max(20).optional(),
+  material: shopText.optional(),
+  care: shopText.optional(),
+  collection: shopText.optional(),
+});
+export type ShopData = z.infer<typeof shopDataSchema>;
+
 /** What the worker extracts from a product page. */
 export const extractedProductSchema = z.object({
   name: z.string().min(1).max(300),
@@ -56,6 +69,13 @@ export const extractedProductSchema = z.object({
   externalId: z.string().optional(),
   siteName: z.string().optional(),
   platform: z.enum(["shopify", "other"]),
+  publishedAt: z.iso.datetime().optional(),
+  gtin: z
+    .string()
+    .regex(/^(\d{8}|\d{12,14})$/)
+    .optional(),
+  sku: z.string().max(200).optional(),
+  shopData: shopDataSchema.optional(),
 });
 export type ExtractedProduct = z.infer<typeof extractedProductSchema>;
 

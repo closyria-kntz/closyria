@@ -1,4 +1,12 @@
-import { cleanImages, cleanText, parseMachinePriceCents } from "./clean";
+import {
+  buildShopData,
+  cleanDate,
+  cleanGtin,
+  cleanImages,
+  cleanList,
+  cleanText,
+  parseMachinePriceCents,
+} from "./clean";
 import type { Candidate } from "./types";
 
 type Json = Record<string, unknown>;
@@ -68,7 +76,30 @@ function sizeLabel(raw: unknown): string | undefined {
   return cleanText(typeof value === "number" ? String(value) : value, 40);
 }
 
-function productCandidate(node: Json, url: string): Candidate | null {
+const GTIN_KEYS = ["gtin13", "gtin8", "gtin", "gtin12", "gtin14"];
+
+const nameOf = (raw: unknown): unknown => (isObject(raw) ? raw.name : raw);
+
+/** Breadcrumb names in position order, without a last entry equal to the product name. */
+function breadcrumbNames(lists: Json[], productName: string): string[] {
+  const list = lists[0];
+  if (!list) return [];
+  const items = asArray(list.itemListElement)
+    .filter(isObject)
+    .map((item, index) => ({
+      index,
+      position: Number(item.position),
+      name: cleanText(item.name ?? nameOf(item.item), 200),
+    }))
+    .sort((a, b) =>
+      Number.isFinite(a.position) && Number.isFinite(b.position) ? a.position - b.position : a.index - b.index,
+    );
+  const names = items.map((i) => i.name).filter((n): n is string => n !== undefined);
+  if (names.length > 0 && names[names.length - 1] === productName) names.pop();
+  return names;
+}
+
+function productCandidate(node: Json, url: string, breadcrumbs: Json[]): Candidate | null {
   const variants = asArray(node.hasVariant).filter(isObject);
   const rootOffers = flattenOffers(node.offers);
   const offers = [...rootOffers, ...variants.flatMap((v) => flattenOffers(v.offers))];
@@ -92,8 +123,20 @@ function productCandidate(node: Json, url: string): Candidate | null {
   const images = asArray(node.image).map((i) => (isObject(i) ? (i.url ?? i.contentUrl) : i));
   const id = node.sku ?? node.productGroupID ?? node.productID;
 
+  const gtin = GTIN_KEYS.map((k) => cleanGtin(node[k])).find((g) => g !== undefined);
+  const sku = [node.sku, ...variants.map((v) => v.sku)].map((v) => cleanText(v, 200)).find((v) => v !== undefined);
+
   return {
     name,
+    publishedAt: cleanDate(node.releaseDate),
+    gtin,
+    sku,
+    shopData: buildShopData({
+      category: cleanText(nameOf(node.category), 200),
+      breadcrumb: breadcrumbNames(breadcrumbs, name),
+      colors: cleanList(asArray(node.color).map(nameOf)),
+      material: cleanText(nameOf(node.material), 200),
+    }),
     brand: cleanText(brandRaw, 120),
     description: cleanText(node.description, 5000),
     currency: typeof currencyRaw === "string" ? currencyRaw.toUpperCase() : undefined,
@@ -108,9 +151,10 @@ function productCandidate(node: Json, url: string): Candidate | null {
 export function extractJsonLd(html: string, url: string): Candidate | null {
   const nodes: Json[] = [];
   for (const block of parseBlocks(html)) collectNodes(block, nodes);
+  const breadcrumbs = nodes.filter((n) => hasType(n, "BreadcrumbList"));
   for (const node of nodes) {
     if (!hasType(node, "Product") && !hasType(node, "ProductGroup")) continue;
-    const candidate = productCandidate(node, url);
+    const candidate = productCandidate(node, url, breadcrumbs);
     if (candidate) return candidate;
   }
   return null;

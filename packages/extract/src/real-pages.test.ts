@@ -45,3 +45,47 @@ describe.each(PAGES)("real page $name", ({ name, url, shopify, sizes }) => {
     if (sizes) expect(r.product.sizes.length).toBeGreaterThan(0);
   });
 });
+
+describe("new fields on real pages", () => {
+  const product = (name: string, url: string, shopify: boolean) => {
+    const r = extract({
+      url,
+      contentType: "text/html",
+      body: read(`${name}.html`),
+      ...(shopify ? { shopifyJson: read(`${name}.js.json`) } : {}),
+    });
+    if (!r.ok) throw new Error(`extraction failed: ${r.error}`);
+    return r.product;
+  };
+  // Shopify `.js` carries `type` only for some shops (empty for intemporel and paolina): no category is invented.
+  const WITH_CATEGORY: Record<string, string> = {
+    "mcb-paris": "SETUP",
+    "easy-clothes": "Jeans",
+    my1996: "Vêtements",
+    ohlala: "Veste",
+  };
+  for (const page of PAGES.filter((p) => p.shopify)) {
+    it(`${page.name}: publication date${page.name in WITH_CATEGORY ? " and category" : ""}`, () => {
+      const p = product(page.name, page.url, true);
+      expect(p.publishedAt).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
+      expect(p.shopData?.category).toBe(WITH_CATEGORY[page.name]);
+    });
+  }
+  it("easy-clothes: tags and codes", () => {
+    const p = product("easy-clothes", PAGES[1]?.url ?? "", true);
+    expect(p.shopData?.tags).toContain("multi-saison");
+    expect(p.sku).toBe("Q377XS");
+    expect(p.gtin).toBe("60788097"); // 8-digit barcode, a valid GTIN-8
+  });
+  it("zalando: sku, colour and breadcrumb (no gtin in the recorded JSON-LD)", () => {
+    const p = product("zalando", PAGES[7]?.url ?? "", false);
+    expect(p.sku).toBe("ADQ41E03I-Q120XXS000");
+    expect(p.shopData?.colors).toEqual(["black/white/noir"]);
+    expect(p.shopData?.breadcrumb).toEqual(["Femme", "Sport", "Vêtements", "Pantalons", "Collants & leggings"]);
+  });
+  it("promod: still valid without new fields", () => {
+    const p = product("promod", PAGES[6]?.url ?? "", false);
+    expect(p.publishedAt).toBeUndefined();
+    expect(p.gtin).toBeUndefined();
+  });
+});

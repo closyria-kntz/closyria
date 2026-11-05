@@ -1,4 +1,4 @@
-import { MAX_PRODUCT_IMAGES } from "@closyria/shared";
+import { MAX_PRODUCT_IMAGES, type ShopData } from "@closyria/shared";
 
 const NAMED_ENTITIES: Record<string, string> = {
   amp: "&",
@@ -91,4 +91,35 @@ export function parseMachinePriceCents(value: string | number): number | null {
   const single = value.match(/^\s*[^\d\s\-\u2212]*\s*(\d+(?:\.\d+)?)\s*[^\d\s]*\s*$/);
   if (single?.[1]) return Math.round(Number(single[1]) * 100);
   return parsePriceCents(value);
+}
+
+/** Digits only after removing spaces and hyphens; length 8, 12, 13 or 14, else undefined. */
+export function cleanGtin(value: unknown): string | undefined {
+  if (typeof value !== "string" && typeof value !== "number") return undefined;
+  const digits = String(value).replace(/[\s-]/g, "");
+  return /^(\d{8}|\d{12,14})$/.test(digits) ? digits : undefined;
+}
+
+/** Any parseable date as a UTC ISO datetime; undefined otherwise. */
+export function cleanDate(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.trim() === "") return undefined;
+  const time = new Date(value.trim()).getTime();
+  return Number.isNaN(time) ? undefined : new Date(time).toISOString();
+}
+
+/** Cleaned, non-empty, distinct strings (each ≤ 200), at most 20. */
+export function cleanList(values: unknown[]): string[] {
+  const out: string[] = [];
+  for (const value of values) {
+    const text = cleanText(value, 200);
+    if (text && !out.includes(text)) out.push(text);
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+/** Drops empty fields; undefined when nothing is left. */
+export function buildShopData(data: ShopData): ShopData | undefined {
+  const entries = Object.entries(data).filter(([, v]) => (Array.isArray(v) ? v.length > 0 : v !== undefined));
+  return entries.length > 0 ? (Object.fromEntries(entries) as ShopData) : undefined;
 }
