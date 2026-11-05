@@ -124,10 +124,21 @@ describe("bulk", () => {
       { op: "delete" },
       { op: "restore" },
       { op: "setFavorite", favorite: true },
+      { op: "setFields", fields: { notes: null, pricePaidCents: 1200, saleChannel: "Vinted" } },
     ];
     for (const c of cases) expect(itemBulkSchema.safeParse({ ids: [id], ...c }).success, c.op).toBe(true);
     expect(itemBulkSchema.safeParse({ ids: [id], op: "move" }).success).toBe(false);
     expect(itemBulkSchema.safeParse({ ids: [id], op: "explode" }).success).toBe(false);
+  });
+  it("setFields needs at least one valid field", () => {
+    expect(itemBulkSchema.safeParse({ ids: [id], op: "setFields", fields: {} }).success).toBe(false);
+    expect(itemBulkSchema.safeParse({ ids: [id], op: "setFields", fields: { pricePaidCents: -1 } }).success).toBe(
+      false,
+    );
+    expect(itemBulkSchema.safeParse({ ids: [id], op: "setFields", fields: { saleChannel: "  " } }).success).toBe(false);
+    expect(itemBulkSchema.safeParse({ ids: [id], op: "setFields", fields: { salePriceCents: null } }).success).toBe(
+      true,
+    );
   });
 });
 
@@ -228,5 +239,12 @@ describe("views", () => {
     expect(undoPayloadSchema.safeParse({ ...undo, ops: [] }).success).toBe(false);
     expect(undoPayloadSchema.safeParse({ ...undo, removeEventIds: ["x"] }).success).toBe(false);
     expect(undoPayloadSchema.safeParse({ ...undo, ops: [{ ids: [], op: "delete" }] }).success).toBe(false);
+    const ids = (n: number, k: number) =>
+      Array.from({ length: n }, (_, i) => `00000000-0000-4000-8${k}00-${String(i).padStart(12, "0")}`);
+    const ops = (k: number) => [0, 1].map((j) => ({ ids: ids(200, k + j), op: "delete" }));
+    expect(undoPayloadSchema.safeParse({ ops: ops(0), removeEventIds: [] }).success).toBe(true);
+    expect(
+      undoPayloadSchema.safeParse({ ops: [...ops(0), { ids: [id], op: "restore" }], removeEventIds: [] }).success,
+    ).toBe(false);
   });
 });

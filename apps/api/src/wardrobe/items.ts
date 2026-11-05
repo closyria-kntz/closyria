@@ -1,4 +1,4 @@
-import { and, type Database, desc, eq, isNull, schema, sql } from "@closyria/db";
+import { and, asc, type Database, desc, eq, isNull, schema, sql } from "@closyria/db";
 import type {
   ItemCreate,
   ItemMove,
@@ -8,9 +8,11 @@ import type {
   UndoPayload,
   WardrobeErrorCode,
 } from "@closyria/shared";
+import { pgCode } from "../pg-code";
 import { recordEvent, type Tx } from "./events";
 import { mergeItemInto } from "./merge-items";
 import { ensureDefaultProfile, findOwnProfile } from "./profiles";
+import { type ItemFieldValues, setFieldsUndo } from "./undo";
 
 export type Item = typeof schema.items.$inferSelect;
 
@@ -20,7 +22,7 @@ export type ItemOutcome =
   | { error: WardrobeErrorCode };
 
 /** Which item column a stage's amount goes to. */
-const AMOUNT_COLUMN: Partial<Record<ItemStage, "pricePaidCents" | "salePriceCents">> = {
+export const AMOUNT_COLUMN: Partial<Record<ItemStage, "pricePaidCents" | "salePriceCents">> = {
   ordered: "pricePaidCents",
   owned: "pricePaidCents",
   for_sale: "salePriceCents",
@@ -28,7 +30,7 @@ const AMOUNT_COLUMN: Partial<Record<ItemStage, "pricePaidCents" | "salePriceCent
 };
 
 /** Serializes the actions that could leave two active items for one product (creation, restoration). */
-async function lockProductOfUser(tx: Tx, userId: string, productId: string) {
+export async function lockProductOfUser(tx: Tx, userId: string, productId: string) {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`items:${userId}:${productId}`}, 0))`);
 }
 
@@ -125,8 +127,8 @@ export async function createItem(db: Database, userId: string, input: ItemCreate
 }
 
 /**
- * Her own fields. The cover must be one of the item's photos; category and colour must exist. Only a favorite toggle
- * is undoable (the bulk ops have no field edits): any other edit answers `undo: null`.
+ * Her own fields. The cover must be one of the item's photos; category and colour must exist. Undo: `setFields` with
+ * the previous values of exactly the fields that changed (ruling R9).
  */
 export async function patchItem(
   db: Database,
@@ -169,11 +171,11 @@ export async function patchItem(
       .update(schema.items)
       .set({ ...set, updatedAt: now })
       .where(eq(schema.items.id, item.id));
-    const undo: UndoPayload | null =
-      Object.keys(set).length === 1 && set.favorite !== undefined
-        ? { ops: [{ ids: [item.id], op: "setFavorite", favorite: item.favorite }], removeEventIds: [] }
-        : null;
-    return { itemId: item.id, itemIds: [item.id], undo };
+    return {
+      itemId: item.id,
+      itemIds: [item.id],
+      undo: { ops: setFieldsUndo([item], set as ItemFieldValues), removeEventIds: [] },
+    };
   });
 }
 
@@ -181,8 +183,8 @@ export async function patchItem(
  * Moves the item to another stage (any other stage, never the same one) and writes the history row. The amount goes
  * to the paid price (`ordered`, `owned`) or the sale price (`for_sale`, `sold`); the channel to `sale_channel`
  * (sale stages only).
- * Undo: back to the previous stage at the date of its own history row (creation date when it has none), and the new
- * row deleted. The amounts written by the action are not reverted.
+ * Undo: back to the previous stage (`at`: the date of its own history row, creation date when it has none; the replay
+ * writes no row), the previous amounts and channel when the action changed them (ruling R9), and the new row deleted.
  */
 export async function changeStage(
   db: Database,
@@ -208,13 +210,16 @@ export async function changeStage(
       )
       .orderBy(desc(schema.itemEvents.at), desc(schema.itemEvents.createdAt))
       .limit(1);
-    const set: Partial<typeof schema.items.$inferInsert> = { stage: input.stage, updatedAt: now };
+    const values: ItemFieldValues = {};
     const column = AMOUNT_COLUMN[input.stage];
-    if (column && input.amountCents !== undefined) set[column] = input.amountCents;
+    if (column && input.amountCents !== undefined) values[column] = input.amountCents;
     if (input.channel !== undefined && (input.stage === "for_sale" || input.stage === "sold")) {
-      set.saleChannel = input.channel;
+      values.saleChannel = input.channel;
     }
-    await tx.update(schema.items).set(set).where(eq(schema.items.id, item.id));
+    await tx
+      .update(schema.items)
+      .set({ ...values, stage: input.stage, updatedAt: now })
+      .where(eq(schema.items.id, item.id));
     const eventId = await recordEvent(tx, item, {
       type: "stage",
       stage: input.stage,
@@ -226,7 +231,10 @@ export async function changeStage(
       itemId: item.id,
       itemIds: [item.id],
       undo: {
-        ops: [{ ids: [item.id], op: "stage", stage: item.stage as ItemStage, at: previousAt }],
+        ops: [
+          { ids: [item.id], op: "stage", stage: item.stage as ItemStage, at: previousAt },
+          ...setFieldsUndo([item], values),
+        ],
         removeEventIds: [eventId],
       },
       previous: item,
@@ -234,7 +242,11 @@ export async function changeStage(
   });
 }
 
-/** Moves the item to another of her profiles, traced in the history (G7). */
+/**
+ * Moves the item to another of her profiles, traced in the history (G7). Lock order as the batches: the target profile
+ * (shared: a deletion in flight finishes first, then 404), then the item row. A foreign-key violation that would still
+ * slip through answers 404, never 500.
+ */
 export async function moveItem(
   db: Database,
   userId: string,
@@ -242,26 +254,37 @@ export async function moveItem(
   input: ItemMove,
   now: Date,
 ): Promise<ItemOutcome> {
-  return db.transaction(async (tx): Promise<ItemOutcome> => {
-    const item = await lockOwnItem(tx, userId, itemId);
-    if (!item) return { error: "not_found" };
-    const target = await findOwnProfile(tx, userId, input.profileId);
-    if (!target) return { error: "not_found" };
-    if (item.deletedAt) return { error: "item_deleted" };
-    if (item.profileId === target.id) return { error: "same_profile" };
-    await tx.update(schema.items).set({ profileId: target.id, updatedAt: now }).where(eq(schema.items.id, item.id));
-    const eventId = await recordEvent(tx, item, {
-      type: "profile",
-      fromProfileId: item.profileId,
-      toProfileId: target.id,
-      at: now,
-    });
-    return {
-      itemId: item.id,
-      itemIds: [item.id],
-      undo: { ops: [{ ids: [item.id], op: "move", profileId: item.profileId }], removeEventIds: [eventId] },
-    };
+  try {
+    return await db.transaction((tx) => moveItemIn(tx, userId, itemId, input, now));
+  } catch (error) {
+    if (pgCode(error) === "23503") return { error: "not_found" };
+    throw error;
+  }
+}
+
+async function moveItemIn(tx: Tx, userId: string, itemId: string, input: ItemMove, now: Date): Promise<ItemOutcome> {
+  const [target] = await tx
+    .select({ id: schema.profiles.id })
+    .from(schema.profiles)
+    .where(and(eq(schema.profiles.id, input.profileId), eq(schema.profiles.userId, userId)))
+    .for("share");
+  const item = await lockOwnItem(tx, userId, itemId);
+  if (!item) return { error: "not_found" };
+  if (!target) return { error: "not_found" };
+  if (item.deletedAt) return { error: "item_deleted" };
+  if (item.profileId === target.id) return { error: "same_profile" };
+  await tx.update(schema.items).set({ profileId: target.id, updatedAt: now }).where(eq(schema.items.id, item.id));
+  const eventId = await recordEvent(tx, item, {
+    type: "profile",
+    fromProfileId: item.profileId,
+    toProfileId: target.id,
+    at: now,
   });
+  return {
+    itemId: item.id,
+    itemIds: [item.id],
+    undo: { ops: [{ ids: [item.id], op: "move", profileId: item.profileId }], removeEventIds: [eventId] },
+  };
 }
 
 /** Sends the item to the trash (kept 30 days). Undo: restore. */
@@ -285,14 +308,32 @@ export async function trashItem(db: Database, userId: string, itemId: string, no
  */
 export async function restoreItem(db: Database, userId: string, itemId: string, now: Date): Promise<ItemOutcome> {
   return db.transaction(async (tx): Promise<ItemOutcome> => {
-    const item = await lockOwnItem(tx, userId, itemId);
+    // An item's product never changes: it is read before any lock.
+    const [peek] = await tx
+      .select({ productId: schema.items.productId })
+      .from(schema.items)
+      .where(and(eq(schema.items.id, itemId), eq(schema.items.userId, userId)));
+    if (!peek) return { error: "not_found" };
+    if (!peek.productId) throw new Error("items without a product come with 2b");
+    // Lock order, as the batches: the product lock (no new active item meanwhile), then the source and target rows
+    // together by id, read fresh under their locks so that a change committed on the target meanwhile is merged,
+    // never overwritten.
+    await lockProductOfUser(tx, userId, peek.productId);
+    const rows = await tx
+      .select()
+      .from(schema.items)
+      .where(
+        and(
+          eq(schema.items.userId, userId),
+          sql`(${eq(schema.items.id, itemId)} or (${eq(schema.items.productId, peek.productId)} and ${isNull(schema.items.deletedAt)}))`,
+        ),
+      )
+      .orderBy(asc(schema.items.id))
+      .for("update");
+    const item = rows.find((row) => row.id === itemId);
     if (!item) return { error: "not_found" };
     if (!item.deletedAt) return { error: "item_not_deleted" };
-    if (!item.productId) throw new Error("items without a product come with 2b");
-    // Lock order: the source row, the product lock (no new active item meanwhile), then the target row, read fresh
-    // under its lock so that a change committed on it in the meantime is merged, never overwritten.
-    await lockProductOfUser(tx, userId, item.productId);
-    const active = await lockActiveItemFor(tx, userId, item.productId);
+    const active = rows.find((row) => row.id !== item.id && row.deletedAt === null);
     if (active) {
       await mergeItemInto(tx, item, active, now);
       return { itemId: active.id, itemIds: [active.id], undo: null };

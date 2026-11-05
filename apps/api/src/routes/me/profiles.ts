@@ -12,6 +12,7 @@ import {
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { type AccessEnv, defineAccess } from "../../access";
+import { pgCode } from "../../pg-code";
 import type { WardrobeDeps } from "../../wardrobe/deps";
 import {
   ensureDefaultProfile,
@@ -130,12 +131,6 @@ function userIdOf(c: Context<AccessEnv>): string {
   const id = c.var.session?.user.id;
   if (!id) throw new Error("me route reached without a session");
   return id;
-}
-
-/** Postgres error code, through Drizzle's wrapping. */
-function pgCode(error: unknown): string | undefined {
-  const e = error as { code?: string; cause?: { code?: string } };
-  return e?.cause?.code ?? e?.code;
 }
 
 /** The child detail a profile ends up with, or false when it contradicts the audience. */

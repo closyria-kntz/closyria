@@ -240,13 +240,22 @@ describe("GET /api/me/items/:id and PATCH", () => {
       brand: "Marque",
       categoryId: category?.id,
     });
-    expect(body.undo).toBeNull();
+    expect(body.undo).toEqual({
+      ops: [
+        {
+          ids: [item.id],
+          op: "setFields",
+          fields: { sizeLabel: null, notes: null, nameOverride: null, categoryId: null },
+        },
+      ],
+      removeEventIds: [],
+    });
     const read = await call("GET", `/api/me/items/${item.id}`, cookie);
     expect(read.status).toBe(200);
     expect(await read.json()).toMatchObject({ id: item.id, sizeLabel: "M", name: "Ma robe" });
   });
 
-  it("gives the inverse of a favorite change as undo", async () => {
+  it("gives the previous favorite value as undo", async () => {
     const { cookie } = await t.signIn();
     const product = await newProduct();
     const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
@@ -254,7 +263,10 @@ describe("GET /api/me/items/:id and PATCH", () => {
       await call("PATCH", `/api/me/items/${item.id}`, cookie, { favorite: false })
     ).json()) as ItemResult;
     expect(body.item.favorite).toBe(false);
-    expect(body.undo).toEqual({ ops: [{ ids: [item.id], op: "setFavorite", favorite: true }], removeEventIds: [] });
+    expect(body.undo).toEqual({
+      ops: [{ ids: [item.id], op: "setFields", fields: { favorite: true } }],
+      removeEventIds: [],
+    });
   });
 
   it("reports nothing changed for a patch with the current values", async () => {
@@ -320,7 +332,10 @@ describe("POST /api/me/items/:id/stage", () => {
     expect(events).toEqual([expect.objectContaining({ type: "stage", stage: "owned", amountCents: 3500 })]);
     expect(events[0]?.at.toISOString()).toBe(at);
     expect(body.undo).toEqual({
-      ops: [{ ids: [item.id], op: "stage", stage: "spotted", at: item.createdAt }],
+      ops: [
+        { ids: [item.id], op: "stage", stage: "spotted", at: item.createdAt },
+        { ids: [item.id], op: "setFields", fields: { pricePaidCents: null } },
+      ],
       removeEventIds: [events[0]?.id],
     });
     expect(await audienceEvents(userId, "item_stage_changed")).toEqual([

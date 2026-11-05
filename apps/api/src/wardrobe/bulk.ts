@@ -1,0 +1,388 @@
+import { and, asc, type Database, eq, inArray, isNull, schema, sql } from "@closyria/db";
+import type { ItemBulk, ItemStage, UndoPayload, WardrobeErrorCode } from "@closyria/shared";
+import { pgCode } from "../pg-code";
+import type { Tx } from "./events";
+import { AMOUNT_COLUMN, type Item, lockProductOfUser } from "./items";
+import { mergeItemInto } from "./merge-items";
+import { changedFields, groupIds, type ItemFieldValues, setFieldsUndo } from "./undo";
+
+/** Aborts the whole transaction with a stable error code (all or nothing). */
+class BulkError extends Error {
+  constructor(readonly code: WardrobeErrorCode) {
+    super(code);
+  }
+}
+
+/** What a batch did, for the audience events (spec §6). */
+export type BulkTrace = { stageChanges: { from: ItemStage; to: ItemStage }[]; moves: number };
+
+export type BulkOutcome =
+  | { itemIds: string[]; undo: UndoPayload | null; trace: BulkTrace }
+  | { error: WardrobeErrorCode };
+
+type OpResult = { changed: string[]; undoOps: ItemBulk[]; eventIds: string[]; trace: BulkTrace };
+type OpOptions = {
+  now: Date /** False while replaying an undo: no new history rows (ruling R4). */;
+  writeEvents: boolean;
+};
+
+const uniqueSorted = (values: string[]) => [...new Set(values)].sort();
+const emptyTrace = (): BulkTrace => ({ stageChanges: [], moves: 0 });
+
+/**
+ * Runs `work` in one transaction: a `BulkError` or a foreign-key violation (a profile, list or tag deleted in the
+ * meantime) rolls everything back and becomes the outcome's error.
+ */
+async function inTransaction(db: Database, work: (tx: Tx) => Promise<BulkOutcome>): Promise<BulkOutcome> {
+  try {
+    return await db.transaction(work);
+  } catch (error) {
+    if (error instanceof BulkError) return { error: error.code };
+    if (pgCode(error) === "23503") return { error: "not_found" };
+    throw error;
+  }
+}
+
+/** Share-locks her rows of a parent table (profile, list, tag): 404 for an id of another user, unknown or deleted. */
+async function shareOwn(
+  tx: Tx,
+  table: typeof schema.profiles | typeof schema.wishlists | typeof schema.tags,
+  userId: string,
+  ids: string[],
+) {
+  if (ids.length === 0) return;
+  const { rows } = await tx.execute(
+    sql`select id from ${table} where user_id = ${userId} and ${inArray(table.id, ids)} order by id for share`,
+  );
+  if (rows.length !== ids.length) throw new BulkError("not_found");
+}
+
+/**
+ * Takes every lock the ops need, before changing anything, always in this order (no deadlock with the single-item
+ * routes, the profile deletion or another batch):
+ * 1. the parent rows (target profiles, lists, tags), shared, by id — a profile being deleted waits or is gone (404);
+ * 2. the per-product advisory locks of the items to restore, by product id — as the creation and the single restore;
+ * 3. the item rows, by id: the ids given and, for a restore, her active items for the same products (merge targets).
+ * An id of another user or unknown answers 404 for the whole request.
+ */
+async function lockFor(tx: Tx, userId: string, ops: ItemBulk[]): Promise<void> {
+  const parents = (pick: (op: ItemBulk) => string | undefined) => uniqueSorted(ops.flatMap((op) => pick(op) ?? []));
+  await shareOwn(
+    tx,
+    schema.profiles,
+    userId,
+    parents((op) => (op.op === "move" ? op.profileId : undefined)),
+  );
+  await shareOwn(
+    tx,
+    schema.wishlists,
+    userId,
+    parents((op) => (op.op === "addToList" || op.op === "removeFromList" ? op.wishlistId : undefined)),
+  );
+  await shareOwn(
+    tx,
+    schema.tags,
+    userId,
+    parents((op) => (op.op === "addTag" || op.op === "removeTag" ? op.tagId : undefined)),
+  );
+
+  const ids = uniqueSorted(ops.flatMap((op) => op.ids));
+  const restoreIds = uniqueSorted(ops.flatMap((op) => (op.op === "restore" ? op.ids : [])));
+  let productIds: string[] = [];
+  if (restoreIds.length > 0) {
+    // An item's product never changes: reading it before the row lock is safe.
+    const rows = await tx
+      .select({ productId: schema.items.productId })
+      .from(schema.items)
+      .where(and(inArray(schema.items.id, restoreIds), eq(schema.items.userId, userId)));
+    productIds = uniqueSorted(rows.flatMap((r) => (r.productId ? [r.productId] : [])));
+    for (const productId of productIds) await lockProductOfUser(tx, userId, productId);
+  }
+  const scope =
+    productIds.length > 0
+      ? sql`(${inArray(schema.items.id, ids)} or (${inArray(schema.items.productId, productIds)} and ${isNull(schema.items.deletedAt)}))`
+      : inArray(schema.items.id, ids);
+  const locked = await tx
+    .select({ id: schema.items.id })
+    .from(schema.items)
+    .where(and(eq(schema.items.userId, userId), scope))
+    .orderBy(asc(schema.items.id))
+    .for("update");
+  const lockedIds = new Set(locked.map((r) => r.id));
+  if (ids.some((id) => !lockedIds.has(id))) throw new BulkError("not_found");
+}
+
+/** Her items of the op, in the op's order (already locked); 404 when one is missing (merged by an earlier op). */
+async function loadItems(tx: Tx, userId: string, ids: string[]): Promise<Item[]> {
+  const rows = await tx
+    .select()
+    .from(schema.items)
+    .where(and(inArray(schema.items.id, ids), eq(schema.items.userId, userId)));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return ids.map((id) => {
+    const row = byId.get(id);
+    if (!row) throw new BulkError("not_found");
+    return row;
+  });
+}
+
+function requireActive(items: Item[]) {
+  if (items.some((item) => item.deletedAt)) throw new BulkError("item_deleted");
+}
+
+const result = (changed: string[], undoOps: ItemBulk[] = [], eventIds: string[] = []): OpResult => ({
+  changed,
+  undoOps,
+  eventIds,
+  trace: emptyTrace(),
+});
+
+async function setItems(tx: Tx, ids: string[], set: Partial<typeof schema.items.$inferInsert>) {
+  if (ids.length > 0) await tx.update(schema.items).set(set).where(inArray(schema.items.id, ids));
+}
+
+/** One op of a batch or of an undo, on rows locked by `lockFor`. Only the items it really changes count. */
+async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions): Promise<OpResult> {
+  const { now } = options;
+  const items = await loadItems(tx, userId, op.ids);
+  switch (op.op) {
+    case "stage": {
+      requireActive(items);
+      const changed = items.filter((item) => item.stage !== op.stage);
+      if (changed.length === 0) return result([]);
+      const values: ItemFieldValues = {};
+      const column = AMOUNT_COLUMN[op.stage];
+      if (column && op.amountCents !== undefined) values[column] = op.amountCents;
+      if (op.channel !== undefined && (op.stage === "for_sale" || op.stage === "sold")) values.saleChannel = op.channel;
+      const ids = changed.map((item) => item.id);
+      await setItems(tx, ids, { ...values, stage: op.stage, updatedAt: now });
+      let eventIds: string[] = [];
+      if (options.writeEvents) {
+        const at = new Date(op.at);
+        const rows = await tx
+          .insert(schema.itemEvents)
+          .values(
+            ids.map((itemId) => ({ itemId, type: "stage", stage: op.stage, at, amountCents: op.amountCents ?? null })),
+          )
+          .returning({ id: schema.itemEvents.id });
+        eventIds = rows.map((r) => r.id);
+      }
+      // The previous stage, then the previous amounts and channel (ruling R9). The undo writes no history row, so
+      // its `at` is only there for the schema.
+      const undoOps: ItemBulk[] = [
+        ...groupIds(changed.map((item) => ({ id: item.id, key: item.stage as ItemStage }))).map(
+          ([stage, stageIds]): ItemBulk => ({ ids: stageIds, op: "stage", stage, at: now.toISOString() }),
+        ),
+        ...setFieldsUndo(changed, values),
+      ];
+      return {
+        ...result(ids, undoOps, eventIds),
+        trace: { stageChanges: changed.map((item) => ({ from: item.stage as ItemStage, to: op.stage })), moves: 0 },
+      };
+    }
+    case "move": {
+      requireActive(items);
+      const changed = items.filter((item) => item.profileId !== op.profileId);
+      if (changed.length === 0) return result([]);
+      const ids = changed.map((item) => item.id);
+      await setItems(tx, ids, { profileId: op.profileId, updatedAt: now });
+      let eventIds: string[] = [];
+      if (options.writeEvents) {
+        const rows = await tx
+          .insert(schema.itemEvents)
+          .values(
+            changed.map((item) => ({
+              itemId: item.id,
+              type: "profile",
+              fromProfileId: item.profileId,
+              toProfileId: op.profileId,
+              at: now,
+            })),
+          )
+          .returning({ id: schema.itemEvents.id });
+        eventIds = rows.map((r) => r.id);
+      }
+      const undoOps = groupIds(changed.map((item) => ({ id: item.id, key: item.profileId }))).map(
+        ([profileId, groupIdsOf]): ItemBulk => ({ ids: groupIdsOf, op: "move", profileId }),
+      );
+      return { ...result(ids, undoOps, eventIds), trace: { stageChanges: [], moves: ids.length } };
+    }
+    case "addToList": {
+      requireActive(items);
+      const present = await tx
+        .select({ itemId: schema.wishlistItems.itemId })
+        .from(schema.wishlistItems)
+        .where(and(eq(schema.wishlistItems.wishlistId, op.wishlistId), inArray(schema.wishlistItems.itemId, op.ids)));
+      const already = new Set(present.map((r) => r.itemId));
+      const ids = op.ids.filter((id) => !already.has(id));
+      if (ids.length === 0) return result([]);
+      const [last] = await tx
+        .select({ max: sql<number | null>`max(${schema.wishlistItems.position})` })
+        .from(schema.wishlistItems)
+        .where(eq(schema.wishlistItems.wishlistId, op.wishlistId));
+      const base = last?.max === null || last?.max === undefined ? 0 : Number(last.max) + 1;
+      const added = await tx
+        .insert(schema.wishlistItems)
+        .values(ids.map((itemId, i) => ({ wishlistId: op.wishlistId, itemId, position: base + i, addedAt: now })))
+        .onConflictDoNothing()
+        .returning({ itemId: schema.wishlistItems.itemId });
+      const addedIds = added.map((r) => r.itemId);
+      return result(
+        addedIds,
+        addedIds.length ? [{ ids: addedIds, op: "removeFromList", wishlistId: op.wishlistId }] : [],
+      );
+    }
+    case "removeFromList": {
+      requireActive(items);
+      const removed = await tx
+        .delete(schema.wishlistItems)
+        .where(and(eq(schema.wishlistItems.wishlistId, op.wishlistId), inArray(schema.wishlistItems.itemId, op.ids)))
+        .returning({ itemId: schema.wishlistItems.itemId });
+      const ids = removed.map((r) => r.itemId);
+      return result(ids, ids.length ? [{ ids, op: "addToList", wishlistId: op.wishlistId }] : []);
+    }
+    case "addTag": {
+      requireActive(items);
+      const added = await tx
+        .insert(schema.itemTags)
+        .values(op.ids.map((itemId) => ({ itemId, tagId: op.tagId })))
+        .onConflictDoNothing()
+        .returning({ itemId: schema.itemTags.itemId });
+      const ids = added.map((r) => r.itemId);
+      return result(ids, ids.length ? [{ ids, op: "removeTag", tagId: op.tagId }] : []);
+    }
+    case "removeTag": {
+      requireActive(items);
+      const removed = await tx
+        .delete(schema.itemTags)
+        .where(and(eq(schema.itemTags.tagId, op.tagId), inArray(schema.itemTags.itemId, op.ids)))
+        .returning({ itemId: schema.itemTags.itemId });
+      const ids = removed.map((r) => r.itemId);
+      return result(ids, ids.length ? [{ ids, op: "addTag", tagId: op.tagId }] : []);
+    }
+    case "setFavorite": {
+      requireActive(items);
+      const ids = items.filter((item) => item.favorite !== op.favorite).map((item) => item.id);
+      await setItems(tx, ids, { favorite: op.favorite, updatedAt: now });
+      return result(ids, ids.length ? [{ ids, op: "setFavorite", favorite: !op.favorite }] : []);
+    }
+    case "setFields": {
+      requireActive(items);
+      const values = Object.fromEntries(
+        Object.entries(op.fields).filter(([, value]) => value !== undefined),
+      ) as ItemFieldValues;
+      await checkReferences(tx, op.ids, values);
+      const changed = items.filter((item) => changedFields(item, values).length > 0);
+      const ids = changed.map((item) => item.id);
+      await setItems(tx, ids, { ...values, updatedAt: now });
+      return result(ids, setFieldsUndo(changed, values));
+    }
+    case "delete": {
+      const ids = items.filter((item) => !item.deletedAt).map((item) => item.id);
+      await setItems(tx, ids, { deletedAt: now, updatedAt: now });
+      return result(ids, ids.length ? [{ ids, op: "restore" }] : []);
+    }
+    case "restore": {
+      // As the single restore: when she keeps the same product again meanwhile, the two are merged into the active
+      // item (no undo for a merge); otherwise the item comes back and its undo is the trash.
+      const changed = new Set<string>();
+      const restored: string[] = [];
+      for (const item of items) {
+        if (!item.deletedAt) continue;
+        if (!item.productId) throw new Error("items without a product come with 2b");
+        const [active] = await tx
+          .select()
+          .from(schema.items)
+          .where(
+            and(
+              eq(schema.items.userId, userId),
+              eq(schema.items.productId, item.productId),
+              isNull(schema.items.deletedAt),
+            ),
+          );
+        if (active) {
+          await mergeItemInto(tx, item, active, now);
+          changed.add(active.id);
+        } else {
+          await setItems(tx, [item.id], { deletedAt: null, updatedAt: now });
+          changed.add(item.id);
+          restored.push(item.id);
+        }
+      }
+      return result([...changed], restored.length ? [{ ids: restored, op: "delete" }] : []);
+    }
+  }
+}
+
+/** The cover must be a photo of every item; the category and colour must exist (as PATCH). */
+async function checkReferences(tx: Tx, ids: string[], values: ItemFieldValues) {
+  if (values.coverMediaId) {
+    const photos = await tx
+      .select({ itemId: schema.itemMedia.itemId })
+      .from(schema.itemMedia)
+      .where(and(eq(schema.itemMedia.mediaId, values.coverMediaId), inArray(schema.itemMedia.itemId, ids)));
+    if (new Set(photos.map((p) => p.itemId)).size !== ids.length) throw new BulkError("invalid_cover");
+  }
+  if (values.categoryId) {
+    const [row] = await tx
+      .select({ id: schema.categories.id })
+      .from(schema.categories)
+      .where(eq(schema.categories.id, values.categoryId));
+    if (!row) throw new BulkError("invalid_category");
+  }
+  if (values.colorId) {
+    const [row] = await tx
+      .select({ id: schema.colors.id })
+      .from(schema.colors)
+      .where(eq(schema.colors.id, values.colorId));
+    if (!row) throw new BulkError("invalid_color");
+  }
+}
+
+/**
+ * `POST /items/bulk`: one op on up to 200 of her items, in one transaction, all or nothing. Returns the ids actually
+ * changed and the undo (inverse ops grouped by previous value, and the history rows written).
+ */
+export async function runBulk(db: Database, userId: string, op: ItemBulk, now: Date): Promise<BulkOutcome> {
+  return inTransaction(db, async (tx) => {
+    await lockFor(tx, userId, [op]);
+    const done = await applyOp(tx, userId, op, { now, writeEvents: true });
+    return {
+      itemIds: done.changed,
+      undo: done.undoOps.length > 0 ? { ops: done.undoOps, removeEventIds: done.eventIds } : null,
+      trace: done.trace,
+    };
+  });
+}
+
+/**
+ * `POST /items/undo`: replays the ops in order through the same code as the batches, without writing history, then
+ * deletes the history rows the action wrote. One transaction; an item, profile, list, tag or history row that is not
+ * hers answers 404 and nothing changes. An undo has no undo.
+ */
+export async function runUndo(db: Database, userId: string, payload: UndoPayload, now: Date): Promise<BulkOutcome> {
+  return inTransaction(db, async (tx) => {
+    await lockFor(tx, userId, payload.ops);
+    const changed = new Set<string>();
+    for (const op of payload.ops) {
+      for (const id of (await applyOp(tx, userId, op, { now, writeEvents: false })).changed) changed.add(id);
+    }
+    const eventIds = [...new Set(payload.removeEventIds)];
+    if (eventIds.length > 0) {
+      const removed = await tx
+        .delete(schema.itemEvents)
+        .where(
+          and(
+            inArray(schema.itemEvents.id, eventIds),
+            inArray(
+              schema.itemEvents.itemId,
+              tx.select({ id: schema.items.id }).from(schema.items).where(eq(schema.items.userId, userId)),
+            ),
+          ),
+        )
+        .returning({ id: schema.itemEvents.id });
+      if (removed.length !== eventIds.length) throw new BulkError("not_found");
+    }
+    return { itemIds: [...changed], undo: null, trace: emptyTrace() };
+  });
+}

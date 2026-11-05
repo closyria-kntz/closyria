@@ -11,8 +11,10 @@ import { type AdminDeps, overviewRoutes } from "./routes/admin/overview";
 import { adminShopsRoutes } from "./routes/admin/shops";
 import { capturesRoutes } from "./routes/captures";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
+import { bulkRoutes } from "./routes/me/bulk";
 import { itemsRoutes } from "./routes/me/items";
 import { profilesRoutes } from "./routes/me/profiles";
+import { tagsRoutes } from "./routes/me/tags";
 import { type MediaDeps, mediaRoutes } from "./routes/media";
 import { productsRoutes } from "./routes/products";
 import { type TestMailDeps, testMailRoutes } from "./routes/test-mail";
@@ -99,7 +101,9 @@ export function createApp(deps: AppDeps) {
     .route("/", productsRoutes(deps.catalog, captureLimiter))
     .route("/", eventsRoutes(deps.events))
     .route("/", profilesRoutes(deps.wardrobe))
+    .route("/", bulkRoutes(deps.wardrobe))
     .route("/", itemsRoutes(deps.wardrobe))
+    .route("/", tagsRoutes(deps.wardrobe))
     .route("/", overviewRoutes(deps.admin))
     .route("/", auditRoutes(deps.admin))
     .route("/", adminShopsRoutes(deps.catalog))

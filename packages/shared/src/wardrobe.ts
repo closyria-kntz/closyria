@@ -91,6 +91,21 @@ export type ItemStageInput = z.infer<typeof itemStageInputSchema>;
 export const itemMoveSchema = z.object({ profileId: z.uuid() });
 export type ItemMove = z.infer<typeof itemMoveSchema>;
 
+/**
+ * Her own fields, as set by `setFields` (bulk and undo): the PATCH fields plus the amounts and sale channel that a
+ * stage change writes. At least one field.
+ */
+export const itemFieldsSchema = itemPatchSchema
+  .extend({
+    pricePaidCents: centsSchema.nullable().optional(),
+    salePriceCents: centsSchema.nullable().optional(),
+    saleChannel: z.string().trim().min(1).max(MAX_SALE_CHANNEL).nullable().optional(),
+  })
+  .refine((fields) => Object.values(fields).some((value) => value !== undefined), {
+    error: "at least one field",
+  });
+export type ItemFields = z.infer<typeof itemFieldsSchema>;
+
 const bulkIds = z
   .array(z.uuid())
   .min(1)
@@ -106,11 +121,19 @@ export const itemBulkSchema = z.discriminatedUnion("op", [
   z.object({ ids: bulkIds, op: z.literal("delete") }),
   z.object({ ids: bulkIds, op: z.literal("restore") }),
   z.object({ ids: bulkIds, op: z.literal("setFavorite"), favorite: z.boolean() }),
+  z.object({ ids: bulkIds, op: z.literal("setFields"), fields: itemFieldsSchema }),
 ]);
 export type ItemBulk = z.infer<typeof itemBulkSchema>;
 
 export const tagInputSchema = z.object({ name: nameOf(MAX_TAG_NAME), color: profileColorSchema.optional() });
 export type TagInput = z.infer<typeof tagInputSchema>;
+
+/** Rename or recolour a tag; `color: null` removes its colour. */
+export const tagPatchSchema = z.object({
+  name: nameOf(MAX_TAG_NAME).optional(),
+  color: profileColorSchema.nullable().optional(),
+});
+export type TagPatch = z.infer<typeof tagPatchSchema>;
 
 export const wishlistInputSchema = z.object({ name: nameOf(MAX_WISHLIST_NAME) });
 export type WishlistInput = z.infer<typeof wishlistInputSchema>;
@@ -149,6 +172,9 @@ export type ProfileView = z.infer<typeof profileViewSchema>;
 
 export const tagViewSchema = z.object({ id: z.uuid(), name: z.string(), color: profileColorSchema.nullable() });
 export type TagView = z.infer<typeof tagViewSchema>;
+
+export const tagListSchema = z.object({ tags: z.array(tagViewSchema) });
+export type TagList = z.infer<typeof tagListSchema>;
 
 export const itemPhotoViewSchema = z.object({
   id: z.uuid(),
@@ -228,13 +254,19 @@ export type ShareResult = z.infer<typeof shareResultSchema>;
  * What "Undo" replays through `POST /api/me/items/undo`, in one transaction: one inverse bulk op per distinct previous
  * value, restricted to the items actually changed, and the history rows the action created (deleted, not completed).
  */
-export const undoPayloadSchema = z.object({
-  ops: z
-    .array(itemBulkSchema)
-    .min(1)
-    .max(2 * MAX_BULK_ITEMS),
-  removeEventIds: z.array(z.uuid()).max(2 * MAX_BULK_ITEMS),
-});
+export const undoPayloadSchema = z
+  .object({
+    ops: z
+      .array(itemBulkSchema)
+      .min(1)
+      .max(2 * MAX_BULK_ITEMS),
+    removeEventIds: z.array(z.uuid()).max(2 * MAX_BULK_ITEMS),
+  })
+  // An action changes at most 200 items and writes at most two inverse ops per item (stage + amounts).
+  .refine((undo) => undo.ops.reduce((n, op) => n + op.ids.length, 0) <= 2 * MAX_BULK_ITEMS, {
+    error: "too many ids",
+    path: ["ops"],
+  });
 export type UndoPayload = z.infer<typeof undoPayloadSchema>;
 
 /** Answer of every action: what changed, and how to undo it. */
@@ -273,7 +305,7 @@ export const summaryViewSchema = z.object({
 });
 export type SummaryView = z.infer<typeof summaryViewSchema>;
 
-/** Stable error codes of the `/api/me/profiles`, `/api/me/items` and `/api/me/summary` routes. */
+/** Stable error codes of the `/api/me/profiles`, `/api/me/items`, `/api/me/tags` and `/api/me/summary` routes. */
 export const wardrobeErrorCodes = [
   "invalid_request",
   "invalid_cursor",
@@ -287,6 +319,7 @@ export const wardrobeErrorCodes = [
   "invalid_color",
   "item_deleted",
   "item_not_deleted",
+  "tag_exists",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];
