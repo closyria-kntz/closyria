@@ -48,16 +48,19 @@ describe("scheduleMonitors", () => {
     // a draft auto shop, and a published auto shop without a test page
     await db.update(schema.shops).set({ status: "draft" }).where(eq(schema.shops.slug, "promod"));
     await db.update(schema.shops).set({ testUrl: null }).where(eq(schema.shops.slug, "zalando"));
+    // a published auto shop merged into another one
+    const [target] = await db.select().from(schema.shops).where(eq(schema.shops.slug, "mcb-paris"));
+    await db.update(schema.shops).set({ mergedIntoId: target?.id }).where(eq(schema.shops.slug, "my1996"));
     const sent: { queue: string; data: object }[] = [];
     const queued = await scheduleMonitors(db, {
       send: async (queue, data) => {
         sent.push({ queue, data });
       },
     });
-    expect(queued).toBe(6);
+    expect(queued).toBe(5);
     expect(sent.every((s) => s.queue === "capture-monitor")).toBe(true);
     const rows = await db.select().from(schema.captures).where(eq(schema.captures.trigger, "monitor"));
-    expect(rows).toHaveLength(6);
+    expect(rows).toHaveLength(5);
     for (const row of rows) {
       expect(row.productId).toBeNull();
       expect(row.status).toBe("queued");

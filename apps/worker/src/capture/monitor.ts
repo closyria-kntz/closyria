@@ -1,4 +1,4 @@
-import { and, type Database, eq, schema, sql } from "@closyria/db";
+import { and, type Database, eq, isNull, schema, sql } from "@closyria/db";
 import { CAPTURE_QUEUES } from "@closyria/shared";
 
 export type MonitorQueue = { send(queue: string, data: object): Promise<unknown> };
@@ -16,6 +16,7 @@ export async function scheduleMonitors(db: Database, queue: MonitorQueue): Promi
         eq(schema.shops.status, "published"),
         eq(schema.shops.captureMode, "auto"),
         sql`${schema.shops.testUrl} IS NOT NULL`,
+        isNull(schema.shops.mergedIntoId),
       ),
     );
   let queued = 0;

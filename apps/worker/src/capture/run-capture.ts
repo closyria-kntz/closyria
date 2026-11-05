@@ -97,12 +97,6 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
           sizes: Object.fromEntries(sizes.map((size) => [size.label, size.available])),
         });
         await tx.update(schema.captures).set({ dataReady: true }).where(eq(schema.captures.id, captureId));
-        if (shop.platform === "unknown") {
-          await tx
-            .update(schema.shops)
-            .set({ platform: product.platform, updatedAt: at })
-            .where(and(eq(schema.shops.id, shop.id), eq(schema.shops.platform, "unknown")));
-        }
       });
       try {
         await copyImages(productId, product.images, {
@@ -115,6 +109,15 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
         // The data is committed: a photo-step failure must not fail the capture.
         console.error(`capture ${captureId}: photo step failed`, error);
       }
+    }
+
+    // Any successful capture (user, admin test, monitor) pre-fills the platform of a shop still `unknown`.
+    if (shop.platform === "unknown") {
+      const at = now();
+      await db
+        .update(schema.shops)
+        .set({ platform: product.platform, updatedAt: at })
+        .where(and(eq(schema.shops.id, shop.id), eq(schema.shops.platform, "unknown")));
     }
 
     const finishedAt = now();

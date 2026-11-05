@@ -3,7 +3,7 @@ import { adminOverviewSchema } from "@closyria/shared";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { defineAccess } from "../../access";
 import type { AdminEnv } from "../../admin-audit";
-import { HEALTH_WINDOW_MS, loadShopStats, shopHealth } from "../../catalog/health";
+import { HEALTH_WINDOW_MS, loadShopStats, REAL_ATTEMPT, shopHealth } from "../../catalog/health";
 
 export type AdminDeps = {
   db: Database;
@@ -28,7 +28,7 @@ const overviewRoute = defineAccess(
       "Aggregates only (spec D13). `users.anonymous` counts anonymous sessions' users, `users.registered` the others. " +
       "`eventsToday`: audience events that occurred during the current UTC day. " +
       "`signupsToday`: accounts (not anonymous) created during the current UTC day. " +
-      "`captures`: rates and durations cover finished captures (succeeded or failed); `shops.down` counts published, " +
+      "`captures`: rates and durations cover finished captures that were real fetch attempts (not 24 h reuses nor queue failures); `shops.down` counts published, " +
       "automatically captured shops whose two latest monitor captures failed.",
     responses: {
       200: { description: "Figures", content: { "application/json": { schema: adminOverviewSchema } } },
@@ -74,12 +74,12 @@ export function overviewRoutes(deps: AdminDeps) {
         select
           (count(*) filter (where created_at >= ${since24h}::timestamptz))::int as last24h,
           (count(*) filter (where created_at >= ${since7d}::timestamptz))::int as last7d,
-          (count(*) filter (where status in ('succeeded', 'failed')))::int as finished,
-          (count(*) filter (where status = 'succeeded'))::int as succeeded,
+          (count(*) filter (where status in ('succeeded', 'failed') and ${REAL_ATTEMPT}))::int as finished,
+          (count(*) filter (where status = 'succeeded' and ${REAL_ATTEMPT}))::int as succeeded,
           (count(*) filter (where status = 'succeeded' and method = 'shopify'))::int as shopify,
           (count(*) filter (where status = 'succeeded' and method = 'jsonld'))::int as jsonld,
           (count(*) filter (where status = 'succeeded' and method = 'opengraph'))::int as opengraph,
-          (percentile_cont(0.5) within group (order by duration_ms) filter (where status = 'succeeded'))::float8 as median
+          (percentile_cont(0.5) within group (order by duration_ms) filter (where status = 'succeeded' and ${REAL_ATTEMPT}))::float8 as median
         from captures
         where created_at >= ${since7d}::timestamptz`),
       deps.db

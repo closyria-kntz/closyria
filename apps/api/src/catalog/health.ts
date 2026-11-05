@@ -13,6 +13,13 @@ export type HealthInput = {
   successRate7d: number | null;
 };
 
+/**
+ * SQL condition keeping only real fetch attempts: not a 24 h reuse (succeeded without a method) and not a
+ * `queue_unavailable` failure (nothing was fetched).
+ */
+export const REAL_ATTEMPT = sql`not (status = 'succeeded' and method is null)
+  and coalesce(error_code, '') <> 'queue_unavailable'`;
+
 /** Only a published shop captured automatically is monitored. */
 export function shopHealth(input: HealthInput): ShopHealth {
   if (input.status !== "published" || input.captureMode !== "auto") return "not_applicable";
@@ -46,7 +53,8 @@ export async function loadShopStats(db: Database, now: Date, shopIds?: string[])
         (count(*) filter (where status = 'succeeded'))::int as succeeded,
         count(*)::int as finished
       from captures
-      where status in ('succeeded', 'failed') and created_at >= ${since.toISOString()}::timestamptz ${scope}
+      where status in ('succeeded', 'failed') and ${REAL_ATTEMPT}
+        and created_at >= ${since.toISOString()}::timestamptz ${scope}
       group by shop_id`),
   ]);
   const stats = new Map<string, ShopStats>();

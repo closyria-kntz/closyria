@@ -65,7 +65,7 @@ async function newProduct(shopId: string, createdAt: Date) {
 function newCapture(shopId: string, values: Partial<typeof schema.captures.$inferInsert> = {}) {
   return t.db
     .insert(schema.captures)
-    .values({ shopId, url: "https://p.test/x", trigger: "user", status: "succeeded", ...values })
+    .values({ shopId, url: "https://p.test/x", trigger: "user", status: "succeeded", method: "shopify", ...values })
     .returning()
     .then(
       (rows) =>
@@ -173,7 +173,20 @@ describe("GET /api/admin/shops/:id", () => {
         finishedAt: ago((i + 1) * HOUR),
       });
     }
-    await newCapture(shop.id, { trigger: "monitor", createdAt: ago(30 * 60_000), finishedAt: ago(30 * 60_000) });
+    await newCapture(shop.id, {
+      trigger: "monitor",
+      method: "shopify",
+      createdAt: ago(30 * 60_000),
+      finishedAt: ago(30 * 60_000),
+    });
+    // not real fetch attempts: a 24 h reuse (succeeded, no method) and a queue failure
+    await newCapture(shop.id, { method: null, createdAt: ago(HOUR), finishedAt: ago(HOUR) });
+    await newCapture(shop.id, {
+      status: "failed",
+      errorCode: "queue_unavailable",
+      createdAt: ago(30 * HOUR),
+      finishedAt: ago(30 * HOUR),
+    });
     const res = await call("GET", `/shops/${shop.id}`);
     expect(res.status).toBe(200);
     const body = await json(res);
@@ -457,6 +470,9 @@ describe("GET /api/admin/overview (catalog figures)", () => {
     await newCapture(fine.id, { method: "jsonld", durationMs: 300, ...fin(2) });
     await newCapture(fine.id, { status: "failed", errorCode: "timeout", ...fin(3) });
     await newCapture(fine.id, { status: "queued", createdAt: ago(HOUR) }); // not finished
+    // not real fetch attempts: counted in last24h/last7d only
+    await newCapture(fine.id, { method: null, durationMs: 1, ...fin(1) }); // 24 h reuse
+    await newCapture(fine.id, { status: "failed", errorCode: "queue_unavailable", ...fin(1) });
     // 7 days: opengraph 500 succeeded, 1 failed (monitor, makes `down` with the next)
     await newCapture(fine.id, { method: "opengraph", durationMs: 500, ...fin(3 * 24) });
     await newCapture(down.id, { trigger: "monitor", status: "failed", errorCode: "blocked", ...fin(48) });
@@ -467,8 +483,8 @@ describe("GET /api/admin/overview (catalog figures)", () => {
     const admin = await call("GET", "/overview");
     const body = adminOverviewSchema.parse(await admin.json());
     expect(body.captures).toEqual({
-      last24h: 4, // 3 finished + 1 queued, created within 24h
-      last7d: 7,
+      last24h: 6, // 3 finished + 1 queued + 1 reuse + 1 queue failure, created within 24h
+      last7d: 9,
       successRate7d: 3 / 6,
       byMethod: { shopify: 1, jsonld: 1, opengraph: 1 },
       medianDurationMs: 300,

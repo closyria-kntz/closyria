@@ -205,6 +205,30 @@ describe("runCapture", () => {
     expect(s?.platform).toBe("shopify");
   });
 
+  it("pre-fills the platform of an unknown shop from an admin_test or monitor capture, touching no product", async () => {
+    for (const trigger of ["admin_test", "monitor"] as const) {
+      servePage("/products/produit-3679", "real/mcb-paris.html");
+      routes["/products/produit-3679"] = {
+        ...routes["/products/produit-3679"],
+        body: `${routes["/products/produit-3679"]?.body}<script>var Shopify = { shop: "x" }; Shopify.shop = "x";</script>`,
+      };
+      serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+      const t = await setup("/products/produit-3679", {}, trigger);
+
+      await runCapture(t.capture.id, deps);
+
+      const r = await load(t.capture.id, t.product.id);
+      expect(r.capture?.status).toBe("succeeded");
+      const [s] = await handle.db.select().from(schema.shops).where(eq(schema.shops.id, t.shop.id));
+      expect(s?.platform).toBe("shopify");
+      expect(r.product?.name).toBe("Robe");
+      expect(r.product?.captureStatus).toBe("pending");
+      expect(r.sizes).toEqual([]);
+      expect(r.history).toEqual([]);
+      expect(r.images).toEqual([]);
+    }
+  });
+
   it("falls back to the HTML page when the .js fails", async () => {
     servePage("/products/produit-3679", "real/mcb-paris.html");
     const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
