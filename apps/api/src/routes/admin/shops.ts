@@ -1,4 +1,4 @@
-import { and, asc, count, type Database, eq, gte, inArray, isNull, ne, schema, sql } from "@closyria/db";
+import { and, asc, count, type Database, desc, eq, gte, inArray, isNull, ne, schema, sql } from "@closyria/db";
 import {
   adminCatalogErrorSchema,
   adminMergedSchema,
@@ -254,7 +254,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
           (a, b) =>
             Number(b.status === "pending") - Number(a.status === "pending") ||
             (a.status === "pending" ? b.recentProducts - a.recentProducts : 0) ||
-            a.name.localeCompare(b.name),
+            (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
         );
       return c.json({ shops: items }, 200);
     })
@@ -281,7 +281,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
               inArray(schema.captures.status, ["succeeded", "failed"]),
             ),
           )
-          .orderBy(sql`${schema.captures.createdAt} desc`)
+          .orderBy(sql`${schema.captures.finishedAt} desc nulls last`, desc(schema.captures.createdAt))
           .limit(1),
       ]);
       const s = stats.get(id);
@@ -304,7 +304,12 @@ export function adminShopsRoutes(deps: CatalogDeps) {
     })
     .openapi(patchRoute, async (c) => {
       const { id } = c.req.valid("param");
-      const { domains: rawDomains, ...settings } = c.req.valid("json");
+      const { domains: rawDomains, testUrl, ...rest } = c.req.valid("json");
+      // Validated by the schema; stored in canonical form (tracking parameters dropped).
+      const settings = {
+        ...rest,
+        ...(testUrl === undefined ? {} : { testUrl: testUrl === null ? null : canonicalizeUrl(testUrl) }),
+      };
       noteAudit(c, {
         action: "shop.update",
         target: `shop:${id}`,

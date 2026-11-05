@@ -110,7 +110,13 @@ describe("GET /api/admin/overview", () => {
     expect(res.status).toBe(200);
     const body = adminOverviewSchema.parse(await res.json());
     // The admin's own (registered) account is one of the users; it was not created on 2030-06-15.
-    expect(body).toMatchObject({ users: { total: 5, anonymous: 1, registered: 4 }, eventsToday: 3, signupsToday: 2 });
+    expect(body).toEqual({
+      users: { total: 5, anonymous: 1, registered: 4 },
+      eventsToday: 3,
+      signupsToday: 2,
+      captures: expect.any(Object),
+      shops: expect.any(Object),
+    });
   });
 
   it("does not write to the audit log (reads are not journalled)", async () => {

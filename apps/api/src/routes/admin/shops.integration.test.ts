@@ -226,6 +226,15 @@ describe("PATCH /api/admin/shops/:id", () => {
     expect(a.id).not.toBe(b.id);
   });
 
+  it("stores the test URL canonical and refuses a non-http(s) one", async () => {
+    const shop = await newShop();
+    const ok = await call("PATCH", `/shops/${shop.id}`, { testUrl: "https://t.test/p?utm_source=x&variant=2" });
+    expect(ok.status).toBe(200);
+    expect((await json(ok)).testUrl).toBe("https://t.test/p?variant=2");
+    expect((await call("PATCH", `/shops/${shop.id}`, { testUrl: "javascript:alert(1)" })).status).toBe(400);
+    expect((await call("PATCH", `/shops/${shop.id}`, { testUrl: null })).status).toBe(200);
+  });
+
   it("answers 409 slug_taken, 400 for a bad slug or no domain, 404 for an unknown shop", async () => {
     const a = await newShop();
     const b = await newShop();
@@ -262,6 +271,14 @@ describe("POST /api/admin/shops", () => {
     const res = await call("POST", "/shops", { url: "https://owned.test/p" });
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "domain_taken", shopId: owner.id });
+    const sub = await call("POST", "/shops", { url: "https://shop.owned.test/p" });
+    expect(sub.status).toBe(409);
+    expect(await sub.json()).toEqual({ error: "domain_taken", shopId: owner.id });
+    const survivor = await newShop({}, ["survivor.test"]);
+    await newShop({ mergedIntoId: survivor.id }, ["gone.test"]);
+    const viaMerged = await call("POST", "/shops", { url: "https://www.gone.test/p" });
+    expect(viaMerged.status).toBe(409);
+    expect(await viaMerged.json()).toEqual({ error: "domain_taken", shopId: survivor.id });
     const bad = await call("POST", "/shops", { url: "javascript:alert(1)" });
     expect(bad.status).toBe(400);
     expect(await bad.json()).toEqual({ error: "invalid_url" });
@@ -399,6 +416,10 @@ describe("captures", () => {
     });
     expect(n1?.id).not.toBe(user.id);
     expect((await call("POST", `/captures/00000000-0000-4000-8000-000000000000/retry`, {})).status).toBe(404);
+    const active = await newCapture(shop.id, { status: "running" });
+    const refused = await call("POST", `/captures/${active.id}/retry`, {});
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({ error: "capture_active" });
   });
 
   it("marks the capture failed with queue_unavailable when the queue is down", async () => {

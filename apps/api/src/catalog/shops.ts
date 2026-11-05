@@ -72,14 +72,16 @@ export type CreatedShop = { shop: Shop } | { taken: string };
 
 /**
  * A `draft` shop named after the domain of `url` (slug suffixed on collision, like `findOrCreateShop`),
- * or the id of the shop that already owns that exact domain.
+ * or the id of the (surviving) shop that already owns that domain or a parent domain.
  */
 export async function createDraftShop(db: Database, url: string): Promise<CreatedShop> {
+  const host = new URL(url).hostname;
   const domain = shopDomain(url);
   const baseSlug = domain.replaceAll(".", "-");
   for (let attempt = 1; attempt <= MAX_SLUG_ATTEMPTS; attempt++) {
-    const [owner] = await db.select().from(schema.shopDomains).where(eq(schema.shopDomains.domain, domain));
-    if (owner) return { taken: owner.shopId };
+    // The domain or a parent domain already belongs to a shop (the surviving one when merged).
+    const owner = await findShop(db, host);
+    if (owner) return { taken: owner.id };
     const slug = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
     try {
       const created = await db.transaction(async (tx) => {

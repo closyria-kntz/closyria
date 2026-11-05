@@ -9,6 +9,7 @@ import {
   platformSchema,
   shopStatusSchema,
 } from "./catalog";
+import { canonicalizeUrl } from "./catalog-url";
 
 const count = z.number().int().nonnegative();
 
@@ -74,7 +75,15 @@ export const shopHealthSchema = z.enum(["ok", "degraded", "down", "not_applicabl
 export type ShopHealth = z.infer<typeof shopHealthSchema>;
 
 export const adminCatalogErrorSchema = z.object({
-  error: z.enum(["invalid_request", "invalid_url", "not_found", "domain_taken", "slug_taken", "invalid_merge"]),
+  error: z.enum([
+    "invalid_request",
+    "invalid_url",
+    "not_found",
+    "domain_taken",
+    "slug_taken",
+    "invalid_merge",
+    "capture_active",
+  ]),
   /** With `domain_taken` on shop creation: the shop that owns the domain. */
   shopId: z.uuid().optional(),
 });
@@ -139,7 +148,11 @@ export const adminShopPatchSchema = z
     status: shopStatusSchema,
     captureMode: captureModeSchema,
     listingKind: listingKindSchema,
-    testUrl: z.string().max(2048).nullable(),
+    testUrl: z
+      .string()
+      .max(2048)
+      .refine((v) => canonicalizeUrl(v) !== null)
+      .nullable(),
     domains: z.array(z.string().trim().min(1).max(253)).min(1).max(50),
   })
   .partial();

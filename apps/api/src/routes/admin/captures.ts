@@ -83,6 +83,7 @@ const retryRoute = defineAccess(
     responses: {
       202: { description: "Accepted", content: { "application/json": { schema: adminCaptureAcceptedSchema } } },
       404: errorContent("Unknown capture"),
+      409: errorContent("capture_active: only a finished (succeeded or failed) capture can be retried"),
     },
   }),
   "admin",
@@ -171,6 +172,9 @@ export function adminCapturesRoutes(deps: CatalogDeps) {
       noteAudit(c, { action: "capture.retry", target: `capture:${id}` });
       const [original] = await db.select().from(schema.captures).where(eq(schema.captures.id, id));
       if (!original) return c.json(notFound, 404);
+      if (original.status !== "succeeded" && original.status !== "failed") {
+        return c.json({ error: "capture_active" } as const, 409);
+      }
       const [capture] = await db
         .insert(schema.captures)
         .values({
