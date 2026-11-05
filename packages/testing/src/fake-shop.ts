@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
-import { relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const RESERVED_PORTS = new Set([3000, 3001, 3100, 3101]);
 const FIXTURES_DIR = resolve(import.meta.dirname, "../../extract/fixtures");
@@ -21,7 +21,7 @@ export type FakeShop = { origin: string; hits: string[]; close(): Promise<void> 
 function fixturePath(file: string): string {
   const full = resolve(FIXTURES_DIR, file);
   const rel = relative(FIXTURES_DIR, full);
-  if (rel === "" || rel.startsWith("..") || resolve(FIXTURES_DIR, rel) !== full) {
+  if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     throw new Error(`fixture path escapes the fixtures directory: ${file}`);
   }
   return full;
@@ -46,6 +46,7 @@ function closeServer(server: Server): Promise<void> {
 
 export async function startFakeShop(routes: Record<string, FakeRoute>): Promise<FakeShop> {
   const hits: string[] = [];
+  const timers = new Set<NodeJS.Timeout>();
   const server = createServer((req, res) => {
     const url = req.url ?? "/";
     hits.push(url);
@@ -67,8 +68,13 @@ export async function startFakeShop(routes: Record<string, FakeRoute>): Promise<
         res.writeHead(500, { "content-type": "text/plain" }).end(String(error));
       }
     };
-    if (route?.delayMs) setTimeout(() => void respond(), route.delayMs);
-    else void respond();
+    if (route?.delayMs) {
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        void respond();
+      }, route.delayMs);
+      timers.add(timer);
+    } else void respond();
   });
 
   let port = await listen(server);
@@ -76,5 +82,13 @@ export async function startFakeShop(routes: Record<string, FakeRoute>): Promise<
     await closeServer(server);
     port = await listen(server);
   }
-  return { origin: `http://127.0.0.1:${port}`, hits, close: () => closeServer(server) };
+  return {
+    origin: `http://127.0.0.1:${port}`,
+    hits,
+    close: () => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+      return closeServer(server);
+    },
+  };
 }

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { gzipSync } from "node:zlib";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { startFakeShop } from "./fake-shop";
 
 const FIXTURES = resolve(import.meta.dirname, "../../extract/fixtures");
@@ -64,5 +64,36 @@ describe("startFakeShop", () => {
     } finally {
       await shop.close();
     }
+  });
+
+  it("follows a redirect chain across routes", async () => {
+    const shop = await startFakeShop({
+      "/a": { redirect: "/b" },
+      "/b": { redirect: "/c" },
+      "/c": { body: "end" },
+    });
+    try {
+      const res = await fetch(`${shop.origin}/a`);
+      expect(res.status).toBe(200);
+      expect(await res.text()).toBe("end");
+      expect(shop.hits).toEqual(["/a", "/b", "/c"]);
+    } finally {
+      await shop.close();
+    }
+  });
+
+  it("clears pending delays on close", async () => {
+    const shop = await startFakeShop({ "/slow": { body: "x", delayMs: 5000 } });
+    const clear = vi.spyOn(globalThis, "clearTimeout");
+    const controller = new AbortController();
+    const pending = fetch(`${shop.origin}/slow`, { signal: controller.signal }).catch(() => null);
+    await new Promise((r) => setTimeout(r, 100));
+    controller.abort();
+    await pending;
+    const start = Date.now();
+    await shop.close();
+    expect(Date.now() - start).toBeLessThan(1000);
+    expect(clear).toHaveBeenCalled();
+    clear.mockRestore();
   });
 });
