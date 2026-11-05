@@ -90,15 +90,13 @@ export function extractShopify(json: string, pageUrl: string): Candidate | null 
   }));
 
   const tags = typeof p.tags === "string" ? p.tags.split(",") : (p.tags ?? []);
-  const sku = p.variants.map((v) => cleanText(v.sku, 200)).find((v) => v !== undefined);
-  const gtin = p.variants.map((v) => cleanGtin(v.barcode)).find((v) => v !== undefined);
+  // No product-level code in Shopify: per-size barcodes are kept apart in shopData.gtins.
+  const gtins = cleanList(p.variants.map((v) => cleanGtin(v.barcode)));
 
   return {
     name,
     publishedAt: cleanDate(p.published_at),
-    sku,
-    gtin,
-    shopData: buildShopData({ category: cleanText(p.type, 200), tags: cleanList(tags) }),
+    shopData: buildShopData({ gtins, category: cleanText(p.type, 200), tags: cleanList(tags) }),
     brand: cleanText(p.vendor, 120),
     description: cleanText(p.description, 5000),
     priceCents: p.price,

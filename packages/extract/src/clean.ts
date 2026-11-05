@@ -102,9 +102,13 @@ export function cleanGtin(value: unknown): string | undefined {
 
 /** Any parseable date as a UTC ISO datetime; undefined otherwise. */
 export function cleanDate(value: unknown): string | undefined {
-  if (typeof value !== "string" || value.trim() === "") return undefined;
+  // Only ISO-like input: V8 would read "1" as a date in 2001.
+  if (typeof value !== "string" || !/^\d{4}-\d{2}/.test(value.trim())) return undefined;
   const time = new Date(value.trim()).getTime();
-  return Number.isNaN(time) ? undefined : new Date(time).toISOString();
+  if (Number.isNaN(time)) return undefined;
+  const iso = new Date(time).toISOString();
+  const year = Number(iso.slice(0, 4));
+  return /^\d{4}-/.test(iso) && year >= 1990 && year <= new Date().getUTCFullYear() + 1 ? iso : undefined;
 }
 
 /** Cleaned, non-empty, distinct strings (each ≤ 200), at most 20. */

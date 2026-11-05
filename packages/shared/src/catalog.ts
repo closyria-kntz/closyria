@@ -48,6 +48,7 @@ const shopText = z.string().max(200);
 export const shopDataSchema = z.object({
   category: shopText.optional(),
   breadcrumb: z.array(shopText).max(20).optional(),
+  gtins: z.array(z.string().max(14)).max(20).optional(),
   tags: z.array(shopText).max(20).optional(),
   colors: z.array(shopText).max(20).optional(),
   material: shopText.optional(),

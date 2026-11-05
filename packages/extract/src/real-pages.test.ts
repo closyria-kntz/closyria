@@ -74,12 +74,13 @@ describe("new fields on real pages", () => {
   it("easy-clothes: tags and codes", () => {
     const p = product("easy-clothes", PAGES[1]?.url ?? "", true);
     expect(p.shopData?.tags).toContain("multi-saison");
-    expect(p.sku).toBe("Q377XS");
-    expect(p.gtin).toBe("60788097"); // 8-digit barcode, a valid GTIN-8
+    expect(p.sku).toBeUndefined();
+    expect(p.gtin).toBeUndefined();
+    expect(p.shopData?.gtins).toContain("60788097"); // per-size barcode (8 digits, a valid GTIN-8)
   });
   it("zalando: sku, colour and breadcrumb (no gtin in the recorded JSON-LD)", () => {
     const p = product("zalando", PAGES[7]?.url ?? "", false);
-    expect(p.sku).toBe("ADQ41E03I-Q120XXS000");
+    expect(p.sku).toBe("ADQ41E03I-Q12");
     expect(p.shopData?.colors).toEqual(["black/white/noir"]);
     expect(p.shopData?.breadcrumb).toEqual(["Femme", "Sport", "Vêtements", "Pantalons", "Collants & leggings"]);
   });

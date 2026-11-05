@@ -89,7 +89,7 @@ function breadcrumbNames(lists: Json[], productName: string): string[] {
     .map((item, index) => ({
       index,
       position: Number(item.position),
-      name: cleanText(item.name ?? nameOf(item.item), 200),
+      name: cleanText(item.name ?? (isObject(item.item) ? item.item.name : undefined), 200),
     }))
     .sort((a, b) =>
       Number.isFinite(a.position) && Number.isFinite(b.position) ? a.position - b.position : a.index - b.index,
@@ -124,7 +124,10 @@ function productCandidate(node: Json, url: string, breadcrumbs: Json[]): Candida
   const id = node.sku ?? node.productGroupID ?? node.productID;
 
   const gtin = GTIN_KEYS.map((k) => cleanGtin(node[k])).find((g) => g !== undefined);
-  const sku = [node.sku, ...variants.map((v) => v.sku)].map((v) => cleanText(v, 200)).find((v) => v !== undefined);
+  const sku = [node.sku, node.productGroupID, node.productID]
+    .map((v) => cleanText(typeof v === "number" ? String(v) : v, 200))
+    .find((v) => v !== undefined);
+  const gtins = cleanList(variants.map((v) => GTIN_KEYS.map((k) => cleanGtin(v[k])).find((g) => g !== undefined)));
 
   return {
     name,
@@ -132,6 +135,7 @@ function productCandidate(node: Json, url: string, breadcrumbs: Json[]): Candida
     gtin,
     sku,
     shopData: buildShopData({
+      gtins,
       category: cleanText(nameOf(node.category), 200),
       breadcrumb: breadcrumbNames(breadcrumbs, name),
       colors: cleanList(asArray(node.color).map(nameOf)),

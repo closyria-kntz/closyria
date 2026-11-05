@@ -65,10 +65,37 @@ describe("jsonld new fields", () => {
     const one = { "@type": "BreadcrumbList", itemListElement: [{ name: "Robe" }] };
     expect(ok(runLd(product(), one)).shopData).toBeUndefined();
   });
-  it("takes the sku and colour list from variants and arrays", () => {
-    const p = ok(runLd(product({ color: ["Rouge", "Bleu"], hasVariant: [{ "@type": "Product", sku: "V-1" }] })));
-    expect(p.sku).toBe("V-1");
+  it("keeps the product-level sku apart from variant codes", () => {
+    const variants = [
+      { "@type": "Product", sku: "V-1", gtin13: "3614272012345" },
+      { "@type": "Product", sku: "V-2", gtin13: "3614 2720 12345" },
+      { "@type": "Product", gtin: "12" },
+    ];
+    const p = ok(runLd(product({ color: ["Rouge", "Bleu"], productGroupID: "G-1", hasVariant: variants })));
+    expect(p.sku).toBe("G-1");
+    expect(p.gtin).toBeUndefined();
     expect(p.shopData?.colors).toEqual(["Rouge", "Bleu"]);
+    expect(p.shopData?.gtins).toEqual(["3614272012345"]);
+    expect(ok(runLd(product({ productID: "P-1", hasVariant: [{ "@type": "Product", sku: "V-1" }] }))).sku).toBe("P-1");
+    expect(ok(runLd(product({ hasVariant: [{ "@type": "Product", sku: "V-1" }] }))).sku).toBeUndefined();
+  });
+  it("turns a numeric sku into a string", () => {
+    expect(ok(runLd(product({ sku: 12345 }))).sku).toBe("12345");
+  });
+  it("never uses a URL string as a breadcrumb label", () => {
+    const crumbs = {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { position: 1, item: "https://shop.example.com/femme" },
+        { position: 2, name: "Robes" },
+      ],
+    };
+    expect(ok(runLd(product(), crumbs)).shopData?.breadcrumb).toEqual(["Robes"]);
+  });
+  it("drops absurd dates", () => {
+    expect(ok(runLd(product({ releaseDate: "1" }))).publishedAt).toBeUndefined();
+    expect(ok(runLd(product({ releaseDate: "+275760-09-13" }))).publishedAt).toBeUndefined();
+    expect(ok(runLd(product({ releaseDate: "1980-01-01" }))).publishedAt).toBeUndefined();
   });
   it("accepts material and category given as objects, ignores bad dates", () => {
     const p = ok(runLd(product({ material: { name: "Laine" }, category: { name: "Pulls" }, releaseDate: "demain" })));
@@ -85,19 +112,24 @@ describe("jsonld new fields", () => {
 });
 
 describe("shopify new fields", () => {
-  it("reads date, category, tags, first non-empty sku and barcode", () => {
+  it("reads date, category, tags and per-size barcodes (no product-level code)", () => {
     const p = ok(
       shopify({
         published_at: "2026-11-04T17:00:10+01:00",
         type: "Jeans",
         tags: ["a", " b ", ""],
-        variants: [{ sku: "" }, { sku: "S-2", barcode: "3614 2720 12345" }],
+        variants: [
+          { sku: "" },
+          { sku: "S-2", barcode: "3614 2720 12345" },
+          { barcode: 3614272012345 },
+          { barcode: "12" },
+        ],
       }),
     );
     expect(p.publishedAt).toBe("2026-11-04T16:00:10.000Z");
-    expect(p.shopData).toEqual({ category: "Jeans", tags: ["a", "b"] });
-    expect(p.sku).toBe("S-2");
-    expect(p.gtin).toBe("3614272012345");
+    expect(p.shopData).toEqual({ category: "Jeans", tags: ["a", "b"], gtins: ["3614272012345"] });
+    expect(p.sku).toBeUndefined();
+    expect(p.gtin).toBeUndefined();
   });
   it("accepts tags given as a comma-separated string and caps lists", () => {
     expect(ok(shopify({ tags: "x, y" })).shopData?.tags).toEqual(["x", "y"]);
