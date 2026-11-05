@@ -15,8 +15,10 @@ import { bulkRoutes } from "./routes/me/bulk";
 import { itemsRoutes } from "./routes/me/items";
 import { profilesRoutes } from "./routes/me/profiles";
 import { tagsRoutes } from "./routes/me/tags";
+import { wishlistsRoutes } from "./routes/me/wishlists";
 import { type MediaDeps, mediaRoutes } from "./routes/media";
 import { productsRoutes } from "./routes/products";
+import { sharedRoutes } from "./routes/shared";
 import { type TestMailDeps, testMailRoutes } from "./routes/test-mail";
 import type { WardrobeDeps } from "./wardrobe/deps";
 
@@ -104,6 +106,8 @@ export function createApp(deps: AppDeps) {
     .route("/", bulkRoutes(deps.wardrobe))
     .route("/", itemsRoutes(deps.wardrobe))
     .route("/", tagsRoutes(deps.wardrobe))
+    .route("/", wishlistsRoutes(deps.wardrobe))
+    .route("/", sharedRoutes(deps.wardrobe))
     .route("/", overviewRoutes(deps.admin))
     .route("/", auditRoutes(deps.admin))
     .route("/", adminShopsRoutes(deps.catalog))

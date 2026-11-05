@@ -49,3 +49,12 @@ export async function trackItemEvents(
     console.error("audience events not recorded:", error);
   }
 }
+
+/** The `wishlist_shared` audience event: one row, no list id, no token (spec §6). Failures are logged only. */
+export async function trackWishlistShared(db: Database, userId: string): Promise<void> {
+  try {
+    await trackServer(db, { name: "wishlist_shared", path: "/api/me/wishlists", userId, props: {} });
+  } catch (error) {
+    console.error("audience event not recorded:", error);
+  }
+}

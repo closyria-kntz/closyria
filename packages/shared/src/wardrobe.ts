@@ -297,6 +297,21 @@ export const profileOrderSchema = z.object({
 });
 export type ProfileOrder = z.infer<typeof profileOrderSchema>;
 
+/** New order of a list: every non-deleted item of the list, exactly once. */
+export const wishlistOrderSchema = z.object({
+  ids: z
+    .array(z.uuid())
+    .max(5000)
+    .refine((ids) => new Set(ids).size === ids.length, { error: "ids must be unique" }),
+});
+export type WishlistOrder = z.infer<typeof wishlistOrderSchema>;
+
+export const wishlistListSchema = z.object({ wishlists: z.array(wishlistViewSchema) });
+export type WishlistList = z.infer<typeof wishlistListSchema>;
+
+export const wishlistItemInputSchema = z.object({ itemId: z.uuid() });
+export type WishlistItemInput = z.infer<typeof wishlistItemInputSchema>;
+
 /** What the app shell needs: the account proposal (anonymous session, item count) and the profiles. */
 export const summaryViewSchema = z.object({
   isAnonymous: z.boolean(),
