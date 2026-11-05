@@ -6,6 +6,7 @@ import { registerCaptureQueues } from "./capture/queues";
 import { seedReference } from "./capture/seed-reference";
 import { seedStartingShops } from "./capture/seed-shops";
 import { env } from "./env";
+import { registerWardrobeQueues } from "./wardrobe/queues";
 
 const HEARTBEAT = "heartbeat";
 
@@ -47,6 +48,7 @@ if (added > 0) console.log(`starting shops: ${added} added`);
 const referenceAdded = await seedReference(db);
 if (referenceAdded > 0) console.log(`starting reference lists: ${referenceAdded} added`);
 await registerCaptureQueues(boss, { db, store });
+await registerWardrobeQueues(boss, { db, store });
 
 console.log(`worker ${env.APP_VERSION} (${env.APP_ENV}) started`);
 
