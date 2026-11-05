@@ -1,0 +1,70 @@
+{
+  "id": 16279932895564,
+  "title": "Gilet Silvana",
+  "handle": "gilet-silvana-2",
+  "description": null,
+  "published_at": "2026-11-03T12:08:10+01:00",
+  "created_at": "2026-11-03T12:07:07+01:00",
+  "vendor": "Le dressing de Paolina",
+  "type": "",
+  "tags": [],
+  "price": 2890,
+  "price_min": 2890,
+  "price_max": 2890,
+  "available": false,
+  "price_varies": false,
+  "compare_at_price": 3890,
+  "compare_at_price_min": 3890,
+  "compare_at_price_max": 3890,
+  "compare_at_price_varies": false,
+  "variants": [
+    {
+      "id": 59734664905036,
+      "title": "TU",
+      "option1": "TU",
+      "option2": null,
+      "option3": null,
+      "sku": null,
+      "requires_shipping": true,
+      "taxable": false,
+      "featured_image": null,
+      "available": false,
+      "name": "Gilet Silvana - TU",
+      "public_title": "TU",
+      "options": ["TU"],
+      "price": 2890,
+      "weight": 300,
+      "compare_at_price": 3890,
+      "inventory_management": "shopify",
+      "barcode": null,
+      "quantity_rule": { "min": 1, "max": null, "increment": 1 },
+      "quantity_price_breaks": [],
+      "requires_selling_plan": false,
+      "selling_plan_allocations": []
+    }
+  ],
+  "images": ["\/\/cdn.shopify.com\/s\/files\/1\/0457\/5890\/6518\/files\/IMG_4516.jpg?v=1793704043"],
+  "featured_image": "\/\/cdn.shopify.com\/s\/files\/1\/0457\/5890\/6518\/files\/IMG_4516.jpg?v=1793704043",
+  "options": [{ "name": "Taille", "position": 1, "values": ["TU"] }],
+  "url": "\/products\/gilet-silvana-2",
+  "media": [
+    {
+      "alt": null,
+      "id": 77658573341004,
+      "position": 1,
+      "preview_image": {
+        "aspect_ratio": 0.785,
+        "height": 1537,
+        "width": 1206,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0457\/5890\/6518\/files\/IMG_4516.jpg?v=1793704043"
+      },
+      "aspect_ratio": 0.785,
+      "height": 1537,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0457\/5890\/6518\/files\/IMG_4516.jpg?v=1793704043",
+      "width": 1206
+    }
+  ],
+  "requires_selling_plan": false,
+  "selling_plan_groups": []
+}

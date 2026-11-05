@@ -1,0 +1,399 @@
+{
+  "id": 15340010471809,
+  "title": "Jeans Joelle - bleu",
+  "handle": "jeans-joelle-bleu-240",
+  "description": "\u003cul\u003e\n\u003cli\u003eJeans barrel\u003c\/li\u003e\n\u003cli\u003ePoches à l’avant\u003c\/li\u003e\n\u003cli\u003eNos modèles portent la blouse \u003ca rel=\"noopener\" href=\"blouse-belly-blanche-240\" target=\"_blank\"\u003e\u003cspan style=\"text-decoration: underline;\"\u003e\u003cstrong\u003eBelly blanche\u003c\/strong\u003e\u003c\/span\u003e\u003c\/a\u003e, le t-shirt \u003ca rel=\"noopener\" href=\"t-shirt-aly-blanc-a-coeur-vichy-rouge-240\" target=\"_blank\"\u003e\u003cspan style=\"text-decoration: underline;\"\u003e\u003cstrong\u003eAly blanc à coeur vichy rouge\u003c\/strong\u003e\u003c\/span\u003e\u003c\/a\u003e, la blouse \u003ca rel=\"noopener\" href=\"blouse-claire-bleue-a-pois-240\" target=\"_blank\"\u003e\u003cspan style=\"text-decoration: underline;\"\u003e\u003cstrong\u003eClaire bleue à pois\u003c\/strong\u003e\u003c\/span\u003e\u003c\/a\u003e, la blouse \u003ca rel=\"noopener\" href=\"blouse-clarissa-ecrue-a-pois-240\" target=\"_blank\"\u003e\u003cspan style=\"text-decoration: underline;\"\u003e\u003cstrong\u003eClarissa écrue à pois\u003c\/strong\u003e\u003c\/span\u003e\u003c\/a\u003e et la ceinture \u003ca rel=\"noopener\" href=\"ceinture-carly-rouge-240\" target=\"_blank\"\u003e\u003cspan style=\"text-decoration: underline;\"\u003e\u003cstrong\u003eCarly rouge\u003c\/strong\u003e\u003c\/span\u003e\u003c\/a\u003e\n\u003c\/li\u003e\n\u003cli\u003eCoupe légèrement loose\u003c\/li\u003e\n\u003cli\u003ePoches à l’arrière\u003c\/li\u003e\n\u003cli\u003ePassants pour une ceinture\u003c\/li\u003e\n\u003cli\u003eBouton et fermeture éclair\u003c\/li\u003e\n\u003cli\u003eTailles : XS \/ S \/ M \/ L\u003c\/li\u003e\n\u003cli\u003eXS : Longueur 101 cm - Largeur 32 cm\u003c\/li\u003e\n\u003cli\u003eS : Longueur 102 cm - Largeur 34 cm\u003c\/li\u003e\n\u003cli\u003eM : Longueur 103 cm - Largeur 36 cm\u003c\/li\u003e\n\u003cli\u003eL : Longueur 104 cm - Largeur 38 cm\u003c\/li\u003e\n\u003c\/ul\u003e",
+  "published_at": "2026-11-04T17:00:10+01:00",
+  "created_at": "2026-03-13T13:30:37+01:00",
+  "vendor": "SEASON",
+  "type": "Jeans",
+  "tags": ["collection_color:joelle", "déjà-soldé", "main_collection:jeans", "multi-saison"],
+  "price": 3500,
+  "price_min": 3500,
+  "price_max": 3500,
+  "available": false,
+  "price_varies": false,
+  "compare_at_price": null,
+  "compare_at_price_min": 0,
+  "compare_at_price_max": 0,
+  "compare_at_price_varies": false,
+  "variants": [
+    {
+      "id": 55422860788097,
+      "title": "XS",
+      "option1": "XS",
+      "option2": null,
+      "option3": null,
+      "sku": "Q377XS",
+      "requires_shipping": true,
+      "taxable": true,
+      "featured_image": null,
+      "available": false,
+      "name": "Jeans Joelle - bleu - XS",
+      "public_title": "XS",
+      "options": ["XS"],
+      "price": 3500,
+      "weight": 100,
+      "compare_at_price": null,
+      "inventory_management": "shopify",
+      "barcode": "60788097",
+      "quantity_rule": { "min": 1, "max": null, "increment": 1 },
+      "quantity_price_breaks": [],
+      "requires_selling_plan": false,
+      "selling_plan_allocations": []
+    },
+    {
+      "id": 55422860820865,
+      "title": "S",
+      "option1": "S",
+      "option2": null,
+      "option3": null,
+      "sku": "Q377S",
+      "requires_shipping": true,
+      "taxable": true,
+      "featured_image": null,
+      "available": false,
+      "name": "Jeans Joelle - bleu - S",
+      "public_title": "S",
+      "options": ["S"],
+      "price": 3500,
+      "weight": 100,
+      "compare_at_price": null,
+      "inventory_management": "shopify",
+      "barcode": "60820865",
+      "quantity_rule": { "min": 1, "max": null, "increment": 1 },
+      "quantity_price_breaks": [],
+      "requires_selling_plan": false,
+      "selling_plan_allocations": []
+    },
+    {
+      "id": 55422860853633,
+      "title": "M",
+      "option1": "M",
+      "option2": null,
+      "option3": null,
+      "sku": "Q377M",
+      "requires_shipping": true,
+      "taxable": true,
+      "featured_image": null,
+      "available": false,
+      "name": "Jeans Joelle - bleu - M",
+      "public_title": "M",
+      "options": ["M"],
+      "price": 3500,
+      "weight": 100,
+      "compare_at_price": null,
+      "inventory_management": "shopify",
+      "barcode": "60853633",
+      "quantity_rule": { "min": 1, "max": null, "increment": 1 },
+      "quantity_price_breaks": [],
+      "requires_selling_plan": false,
+      "selling_plan_allocations": []
+    },
+    {
+      "id": 55422860886401,
+      "title": "L",
+      "option1": "L",
+      "option2": null,
+      "option3": null,
+      "sku": "Q377L",
+      "requires_shipping": true,
+      "taxable": true,
+      "featured_image": null,
+      "available": false,
+      "name": "Jeans Joelle - bleu - L",
+      "public_title": "L",
+      "options": ["L"],
+      "price": 3500,
+      "weight": 100,
+      "compare_at_price": null,
+      "inventory_management": "shopify",
+      "barcode": "60886401",
+      "quantity_rule": { "min": 1, "max": null, "increment": 1 },
+      "quantity_price_breaks": [],
+      "requires_selling_plan": false,
+      "selling_plan_allocations": []
+    }
+  ],
+  "images": [
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-42.jpg?v=1773695931",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-41.jpg?v=1773695931",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-44.jpg?v=1773695931",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-46.jpg?v=1773695931",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-23.jpg?v=1773695931",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-35.jpg?v=1773695931",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-49.jpg?v=1773695931",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-45.jpg?v=1773695940",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-1.jpg?v=1773695940",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-4.jpg?v=1773695940",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-19.jpg?v=1773695940",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-43.jpg?v=1773695940",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-26.jpg?v=1773695940",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-30.jpg?v=1773695940",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-33.jpg?v=1773695940",
+    "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-40.jpg?v=1773695940"
+  ],
+  "featured_image": "\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-42.jpg?v=1773695931",
+  "options": [{ "name": "Taille", "position": 1, "values": ["XS", "S", "M", "L"] }],
+  "url": "\/products\/jeans-joelle-bleu-240",
+  "media": [
+    {
+      "alt": null,
+      "id": 68691407339905,
+      "position": 1,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-42.jpg?v=1773695931"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-42.jpg?v=1773695931",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691407307137,
+      "position": 2,
+      "preview_image": {
+        "aspect_ratio": 0.664,
+        "height": 2560,
+        "width": 1701,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-41.jpg?v=1773695931"
+      },
+      "aspect_ratio": 0.664,
+      "height": 2560,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-41.jpg?v=1773695931",
+      "width": 1701
+    },
+    {
+      "alt": null,
+      "id": 68691407405441,
+      "position": 3,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-44.jpg?v=1773695931"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-44.jpg?v=1773695931",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691407470977,
+      "position": 4,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-46.jpg?v=1773695931"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-46.jpg?v=1773695931",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691406717313,
+      "position": 5,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-23.jpg?v=1773695931"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-23.jpg?v=1773695931",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691407110529,
+      "position": 6,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-35.jpg?v=1773695931"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-35.jpg?v=1773695931",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691407569281,
+      "position": 7,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-49.jpg?v=1773695931"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-49.jpg?v=1773695931",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691407438209,
+      "position": 8,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-45.jpg?v=1773695940"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-45.jpg?v=1773695940",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691406029185,
+      "position": 9,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-1.jpg?v=1773695940"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-1.jpg?v=1773695940",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691406127489,
+      "position": 10,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-4.jpg?v=1773695940"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-4.jpg?v=1773695940",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691406586241,
+      "position": 11,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-19.jpg?v=1773695940"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-19.jpg?v=1773695940",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691407372673,
+      "position": 12,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-43.jpg?v=1773695940"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-43.jpg?v=1773695940",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691406815617,
+      "position": 13,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-26.jpg?v=1773695940"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-26.jpg?v=1773695940",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691406946689,
+      "position": 14,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-30.jpg?v=1773695940"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-30.jpg?v=1773695940",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691407044993,
+      "position": 15,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-33.jpg?v=1773695940"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-33.jpg?v=1773695940",
+      "width": 2048
+    },
+    {
+      "alt": null,
+      "id": 68691407274369,
+      "position": 16,
+      "preview_image": {
+        "aspect_ratio": 0.667,
+        "height": 3072,
+        "width": 2048,
+        "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-40.jpg?v=1773695940"
+      },
+      "aspect_ratio": 0.667,
+      "height": 3072,
+      "media_type": "image",
+      "src": "https:\/\/cdn.shopify.com\/s\/files\/1\/0726\/5026\/0800\/files\/Jeans-Joelle-bleu-40.jpg?v=1773695940",
+      "width": 2048
+    }
+  ],
+  "requires_selling_plan": false,
+  "selling_plan_groups": []
+}
