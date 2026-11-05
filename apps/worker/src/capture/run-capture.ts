@@ -163,7 +163,8 @@ async function recordFailure(
           durationMs: finishedAt.getTime() - startedAt.getTime(),
           finishedAt,
         })
-        .where(eq(schema.captures.id, capture.id));
+        // Only while running: a capture already swept to failed/timeout keeps its error code.
+        .where(and(eq(schema.captures.id, capture.id), eq(schema.captures.status, "running")));
       if (capture.trigger === "user" && capture.productId) {
         await tx
           .update(schema.products)

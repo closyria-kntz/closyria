@@ -134,35 +134,78 @@ describe("job handlers", () => {
     log.mockRestore();
   });
 
-  it("capture-user runs a valid capture id (unknown capture is ignored)", async () => {
-    await expect(
-      captureHandler(deps())([{ data: { captureId: "7b0c1d52-0a1e-4f6b-8f3a-2c9d5e6f7a81" } }]),
-    ).resolves.toBeUndefined();
-  });
+  /** robots.txt disallows everything: a dispatched capture leaves `queued` (robots_disallowed), with no network. */
+  const denyAll = () => ({ ...deps(), robots: { allows: async () => false } });
 
-  it("capture-monitor plans monitors on no data or {}, runs a valid capture, fails anything else", async () => {
+  async function queuedCapture(trigger: "user" | "admin_test" | "monitor") {
     const { db } = handle;
     await seedStartingShops(db);
+    const [shop] = await db.select().from(schema.shops).limit(1);
+    if (!shop) throw new Error("no shop");
+    const [c] = await db
+      .insert(schema.captures)
+      .values({ shopId: shop.id, url: "https://dispatch.test/p", trigger, status: "queued" })
+      .returning();
+    if (!c) throw new Error("no capture");
+    return c.id;
+  }
+  const statusOf = async (id: string) =>
+    (await handle.db.select().from(schema.captures).where(eq(schema.captures.id, id)))[0];
+
+  it("capture-user and capture-admin run a valid capture: it leaves queued", async () => {
+    for (const queue of ["capture-user", "capture-admin"]) {
+      const id = await queuedCapture("admin_test");
+      await captureHandler(denyAll(), queue)([{ data: { captureId: id } }]);
+      const c = await statusOf(id);
+      expect(c?.status).toBe("failed");
+      expect(c?.errorCode).toBe("robots_disallowed");
+    }
+  });
+
+  it("names the real queue in the log line", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(captureHandler(deps(), "capture-admin")([{ id: "j", data: {} }])).rejects.toThrow("capture-admin");
+    expect(log.mock.calls[0]?.[0]).toContain("capture-admin");
+    log.mockRestore();
+  });
+
+  it("capture-monitor plans the monitors on no data or {}", async () => {
+    const { db } = handle;
+    await seedStartingShops(db);
+    for (const data of [null, undefined, {}]) {
+      const sent: { captureId: string }[] = [];
+      const queue = {
+        send: async (_q: string, d: object) => {
+          sent.push(d as { captureId: string });
+        },
+      };
+      await monitorHandler(deps(), queue)([{ data }]);
+      expect(sent.length).toBeGreaterThan(0);
+      for (const { captureId } of sent) {
+        const c = await statusOf(captureId);
+        expect(c?.trigger).toBe("monitor");
+        expect(c?.status).toBe("queued");
+      }
+    }
+  });
+
+  it("capture-monitor runs a valid capture (it leaves queued) and fails anything else without planning", async () => {
     const sent: object[] = [];
     const queue = {
-      send: async (_q: string, data: object) => {
-        sent.push(data);
+      send: async (_q: string, d: object) => {
+        sent.push(d);
       },
     };
-    const before = (await db.select().from(schema.captures)).length;
-    await monitorHandler(deps(), queue)([{ data: null }, { data: {} }]);
-    expect(sent.length).toBeGreaterThan(0);
-    expect((await db.select().from(schema.captures)).length).toBeGreaterThan(before);
-
-    const sentBefore = sent.length;
-    await monitorHandler(deps(), queue)([{ data: { captureId: "7b0c1d52-0a1e-4f6b-8f3a-2c9d5e6f7a81" } }]);
-    expect(sent.length).toBe(sentBefore);
+    const id = await queuedCapture("monitor");
+    await monitorHandler(denyAll(), queue)([{ data: { captureId: id } }]);
+    expect((await statusOf(id))?.status).toBe("failed");
+    expect(sent).toHaveLength(0);
 
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     for (const data of [{ captureId: "nope" }, { other: 1 }, [], "x", 5]) {
-      await expect(monitorHandler(deps(), queue)([{ data }])).rejects.toThrow();
+      await expect(monitorHandler(denyAll(), queue)([{ data }])).rejects.toThrow();
     }
-    expect(sent.length).toBe(sentBefore);
+    expect(sent).toHaveLength(0);
     log.mockRestore();
   });
 });

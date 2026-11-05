@@ -304,6 +304,25 @@ describe("runCapture", () => {
     expect(r.capture?.errorCode).toBe("timeout");
   });
 
+  it("keeps timeout on a capture already swept when the run then fails", async () => {
+    const t = await setup("/p");
+    const sweepThenDeny = {
+      allows: async () => {
+        await handle.db
+          .update(schema.captures)
+          .set({ status: "failed", errorCode: "timeout", finishedAt: new Date() })
+          .where(eq(schema.captures.id, t.capture.id));
+        return false;
+      },
+    };
+
+    await runCapture(t.capture.id, { ...deps, robots: sweepThenDeny });
+
+    const r = await load(t.capture.id, t.product.id);
+    expect(r.capture?.status).toBe("failed");
+    expect(r.capture?.errorCode).toBe("timeout");
+  });
+
   it("keeps a product that was already ok when a capture fails", async () => {
     routes["/p"] = { status: 403, headers: { "content-type": "text/html" }, body: "no" };
     const t = await setup("/p", { product: { captureStatus: "ok" } });

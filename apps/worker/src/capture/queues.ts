@@ -21,7 +21,7 @@ function parseJob(queue: string, job: JobLike) {
 }
 
 /** capture-user and capture-admin: data that does not validate fails the job (pg-boss), runCapture is not called. */
-export function captureHandler(deps: CaptureDeps, queue = "capture") {
+export function captureHandler(deps: CaptureDeps, queue: string) {
   return async (jobs: JobLike[]): Promise<void> => {
     for (const job of jobs) await runCapture(parseJob(queue, job).captureId, deps);
   };
@@ -60,8 +60,8 @@ export async function registerCaptureQueues(boss: PgBoss, deps: CaptureQueueDeps
   for (const name of [CAPTURE_QUEUES.user, CAPTURE_QUEUES.admin, CAPTURE_QUEUES.monitor, SWEEP_QUEUE]) {
     await boss.createQueue(name);
   }
-  await boss.work(CAPTURE_QUEUES.user, { localConcurrency: 4 }, captureHandler(captureDeps));
-  await boss.work(CAPTURE_QUEUES.admin, { localConcurrency: 1 }, captureHandler(captureDeps));
+  await boss.work(CAPTURE_QUEUES.user, { localConcurrency: 4 }, captureHandler(captureDeps, CAPTURE_QUEUES.user));
+  await boss.work(CAPTURE_QUEUES.admin, { localConcurrency: 1 }, captureHandler(captureDeps, CAPTURE_QUEUES.admin));
   // The schedule sends a job without data: it plans the day's monitor captures, which come back here.
   await boss.work(CAPTURE_QUEUES.monitor, { localConcurrency: 1 }, monitorHandler(captureDeps, boss));
   await boss.work(SWEEP_QUEUE, async () => {
