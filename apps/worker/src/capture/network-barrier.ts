@@ -13,17 +13,23 @@ const tcpConnect: Connect = (host, port) =>
     socket.once("error", reject);
   });
 
+export type BarrierCheck = { state: "active" | "absent"; reason: string };
+
+/** Outcomes of a connection to a closed local port that only a firewall can produce. */
+const BLOCKED = new Set(["ETIMEDOUT", "EPERM", "EACCES"]);
+
 /**
  * The systemd unit forbids the worker from reaching local addresses (second line of defence behind safeFetch).
- * A direct TCP connection to 127.0.0.1:9 (discard, nothing listens) is refused with EPERM/EACCES when the
- * barrier is in place; any other outcome (ECONNREFUSED, success…) means it is absent.
+ * A direct TCP connection to 127.0.0.1:9 (discard, nothing listens) is refused at once (ECONNREFUSED) without
+ * the barrier. With it, systemd's IPAddressDeny drops the packets silently (measured on the server on
+ * 2026-11-05: timeout), or the kernel answers EPERM/EACCES. `reason` is the observed code, for the log.
  */
-export async function checkNetworkBarrier(connect: Connect = tcpConnect): Promise<"active" | "absent"> {
+export async function checkNetworkBarrier(connect: Connect = tcpConnect): Promise<BarrierCheck> {
   try {
     await connect("127.0.0.1", 9);
-    return "absent";
+    return { state: "absent", reason: "connected" };
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException | undefined)?.code;
-    return code === "EPERM" || code === "EACCES" ? "active" : "absent";
+    const code = (error as NodeJS.ErrnoException | undefined)?.code ?? "unknown";
+    return { state: BLOCKED.has(code) ? "active" : "absent", reason: code };
   }
 }

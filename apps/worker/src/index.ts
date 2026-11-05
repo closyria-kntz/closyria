@@ -24,12 +24,13 @@ const store =
       })
     : memoryStore();
 
-if ((await checkNetworkBarrier()) === "active") {
-  console.log("network barrier: active");
+const barrier = await checkNetworkBarrier();
+if (barrier.state === "active") {
+  console.log(`network barrier: active (${barrier.reason})`);
 } else if (env.APP_ENV !== "development" && env.APP_ENV !== "test") {
-  console.warn("network barrier: ABSENT");
+  console.warn(`network barrier: ABSENT (${barrier.reason})`);
 } else {
-  console.log("network barrier: absent");
+  console.log(`network barrier: absent (${barrier.reason})`);
 }
 
 await boss.start();

@@ -43,8 +43,8 @@ sudo systemctl daemon-reload
 sudo closyria-deploy dev <id>   # le redémarrage prend la nouvelle unité
 ```
 
-Vérifier dans le journal (au démarrage, le worker écrit `network barrier: active`, ou l'avertissement
-`network barrier: ABSENT` si la barrière n'est pas en place) :
+Vérifier dans le journal (au démarrage, le worker écrit `network barrier: active (ETIMEDOUT)` — systemd jette les paquets en silence, d’où un délai dépassé —, ou l’avertissement
+`network barrier: ABSENT (ECONNREFUSED)` si la barrière n’est pas en place) :
 
 ```bash
 sudo journalctl -u closyria-dev-worker -n 50 --no-pager | grep 'network barrier'

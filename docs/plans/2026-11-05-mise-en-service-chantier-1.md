@@ -35,7 +35,7 @@
    ```bash
    sudo journalctl -u closyria-dev-worker -n 50 --no-pager | grep 'network barrier'
    ```
-   Attendu : `network barrier: active`. Si `network barrier: ABSENT` : l'unité n'a pas été recopiée ou
+   Attendu : `network barrier: active (ETIMEDOUT)`. Si `network barrier: ABSENT (…)` : l'unité n'a pas été recopiée ou
    `daemon-reload` a été oublié ; ne pas passer à la suite.
 4. [ ] Journal sans erreur ni avertissement inattendu : `sudo journalctl -u 'closyria-dev-*' -p warning -n 50`.
    Puis, à part (Node écrit ses avertissements au niveau « info », que `-p warning` masque) :
@@ -63,7 +63,7 @@ Mêmes étapes, avec les noms de prod :
      de la forme `worker <version> (prod) started`
    - Un worker qui redémarre en boucle (échec de l'amorçage des boutiques, variables `S3_*`, DNS derrière la
      barrière) doit mener à `sudo closyria-deploy prod rollback`, à lancer à la main.
-5. [ ] `sudo journalctl -u closyria-prod-worker -n 50 --no-pager | grep 'network barrier'` → `network barrier: active`
+5. [ ] `sudo journalctl -u closyria-prod-worker -n 50 --no-pager | grep 'network barrier'` → `network barrier: active (ETIMEDOUT)`
 6. [ ] Coller un lien Shopify sur https://closyria.com et voir la fiche
 7. [ ] Admin : santé visible
 8. [ ] Le lendemain : surveillance de 04:00 UTC passée pour les 8 boutiques
