@@ -1,6 +1,7 @@
 import { registerOwnedTable } from "@closyria/auth";
 import { schema } from "@closyria/db";
 import { registerEntitlementsOwnedTables } from "@closyria/entitlements";
+import { mergeItems, mergeProfiles, mergeTags, mergeWishlists } from "./wardrobe/merge";
 
 /**
  * Registers, in the API process, every table holding a user's data, so that anonymous -> account linking
@@ -12,12 +13,11 @@ export function registerOwnedTables(): void {
   registerOwnedTable(schema.media, schema.media.userId);
   // Audience events with a user move too; those with no user (null) stay anonymous.
   registerOwnedTable(schema.events, schema.events.userId);
-  // Wardrobe: generic move for now. The order (profiles and tags before the items that point to them) is a convention
-  // for the merge functions of chantier 2a task 10, not a requirement of the generic move.
-  // Known interim gap until task 10: linking an anonymous account to one that already has the same product (items) or
-  // the same tag name (tags) may hit a unique violation.
-  registerOwnedTable(schema.profiles, schema.profiles.userId);
-  registerOwnedTable(schema.tags, schema.tags.userId);
-  registerOwnedTable(schema.items, schema.items.userId);
-  registerOwnedTable(schema.wishlists, schema.wishlists.userId);
+  // Wardrobe: merged into the account (spec §3 « Fusion anonyme → compte », wardrobe/merge.ts). Registration order is
+  // execution order and matters: media (above), profiles and tags are moved or folded before the items that point to
+  // them, so the item merge only sees rows of the account; lists last.
+  registerOwnedTable(schema.profiles, schema.profiles.userId, mergeProfiles);
+  registerOwnedTable(schema.tags, schema.tags.userId, mergeTags);
+  registerOwnedTable(schema.items, schema.items.userId, mergeItems);
+  registerOwnedTable(schema.wishlists, schema.wishlists.userId, mergeWishlists);
 }

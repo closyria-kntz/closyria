@@ -57,6 +57,14 @@ describe("owned tables of the API process", () => {
     expect(await findOwnedColumnsWithoutCascade(api.db)).toEqual([]);
   });
 
+  it("merges the wardrobe in an order where every step sees its parents already moved", () => {
+    // Registration order is execution order (wardrobe/merge.ts relies on it).
+    const order = listOwnedColumns()
+      .map((o) => o.table)
+      .filter((t) => ["media", "profiles", "tags", "items", "wishlists"].includes(t));
+    expect(order).toEqual(["media", "profiles", "tags", "items", "wishlists"]);
+  });
+
   it("leaves no foreign key to user(id) unregistered, except the explicit allowlist", async () => {
     const result = await api.db.execute<{ fk: string }>(sql`
       select c.conrelid::regclass::text || '.' || a.attname as fk
