@@ -41,11 +41,13 @@ async function lockOwnItem(tx: Tx, userId: string, itemId: string): Promise<Item
   return row ?? null;
 }
 
-async function activeItemFor(tx: Tx, userId: string, productId: string): Promise<Item | null> {
+/** Her active item for the product, row-locked (read fresh, after any change in flight on it has committed). */
+async function lockActiveItemFor(tx: Tx, userId: string, productId: string): Promise<Item | null> {
   const [row] = await tx
     .select()
     .from(schema.items)
-    .where(and(eq(schema.items.userId, userId), eq(schema.items.productId, productId), isNull(schema.items.deletedAt)));
+    .where(and(eq(schema.items.userId, userId), eq(schema.items.productId, productId), isNull(schema.items.deletedAt)))
+    .for("update");
   return row ?? null;
 }
 
@@ -72,8 +74,23 @@ export async function createItem(db: Database, userId: string, input: ItemCreate
     if (!list) return { error: "not_found" };
   }
   return db.transaction(async (tx): Promise<ItemOutcome> => {
+    // Read again under a share lock: a profile or list deleted since the checks above answers 404, not 500.
+    const [heldProfile] = await tx
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .where(and(eq(schema.profiles.id, profile.id), eq(schema.profiles.userId, userId)))
+      .for("share");
+    if (!heldProfile) return { error: "not_found" };
+    if (input.action === "list" && input.wishlistId) {
+      const [heldList] = await tx
+        .select({ id: schema.wishlists.id })
+        .from(schema.wishlists)
+        .where(and(eq(schema.wishlists.id, input.wishlistId), eq(schema.wishlists.userId, userId)))
+        .for("share");
+      if (!heldList) return { error: "not_found" };
+    }
     await lockProductOfUser(tx, userId, product.id);
-    const existing = await activeItemFor(tx, userId, product.id);
+    const existing = await lockActiveItemFor(tx, userId, product.id);
     if (existing) return { itemId: existing.id, itemIds: [existing.id], undo: null, created: false };
     const stage: ItemStage = input.action === "ordered" ? "ordered" : "spotted";
     const [item] = await tx
@@ -143,16 +160,17 @@ export async function patchItem(
         .where(eq(schema.colors.id, patch.colorId));
       if (!row) return { error: "invalid_color" };
     }
-    const set = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
-    if (Object.keys(set).length > 0) {
-      await tx
-        .update(schema.items)
-        .set({ ...set, updatedAt: now })
-        .where(eq(schema.items.id, item.id));
-    }
-    const onlyFavorite = Object.keys(set).length === 1 && patch.favorite !== undefined;
+    // Only the fields whose value really changes: a patch with the current values changes nothing at all.
+    const set = Object.fromEntries(
+      Object.entries(patch).filter(([key, value]) => value !== undefined && value !== item[key as keyof Item]),
+    );
+    if (Object.keys(set).length === 0) return { itemId: item.id, itemIds: [], undo: null };
+    await tx
+      .update(schema.items)
+      .set({ ...set, updatedAt: now })
+      .where(eq(schema.items.id, item.id));
     const undo: UndoPayload | null =
-      onlyFavorite && patch.favorite !== item.favorite
+      Object.keys(set).length === 1 && set.favorite !== undefined
         ? { ops: [{ ids: [item.id], op: "setFavorite", favorite: item.favorite }], removeEventIds: [] }
         : null;
     return { itemId: item.id, itemIds: [item.id], undo };
@@ -161,7 +179,8 @@ export async function patchItem(
 
 /**
  * Moves the item to another stage (any other stage, never the same one) and writes the history row. The amount goes
- * to the paid price (`ordered`, `owned`) or the sale price (`for_sale`, `sold`); the channel to `sale_channel`.
+ * to the paid price (`ordered`, `owned`) or the sale price (`for_sale`, `sold`); the channel to `sale_channel`
+ * (sale stages only).
  * Undo: back to the previous stage at the date of its own history row (creation date when it has none), and the new
  * row deleted. The amounts written by the action are not reverted.
  */
@@ -192,7 +211,9 @@ export async function changeStage(
     const set: Partial<typeof schema.items.$inferInsert> = { stage: input.stage, updatedAt: now };
     const column = AMOUNT_COLUMN[input.stage];
     if (column && input.amountCents !== undefined) set[column] = input.amountCents;
-    if (input.channel !== undefined) set.saleChannel = input.channel;
+    if (input.channel !== undefined && (input.stage === "for_sale" || input.stage === "sold")) {
+      set.saleChannel = input.channel;
+    }
     await tx.update(schema.items).set(set).where(eq(schema.items.id, item.id));
     const eventId = await recordEvent(tx, item, {
       type: "stage",
@@ -268,9 +289,10 @@ export async function restoreItem(db: Database, userId: string, itemId: string, 
     if (!item) return { error: "not_found" };
     if (!item.deletedAt) return { error: "item_not_deleted" };
     if (!item.productId) throw new Error("items without a product come with 2b");
-    // The row lock keeps this item as read; the product lock keeps a new active item from appearing meanwhile.
+    // Lock order: the source row, the product lock (no new active item meanwhile), then the target row, read fresh
+    // under its lock so that a change committed on it in the meantime is merged, never overwritten.
     await lockProductOfUser(tx, userId, item.productId);
-    const active = await activeItemFor(tx, userId, item.productId);
+    const active = await lockActiveItemFor(tx, userId, item.productId);
     if (active) {
       await mergeItemInto(tx, item, active, now);
       return { itemId: active.id, itemIds: [active.id], undo: null };

@@ -131,7 +131,8 @@ export const itemListQuerySchema = z.object({
   sort: itemSortSchema.optional(),
   /** Trash view: only deleted items. */
   deleted: z.stringbool().optional(),
-  cursor: z.string().min(1).max(500).optional(),
+  /** Opaque; room for a 300-character name key in UTF-8, base64url-encoded. */
+  cursor: z.string().min(1).max(2000).optional(),
 });
 export type ItemListQuery = z.infer<typeof itemListQuerySchema>;
 
@@ -275,6 +276,7 @@ export type SummaryView = z.infer<typeof summaryViewSchema>;
 /** Stable error codes of the `/api/me/profiles`, `/api/me/items` and `/api/me/summary` routes. */
 export const wardrobeErrorCodes = [
   "invalid_request",
+  "invalid_cursor",
   "not_found",
   "rate_limited",
   "profile_not_empty",

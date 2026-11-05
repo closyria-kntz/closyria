@@ -103,7 +103,48 @@ export async function loadItemView(db: Database | Tx, userId: string, itemId: st
 /** Thrown for a cursor that was not produced by `listItems` for the same sort. */
 export class InvalidCursorError extends Error {}
 
-type SortKey = { expr: SQL; type: "timestamptz" | "integer" | "text" | "uuid" };
+type KeyType = "timestamptz" | "integer" | "text" | "uuid";
+type SortKey = { expr: SQL; type: KeyType };
+
+/** Longest text key: a product name or a name override (300 characters). */
+const MAX_TEXT_KEY = 300;
+const INT_MAX = 2_147_483_647;
+/** `timestamptz::text` in a UTC session, e.g. `2026-11-05 22:10:01.123456+00`. */
+const TIMESTAMP_TEXT = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(\.\d{1,6})?\+00$/;
+const uuidSchema = z.uuid();
+
+/** Whether a cursor value can be cast to its key's type: a forged cursor must answer 400, never reach Postgres. */
+function validKeyValue(type: KeyType, value: string): boolean {
+  switch (type) {
+    case "uuid":
+      return uuidSchema.safeParse(value).success;
+    case "integer":
+      return /^-?\d{1,10}$/.test(value) && Math.abs(Number(value)) <= INT_MAX;
+    case "text":
+      return value.length <= MAX_TEXT_KEY;
+    case "timestamptz": {
+      const m = TIMESTAMP_TEXT.exec(value);
+      if (!m) return false;
+      const [year, month, day, hour, minute, second] = m.slice(1, 7).map(Number) as [
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+      ];
+      const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+      return (
+        date.getUTCFullYear() === year &&
+        date.getUTCMonth() === month - 1 &&
+        date.getUTCDate() === day &&
+        date.getUTCHours() === hour &&
+        date.getUTCMinutes() === minute &&
+        date.getUTCSeconds() === second
+      );
+    }
+  }
+}
 
 const effectiveName = sql`coalesce(${schema.items.nameOverride}, ${schema.products.name})`;
 const idKey: SortKey = { expr: sql`${schema.items.id}`, type: "uuid" };
@@ -112,7 +153,11 @@ const idKey: SortKey = { expr: sql`${schema.items.id}`, type: "uuid" };
  * Keyset of each sort. Every key is non-null and all keys of a sort go the same way, so a row comparison
  * `(k1, k2, id) < (…)` gives the next page; unknown names and prices come last.
  */
-const SORTS: Record<ItemSort, { keys: SortKey[]; desc: boolean }> = {
+type ListSort = ItemSort | "trash";
+
+const SORTS: Record<ListSort, { keys: SortKey[]; desc: boolean }> = {
+  /** Default of the trash view: latest deleted first. */
+  trash: { keys: [{ expr: sql`${schema.items.deletedAt}`, type: "timestamptz" }, idKey], desc: true },
   recent: { keys: [{ expr: sql`${schema.items.createdAt}`, type: "timestamptz" }, idKey], desc: true },
   oldest: { keys: [{ expr: sql`${schema.items.createdAt}`, type: "timestamptz" }, idKey], desc: false },
   name: {
@@ -141,13 +186,16 @@ const SORTS: Record<ItemSort, { keys: SortKey[]; desc: boolean }> = {
   },
 };
 
-const cursorSchema = z.object({ s: itemSortSchema, k: z.array(z.string()).min(2).max(3) });
+const cursorSchema = z.object({
+  s: z.enum([...itemSortSchema.options, "trash"]),
+  k: z.array(z.string()).min(2).max(3),
+});
 
-function encodeCursor(sort: ItemSort, keys: string[]): string {
+function encodeCursor(sort: ListSort, keys: string[]): string {
   return Buffer.from(JSON.stringify({ s: sort, k: keys })).toString("base64url");
 }
 
-function decodeCursor(sort: ItemSort, cursor: string): string[] {
+function decodeCursor(sort: ListSort, cursor: string): string[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
@@ -155,18 +203,22 @@ function decodeCursor(sort: ItemSort, cursor: string): string[] {
     throw new InvalidCursorError();
   }
   const result = cursorSchema.safeParse(parsed);
-  if (!result.success || result.data.s !== sort || result.data.k.length !== SORTS[sort].keys.length) {
+  const keys = SORTS[sort].keys;
+  if (!result.success || result.data.s !== sort || result.data.k.length !== keys.length) {
     throw new InvalidCursorError();
   }
-  return result.data.k;
+  const values = result.data.k;
+  if (!keys.every((key, i) => validKeyValue(key.type, values[i] ?? ""))) throw new InvalidCursorError();
+  return values;
 }
 
 /**
- * One page (48) of her items, filtered and sorted, with a cursor on the sort keys (`(created_at, id)` descending by
- * default). Price sorts use the product's price. Throws `InvalidCursorError` for a foreign or malformed cursor.
+ * One page (48) of her items, filtered and sorted, with a cursor on the sort keys: `(created_at, id)` descending by
+ * default, `(deleted_at, id)` descending in the trash (`deleted=true`). Price sorts use the product's price.
+ * Throws `InvalidCursorError` for a foreign or malformed cursor.
  */
 export async function listItems(db: Database, userId: string, query: ItemListQuery): Promise<ItemPage> {
-  const sort = query.sort ?? "recent";
+  const sort: ListSort = query.sort ?? (query.deleted ? "trash" : "recent");
   const { keys, desc } = SORTS[sort];
   const conditions: SQL[] = [
     eq(schema.items.userId, userId),

@@ -1,4 +1,4 @@
-import { and, count, eq, isNull, schema, sql } from "@closyria/db";
+import { and, asc, count, eq, isNull, ne, schema, sql } from "@closyria/db";
 import {
   type ChildDetail,
   profileInputSchema,
@@ -13,7 +13,14 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { type AccessEnv, defineAccess } from "../../access";
 import type { WardrobeDeps } from "../../wardrobe/deps";
-import { ensureDefaultProfile, findOwnProfile, listProfileViews, toProfileView } from "../../wardrobe/profiles";
+import {
+  ensureDefaultProfile,
+  findOwnProfile,
+  insertDefaultProfile,
+  listProfileViews,
+  lockProfilesOf,
+  toProfileView,
+} from "../../wardrobe/profiles";
 
 const invalidRequest = { error: "invalid_request" } as const;
 const notFound = { error: "not_found" } as const;
@@ -77,13 +84,15 @@ const deleteProfileRoute = defineAccess(
     method: "delete",
     path: "/me/profiles/{id}",
     summary: "Delete an empty profile",
-    description: "Refused while it holds items, trashed ones included.",
+    description:
+      "Refused while it holds active items. Its trashed items move to her first other profile (« Moi » is created " +
+      "when it was her last one).",
     request: { params: idParams },
     responses: {
       204: { description: "Deleted" },
       400: errorContent("Malformed id (invalid_request)"),
       404: errorContent("Unknown or another account's profile (not_found)"),
-      409: errorContent("The profile holds items (profile_not_empty)"),
+      409: errorContent("The profile holds active items (profile_not_empty)"),
     },
   }),
   "user",
@@ -197,14 +206,31 @@ export function profilesRoutes(deps: WardrobeDeps) {
       const id = c.req.valid("param").id;
       try {
         const outcome = await db.transaction(async (tx) => {
+          await lockProfilesOf(tx, userId);
           const [profile] = await tx
             .select({ id: schema.profiles.id })
             .from(schema.profiles)
             .where(and(eq(schema.profiles.id, id), eq(schema.profiles.userId, userId)))
             .for("update");
           if (!profile) return "not_found" as const;
-          const [held] = await tx.select({ n: count() }).from(schema.items).where(eq(schema.items.profileId, id));
-          if ((held?.n ?? 0) > 0) return "profile_not_empty" as const;
+          const [active] = await tx
+            .select({ n: count() })
+            .from(schema.items)
+            .where(and(eq(schema.items.profileId, id), isNull(schema.items.deletedAt)));
+          if ((active?.n ?? 0) > 0) return "profile_not_empty" as const;
+          // Items in the trash go to her first other profile (« Moi » is created when there is none), so that
+          // they can still be restored.
+          const [trashed] = await tx.select({ n: count() }).from(schema.items).where(eq(schema.items.profileId, id));
+          if ((trashed?.n ?? 0) > 0) {
+            const [other] = await tx
+              .select()
+              .from(schema.profiles)
+              .where(and(eq(schema.profiles.userId, userId), ne(schema.profiles.id, id)))
+              .orderBy(asc(schema.profiles.position), asc(schema.profiles.createdAt), asc(schema.profiles.id))
+              .limit(1);
+            const fallback = other ?? (await insertDefaultProfile(tx, userId));
+            await tx.update(schema.items).set({ profileId: fallback.id }).where(eq(schema.items.profileId, id));
+          }
           await tx.delete(schema.profiles).where(eq(schema.profiles.id, id));
           return "deleted" as const;
         });

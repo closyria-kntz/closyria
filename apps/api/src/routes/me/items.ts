@@ -78,7 +78,7 @@ const listRoute = defineAccess(
     request: { query: itemListQuerySchema },
     responses: {
       200: json("A page", itemPageSchema),
-      400: errorContent("Invalid query or cursor (invalid_request)"),
+      400: errorContent("Invalid query (invalid_request) or cursor (invalid_cursor)"),
     },
   }),
   "user",
@@ -208,12 +208,15 @@ export function itemsRoutes(deps: WardrobeDeps) {
     c.json({ error: "rate_limited" } as const, 429),
   );
 
-  /** The mutation answer: ids, undo and the item as it now is. */
+  /** The mutation answer: ids, undo and the item as it now is; null when it is gone meanwhile (404). */
   async function answer(userId: string, outcome: Exclude<ItemOutcome, { error: unknown }>) {
     const item = await loadItemView(db, userId, outcome.itemId);
-    if (!item) throw new Error("item vanished after its mutation");
-    return { itemIds: outcome.itemIds, undo: outcome.undo, item };
+    return item ? { itemIds: outcome.itemIds, undo: outcome.undo, item } : null;
   }
+
+  /** 200 with the answer, or 404 when the item is gone. */
+  const respond = <C extends Context<AccessEnv>>(c: C, result: Awaited<ReturnType<typeof answer>>) =>
+    result ? c.json(result, 200) : c.json(notFound, 404);
 
   return app
     .openapi(createItemRoute(limiter), async (c) => {
@@ -222,6 +225,7 @@ export function itemsRoutes(deps: WardrobeDeps) {
       const outcome = await createItem(db, userId, input, now());
       if ("error" in outcome) return c.json(notFound, 404);
       const result = await answer(userId, outcome);
+      if (!result) return c.json(notFound, 404);
       if (!outcome.created) return c.json(result, 200);
       await trackItemEvent(db, userId, "item_saved", { action: input.action, stage: result.item.stage });
       return c.json(result, 201);
@@ -230,7 +234,7 @@ export function itemsRoutes(deps: WardrobeDeps) {
       try {
         return c.json(await listItems(db, userIdOf(c), c.req.valid("query")), 200);
       } catch (error) {
-        if (error instanceof InvalidCursorError) return c.json(invalidRequest, 400);
+        if (error instanceof InvalidCursorError) return c.json({ error: "invalid_cursor" } as const, 400);
         throw error;
       }
     })
@@ -255,7 +259,7 @@ export function itemsRoutes(deps: WardrobeDeps) {
             throw new Error(`unexpected outcome ${outcome.error}`);
         }
       }
-      return c.json(await answer(userId, outcome), 200);
+      return respond(c, await answer(userId, outcome));
     })
     .openapi(stageRoute, async (c) => {
       const userId = userIdOf(c);
@@ -270,7 +274,7 @@ export function itemsRoutes(deps: WardrobeDeps) {
         from: outcome.previous?.stage ?? "",
         to: input.stage,
       });
-      return c.json(await answer(userId, outcome), 200);
+      return respond(c, await answer(userId, outcome));
     })
     .openapi(moveRoute, async (c) => {
       const userId = userIdOf(c);
@@ -281,7 +285,7 @@ export function itemsRoutes(deps: WardrobeDeps) {
         return c.json({ error: "same_profile" } as const, 400);
       }
       await trackItemEvent(db, userId, "item_moved", {});
-      return c.json(await answer(userId, outcome), 200);
+      return respond(c, await answer(userId, outcome));
     })
     .openapi(deleteRoute, async (c) => {
       const userId = userIdOf(c);
@@ -289,7 +293,7 @@ export function itemsRoutes(deps: WardrobeDeps) {
       if ("error" in outcome) {
         return outcome.error === "not_found" ? c.json(notFound, 404) : c.json({ error: "item_deleted" } as const, 409);
       }
-      return c.json(await answer(userId, outcome), 200);
+      return respond(c, await answer(userId, outcome));
     })
     .openapi(restoreRoute, async (c) => {
       const userId = userIdOf(c);
@@ -299,6 +303,6 @@ export function itemsRoutes(deps: WardrobeDeps) {
           ? c.json(notFound, 404)
           : c.json({ error: "item_not_deleted" } as const, 409);
       }
-      return c.json(await answer(userId, outcome), 200);
+      return respond(c, await answer(userId, outcome));
     });
 }

@@ -165,6 +165,47 @@ describe("PATCH, DELETE and order", () => {
     ]);
   });
 
+  it("deletes a profile whose items are all in the trash, moving them to the first other profile", async () => {
+    const { cookie } = await t.signIn();
+    const moi = ((await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] })
+      .profiles[0] as ProfileJson;
+    const lea = (await (
+      await call("POST", "/api/me/profiles", cookie, { name: "Léa", audience: "women", color: "rose" })
+    ).json()) as ProfileJson;
+    const product = await newProduct();
+    const kept = (await (
+      await call("POST", "/api/me/items", cookie, { productId: product.id, profileId: lea.id, action: "favorite" })
+    ).json()) as { item: { id: string } };
+    expect((await call("DELETE", `/api/me/items/${kept.item.id}`, cookie)).status).toBe(200);
+
+    expect((await call("DELETE", `/api/me/profiles/${lea.id}`, cookie)).status).toBe(204);
+    const [row] = await t.db.select().from(schema.items).where(eq(schema.items.id, kept.item.id));
+    expect(row?.profileId).toBe(moi.id);
+    const restored = await call("POST", `/api/me/items/${kept.item.id}/restore`, cookie);
+    expect(restored.status).toBe(200);
+    expect(await restored.json()).toMatchObject({ item: { id: kept.item.id, profileId: moi.id, deletedAt: null } });
+  });
+
+  it("recreates « Moi » for the trashed items of her last profile", async () => {
+    const { cookie } = await t.signIn();
+    const moi = ((await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] })
+      .profiles[0] as ProfileJson;
+    const product = await newProduct();
+    const kept = (await (
+      await call("POST", "/api/me/items", cookie, { productId: product.id, action: "favorite" })
+    ).json()) as { item: { id: string } };
+    await call("DELETE", `/api/me/items/${kept.item.id}`, cookie);
+
+    expect((await call("DELETE", `/api/me/profiles/${moi.id}`, cookie)).status).toBe(204);
+    const list = (await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] };
+    expect(list.profiles).toHaveLength(1);
+    const fallback = list.profiles[0] as ProfileJson;
+    expect(fallback).toMatchObject({ name: "Moi", audience: "women", color: "plum" });
+    expect(fallback.id).not.toBe(moi.id);
+    const [row] = await t.db.select().from(schema.items).where(eq(schema.items.id, kept.item.id));
+    expect(row?.profileId).toBe(fallback.id);
+  });
+
   it("reorders the profiles", async () => {
     const { cookie } = await t.signIn();
     const moi = ((await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] })

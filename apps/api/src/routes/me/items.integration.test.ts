@@ -257,6 +257,18 @@ describe("GET /api/me/items/:id and PATCH", () => {
     expect(body.undo).toEqual({ ops: [{ ids: [item.id], op: "setFavorite", favorite: true }], removeEventIds: [] });
   });
 
+  it("reports nothing changed for a patch with the current values", async () => {
+    const { cookie } = await t.signIn();
+    const product = await newProduct();
+    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const res = await call("PATCH", `/api/me/items/${item.id}`, cookie, { favorite: true, notes: null });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ItemResult;
+    expect(body.itemIds).toEqual([]);
+    expect(body.undo).toBeNull();
+    expect(body.item.updatedAt).toBe(item.updatedAt);
+  });
+
   it("refuses a cover that is not one of the item's photos, an unknown category or colour", async () => {
     const { cookie, userId } = await t.signIn();
     const product = await newProduct();
@@ -341,6 +353,19 @@ describe("POST /api/me/items/:id/stage", () => {
     });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "same_stage" });
+  });
+
+  it("writes the channel only for the sale stages", async () => {
+    const { cookie } = await t.signIn();
+    const product = await newProduct();
+    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const res = await call("POST", `/api/me/items/${item.id}/stage`, cookie, {
+      stage: "owned",
+      at: "2026-11-01T10:00:00.000Z",
+      channel: "Vinted",
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as ItemResult).item.saleChannel).toBeNull();
   });
 
   it("replaying the undo of a stage change brings the stage back", async () => {
@@ -481,6 +506,36 @@ describe("trash and restore", () => {
   });
 });
 
+describe("restore merge under concurrency", () => {
+  it("merges with the target's committed values when a change on it was in flight", async () => {
+    const { cookie } = await t.signIn();
+    const product = await newProduct();
+    const old = (await keep(cookie, { productId: product.id, action: "ordered" })).item;
+    await call("DELETE", `/api/me/items/${old.id}`, cookie);
+    const fresh = (await keep(cookie, { productId: product.id, action: "favorite" })).item;
+    // Another transaction holds the target row and moves it to « sold ».
+    const client = await t.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("update items set stage = 'sold', sale_price_cents = 2500 where id = $1", [fresh.id]);
+      const restoring = call("POST", `/api/me/items/${old.id}/restore`, cookie);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await client.query("commit");
+      const res = await restoring;
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as ItemResult).item).toMatchObject({
+        id: fresh.id,
+        stage: "sold",
+        salePriceCents: 2500,
+      });
+    } finally {
+      client.release();
+    }
+    const [row] = await t.db.select().from(schema.items).where(eq(schema.items.id, fresh.id));
+    expect(row).toMatchObject({ stage: "sold", salePriceCents: 2500 });
+  });
+});
+
 describe("GET /api/me/items", () => {
   it("paginates 120 items stably by creation date, 48 per page", async () => {
     const { cookie, userId } = await t.signIn();
@@ -554,6 +609,97 @@ describe("GET /api/me/items", () => {
     expect(await ids("sort=price_desc")).toEqual([dear.item.id, cheap.item.id, noPriceId]);
     expect(await ids("sort=oldest")).toEqual([cheap.item.id, dear.item.id, noPriceId]);
     expect((await call("GET", "/api/me/items?cursor=garbage", cookie)).status).toBe(400);
+  });
+
+  it("answers 400 invalid_cursor for a forged cursor", async () => {
+    const { cookie } = await t.signIn();
+    const forge = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+    const cursors = [
+      "garbage",
+      forge({ s: "recent", k: ["x", "y"] }),
+      forge({ s: "recent", k: ["2026-02-31 00:00:00+00", UNKNOWN_ID] }),
+      forge({ s: "price_asc", k: ["0", "abc", UNKNOWN_ID] }),
+      forge({ s: "price_asc", k: ["0", "99999999999", UNKNOWN_ID] }),
+      forge({ s: "name", k: ["0", "x".repeat(1000), UNKNOWN_ID] }),
+      forge({ s: "oldest", k: ["2026-11-01 10:00:00+00", UNKNOWN_ID] }),
+    ];
+    for (const cursor of cursors) {
+      const res = await call("GET", `/api/me/items?cursor=${encodeURIComponent(cursor)}`, cookie);
+      expect(res.status, cursor).toBe(400);
+      expect(await res.json()).toEqual({ error: "invalid_cursor" });
+    }
+  });
+
+  it("pages the name sort past items with 300-character accented names", async () => {
+    const { cookie, userId } = await t.signIn();
+    const moi = await defaultProfile(cookie);
+    const shop = await newShop();
+    const products = await t.db
+      .insert(schema.products)
+      .values(
+        Array.from({ length: 49 }, (_, i) => ({
+          shopId: shop.id,
+          canonicalUrl: `https://me-items-names-${shop.id}.test/${i}`,
+          name: "é".repeat(300),
+        })),
+      )
+      .returning({ id: schema.products.id });
+    await t.db.insert(schema.items).values(products.map((p) => ({ userId, profileId: moi.id, productId: p.id })));
+    const first = (await (await call("GET", "/api/me/items?sort=name", cookie)).json()) as {
+      items: ItemView[];
+      nextCursor: string | null;
+    };
+    expect(first.items).toHaveLength(48);
+    const res = await call(
+      "GET",
+      `/api/me/items?sort=name&cursor=${encodeURIComponent(first.nextCursor ?? "")}`,
+      cookie,
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { items: ItemView[] }).items).toHaveLength(1);
+  });
+
+  it("shows the trash latest deleted first, with a stable cursor", async () => {
+    const { cookie, userId } = await t.signIn();
+    const moi = await defaultProfile(cookie);
+    const shop = await newShop();
+    const products = await t.db
+      .insert(schema.products)
+      .values(
+        Array.from({ length: 50 }, (_, i) => ({
+          shopId: shop.id,
+          canonicalUrl: `https://me-items-trash-${shop.id}.test/${i}`,
+        })),
+      )
+      .returning({ id: schema.products.id });
+    const base = new Date("2026-10-01T00:00:00Z").getTime();
+    // Created in one order, deleted in the reverse one (two share a deletion date: the id breaks the tie).
+    const rows = await t.db
+      .insert(schema.items)
+      .values(
+        products.map((p, i) => ({
+          userId,
+          profileId: moi.id,
+          productId: p.id,
+          createdAt: new Date(base + i * 1000),
+          deletedAt: new Date(base + 1_000_000 - Math.min(i, 48) * 1000),
+        })),
+      )
+      .returning();
+    const expected = rows
+      .sort((a, b) => (b.deletedAt?.getTime() ?? 0) - (a.deletedAt?.getTime() ?? 0) || (a.id < b.id ? 1 : -1))
+      .map((r) => r.id);
+    const first = (await (await call("GET", "/api/me/items?deleted=true", cookie)).json()) as {
+      items: ItemView[];
+      nextCursor: string | null;
+    };
+    expect(first.items).toHaveLength(48);
+    expect(first.nextCursor).not.toBeNull();
+    const second = (await (
+      await call("GET", `/api/me/items?deleted=true&cursor=${encodeURIComponent(first.nextCursor ?? "")}`, cookie)
+    ).json()) as { items: ItemView[]; nextCursor: string | null };
+    expect(second.nextCursor).toBeNull();
+    expect([...first.items, ...second.items].map((i) => i.id)).toEqual(expected);
   });
 });
 

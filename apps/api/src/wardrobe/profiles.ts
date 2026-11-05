@@ -26,16 +26,27 @@ export async function ensureDefaultProfile(db: Database, userId: string): Promis
   const existing = await firstProfile(db, userId);
   if (existing) return existing;
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`profiles:${userId}`}, 0))`);
-    const found = await firstProfile(tx, userId);
-    if (found) return found;
-    const [created] = await tx
-      .insert(schema.profiles)
-      .values({ userId, name: "Moi", audience: "women", color: "plum", position: 0 })
-      .returning();
-    if (!created) throw new Error("default profile not inserted");
-    return created;
+    await lockProfilesOf(tx, userId);
+    return (await firstProfile(tx, userId)) ?? (await insertDefaultProfile(tx, userId));
   });
+}
+
+/**
+ * Serializes, per user, the creation of « Moi » and the deletion of a profile (which may need a fallback « Moi »).
+ * Transaction-scoped.
+ */
+export async function lockProfilesOf(tx: Tx, userId: string): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`profiles:${userId}`}, 0))`);
+}
+
+/** Inserts « Moi » (women, plum). Call under `lockProfilesOf`. */
+export async function insertDefaultProfile(tx: Tx, userId: string): Promise<Profile> {
+  const [created] = await tx
+    .insert(schema.profiles)
+    .values({ userId, name: "Moi", audience: "women", color: "plum", position: 0 })
+    .returning();
+  if (!created) throw new Error("default profile not inserted");
+  return created;
 }
 
 export function toProfileView(profile: Profile, itemCount?: number): ProfileView {
