@@ -1,15 +1,15 @@
-import type { DbExecutor } from "@closyria/auth";
-import { asc, eq, inArray, schema, sql } from "@closyria/db";
-import type { Tx } from "./events";
+import type { DbTransaction } from "@closyria/auth";
+import { and, asc, eq, inArray, isNotNull, isNull, schema, sql } from "@closyria/db";
+import { lockProductOfUser } from "./items";
 import { mergeItemInto } from "./merge-items";
-import { lockProfilesOf } from "./profiles";
+import { lockProfilesOf, PROFILE_ORDER } from "./profiles";
 
 /**
  * Anonymous -> account merge of the wardrobe (spec §3 « Fusion anonyme → compte »). Four `reassign` functions for
  * `registerOwnedTable`, run by `reassignUserData` inside Better Auth's link transaction, in registration order:
  * profiles, tags, items, wishlists (media, registered before, have already moved). Each step leaves every foreign key
  * and unique index valid:
- * - profiles first: the anonymous « Moi » is folded into the account's before items move, so no item points to a
+ * - profiles first: the anonymous « Moi » (each side's first profile by position, as `firstProfile`) is folded into the account's before items move, so no item points to a
  *   deleted profile and none ends up in another user's profile;
  * - tags next: same-name tags are folded (item_tags re-pointed) before the remaining ones move, so the unique
  *   (user_id, lower(name)) holds;
@@ -19,33 +19,22 @@ import { lockProfilesOf } from "./profiles";
  * Locks are taken in the order the API routes use (advisory lock, then rows by id), always on the account `to`.
  */
 
-/** The link transaction, typed as Drizzle's (`reassignUserData` hands over `db.transaction`'s `tx`). */
-function asTx(executor: DbExecutor): Tx {
-  if (!("select" in executor && "update" in executor && "delete" in executor)) {
-    throw new Error("the wardrobe merge needs a Drizzle transaction");
-  }
-  return executor as Tx;
-}
-
-const oldestFirst = [asc(schema.profiles.createdAt), asc(schema.profiles.id)];
-
-/** « Moi » (each side's oldest profile) folded into the account's; the other profiles move after hers. */
-export async function mergeProfiles(fromUserId: string, toUserId: string, executor: DbExecutor): Promise<void> {
-  const tx = asTx(executor);
+/** « Moi » (each side's first profile by position) folded into the account's; the other profiles move after hers. */
+export async function mergeProfiles(fromUserId: string, toUserId: string, tx: DbTransaction): Promise<void> {
   // As the creation of « Moi » and the deletion of a profile: neither runs on the account meanwhile.
   await lockProfilesOf(tx, toUserId);
   const [accountMoi] = await tx
     .select({ id: schema.profiles.id })
     .from(schema.profiles)
     .where(eq(schema.profiles.userId, toUserId))
-    .orderBy(...oldestFirst)
+    .orderBy(...PROFILE_ORDER)
     .limit(1)
     .for("share");
   const [anonymousMoi] = await tx
     .select({ id: schema.profiles.id })
     .from(schema.profiles)
     .where(eq(schema.profiles.userId, fromUserId))
-    .orderBy(...oldestFirst)
+    .orderBy(...PROFILE_ORDER)
     .limit(1);
   if (!anonymousMoi) return;
 
@@ -75,8 +64,7 @@ export async function mergeProfiles(fromUserId: string, toUserId: string, execut
 }
 
 /** Same name (case ignored): folded into the account's tag; the others move. May exceed the 200-tag cap (nothing lost). */
-export async function mergeTags(fromUserId: string, toUserId: string, executor: DbExecutor): Promise<void> {
-  const tx = asTx(executor);
+export async function mergeTags(fromUserId: string, toUserId: string, tx: DbTransaction): Promise<void> {
   // As the creation of a tag: no same-name tag appears on the account meanwhile.
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`tags:${toUserId}`}, 0))`);
   await tx.execute(sql`
@@ -92,6 +80,13 @@ export async function mergeTags(fromUserId: string, toUserId: string, executor: 
     join ${schema.tags} as s on s.id = it.tag_id and s.user_id = ${fromUserId}
     join ${schema.tags} as a on a.user_id = ${toUserId} and lower(a.name) = lower(s.name)
     on conflict do nothing`);
+  // The account's tag keeps its colour; the anonymous one fills it when it has none.
+  await tx.execute(sql`
+    update ${schema.tags} as a
+    set color = s.color
+    from ${schema.tags} as s
+    where a.user_id = ${toUserId} and s.user_id = ${fromUserId} and lower(a.name) = lower(s.name)
+      and a.color is null and s.color is not null`);
   // Their links to the anonymous tag go with it (cascade); they were copied above.
   await tx.execute(sql`
     delete from ${schema.tags} as s
@@ -101,16 +96,16 @@ export async function mergeTags(fromUserId: string, toUserId: string, executor: 
 }
 
 /** Same product active on both sides: merged into the account's item (`mergeItemInto`); the others move. */
-export async function mergeItems(fromUserId: string, toUserId: string, executor: DbExecutor): Promise<void> {
-  const tx = asTx(executor);
+export async function mergeItems(fromUserId: string, toUserId: string, tx: DbTransaction): Promise<void> {
   // As the creation and the restoration of an item: the account gains no active item for these products meanwhile.
-  await tx.execute(sql`
-    select pg_advisory_xact_lock(hashtextextended('items:' || ${toUserId}::text || ':' || p.product_id::text, 0))
-    from (
-      select distinct product_id from ${schema.items}
-      where user_id = ${fromUserId} and deleted_at is null and product_id is not null
-      order by product_id
-    ) as p`);
+  // One lock per product, by product id (as bulk.ts), so two merges or a batch restore never wait on each other in a
+  // cycle.
+  const products = await tx
+    .selectDistinct({ productId: schema.items.productId })
+    .from(schema.items)
+    .where(and(eq(schema.items.userId, fromUserId), isNull(schema.items.deletedAt), isNotNull(schema.items.productId)));
+  const productIds = products.flatMap((p) => (p.productId ? [p.productId] : [])).sort();
+  for (const productId of productIds) await lockProductOfUser(tx, toUserId, productId);
   const pairs = await tx.execute<{ source_id: string; target_id: string }>(sql`
     select s.id as source_id, a.id as target_id
     from ${schema.items} as s
@@ -138,8 +133,7 @@ export async function mergeItems(fromUserId: string, toUserId: string, executor:
 }
 
 /** Lists move after the account's, in their order; identical names are kept as they are. */
-export async function mergeWishlists(fromUserId: string, toUserId: string, executor: DbExecutor): Promise<void> {
-  const tx = asTx(executor);
+export async function mergeWishlists(fromUserId: string, toUserId: string, tx: DbTransaction): Promise<void> {
   // As the creation and the reordering of lists.
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`wishlists:${toUserId}`}, 0))`);
   await tx.execute(sql`

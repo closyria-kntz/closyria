@@ -102,8 +102,8 @@ async function newProfile(userId: string, name: string, createdAt: Date, positio
   return row;
 }
 
-async function newTag(userId: string, name: string) {
-  const [row] = await handle.db.insert(schema.tags).values({ userId, name }).returning();
+async function newTag(userId: string, name: string, color: string | null = null) {
+  const [row] = await handle.db.insert(schema.tags).values({ userId, name, color }).returning();
   if (!row) throw new Error("no tag");
   return row;
 }
@@ -200,6 +200,21 @@ async function listIdsOf(itemId: string) {
   return rows.map((r) => r.id).sort();
 }
 
+/** Everything a user holds in the wardrobe tables, to check a bystander is left untouched. */
+async function wardrobeOf(userId: string) {
+  const rows = async (query: ReturnType<typeof sql>) => (await handle.db.execute(query)).rows;
+  return {
+    profiles: await rows(sql`select * from profiles where user_id = ${userId} order by id`),
+    tags: await rows(sql`select * from tags where user_id = ${userId} order by id`),
+    items: await rows(sql`select * from items where user_id = ${userId} order by id`),
+    wishlists: await rows(sql`select * from wishlists where user_id = ${userId} order by id`),
+    itemTags: await rows(sql`select it.* from item_tags it join items i on i.id = it.item_id
+      where i.user_id = ${userId} order by it.item_id, it.tag_id`),
+    wishlistItems: await rows(sql`select wi.* from wishlist_items wi join items i on i.id = wi.item_id
+      where i.user_id = ${userId} order by wi.wishlist_id, wi.item_id`),
+  };
+}
+
 describe("anonymous -> account merge on sign-in", () => {
   it("merges into an account that already has the same product and same-name tags: no duplicate, nothing lost", async () => {
     const email = `garde-${randomUUID()}@example.test`;
@@ -209,11 +224,11 @@ describe("anonymous -> account merge on sign-in", () => {
     const inChildProfile = await newProduct();
     const onlyAccount = await newProduct();
 
-    // The account: « Moi » (oldest) and « Léa », tags « Été » and « Travail », a list, two items.
+    // The account: « Moi » (first by position) and « Léa », tags « Été » and « Travail », a list, two items.
     const accountMoi = await newProfile(accountId, "Moi", day(1), 0);
     const lea = await newProfile(accountId, "Léa", day(2), 1);
-    const summer = await newTag(accountId, "Été");
-    const work = await newTag(accountId, "Travail");
+    const summer = await newTag(accountId, "Été"); // no colour: takes the anonymous one
+    const work = await newTag(accountId, "Travail", "plum"); // has one: keeps it
     const accountList = await newList(accountId, "Mes envies", 0);
     const accountMedia = await newMedia(accountId);
     const accountItem = await newItem({
@@ -230,13 +245,24 @@ describe("anonymous -> account merge on sign-in", () => {
     const accountOnlyItem = await newItem({ userId: accountId, profileId: lea.id, productId: onlyAccount.id });
     await handle.db.insert(schema.itemTags).values({ itemId: accountOnlyItem.id, tagId: work.id });
 
+    // A third user with the same product and tag names: never touched.
+    const bystander = await signInAnonymously();
+    const bystanderMoi = await newProfile(bystander.userId, "Moi", day(1));
+    const bystanderTag = await newTag(bystander.userId, "été");
+    const bystanderList = await newList(bystander.userId, "Idées");
+    const bystanderItem = await newItem({ userId: bystander.userId, profileId: bystanderMoi.id, productId: shared.id });
+    await handle.db.insert(schema.itemTags).values({ itemId: bystanderItem.id, tagId: bystanderTag.id });
+    await handle.db.insert(schema.wishlistItems).values({ wishlistId: bystanderList.id, itemId: bystanderItem.id });
+    const bystanderBefore = await wardrobeOf(bystander.userId);
+
     // The anonymous visitor: « Moi » and « Bébé », tags « été » (same name, other case) and « Soldes », a list.
     const anonymous = await signInAnonymously();
     const anonId = anonymous.userId;
     const anonMoi = await newProfile(anonId, "Moi", day(3), 0);
     const baby = await newProfile(anonId, "Bébé", day(4), 1);
-    const anonSummer = await newTag(anonId, "été");
+    const anonSummer = await newTag(anonId, "été", "rose");
     const sales = await newTag(anonId, "Soldes");
+    await newTag(anonId, "travail", "sage");
     const anonList = await newList(anonId, "Idées", 0);
     const anonMedia = await newMedia(anonId);
     const anonItem = await newItem({
@@ -287,13 +313,20 @@ describe("anonymous -> account merge on sign-in", () => {
 
     // Tags: « été » merged into « Été », « Soldes » added.
     const tags = await handle.db.select().from(schema.tags).where(eq(schema.tags.userId, accountId));
-    expect(tags.map((t) => t.name).sort()).toEqual(["Soldes", "Travail", "Été"]);
+    expect(Object.fromEntries(tags.map((t) => [t.name, t.color]))).toEqual({
+      Été: "rose",
+      Travail: "plum",
+      Soldes: null,
+    });
+    expect(tags.find((t) => t.name === "Été")?.id).toBe(summer.id);
 
     // The shared product: one active item, the account's, merged.
     const active = await handle.db
       .select()
       .from(schema.items)
-      .where(and(eq(schema.items.productId, shared.id), isNull(schema.items.deletedAt)));
+      .where(
+        and(eq(schema.items.userId, accountId), eq(schema.items.productId, shared.id), isNull(schema.items.deletedAt)),
+      );
     expect(active).toHaveLength(1);
     expect(active[0]).toMatchObject({
       id: accountItem.id,
@@ -343,6 +376,105 @@ describe("anonymous -> account merge on sign-in", () => {
       .where(eq(schema.wishlists.userId, accountId))
       .orderBy(asc(schema.wishlists.position));
     expect(lists.map((l) => l.name)).toEqual(["Mes envies", "Idées"]);
+
+    expect(await wardrobeOf(bystander.userId)).toEqual(bystanderBefore);
+  });
+
+  it("folds into the first profile by position, not the oldest one", async () => {
+    const email = `position-${randomUUID()}@example.test`;
+    const accountId = await signInWithEmail(email);
+    const moi = await newProfile(accountId, "Moi", day(1), 1);
+    const lea = await newProfile(accountId, "Léa", day(2), 0); // newer, but first by position
+    const anonymous = await signInAnonymously();
+    const anonPrimary = await newProfile(anonymous.userId, "Moi", day(3), 0);
+    const anonOlder = await newProfile(anonymous.userId, "Ancien", day(1), 1);
+    const product = await newProduct();
+    const item = await newItem({ userId: anonymous.userId, profileId: anonPrimary.id, productId: product.id });
+
+    expect(await signInWithEmail(email, anonymous.cookie)).toBe(accountId);
+
+    await expectNothingLeftOrCrossed(anonymous.userId);
+    expect((await profilesOf(accountId)).map((p) => [p.id, p.position])).toEqual([
+      [lea.id, 0],
+      [moi.id, 1],
+      [anonOlder.id, 2],
+    ]);
+    const [movedItem] = await handle.db.select().from(schema.items).where(eq(schema.items.id, item.id));
+    expect(movedItem).toMatchObject({ userId: accountId, profileId: lea.id });
+  });
+
+  it("never merges a trashed item: active beside trashed, trashed beside trashed", async () => {
+    const email = `corbeille-${randomUUID()}@example.test`;
+    const accountId = await signInWithEmail(email);
+    const accountMoi = await newProfile(accountId, "Moi", day(1));
+    const trashedOnAccount = await newProduct();
+    const trashedOnBoth = await newProduct();
+    const accountTrashed = await newItem({
+      userId: accountId,
+      profileId: accountMoi.id,
+      productId: trashedOnAccount.id,
+      stage: "owned",
+      deletedAt: day(2),
+    });
+    const accountTrashedToo = await newItem({
+      userId: accountId,
+      profileId: accountMoi.id,
+      productId: trashedOnBoth.id,
+      deletedAt: day(2),
+    });
+    const anonymous = await signInAnonymously();
+    const anonMoi = await newProfile(anonymous.userId, "Moi", day(3));
+    const anonActive = await newItem({
+      userId: anonymous.userId,
+      profileId: anonMoi.id,
+      productId: trashedOnAccount.id,
+      favorite: true,
+    });
+    const anonTrashed = await newItem({
+      userId: anonymous.userId,
+      profileId: anonMoi.id,
+      productId: trashedOnBoth.id,
+      deletedAt: day(4),
+    });
+
+    expect(await signInWithEmail(email, anonymous.cookie)).toBe(accountId);
+
+    await expectNothingLeftOrCrossed(anonymous.userId);
+    const rows = await handle.db
+      .select()
+      .from(schema.items)
+      .where(eq(schema.items.userId, accountId))
+      .orderBy(asc(schema.items.id));
+    const state = Object.fromEntries(rows.map((i) => [i.id, [i.productId, i.stage, i.favorite, i.deletedAt !== null]]));
+    expect(state).toEqual({
+      [accountTrashed.id]: [trashedOnAccount.id, "owned", false, true],
+      [accountTrashedToo.id]: [trashedOnBoth.id, "spotted", false, true],
+      [anonActive.id]: [trashedOnAccount.id, "spotted", true, false],
+      [anonTrashed.id]: [trashedOnBoth.id, "spotted", false, true],
+    });
+    expect(rows.find((i) => i.id === anonActive.id)?.profileId).toBe(accountMoi.id);
+  });
+
+  it("moves several profiles into an account with none, positions in their order from 0", async () => {
+    const email = `profils-${randomUUID()}@example.test`;
+    const accountId = await signInWithEmail(email);
+    const anonymous = await signInAnonymously();
+    const second = await newProfile(anonymous.userId, "Léa", day(1), 4);
+    const first = await newProfile(anonymous.userId, "Moi", day(2), 2);
+    const third = await newProfile(anonymous.userId, "Bébé", day(3), 9);
+    const product = await newProduct();
+    const item = await newItem({ userId: anonymous.userId, profileId: third.id, productId: product.id });
+
+    expect(await signInWithEmail(email, anonymous.cookie)).toBe(accountId);
+
+    await expectNothingLeftOrCrossed(anonymous.userId);
+    expect((await profilesOf(accountId)).map((p) => [p.id, p.position])).toEqual([
+      [first.id, 0],
+      [second.id, 1],
+      [third.id, 2],
+    ]);
+    const [movedItem] = await handle.db.select().from(schema.items).where(eq(schema.items.id, item.id));
+    expect(movedItem).toMatchObject({ userId: accountId, profileId: third.id });
   });
 
   it("moves everything as it is when the account has no wardrobe yet", async () => {

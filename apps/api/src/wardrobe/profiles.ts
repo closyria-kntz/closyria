@@ -4,7 +4,8 @@ import type { Tx } from "./events";
 
 export type Profile = typeof schema.profiles.$inferSelect;
 
-const byPosition = [asc(schema.profiles.position), asc(schema.profiles.createdAt), asc(schema.profiles.id)];
+/** Her profiles' order; the first one is « Moi » (her primary profile, also for the anonymous -> account merge). */
+export const PROFILE_ORDER = [asc(schema.profiles.position), asc(schema.profiles.createdAt), asc(schema.profiles.id)];
 
 /** Her first profile (by position), or null when she has none yet. */
 async function firstProfile(db: Database | Tx, userId: string): Promise<Profile | null> {
@@ -12,7 +13,7 @@ async function firstProfile(db: Database | Tx, userId: string): Promise<Profile 
     .select()
     .from(schema.profiles)
     .where(eq(schema.profiles.userId, userId))
-    .orderBy(...byPosition)
+    .orderBy(...PROFILE_ORDER)
     .limit(1);
   return row ?? null;
 }
@@ -69,7 +70,7 @@ export async function listProfileViews(db: Database, userId: string): Promise<Pr
       .select()
       .from(schema.profiles)
       .where(eq(schema.profiles.userId, userId))
-      .orderBy(...byPosition),
+      .orderBy(...PROFILE_ORDER),
     db
       .select({ profileId: schema.items.profileId, n: count() })
       .from(schema.items)
