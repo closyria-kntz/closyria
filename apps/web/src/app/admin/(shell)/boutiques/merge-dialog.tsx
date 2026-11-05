@@ -3,7 +3,7 @@
 import { adminMergedSchema } from "@closyria/shared";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { adminRequest, catalogErrorKey } from "@/lib/admin-catalog";
 import { buttonClass, inputClass, primaryButtonClass } from "../../ui";
 
@@ -18,7 +18,19 @@ export function MergeDialog({ source, options }: { source: Option; options: Opti
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const startRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
   const target = options.find((o) => o.id === targetId);
+
+  // Focus moves into the confirmation when it opens, and back to « Fusionner » when it closes.
+  useEffect(() => {
+    if (confirming) confirmRef.current?.focus();
+  }, [confirming]);
+
+  const cancel = () => {
+    setConfirming(false);
+    startRef.current?.focus();
+  };
 
   const merge = async () => {
     setBusy(true);
@@ -62,7 +74,13 @@ export function MergeDialog({ source, options }: { source: Option; options: Opti
               ))}
             </select>
           </label>
-          <button type="button" className={buttonClass} disabled={!target} onClick={() => setConfirming(true)}>
+          <button
+            ref={startRef}
+            type="button"
+            className={buttonClass}
+            disabled={!target}
+            onClick={() => setConfirming(true)}
+          >
             {t("start")}
           </button>
         </div>
@@ -70,15 +88,23 @@ export function MergeDialog({ source, options }: { source: Option; options: Opti
       {confirming && target ? (
         <div
           role="alertdialog"
-          aria-label={t("title")}
+          aria-modal="true"
+          aria-labelledby="merge-confirm-title"
+          aria-describedby="merge-confirm-text"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") cancel();
+          }}
           className="flex flex-col gap-space-3 rounded-card border border-line bg-surface-sunken p-space-4"
         >
-          <p>{t("confirm", { source: source.name, target: target.name })}</p>
+          <p id="merge-confirm-title" className="font-strong">
+            {t("title")}
+          </p>
+          <p id="merge-confirm-text">{t("confirm", { source: source.name, target: target.name })}</p>
           <div className="flex flex-wrap gap-space-2">
-            <button type="button" className={primaryButtonClass} disabled={busy} onClick={merge}>
+            <button ref={confirmRef} type="button" className={primaryButtonClass} disabled={busy} onClick={merge}>
               {t("confirmButton")}
             </button>
-            <button type="button" className={buttonClass} disabled={busy} onClick={() => setConfirming(false)}>
+            <button type="button" className={buttonClass} disabled={busy} onClick={cancel}>
               {t("cancel")}
             </button>
           </div>

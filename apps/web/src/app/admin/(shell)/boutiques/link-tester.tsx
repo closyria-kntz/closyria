@@ -15,13 +15,16 @@ export function LinkTester({ initialUrl }: { initialUrl?: string | null }) {
   const [url, setUrl] = useState(initialUrl ?? "");
   const [error, setError] = useState<string | null>(null);
   const { state, follow, reset } = useCaptureFollow();
-  const busy = state.phase === "running";
+  const [posting, setPosting] = useState(false);
+  const busy = posting || state.phase === "running";
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
     reset();
+    setPosting(true);
     const res = await adminRequest("POST", "/api/admin/captures/test", { url });
+    setPosting(false);
     const accepted = adminCaptureAcceptedSchema.safeParse(res.body);
     if (!res.ok || !accepted.success) return setError(errors(catalogErrorKey(res.status, res.body)));
     follow(accepted.data.captureId);

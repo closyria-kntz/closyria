@@ -164,7 +164,8 @@
         "captureActive": "Cette capture est encore en cours.",
         "invalidMerge": "Cette fusion n’est pas possible.",
         "invalidUrl": "Ce lien n’est pas valide.",
-        "generic": "L’action a échoué. Réessaie."
+        "generic": "L’action a échoué. Réessaie.",
+        "invalidFields": "Vérifie le slug et les domaines."
       }
     },
     "shops": {
@@ -220,7 +221,6 @@
       "recentErrors": "10 dernières erreurs",
       "noErrors": "Aucune erreur.",
       "errorLine": "{code} · HTTP {status}",
-      "date": "Date (UTC)",
       "tester": {
         "title": "Tester un lien",
         "intro": "Lance une capture de test : aucune fiche n’est créée.",
@@ -264,8 +264,7 @@
         "takeName": "Reprendre le nom",
         "useTestUrl": "Utiliser comme page de test",
         "nameTaken": "Nom repris : {name}.",
-        "testUrlSet": "Page de test enregistrée.",
-        "noSuggestion": "La capture n’a rien proposé à reprendre."
+        "testUrlSet": "Page de test enregistrée."
       }
     },
     "captures": {
@@ -284,7 +283,9 @@
       "httpStatus": "HTTP",
       "retry": "Relancer",
       "retrying": "Relance…",
-      "retried": "Capture relancée."
+      "retried": "Capture relancée.",
+      "retryLabel": "Relancer la capture de {shop} du {date}",
+      "actions": "Actions"
     }
   },
   "Capture": {

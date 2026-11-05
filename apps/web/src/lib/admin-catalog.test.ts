@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adminRequest, catalogErrorKey, readCaptureResult } from "./admin-catalog";
+import { adminRequest, catalogErrorKey, readCaptureResult, shopPatchErrorKey } from "./admin-catalog";
 
 describe("catalogErrorKey", () => {
   it("maps the API refusals to a message key", () => {
@@ -61,5 +61,14 @@ describe("adminRequest", () => {
       status: 0,
       body: null,
     });
+  });
+});
+
+describe("shopPatchErrorKey", () => {
+  it("blames the slug or domains for a 400, and keeps the other mappings", () => {
+    expect(shopPatchErrorKey(400, { error: "invalid_request" })).toBe("invalidFields");
+    expect(shopPatchErrorKey(409, { error: "slug_taken" })).toBe("slugTaken");
+    expect(shopPatchErrorKey(409, { error: "domain_taken" })).toBe("domainTaken");
+    expect(shopPatchErrorKey(500, null)).toBe("generic");
   });
 });

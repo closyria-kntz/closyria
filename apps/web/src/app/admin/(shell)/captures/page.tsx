@@ -75,7 +75,9 @@ export default async function AdminCapturesPage({ searchParams }: Props) {
                     {t(key)}
                   </th>
                 ))}
-                <td className={cell} />
+                <th scope="col" className={cell}>
+                  <span className="sr-only">{t("actions")}</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -102,7 +104,17 @@ export default async function AdminCapturesPage({ searchParams }: Props) {
                   </td>
                   <td className={`${cell} tabular-nums`}>{failure.httpStatus ?? common("none")}</td>
                   <td className={cell}>
-                    <RetryButton captureId={failure.id} />
+                    <RetryButton
+                      captureId={failure.id}
+                      label={t("retryLabel", {
+                        shop: failure.shopName,
+                        date: format.dateTime(new Date(failure.createdAt), {
+                          dateStyle: "short",
+                          timeStyle: "medium",
+                          timeZone: "UTC",
+                        }),
+                      })}
+                    />
                   </td>
                 </tr>
               ))}

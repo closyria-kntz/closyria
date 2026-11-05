@@ -1,10 +1,10 @@
 "use client";
 
-import type { AdminShop } from "@closyria/shared";
+import { type AdminShop, canonicalizeUrl } from "@closyria/shared";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
-import { adminRequest, catalogErrorKey } from "@/lib/admin-catalog";
+import { useEffect, useState } from "react";
+import { adminRequest, shopPatchErrorKey } from "@/lib/admin-catalog";
 import { inputClass, primaryButtonClass } from "../../ui";
 
 const STATUSES = ["pending", "draft", "published"] as const;
@@ -26,10 +26,24 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; failed: boolean; shopId?: string } | null>(null);
 
+  // After a save the page is refreshed: show what the server kept (domains come back normalised).
+  useEffect(() => {
+    setName(shop.name);
+    setSlug(shop.slug);
+    setStatus(shop.status);
+    setCaptureMode(shop.captureMode);
+    setListingKind(shop.listingKind);
+    setTestUrl(shop.testUrl ?? "");
+    setDomains(shop.domains.join("\n"));
+  }, [shop]);
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setBusy(true);
     setMessage(null);
+    if (testUrl.trim() !== "" && canonicalizeUrl(testUrl.trim()) === null) {
+      return setMessage({ text: errors("invalidUrl"), failed: true });
+    }
+    setBusy(true);
     const res = await adminRequest("PATCH", `/api/admin/shops/${shop.id}`, {
       name,
       slug,
@@ -47,10 +61,7 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
       setMessage({ text: t("saved"), failed: false });
       return router.refresh();
     }
-    const key =
-      res.status === 400 && testUrl.trim() !== (shop.testUrl ?? "")
-        ? "invalidUrl"
-        : catalogErrorKey(res.status, res.body);
+    const key = shopPatchErrorKey(res.status, res.body);
     const owner = (res.body as { shopId?: unknown } | null)?.shopId;
     setMessage({
       text: errors(key),
@@ -149,7 +160,7 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
             {t("save")}
           </button>
         </div>
-        <p role={message?.failed ? "alert" : "status"} className={message?.failed ? "text-danger" : "text-success"}>
+        <p role="status" aria-live="polite" className={message?.failed ? "text-danger" : "text-success"}>
           {message?.text}{" "}
           {message?.shopId ? (
             <a className="underline" href={`/admin/boutiques/${message.shopId}`}>

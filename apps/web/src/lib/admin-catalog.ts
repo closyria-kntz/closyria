@@ -1,6 +1,13 @@
 import { type ExtractedProduct, extractedProductSchema } from "@closyria/shared";
 
-export type CatalogErrorKey = "slugTaken" | "domainTaken" | "captureActive" | "invalidMerge" | "invalidUrl" | "generic";
+export type CatalogErrorKey =
+  | "slugTaken"
+  | "domainTaken"
+  | "captureActive"
+  | "invalidMerge"
+  | "invalidUrl"
+  | "invalidFields"
+  | "generic";
 
 /** The message (under `Admin.shops.errors`) for a refusal of the admin catalog API. */
 export function catalogErrorKey(status: number, body: unknown): CatalogErrorKey {
@@ -38,4 +45,10 @@ export async function adminRequest(
   } catch {
     return { ok: false, status: 0, body: null };
   }
+}
+
+/** Like `catalogErrorKey`, for a shop PATCH: its 400 is a bad slug or domain (the test URL is checked before sending). */
+export function shopPatchErrorKey(status: number, body: unknown): CatalogErrorKey {
+  const key = catalogErrorKey(status, body);
+  return status === 400 && key === "generic" ? "invalidFields" : key;
 }

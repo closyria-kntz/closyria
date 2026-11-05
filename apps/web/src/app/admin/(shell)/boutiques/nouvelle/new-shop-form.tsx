@@ -68,7 +68,7 @@ export function NewShopForm() {
           {t("submit")}
         </button>
       </form>
-      <p role={notice?.failed ? "alert" : "status"} className={notice?.failed ? "text-danger" : "text-success"}>
+      <p role="status" aria-live="polite" className={notice?.failed ? "text-danger" : "text-success"}>
         {notice?.text}{" "}
         {notice?.shopId ? (
           <a className="underline" href={`/admin/boutiques/${notice.shopId}`}>

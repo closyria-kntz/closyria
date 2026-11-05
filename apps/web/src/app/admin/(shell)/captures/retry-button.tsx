@@ -7,7 +7,7 @@ import { adminRequest, catalogErrorKey } from "@/lib/admin-catalog";
 import { buttonClass } from "../../ui";
 
 /** « Relancer »: a new capture of the same address, then a refresh of the list. */
-export function RetryButton({ captureId }: { captureId: string }) {
+export function RetryButton({ captureId, label }: { captureId: string; label: string }) {
   const t = useTranslations("Admin.captures");
   const errors = useTranslations("Admin.common.errors");
   const router = useRouter();
@@ -28,10 +28,10 @@ export function RetryButton({ captureId }: { captureId: string }) {
 
   return (
     <div className="flex flex-col gap-space-1">
-      <button type="button" className={buttonClass} disabled={busy} onClick={retry}>
+      <button type="button" className={buttonClass} disabled={busy} onClick={retry} aria-label={label}>
         {busy ? t("retrying") : t("retry")}
       </button>
-      <span role={message?.failed ? "alert" : "status"} className={message?.failed ? "text-danger" : "text-success"}>
+      <span role="status" aria-live="polite" className={message?.failed ? "text-danger" : "text-success"}>
         {message?.text}
       </span>
     </div>
