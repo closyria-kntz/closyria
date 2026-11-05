@@ -77,3 +77,43 @@ test("taille, notes, étiquette, photo personnelle et suppression", async ({ pag
   await expect(page.getByRole("status", { name: "Notifications" })).toContainText("Article supprimé");
   await expect(page.getByRole("button", { name: "Je l’ai commandé" })).toBeVisible();
 });
+
+test("un article déjà gardé ailleurs : « Ajouter à une liste » l'ajoute à l'article existant", async ({
+  page,
+  context,
+}) => {
+  await openSheet(page);
+  // The same sheet, open in another tab, where she keeps it first.
+  const other = await context.newPage();
+  await other.goto(page.url());
+  await other.getByRole("button", { name: "Favori" }).click();
+  await expect(other.getByRole("heading", { name: "Mon article" })).toBeVisible();
+
+  // The first tab still shows the keep actions: the API answers with the existing item.
+  await page.getByRole("button", { name: "Ajouter à une liste" }).click();
+  const dialog = page.getByRole("dialog", { name: "Ajouter à une liste" });
+  await dialog.getByLabel("Nouvelle liste").fill("Printemps");
+  await dialog.getByRole("button", { name: "Créer et ajouter" }).click();
+  await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Printemps", pressed: true })).toBeVisible();
+  await expect(page.getByRole("status", { name: "Notifications" })).toContainText("Ajouté à la liste Printemps");
+});
+
+test("un article gardé dans un autre profil : bandeau « Déjà dans le profil … »", async ({ page }) => {
+  await openSheet(page);
+  await page.getByRole("button", { name: "Favori" }).click();
+  await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+  const sheet = page.url();
+
+  const lea = await page.evaluate(async () => {
+    const response = await fetch("/api/me/profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Léa", audience: "women", color: "rose" }),
+    });
+    return (await response.json()) as { id: string };
+  });
+  await page.goto(`${sheet.split("?")[0]}?profil=${lea.id}`);
+  await expect(page.getByText("Déjà dans le profil Moi")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+});

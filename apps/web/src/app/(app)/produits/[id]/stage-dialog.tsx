@@ -78,6 +78,7 @@ function StageForm({
         id="stage-date"
         type="date"
         required
+        max={todayInput()}
         value={date}
         onChange={(event) => setDate(event.target.value)}
         className={`${inputClass} min-h-touch-target`}

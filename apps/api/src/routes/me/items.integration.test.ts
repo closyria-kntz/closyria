@@ -621,6 +621,11 @@ describe("GET /api/me/items", () => {
     expect(await ids(`profile=${lea.id}`)).toEqual([dear.item.id]);
     expect(await ids(`product=${dear.item.product.id}`)).toEqual([dear.item.id]);
     expect(await ids(`product=${UNKNOWN_ID}`)).toEqual([]);
+    expect((await call("GET", "/api/me/items?product=not-a-uuid", cookie)).status).toBe(400);
+    // Another account's item for the same product is never returned.
+    const stranger = await t.signIn();
+    await keep(stranger.cookie, { productId: dear.item.product.id, action: "favorite" });
+    expect(await ids(`product=${dear.item.product.id}`)).toEqual([dear.item.id]);
     expect(await ids("favorite=true&sort=price_asc")).toEqual([cheap.item.id, noPriceId]);
     expect(await ids("sort=price_asc")).toEqual([cheap.item.id, dear.item.id, noPriceId]);
     expect(await ids("sort=price_desc")).toEqual([dear.item.id, cheap.item.id, noPriceId]);

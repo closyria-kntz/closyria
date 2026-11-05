@@ -429,7 +429,8 @@
       "move": "Déplacer",
       "delete": "Supprimer",
       "deleteHint": "L’article va dans la corbeille pendant 30 jours.",
-      "loadingExtras": "Chargement…"
+      "loadingExtras": "Chargement…",
+      "retry": "Réessayer"
     },
     "stage": {
       "spotted": "Repéré",
@@ -464,7 +465,11 @@
       "alt": "Photo {n} de {name}",
       "count": "{count} sur {max}",
       "uploading": "Envoi de la photo…",
-      "empty": "Pas encore de photo"
+      "empty": "Pas encore de photo",
+      "confirmTitle": "Supprimer cette photo ?",
+      "confirmBody": "Elle sera effacée définitivement.",
+      "confirm": "Supprimer",
+      "keep": "Garder la photo"
     },
     "errors": {
       "failed": "Ça n’a pas marché. Réessaie dans un instant.",
@@ -486,7 +491,9 @@
       "unsupported_image": "Cette image n’est pas prise en charge (JPEG, PNG, WebP ou AVIF).",
       "image_too_large": "Cette image est trop lourde.",
       "invalid_upload": "Aucune photo reçue.",
-      "busy": "Le traitement des photos est occupé. Réessaie dans un instant."
+      "busy": "Le traitement des photos est occupé. Réessaie dans un instant.",
+      "itemLoad": "Ton article ne s’affiche pas. Réessaie dans un instant.",
+      "extrasLoad": "Tes listes et étiquettes ne s’affichent pas."
     }
   }
 }

@@ -3,9 +3,11 @@
 import { type ItemPhotoView, type ItemView, MAX_ITEM_PHOTOS } from "@closyria/shared";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
-import { buttonClass } from "@/components/ui";
+import { Dialog } from "@/components/dialog";
+import { buttonClass, primaryButtonClass } from "@/components/ui";
+import { checkPhoto } from "@/lib/photo-check";
 import { pushUndo } from "@/lib/undo";
-import { patchItem, removePhoto, uploadPhoto } from "@/lib/wardrobe-client";
+import { patchItem, removePhoto, undoWith, uploadPhoto } from "@/lib/wardrobe-client";
 
 /** Stand-in for a sheet without photo (hand-entered, shop blocked): tokens only, same 3:4 frame. */
 export function PhotoPlaceholder({ label }: { label: string }) {
@@ -40,19 +42,30 @@ function Frame({ photo, alt }: { photo: ItemPhotoView; alt: string }) {
 }
 
 /** Her private photos first (add, remove, choose the thumbnail), then the shop's. */
-export function PhotoManager({ item, onChange }: { item: ItemView; onChange: (item: ItemView) => void }) {
+export function PhotoManager({
+  item,
+  onChange,
+  reload,
+}: {
+  item: ItemView;
+  onChange: (item: ItemView) => void;
+  reload: () => Promise<void>;
+}) {
   const t = useTranslations("Item");
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<ItemPhotoView | null>(null);
   const name = item.name ?? item.product.shop.name;
   const mine = item.photos.filter((photo) => photo.source === "private");
   const shop = item.photos.filter((photo) => photo.source === "shop");
   const fail = (code: string) => setError(t(`errors.${code}` as "errors.failed"));
 
   async function add(file: File) {
-    setBusy(true);
     setError(null);
+    const refused = checkPhoto(file);
+    if (refused) return fail(refused);
+    setBusy(true);
     const result = await uploadPhoto(item.id, file);
     if (result.ok) {
       onChange(result.item);
@@ -65,6 +78,7 @@ export function PhotoManager({ item, onChange }: { item: ItemView; onChange: (it
     setBusy(true);
     setError(null);
     const result = await removePhoto(item.id, photo.id);
+    setConfirming(null);
     if (result.ok) {
       onChange(result.item);
       pushUndo(t("toast.photoRemoved"), null);
@@ -78,7 +92,7 @@ export function PhotoManager({ item, onChange }: { item: ItemView; onChange: (it
     const result = await patchItem(item.id, { coverMediaId: mediaId });
     if (result.ok) {
       onChange(result.item);
-      pushUndo(t(mediaId ? "toast.cover" : "toast.coverDefault"), null);
+      pushUndo(t(mediaId ? "toast.cover" : "toast.coverDefault"), undoWith(result.undo, reload));
     } else fail(result.error);
     setBusy(false);
   }
@@ -108,7 +122,7 @@ export function PhotoManager({ item, onChange }: { item: ItemView; onChange: (it
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => remove(photo)}
+                  onClick={() => setConfirming(photo)}
                   className={`${buttonClass} ${touch}`}
                 >
                   {t("photos.remove")}
@@ -154,6 +168,23 @@ export function PhotoManager({ item, onChange }: { item: ItemView; onChange: (it
           </p>
         )}
       </div>
+
+      <Dialog
+        open={confirming !== null}
+        onClose={() => setConfirming(null)}
+        title={t("photos.confirmTitle")}
+        closeLabel={t("photos.keep")}
+      >
+        <p>{t("photos.confirmBody")}</p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => confirming && remove(confirming)}
+          className={`${primaryButtonClass} ${touch}`}
+        >
+          {t("photos.confirm")}
+        </button>
+      </Dialog>
 
       {shop.length > 0 && (
         <ul aria-label={t("photos.shop")} className="grid grid-cols-2 gap-space-2">

@@ -56,16 +56,26 @@ export function KeepActions({ product, profileId, onKept, reload }: Props) {
     setBusy(true);
     setError(null);
     const result = await createItem({ ...base, action: "favorite" });
-    if (!result.ok) fail(result.error);
-    else {
-      let item = result.item;
-      if (!result.created && !item.favorite) {
-        const patched = await patchItem(item.id, { favorite: true });
-        if (patched.ok) item = patched.item;
-      }
-      onKept(item);
-      pushUndo(t("toast.favorite"), undoWith(result.undo, reload));
+    if (!result.ok) {
+      fail(result.error);
+      setBusy(false);
+      return;
     }
+    let item = result.item;
+    let undo = result.undo;
+    if (!result.created && !item.favorite) {
+      // The API returned her existing item as it was: the favorite is ours to set.
+      const patched = await patchItem(item.id, { favorite: true });
+      if (!patched.ok) {
+        fail(patched.error);
+        setBusy(false);
+        return;
+      }
+      item = patched.item;
+      undo = patched.undo;
+    }
+    onKept(item);
+    pushUndo(t("toast.favorite"), undoWith(undo, reload));
     setBusy(false);
   }
 
@@ -83,10 +93,13 @@ export function KeepActions({ product, profileId, onKept, reload }: Props) {
     if (!result.created && item.stage !== "ordered") {
       // The API returned her existing item as it was: the stage is ours to set.
       const moved = await changeStage(item.id, { stage: "ordered", at: new Date().toISOString() });
-      if (moved.ok) {
-        item = moved.item;
-        undo = moved.undo;
-      } else fail(moved.error);
+      if (!moved.ok) {
+        fail(moved.error);
+        setBusy(false);
+        return;
+      }
+      item = moved.item;
+      undo = moved.undo;
     }
     onKept(item);
     pushUndo(t("toast.ordered"), undoWith(undo, reload));
@@ -106,10 +119,13 @@ export function KeepActions({ product, profileId, onKept, reload }: Props) {
     let undo = result.undo;
     if (!result.created && !item.wishlistIds.includes(list.id)) {
       const added = await bulkItems({ op: "addToList", ids: [item.id], wishlistId: list.id });
-      if (added.ok) {
-        item = { ...item, wishlistIds: [...item.wishlistIds, list.id] };
-        undo = added.undo;
-      } else fail(added.error);
+      if (!added.ok) {
+        fail(added.error);
+        setBusy(false);
+        return;
+      }
+      item = { ...item, wishlistIds: [...item.wishlistIds, list.id] };
+      undo = added.undo;
     }
     setListsOpen(false);
     onKept(item);

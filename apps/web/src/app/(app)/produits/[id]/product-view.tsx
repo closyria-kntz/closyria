@@ -54,13 +54,17 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   const current = useCurrentProfile();
   const profiles = useProfiles();
   const [item, setItem] = useState<ItemView | null>(null);
+  const [itemLoad, setItemLoad] = useState<"loading" | "error" | "ready">("loading");
 
-  /** Her item for this sheet, if she keeps it (a failed read leaves the sheet as if she did not). */
+  /** Reads her item for this sheet. The keep actions only show once this succeeded (never on a failed read). */
   const reloadItem = useCallback(async () => {
+    setItemLoad("loading");
     try {
       setItem(await fetchItemForProduct(productId));
+      setItemLoad("ready");
     } catch {
       setItem(null);
+      setItemLoad("error");
     }
   }, [productId]);
   useEffect(() => {
@@ -169,8 +173,8 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   return (
     <article className={`${TWO_COLUMNS} gap-space-5`} aria-busy={capturing || reloadedPending || undefined}>
       <div data-testid="product-gallery" className={item ? "lg:self-start" : "lg:sticky lg:top-space-8 lg:self-start"}>
-        {item ? (
-          <PhotoManager item={item} onChange={setItem} />
+        {item && itemLoad !== "error" ? (
+          <PhotoManager item={item} onChange={setItem} reload={reloadItem} />
         ) : product.images.length > 0 ? (
           <div className="grid grid-cols-2 gap-space-2">
             {product.images.map((image, index) => (
@@ -255,12 +259,27 @@ export function ProductView({ productId, captureId }: { productId: string; captu
             {tItem("keep.alreadyIn", { name: profiles.find((p) => p.id === item.profileId)?.name ?? "" })}
           </p>
         )}
-        {hasName &&
-          (item ? (
-            <ItemPanel item={item} onChange={setItem} onGone={() => setItem(null)} reload={reloadItem} />
-          ) : (
-            <KeepActions product={product} profileId={current.id} onKept={setItem} reload={reloadItem} />
-          ))}
+        {hasName && itemLoad === "error" && (
+          <div className="flex flex-col items-start gap-space-2">
+            <p role="alert" className="text-sm text-danger">
+              {tItem("errors.itemLoad")}
+            </p>
+            <button type="button" className={`${buttonClass} min-h-touch-target`} onClick={() => void reloadItem()}>
+              {t("product.retry")}
+            </button>
+          </div>
+        )}
+        {hasName && itemLoad !== "error" && item && (
+          <ItemPanel item={item} onChange={setItem} onGone={() => setItem(null)} reload={reloadItem} />
+        )}
+        {hasName && itemLoad === "loading" && !item && (
+          <p role="status" className="text-sm text-ink-muted">
+            {tItem("keep.working")}
+          </p>
+        )}
+        {hasName && itemLoad === "ready" && !item && (
+          <KeepActions product={product} profileId={current.id} onKept={setItem} reload={reloadItem} />
+        )}
 
         {!hasName && (failed || manualShop) && (
           <p role="status" className="text-ink-muted">

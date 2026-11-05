@@ -63,21 +63,25 @@ export function ItemPanel({ item, onChange, onGone, reload }: Props) {
   const fail = (code: string) => setError(t(`errors.${code}` as "errors.failed"));
   const itemId = item.id;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: lists and tags are read once per item.
+  const [extrasFailed, setExtrasFailed] = useState(false);
+  const [extrasAttempt, setExtrasAttempt] = useState(0);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: lists and tags are read once per item, and on « Réessayer ».
   useEffect(() => {
     let alive = true;
+    setExtrasFailed(false);
     fetchWishlists().then(
       (found) => alive && setLists(found),
-      () => alive && setLists([]),
+      () => alive && setExtrasFailed(true),
     );
     fetchTags().then(
       (found) => alive && setTags(found),
-      () => alive && setTags([]),
+      () => alive && setExtrasFailed(true),
     );
     return () => {
       alive = false;
     };
-  }, [itemId]);
+  }, [itemId, extrasAttempt]);
 
   // The saved fields follow the item (an undo or another action changed them).
   useEffect(() => {
@@ -204,7 +208,7 @@ export function ItemPanel({ item, onChange, onGone, reload }: Props) {
   ].filter(Boolean);
 
   return (
-    <div className="flex flex-col gap-space-5">
+    <div className="flex flex-col gap-space-5" aria-busy={busy || undefined}>
       <div className="flex items-center justify-between gap-space-3">
         <h2 className="font-display text-lead font-strong">{t("panel.title")}</h2>
         <button
@@ -292,6 +296,17 @@ export function ItemPanel({ item, onChange, onGone, reload }: Props) {
           {t("panel.save")}
         </button>
       </form>
+
+      {extrasFailed && (
+        <div className="flex flex-col items-start gap-space-2">
+          <p role="alert" className="text-sm text-danger">
+            {t("errors.extrasLoad")}
+          </p>
+          <button type="button" className={`${buttonClass} ${touch}`} onClick={() => setExtrasAttempt((n) => n + 1)}>
+            {t("panel.retry")}
+          </button>
+        </div>
+      )}
 
       <section aria-labelledby="lists-title" className="flex flex-col gap-space-2">
         <h3 id="lists-title" className="text-sm font-strong">
