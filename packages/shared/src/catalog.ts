@@ -16,6 +16,7 @@ export const captureErrorCodeSchema = z.enum([
   "not_a_product",
   "http_error",
   "invalid_data",
+  "queue_unavailable",
 ]);
 export type ShopStatus = z.infer<typeof shopStatusSchema>;
 export type CaptureMode = z.infer<typeof captureModeSchema>;

@@ -128,8 +128,12 @@ export function capturesRoutes(deps: CatalogDeps, limiter: MiddlewareHandler<Acc
         try {
           await queue.enqueue("capture-user", capture.id);
         } catch (error) {
-          // A capture nobody will run would block every later request for this page: forget it.
-          await db.delete(schema.captures).where(eq(schema.captures.id, capture.id));
+          // Keep the row: another request may already have been given this capture id. A failed capture
+          // does not block the next attempt on this page.
+          await db
+            .update(schema.captures)
+            .set({ status: "failed", errorCode: "queue_unavailable", finishedAt: now() })
+            .where(eq(schema.captures.id, capture.id));
           throw error;
         }
       }

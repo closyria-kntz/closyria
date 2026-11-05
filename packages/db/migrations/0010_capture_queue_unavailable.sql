@@ -1,0 +1,2 @@
+ALTER TABLE "captures" DROP CONSTRAINT "captures_error_code_check";--> statement-breakpoint
+ALTER TABLE "captures" ADD CONSTRAINT "captures_error_code_check" CHECK ("captures"."error_code" IS NULL OR "captures"."error_code" IN ('blocked', 'timeout', 'too_large', 'forbidden_address', 'robots_disallowed', 'not_a_product', 'http_error', 'invalid_data', 'queue_unavailable'));

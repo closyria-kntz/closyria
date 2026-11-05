@@ -241,7 +241,7 @@ describe("POST /api/captures", () => {
     expect(active).toHaveLength(1);
   });
 
-  it("removes the capture and answers 500 when the queue is down, so the link can be retried", async () => {
+  it("keeps the capture as failed/queue_unavailable and answers 500 when the queue is down", async () => {
     const down = await createCatalogHarness({
       queue: {
         enqueue: async () => {
@@ -259,9 +259,86 @@ describe("POST /api/captures", () => {
         headers: { origin: BASE_URL, "content-type": "application/json", cookie },
       });
       expect(res.status).toBe(500);
-      expect(await down.db.$count(down.schema.captures)).toBe(0);
+      const rows = await down.db.select().from(down.schema.captures);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ status: "failed", errorCode: "queue_unavailable" });
+      expect(rows[0]?.finishedAt).not.toBeNull();
+      const view = await down.app.request(`/api/captures/${rows[0]?.id}`, { headers: { cookie } });
+      expect(view.status).toBe(200);
+      expect(await view.json()).toMatchObject({ status: "failed", errorCode: "queue_unavailable" });
     } finally {
       await down.stop();
+    }
+  }, 60_000);
+
+  it("answers 400 for a data: URL and for an address of 2049 characters", async () => {
+    const { cookie } = await t.signIn();
+    for (const url of ["data:text/html,<p>x</p>", `https://a.test/${"a".repeat(2049 - "https://a.test/".length)}`]) {
+      const res = await post(url, cookie);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "invalid_url" });
+    }
+  });
+
+  it("creates one shop for two simultaneous new links on the same domain", async () => {
+    const { cookie } = await t.signIn();
+    const domain = `twin-${++counter}.test`;
+    const responses = await Promise.all([1, 2, 3, 4].map((i) => post(`https://${domain}/p/${i}`, cookie)));
+    expect(responses.map((r) => r.status)).toEqual([202, 202, 202, 202]);
+    expect(await t.db.$count(schema.shopDomains, eq(schema.shopDomains.domain, domain))).toBe(1);
+    expect(await t.db.$count(schema.shops, eq(schema.shops.name, domain))).toBe(1);
+  });
+
+  it("limits per address with the injected limit, whatever the session", async () => {
+    const small = await createCatalogHarness({ limits: { perAddress: { max: 2, windowMs: 60_000 } } });
+    try {
+      const a = await small.signIn();
+      const b = await small.signIn();
+      const send = (cookie: string, i: number) =>
+        small.app.request("/api/captures", {
+          method: "POST",
+          body: JSON.stringify({ url: `https://addr.test/p/${i}` }),
+          headers: { origin: BASE_URL, "content-type": "application/json", cookie, "x-forwarded-for": "203.0.113.7" },
+        });
+      expect((await send(a.cookie, 1)).status).toBe(202);
+      expect((await send(b.cookie, 2)).status).toBe(202);
+      expect((await send(a.cookie, 3)).status).toBe(429);
+      const other = await small.app.request("/api/captures", {
+        method: "POST",
+        body: JSON.stringify({ url: "https://addr.test/p/4" }),
+        headers: {
+          origin: BASE_URL,
+          "content-type": "application/json",
+          cookie: a.cookie,
+          "x-forwarded-for": "203.0.113.8",
+        },
+      });
+      expect(other.status).toBe(202);
+    } finally {
+      await small.stop();
+    }
+  }, 60_000);
+
+  it("uses the account limit (not the anonymous one) for a non-anonymous user", async () => {
+    const acct = await createCatalogHarness({
+      limits: { perAnonymousUser: { max: 1, windowMs: 60_000 }, perUser: { max: 3, windowMs: 60_000 } },
+    });
+    try {
+      const anon = await acct.signIn();
+      const member = await acct.signIn();
+      await acct.db.update(schema.user).set({ isAnonymous: false }).where(eq(schema.user.id, member.userId));
+      const send = (cookie: string, i: number) =>
+        acct.app.request("/api/captures", {
+          method: "POST",
+          body: JSON.stringify({ url: `https://acct.test/p/${i}` }),
+          headers: { origin: BASE_URL, "content-type": "application/json", cookie },
+        });
+      expect((await send(anon.cookie, 1)).status).toBe(202);
+      expect((await send(anon.cookie, 2)).status).toBe(429);
+      for (let i = 1; i <= 3; i++) expect((await send(member.cookie, i)).status).toBe(202);
+      expect((await send(member.cookie, 4)).status).toBe(429);
+    } finally {
+      await acct.stop();
     }
   }, 60_000);
 

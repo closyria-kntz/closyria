@@ -21,6 +21,8 @@ export function catalogLimiter(limits: CatalogDeps["limits"]): MiddlewareHandler
     const perUser = c.var.session?.user.isAnonymous ? anonymous : account;
     return address(c, async () => {
       const res = await perUser(c, next);
+      // rateLimit answers 429 by returning a Response, which `address` ignores (it only awaits next):
+      // it must be put on the context here or the request would go on as if nothing was refused.
       if (res) c.res = res;
     });
   };

@@ -71,6 +71,13 @@
       "when": 1793904929421,
       "tag": "0009_product_nullable_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793905249370,
+      "tag": "0010_capture_queue_unavailable",
+      "breakpoints": true
     }
   ]
 }
