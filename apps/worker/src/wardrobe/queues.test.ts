@@ -17,6 +17,7 @@ describe("wardrobe queues", () => {
     await registerWardrobeQueues(boss, { db: {} as Database, store: memoryStore() });
     expect(PURGE_QUEUE).toBe("wardrobe-purge");
     expect(boss.createQueue).toHaveBeenCalledWith("wardrobe-purge");
+    expect(boss.work).toHaveBeenCalledWith("wardrobe-purge", expect.any(Function));
     expect(calls).toEqual([["wardrobe-purge", "30 3 * * *"]]);
   });
 

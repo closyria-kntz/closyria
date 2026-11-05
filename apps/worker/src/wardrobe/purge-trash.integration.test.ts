@@ -99,6 +99,43 @@ describe("purgeTrash", () => {
     expect(await purgeTrash(db, now, store)).toBe(0);
   });
 
+  it("keeps an item trashed exactly 30 days ago", async () => {
+    const { db } = handle;
+    const store = memoryStore();
+    const ctx = await setup();
+    const edge = await itemWithPhotos(store, ctx, daysAgo(30), 1);
+    expect(await purgeTrash(db, now, store)).toBe(0);
+    expect(await db.select().from(schema.items).where(eq(schema.items.id, edge.id))).toHaveLength(1);
+    expect(await stored(store, edge.keys[0] as string)).toBe(true);
+  });
+
+  it("never touches unattached media or another user's photos", async () => {
+    const { db } = handle;
+    const store = memoryStore();
+    const ctx = await setup();
+    const other = await setup();
+    await itemWithPhotos(store, ctx, daysAgo(31), 1);
+    const active = await itemWithPhotos(store, other, null, 1);
+    const orphanId = crypto.randomUUID();
+    const orphanKey = `users/${ctx.userId}/${orphanId}.webp`;
+    await store.put(orphanKey, Buffer.from("x"), "image/webp");
+    await db.insert(schema.media).values({
+      id: orphanId,
+      userId: ctx.userId,
+      key: orphanKey,
+      contentType: "image/webp",
+      sizeBytes: 1,
+      width: 1,
+      height: 1,
+    });
+
+    expect(await purgeTrash(db, now, store)).toBe(1);
+    for (const key of [orphanKey, ...active.keys]) {
+      expect(await db.select().from(schema.media).where(eq(schema.media.key, key))).toHaveLength(1);
+      expect(await stored(store, key)).toBe(true);
+    }
+  });
+
   it("keeps a photo still attached to another remaining item", async () => {
     const { db } = handle;
     const store = memoryStore();

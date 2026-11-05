@@ -1,4 +1,4 @@
-import { and, type Database, inArray, isNotNull, lt, schema, sql } from "@closyria/db";
+import { and, type Database, inArray, isNotNull, lt, notInArray, schema, sql } from "@closyria/db";
 import { TRASH_RETENTION_DAYS } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 
@@ -35,16 +35,17 @@ export async function purgeTrash(db: Database, now: Date, store: ObjectStore): P
           .where(
             and(
               inArray(schema.media.id, mediaIds),
-              sql`not exists (select 1 from ${schema.itemMedia} where ${schema.itemMedia.mediaId} = ${schema.media.id} and ${schema.itemMedia.itemId} not in (${sql.join(
-                ids.map((id) => sql`${id}`),
-                sql`, `,
-              )}))`,
+              sql`not exists (select 1 from ${schema.itemMedia} where ${schema.itemMedia.mediaId} = ${schema.media.id} and ${notInArray(schema.itemMedia.itemId, ids)})`,
             ),
           )
           .returning({ key: schema.media.key });
         keys.push(...removed.map((r) => r.key));
       }
-      await tx.delete(schema.items).where(inArray(schema.items.id, ids));
+      await tx
+        .delete(schema.items)
+        .where(
+          and(inArray(schema.items.id, ids), isNotNull(schema.items.deletedAt), lt(schema.items.deletedAt, limit)),
+        );
       return ids.length;
     });
     if (count === 0) break;
