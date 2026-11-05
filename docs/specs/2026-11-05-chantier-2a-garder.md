@@ -117,6 +117,18 @@ passage anonyme → compte.
 **Navigation** : Envies · Commandé · Dressing · À vendre · Listes (sur téléphone, 4 onglets en bas, « À vendre » et
 « Listes » dans « Plus »). En haut : sélecteur de profil et bouton « + Ajouter ».
 
+**Adaptation aux écrans (exigence de la fondatrice, 2026-11-05)** : le site doit être aussi agréable sur ordinateur
+que sur téléphone et tablette — jamais « tout petit » au milieu d'un grand écran.
+- Téléphone (< 48 rem) : une colonne, barre d'onglets en bas, grille de 2 vignettes.
+- Tablette (48–64 rem) : grille de 3 à 4 vignettes, onglets en haut ; la fiche passe en deux colonnes (photos à
+  gauche, informations à droite) en paysage.
+- Ordinateur (≥ 64 rem) : menu latéral, contenu jusqu'à ≈ 90 rem de large, grille de 5 à 6 vignettes, fiche en deux
+  colonnes avec galerie de photos ; le texte courant reste limité à ≈ 70 caractères par ligne.
+- Tailles de texte et espacements en tokens qui grandissent avec l'écran (typographie fluide), cibles tactiles de
+  44 px au moins sur écran tactile.
+- Les pages déjà livrées (accueil, fiche du chantier 1, admin) sont reprises selon ces règles.
+- Tests de bout en bout sur trois formats : téléphone, tablette, ordinateur.
+
 **Fiche → article** (page `/produits/<id>` du chantier 1)
 - Avant de garder : **♡ Favori** · **Ajouter à une liste** · **Je l'ai commandé**. Le premier geste crée l'article
   à l'étape correspondante, dans le profil courant.
@@ -204,7 +216,7 @@ Aucun nouveau service : web (Next), API (Hono), base PostgreSQL, stockage OVH, w
 |---|---|
 | Unitaires | `classify` (mots-clés, public, priorité titre / fil d'Ariane / adresse), transitions d'étape et événements écrits, fusion anonyme → compte, extraction des nouveaux champs sur les pages enregistrées. |
 | Intégration API | Cloisonnement sur chaque route ; pas de doublon par fiche ; fusion (profils, articles, listes, photos, étiquettes) ; partage / arrêt / ancien lien ; transferts et leur trace ; corbeille ; annulation ; correction admin non écrasée par une capture. |
-| Bout en bout (téléphone et ordinateur) | Coller un lien → ♡ → Envies ; avancer jusqu'à « Dans mon dressing » avec prix payé ; partager une liste et l'ouvrir dans une autre session ; anonyme → compte sans perte ; déplacer vers « Léa » ; axe sur toutes les nouvelles pages. |
+| Bout en bout (téléphone, tablette et ordinateur) | Coller un lien → ♡ → Envies ; avancer jusqu'à « Dans mon dressing » avec prix payé ; partager une liste et l'ouvrir dans une autre session ; anonyme → compte sans perte ; déplacer vers « Léa » ; axe sur toutes les nouvelles pages. |
 
 ## 9. Mise en prod
 
