@@ -129,3 +129,67 @@ describe("catalog tables", () => {
     expect(after?.productId).toBeNull();
   });
 });
+
+describe("reference lists and product classification", () => {
+  it("stores a child category under its parent", async () => {
+    const n = ++counter;
+    const [parent] = await handle.db
+      .insert(schema.categories)
+      .values({ slug: `clothes-${n}`, name: "Vêtements", position: 0 })
+      .returning();
+    const [child] = await handle.db
+      .insert(schema.categories)
+      .values({ parentId: parent?.id, slug: `dresses-${n}`, name: "Robes", position: 0 })
+      .returning();
+    expect(child?.parentId).toBe(parent?.id);
+    expect(child?.keywords).toEqual([]);
+    await expect(
+      handle.db.insert(schema.categories).values({ slug: `dresses-${n}`, name: "Doublon", position: 1 }),
+    ).rejects.toThrow();
+  });
+
+  it("refuses a colour hex that is not #RRGGBB", async () => {
+    const n = ++counter;
+    await expect(
+      handle.db.insert(schema.colors).values({ slug: `bad-${n}`, name: "Bad", hex: "red" }),
+    ).rejects.toThrow();
+  });
+
+  it("refuses audience = 'kids' and applies the classification defaults", async () => {
+    const shop = await newShop();
+    const product = await newProduct(shop.id);
+    expect(product.shopData).toEqual({});
+    expect(product.classifiedBy).toBe("rule");
+    expect(product.audience).toBeNull();
+    await expect(
+      handle.db
+        .update(schema.products)
+        .set({ audience: "kids" as never })
+        .where(eq(schema.products.id, product.id)),
+    ).rejects.toThrow();
+    await expect(
+      handle.db
+        .update(schema.products)
+        .set({ season: "spring" as never })
+        .where(eq(schema.products.id, product.id)),
+    ).rejects.toThrow();
+  });
+
+  it("sets products.color_id to null when the colour is deleted", async () => {
+    const n = ++counter;
+    const [color] = await handle.db
+      .insert(schema.colors)
+      .values({ slug: `blue-${n}`, name: "Bleu", hex: "#0000FF" })
+      .returning();
+    const shop = await newShop();
+    const product = await newProduct(shop.id);
+    await handle.db
+      .update(schema.products)
+      .set({ colorId: color?.id, audience: "child", childDetail: "baby", season: "all" })
+      .where(eq(schema.products.id, product.id));
+    await handle.db.delete(schema.colors).where(eq(schema.colors.id, color?.id ?? ""));
+    const [after] = await handle.db.select().from(schema.products).where(eq(schema.products.id, product.id));
+    expect(after?.colorId).toBeNull();
+    expect(after?.audience).toBe("child");
+  });
+});

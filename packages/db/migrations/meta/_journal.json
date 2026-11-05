@@ -78,6 +78,13 @@
       "when": 1793905249370,
       "tag": "0010_capture_queue_unavailable",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793916167899,
+      "tag": "0011_reference_and_product_fields",
+      "breakpoints": true
     }
   ]
 }

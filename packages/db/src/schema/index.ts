@@ -11,3 +11,4 @@ export * from "./catalog";
 export * from "./entitlements";
 export * from "./events";
 export * from "./media";
+export * from "./reference";
