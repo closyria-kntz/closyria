@@ -1,6 +1,6 @@
 import { type FakeShop, startFakeShop } from "@closyria/testing";
 import { afterEach, describe, expect, it } from "vitest";
-import { createRobotsCache, parseRobots, safeRobotsFetcher } from "./robots";
+import { createRobotsCache, parseRobots, type RobotsFetch, safeRobotsFetcher } from "./robots";
 import { loopbackForTests } from "./testing";
 
 describe("parseRobots", () => {
@@ -59,7 +59,7 @@ describe("createRobotsCache", () => {
     const cache = createRobotsCache(
       async (url) => {
         calls.push(url);
-        return "User-agent: *\nDisallow: /checkout";
+        return { kind: "text", text: "User-agent: *\nDisallow: /checkout" };
       },
       () => now,
     );
@@ -78,7 +78,7 @@ describe("createRobotsCache", () => {
 
   it("allows everything when the file is missing", async () => {
     const cache = createRobotsCache(
-      async () => null,
+      async () => ({ kind: "absent" }),
       () => 0,
     );
     expect(await cache.allows("https://a.fr/checkout")).toBe(true);
@@ -86,7 +86,7 @@ describe("createRobotsCache", () => {
 
   it("includes the query string in the tested path", async () => {
     const cache = createRobotsCache(
-      async () => "User-agent: *\nDisallow: /*?add=",
+      async () => ({ kind: "text", text: "User-agent: *\nDisallow: /*?add=" }),
       () => 0,
     );
     expect(await cache.allows("https://a.fr/p?add=1")).toBe(false);
@@ -104,10 +104,13 @@ describe("safeRobotsFetcher", () => {
 
   it("returns the body on 200", async () => {
     shop = await startFakeShop({ "/robots.txt": { headers: text, body: "User-agent: *\nDisallow: /é" } });
-    expect(await safeRobotsFetcher(loopbackForTests)(`${shop.origin}/robots.txt`)).toBe("User-agent: *\nDisallow: /é");
+    expect(await safeRobotsFetcher(loopbackForTests)(`${shop.origin}/robots.txt`)).toEqual({
+      kind: "text",
+      text: "User-agent: *\nDisallow: /é",
+    });
   });
 
-  it("returns null on 404, 410, wrong type, server error and refused address", async () => {
+  it("tells absent (404, 410) from failed (wrong type, server error, refused address)", async () => {
     shop = await startFakeShop({
       "/404/robots.txt": { status: 404 },
       "/410/robots.txt": { status: 410, headers: text, body: "gone" },
@@ -115,9 +118,133 @@ describe("safeRobotsFetcher", () => {
       "/500/robots.txt": { status: 500 },
     });
     const fetcher = safeRobotsFetcher(loopbackForTests);
-    for (const p of ["404", "410", "html", "500"]) {
-      expect(await fetcher(`${shop.origin}/${p}/robots.txt`)).toBeNull();
+    const kinds: Record<string, string> = { "404": "absent", "410": "absent", html: "failed", "500": "failed" };
+    for (const [p, kind] of Object.entries(kinds)) {
+      expect(await fetcher(`${shop.origin}/${p}/robots.txt`)).toEqual({ kind });
     }
-    expect(await safeRobotsFetcher()(`${shop.origin}/robots.txt`)).toBeNull();
+    expect(await safeRobotsFetcher()(`${shop.origin}/robots.txt`)).toEqual({ kind: "failed" });
+  });
+});
+
+describe("parseRobots hardening", () => {
+  it("matches a pathological pattern in linear time", () => {
+    const allows = parseRobots(`User-agent: *\nDisallow: /${"a*".repeat(50)}b`, "ClosyriaBot");
+    const started = performance.now();
+    expect(allows(`/${"a".repeat(2000)}`)).toBe(true);
+    expect(performance.now() - started).toBeLessThan(100);
+  });
+
+  it("matches wildcards and anchors exactly", () => {
+    const allows = parseRobots("User-agent: *\nDisallow: /a*b*c$", "ClosyriaBot");
+    expect(allows("/aXbYc")).toBe(false);
+    expect(allows("/aXbYcZ")).toBe(true);
+    expect(allows("/abc")).toBe(false);
+    expect(allows("/acb")).toBe(true);
+    expect(parseRobots("User-agent: *\nDisallow: /a$", "ClosyriaBot")("/a")).toBe(false);
+    expect(parseRobots("User-agent: *\nDisallow: /a$", "ClosyriaBot")("/ab")).toBe(true);
+    expect(parseRobots("User-agent: *\nDisallow: /a*", "ClosyriaBot")("/a")).toBe(false);
+  });
+
+  it("normalises percent-encoding on rules and paths", () => {
+    expect(parseRobots("User-agent: *\nDisallow: /é", "ClosyriaBot")("/%C3%A9")).toBe(false);
+    expect(parseRobots("User-agent: *\nDisallow: /%7Efoo", "ClosyriaBot")("/~foo")).toBe(false);
+    expect(parseRobots("User-agent: *\nDisallow: /~foo", "ClosyriaBot")("/%7Efoo")).toBe(false);
+    expect(parseRobots("User-agent: *\nDisallow: /%c3%a9", "ClosyriaBot")("/%C3%A9")).toBe(false);
+    expect(parseRobots("User-agent: *\nDisallow: /%2Fx", "ClosyriaBot")("/%2fx")).toBe(false);
+    expect(parseRobots("User-agent: *\nDisallow: /%2Fx", "ClosyriaBot")("//x")).toBe(true);
+  });
+
+  it("handles a BOM, CRLF and lone CR line endings", () => {
+    expect(parseRobots("\uFEFFUser-agent: *\r\nDisallow: /a\r\n", "ClosyriaBot")("/a")).toBe(false);
+    expect(parseRobots("User-agent: *\rDisallow: /a\rDisallow: /b", "ClosyriaBot")("/b")).toBe(false);
+  });
+});
+
+describe("createRobotsCache robustness", () => {
+  const HOUR = 60 * 60 * 1000;
+  const DAY = 24 * HOUR;
+
+  it("shares one in-flight fetch between concurrent calls on a cold origin", async () => {
+    let calls = 0;
+    const cache = createRobotsCache(
+      async () => {
+        calls++;
+        await new Promise((r) => setTimeout(r, 10));
+        return { kind: "text", text: "User-agent: *\nDisallow: /x" };
+      },
+      () => 0,
+    );
+    const results = await Promise.all([cache.allows("https://a.fr/x"), cache.allows("https://a.fr/y")]);
+    expect(results).toEqual([false, true]);
+    expect(calls).toBe(1);
+  });
+
+  it("keeps a failure for 1 h only, and absent or real content for 24 h", async () => {
+    let now = 0;
+    const answers: RobotsFetch[] = [{ kind: "failed" }, { kind: "absent" }];
+    let calls = 0;
+    const cache = createRobotsCache(
+      async () => answers[calls++] ?? { kind: "absent" },
+      () => now,
+    );
+    await cache.allows("https://a.fr/");
+    now = HOUR - 1;
+    await cache.allows("https://a.fr/");
+    expect(calls).toBe(1);
+    now = HOUR;
+    await cache.allows("https://a.fr/");
+    expect(calls).toBe(2);
+    now = HOUR + DAY - 1;
+    await cache.allows("https://a.fr/");
+    expect(calls).toBe(2);
+  });
+
+  it("treats a throwing fetcher as a one-hour failure", async () => {
+    let now = 0;
+    let calls = 0;
+    const cache = createRobotsCache(
+      async () => {
+        calls++;
+        throw new Error("boom");
+      },
+      () => now,
+    );
+    expect(await cache.allows("https://a.fr/x")).toBe(true);
+    now = HOUR;
+    await cache.allows("https://a.fr/x");
+    expect(calls).toBe(2);
+  });
+
+  it("caps the number of origins kept, evicting the oldest", async () => {
+    const calls: string[] = [];
+    const cache = createRobotsCache(
+      async (url) => {
+        calls.push(url);
+        return { kind: "absent" };
+      },
+      () => 0,
+    );
+    for (let i = 0; i <= 10_000; i++) await cache.allows(`https://d${i}.fr/`);
+    calls.length = 0;
+    await cache.allows("https://d0.fr/");
+    await cache.allows("https://d10000.fr/");
+    expect(calls).toEqual(["https://d0.fr/robots.txt"]);
+  });
+
+  it("prunes expired origins when a new one is fetched", async () => {
+    let now = 0;
+    const calls: string[] = [];
+    const cache = createRobotsCache(
+      async (url) => {
+        calls.push(url);
+        return { kind: "absent" };
+      },
+      () => now,
+    );
+    await cache.allows("https://old.fr/");
+    now = DAY + 1;
+    await cache.allows("https://new.fr/");
+    await cache.allows("https://old.fr/");
+    expect(calls).toEqual(["https://old.fr/robots.txt", "https://new.fr/robots.txt", "https://old.fr/robots.txt"]);
   });
 });

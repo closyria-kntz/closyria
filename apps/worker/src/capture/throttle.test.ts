@@ -61,4 +61,33 @@ describe("createThrottle", () => {
     await Promise.all([throttle.wait("a.fr"), throttle.wait("a.fr"), throttle.wait("a.fr"), throttle.wait("b.fr")]);
     expect(delays).toEqual([2000, 4000]);
   });
+
+  it("forgets domains whose slot is more than a minute old", async () => {
+    const delays: number[] = [];
+    let now = 1_000_000;
+    const throttle = createThrottle(
+      2000,
+      () => now,
+      async (ms) => void delays.push(ms),
+    );
+    await throttle.wait("a.fr");
+    now += 61_000;
+    await throttle.wait("b.fr");
+    await throttle.wait("a.fr");
+    expect(delays).toEqual([]);
+  });
+
+  it("caps the domains kept at 10 000, evicting the oldest", async () => {
+    const delays: number[] = [];
+    const throttle = createThrottle(
+      2000,
+      () => 1_000_000,
+      async (ms) => void delays.push(ms),
+    );
+    for (let i = 0; i <= 10_000; i++) await throttle.wait(`d${i}.fr`);
+    await throttle.wait("d0.fr");
+    expect(delays).toEqual([]);
+    await throttle.wait("d10000.fr");
+    expect(delays).toEqual([2000]);
+  });
 });

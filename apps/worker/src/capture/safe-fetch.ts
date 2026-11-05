@@ -43,9 +43,9 @@ const ACCEPTED_TYPES: Record<SafeFetchAccept, (mime: string) => boolean> = {
   // Shopify serves `/products/<handle>.js` as JSON under a JavaScript type.
   json: (mime) => mime === "application/json" || mime === "text/javascript" || mime === "application/javascript",
   // Raster images only: the photo pipeline re-encodes them, SVG would carry markup and scripts.
+  image: (mime) => /^image\/[a-z0-9][a-z0-9.+-]*$/.test(mime) && !mime.startsWith("image/svg"),
   // Plain text only (robots.txt); the charset parameter is ignored by `mimeOf`.
   text: (mime) => mime === "text/plain",
-  image: (mime) => /^image\/[a-z0-9][a-z0-9.+-]*$/.test(mime) && !mime.startsWith("image/svg"),
 };
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
