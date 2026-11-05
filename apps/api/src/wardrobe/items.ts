@@ -34,7 +34,7 @@ export async function lockProductOfUser(tx: Tx, userId: string, productId: strin
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`items:${userId}:${productId}`}, 0))`);
 }
 
-async function lockOwnItem(tx: Tx, userId: string, itemId: string): Promise<Item | null> {
+export async function lockOwnItem(tx: Tx, userId: string, itemId: string): Promise<Item | null> {
   const [row] = await tx
     .select()
     .from(schema.items)

@@ -12,11 +12,12 @@ import { adminShopsRoutes } from "./routes/admin/shops";
 import { capturesRoutes } from "./routes/captures";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
 import { bulkRoutes } from "./routes/me/bulk";
+import { itemMediaRoutes } from "./routes/me/item-media";
 import { itemsRoutes } from "./routes/me/items";
 import { profilesRoutes } from "./routes/me/profiles";
 import { tagsRoutes } from "./routes/me/tags";
 import { wishlistsRoutes } from "./routes/me/wishlists";
-import { type MediaDeps, mediaRoutes } from "./routes/media";
+import { createMediaPipeline, type MediaDeps, mediaRoutes } from "./routes/media";
 import { productsRoutes } from "./routes/products";
 import { sharedRoutes } from "./routes/shared";
 import { type TestMailDeps, testMailRoutes } from "./routes/test-mail";
@@ -86,6 +87,8 @@ export function createApp(deps: AppDeps) {
   app.on(["GET", "POST"], "/auth/*", (c) => deps.auth.handler(c.req.raw));
 
   // One limiter for the captures and the manual entry: they count in the same hour.
+  // One pipeline: `POST /api/media` and the item photos share the upload limits and the re-encoding semaphore.
+  const mediaPipeline = createMediaPipeline(deps.media);
   const captureLimiter = catalogLimiter(deps.catalog.limits);
   const routes = app
     .openapi(healthRoute, async (c) => {
@@ -98,13 +101,14 @@ export function createApp(deps: AppDeps) {
       } as const;
       return dbOk ? c.json(body, 200) : c.json(body, 503);
     })
-    .route("/", mediaRoutes(deps.media))
+    .route("/", mediaRoutes(deps.media, mediaPipeline))
     .route("/", capturesRoutes(deps.catalog, captureLimiter))
     .route("/", productsRoutes(deps.catalog, captureLimiter))
     .route("/", eventsRoutes(deps.events))
     .route("/", profilesRoutes(deps.wardrobe))
     .route("/", bulkRoutes(deps.wardrobe))
     .route("/", itemsRoutes(deps.wardrobe))
+    .route("/", itemMediaRoutes({ ...deps.wardrobe, store: deps.media.store }, mediaPipeline))
     .route("/", tagsRoutes(deps.wardrobe))
     .route("/", wishlistsRoutes(deps.wardrobe))
     .route("/", sharedRoutes(deps.wardrobe))

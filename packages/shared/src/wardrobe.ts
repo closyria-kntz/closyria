@@ -347,6 +347,7 @@ export const wardrobeErrorCodes = [
   "item_not_deleted",
   "tag_exists",
   "tag_limit",
+  "too_many_photos",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];

@@ -80,8 +80,10 @@ export async function loadItemViews(db: Database | Tx, userId: string, itemIds: 
       categoryId: item.categoryId,
       colorId: item.colorId,
       coverMediaId: item.coverMediaId,
-      // Null cover = the shop's first photo (spec §3).
-      coverUrl: item.coverMediaId ? privateMediaUrl(item.coverMediaId) : (product.images[0]?.url ?? null),
+      // Null cover = the shop's first photo, else her first private photo (spec §3).
+      coverUrl: item.coverMediaId
+        ? privateMediaUrl(item.coverMediaId)
+        : (product.images[0]?.url ?? own[0]?.url ?? null),
       photos: [...own, ...shop],
       tags: tags
         .filter((t) => t.itemId === item.id)
