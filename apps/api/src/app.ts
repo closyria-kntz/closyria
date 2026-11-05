@@ -11,9 +11,12 @@ import { type AdminDeps, overviewRoutes } from "./routes/admin/overview";
 import { adminShopsRoutes } from "./routes/admin/shops";
 import { capturesRoutes } from "./routes/captures";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
+import { itemsRoutes } from "./routes/me/items";
+import { profilesRoutes } from "./routes/me/profiles";
 import { type MediaDeps, mediaRoutes } from "./routes/media";
 import { productsRoutes } from "./routes/products";
 import { type TestMailDeps, testMailRoutes } from "./routes/test-mail";
+import type { WardrobeDeps } from "./wardrobe/deps";
 
 export type AppDeps = {
   env: string;
@@ -31,6 +34,8 @@ export type AppDeps = {
   events: EventsDeps;
   /** Admin area: dashboard figures and the audit log. */
   admin: AdminDeps;
+  /** Her profiles and items (`/api/me/…`). */
+  wardrobe: WardrobeDeps;
   /** The memory mailer, exposed to the browser tests. Only ever given with APP_ENV=test (R18). */
   testMail?: TestMailDeps;
 };
@@ -93,6 +98,8 @@ export function createApp(deps: AppDeps) {
     .route("/", capturesRoutes(deps.catalog, captureLimiter))
     .route("/", productsRoutes(deps.catalog, captureLimiter))
     .route("/", eventsRoutes(deps.events))
+    .route("/", profilesRoutes(deps.wardrobe))
+    .route("/", itemsRoutes(deps.wardrobe))
     .route("/", overviewRoutes(deps.admin))
     .route("/", auditRoutes(deps.admin))
     .route("/", adminShopsRoutes(deps.catalog))

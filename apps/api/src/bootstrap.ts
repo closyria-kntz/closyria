@@ -51,6 +51,7 @@ export function bootstrap(env: Env): Api {
     events: { db },
     catalog: { db, store, queue: pgBossQueue(boss) },
     admin: { db },
+    wardrobe: { db },
     // R18: the browser tests read their codes here; env.ts guarantees the memory mailer with APP_ENV=test.
     ...(env.APP_ENV === "test" && memory ? { testMail: memory } : {}),
   });

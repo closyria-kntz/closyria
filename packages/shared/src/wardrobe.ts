@@ -242,3 +242,49 @@ export const mutationResultSchema = z.object({
   undo: undoPayloadSchema.nullable(),
 });
 export type MutationResult = z.infer<typeof mutationResultSchema>;
+
+/** An item action's answer: the mutation result and the item as it now is (created, existing, changed or merged). */
+export const itemMutationResultSchema = mutationResultSchema.extend({ item: itemViewSchema });
+export type ItemMutationResult = z.infer<typeof itemMutationResultSchema>;
+
+export const profilePatchSchema = profileInputSchema.partial();
+export type ProfilePatch = z.infer<typeof profilePatchSchema>;
+
+export const profileListSchema = z.object({ profiles: z.array(profileViewSchema) });
+export type ProfileList = z.infer<typeof profileListSchema>;
+
+/** New order of her profiles: every one of her profile ids, exactly once. */
+export const profileOrderSchema = z.object({
+  ids: z
+    .array(z.uuid())
+    .min(1)
+    .max(100)
+    .refine((ids) => new Set(ids).size === ids.length, { error: "ids must be unique" }),
+});
+export type ProfileOrder = z.infer<typeof profileOrderSchema>;
+
+/** What the app shell needs: the account proposal (anonymous session, item count) and the profiles. */
+export const summaryViewSchema = z.object({
+  isAnonymous: z.boolean(),
+  /** Active items (not in the trash). */
+  itemCount: z.number().int().nonnegative(),
+  profiles: z.array(profileViewSchema),
+});
+export type SummaryView = z.infer<typeof summaryViewSchema>;
+
+/** Stable error codes of the `/api/me/profiles`, `/api/me/items` and `/api/me/summary` routes. */
+export const wardrobeErrorCodes = [
+  "invalid_request",
+  "not_found",
+  "rate_limited",
+  "profile_not_empty",
+  "same_stage",
+  "same_profile",
+  "invalid_cover",
+  "invalid_category",
+  "invalid_color",
+  "item_deleted",
+  "item_not_deleted",
+] as const;
+export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
+export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];
