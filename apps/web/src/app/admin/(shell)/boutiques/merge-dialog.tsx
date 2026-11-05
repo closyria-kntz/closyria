@@ -28,6 +28,7 @@ export function MergeDialog({ source, options }: { source: Option; options: Opti
   }, [confirming]);
 
   const cancel = () => {
+    if (busy) return;
     setConfirming(false);
     startRef.current?.focus();
   };
@@ -40,6 +41,7 @@ export function MergeDialog({ source, options }: { source: Option; options: Opti
     const merged = adminMergedSchema.safeParse(res.body);
     if (!res.ok || !merged.success) {
       setConfirming(false);
+      startRef.current?.focus();
       return setError(errors(catalogErrorKey(res.status, res.body)));
     }
     router.push(`/admin/boutiques/${merged.data.targetId}`);
@@ -92,7 +94,20 @@ export function MergeDialog({ source, options }: { source: Option; options: Opti
           aria-labelledby="merge-confirm-title"
           aria-describedby="merge-confirm-text"
           onKeyDown={(e) => {
-            if (e.key === "Escape") cancel();
+            if (e.key === "Escape") return cancel();
+            if (e.key !== "Tab") return;
+            // aria-modal: keep Tab and Shift+Tab on the dialog's enabled buttons.
+            const buttons = [...e.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+            const first = buttons[0];
+            const last = buttons[buttons.length - 1];
+            if (!first || !last) return e.preventDefault();
+            if (e.shiftKey && document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
           }}
           className="flex flex-col gap-space-3 rounded-card border border-line bg-surface-sunken p-space-4"
         >

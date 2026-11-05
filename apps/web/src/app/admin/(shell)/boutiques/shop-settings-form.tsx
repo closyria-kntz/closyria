@@ -3,7 +3,7 @@
 import { type AdminShop, canonicalizeUrl } from "@closyria/shared";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { adminRequest, shopPatchErrorKey } from "@/lib/admin-catalog";
 import { inputClass, primaryButtonClass } from "../../ui";
 
@@ -27,7 +27,10 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
   const [message, setMessage] = useState<{ text: string; failed: boolean; shopId?: string } | null>(null);
 
   // After a save the page is refreshed: show what the server kept (domains come back normalised).
+  const resync = useRef(false);
   useEffect(() => {
+    if (!resync.current) return;
+    resync.current = false;
     setName(shop.name);
     setSlug(shop.slug);
     setStatus(shop.status);
@@ -59,6 +62,7 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
     setBusy(false);
     if (res.ok) {
       setMessage({ text: t("saved"), failed: false });
+      resync.current = true;
       return router.refresh();
     }
     const key = shopPatchErrorKey(res.status, res.body);
