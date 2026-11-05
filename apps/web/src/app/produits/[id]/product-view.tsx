@@ -43,15 +43,6 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   const [focusHeading, setFocusHeading] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
 
-  // A different product or capture starts from a blank state (declared first: effects run in order).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the ids are the triggers, the body only resets.
-  useEffect(() => {
-    setProduct(null);
-    setCapture(null);
-    setSlow(false);
-    setGaveUp(false);
-  }, [productId, captureId]);
-
   // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` re-runs the load on « Réessayer ».
   useEffect(() => {
     let alive = true;
