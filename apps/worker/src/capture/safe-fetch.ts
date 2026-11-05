@@ -4,7 +4,7 @@ import https from "node:https";
 import { isIP, type LookupFunction } from "node:net";
 import type { Readable } from "node:stream";
 import { pipeline } from "node:stream";
-import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
+import { createBrotliDecompress, createGunzip } from "node:zlib";
 import { type AddressPolicy, strictPolicy } from "./address-policy";
 import { CaptureError } from "./capture-error";
 
@@ -41,7 +41,8 @@ const ACCEPTED_TYPES: Record<SafeFetchAccept, (mime: string) => boolean> = {
   page: (mime) => mime === "text/html" || mime === "application/xhtml+xml",
   // Shopify serves `/products/<handle>.js` as JSON under a JavaScript type.
   json: (mime) => mime === "application/json" || mime === "text/javascript" || mime === "application/javascript",
-  image: (mime) => /^image\/[a-z0-9][a-z0-9.+-]*$/.test(mime),
+  // Raster images only: the photo pipeline re-encodes them, SVG would carry markup and scripts.
+  image: (mime) => /^image\/[a-z0-9][a-z0-9.+-]*$/.test(mime) && !mime.startsWith("image/svg"),
 };
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
@@ -112,7 +113,7 @@ function vettedLookup(hop: Hop, standardPort: boolean, onRefused: (error: Captur
       if (options.all) callback(error, []);
       else callback(error, "", 0);
     };
-    hop.resolver(hostname, { all: true }, (error, addresses: LookupAddress[]) => {
+    const vet = (error: NodeJS.ErrnoException | null, addresses: LookupAddress[]) => {
       if (error) return fail(error);
       if (addresses.length === 0) return fail(new CaptureError("http_error"));
       if (addresses.some(({ address }) => !addressAllowed(address, hop.policy, standardPort))) {
@@ -124,7 +125,13 @@ function vettedLookup(hop: Hop, standardPort: boolean, onRefused: (error: Captur
       if (!first) return fail(new CaptureError("http_error"));
       if (options.all) callback(null, usable);
       else callback(null, first.address, first.family);
-    });
+    };
+    try {
+      hop.resolver(hostname, { all: true }, vet);
+    } catch (error) {
+      // A resolver that throws must not escape as an uncaught exception from the socket.
+      fail(error instanceof Error ? error : new Error(String(error)));
+    }
   };
 }
 
@@ -149,7 +156,7 @@ function request(url: URL, hop: Hop): Promise<IncomingMessage> {
       headers: {
         "user-agent": BOT_USER_AGENT,
         accept: ACCEPT_HEADER[hop.accept],
-        "accept-encoding": "gzip, deflate, br",
+        "accept-encoding": "gzip, br",
       },
       ...(literal ? {} : { lookup: vettedLookup(hop, standardPort, (error) => (refusal = error)) }),
       ...(url.protocol === "https:" && !literal ? { servername: host } : {}),
@@ -172,8 +179,6 @@ function decoderFor(encoding: string): Readable & NodeJS.WritableStream {
     case "gzip":
     case "x-gzip":
       return createGunzip();
-    case "deflate":
-      return createInflate();
     case "br":
       return createBrotliDecompress();
     default:
@@ -181,11 +186,14 @@ function decoderFor(encoding: string): Readable & NodeJS.WritableStream {
   }
 }
 
-/** Reads the body, decompressed, and stops as soon as it exceeds `maxBytes`. */
-async function readBody(res: IncomingMessage, maxBytes: number): Promise<Buffer> {
+/**
+ * Reads the body, decompressed, and stops as soon as it exceeds `maxBytes`. With `headOnly`, stops
+ * quietly after `maxBytes` and returns what was read (challenge detection on error pages).
+ */
+async function readBody(res: IncomingMessage, maxBytes: number, headOnly = false): Promise<Buffer> {
   const encoding = (res.headers["content-encoding"] ?? "").trim().toLowerCase();
   const plain = encoding === "" || encoding === "identity";
-  if (plain && Number(res.headers["content-length"]) > maxBytes) {
+  if (!headOnly && plain && Number(res.headers["content-length"]) > maxBytes) {
     res.destroy();
     throw new CaptureError("too_large");
   }
@@ -211,6 +219,11 @@ async function readBody(res: IncomingMessage, maxBytes: number): Promise<Buffer>
   try {
     for await (const chunk of stream) {
       const buffer = chunk as Buffer;
+      if (headOnly && total + buffer.length >= maxBytes) {
+        chunks.push(buffer.subarray(0, maxBytes - total));
+        total = maxBytes;
+        break;
+      }
       total += buffer.length;
       if (total > maxBytes) throw new CaptureError("too_large");
       chunks.push(buffer);
@@ -252,8 +265,14 @@ async function run(rawUrl: string, options: SafeFetchOptions, signal: AbortSigna
       continue;
     }
     if (status < 200 || status >= 300) {
+      const code = BLOCKED_STATUSES.has(status) ? "blocked" : "http_error";
+      if (code === "http_error" && ACCEPTED_TYPES.page(mimeOf(res.headers["content-type"] ?? ""))) {
+        // A challenge served with an error status (503 from Cloudflare, DataDome...) is a block.
+        const head = await readBody(res, Math.min(CHALLENGE_SCAN_BYTES, maxBytes), true).catch(() => Buffer.alloc(0));
+        if (isChallenge(head)) throw new CaptureError("blocked", status);
+      }
       res.destroy();
-      throw new CaptureError(BLOCKED_STATUSES.has(status) ? "blocked" : "http_error", status);
+      throw new CaptureError(code, status);
     }
     const contentType = res.headers["content-type"] ?? "";
     const mime = mimeOf(contentType);
@@ -280,8 +299,12 @@ export async function safeFetch(url: string, options: SafeFetchOptions): Promise
       controller.abort();
     }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   });
+  // Whatever escapes (a synchronous throw, a resolver failure) surfaces as a CaptureError.
+  const work = run(url, options, controller.signal).catch((error: unknown) => {
+    throw error instanceof CaptureError ? error : new CaptureError("http_error", undefined, { cause: error });
+  });
   try {
-    return await Promise.race([run(url, options, controller.signal), deadline]);
+    return await Promise.race([work, deadline]);
   } finally {
     clearTimeout(timer);
     controller.abort();

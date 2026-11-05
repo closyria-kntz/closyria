@@ -47,7 +47,7 @@ describe("strictPolicy", () => {
     ["::1", ["::1", "0:0:0:0:0:0:0:1"], []],
     ["fc00::/7", ["fc00::", "fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", "FD12::1"], ["fbff:ffff::1", "fe00::1"]],
     ["fe80::/10", ["fe80::", "febf:ffff::1", "fe80::1%eth0"], ["fe7f::1"]],
-    ["ff00::/8", ["ff00::", "ff02::1", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"], ["feff::1"]],
+    ["ff00::/8", ["ff00::", "ff02::1", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"], ["fbff::1"]],
     [
       "::ffff:0:0/96 (checked as IPv4)",
       ["::ffff:127.0.0.1", "::ffff:7f00:1", "::FFFF:7F00:1", "::ffff:10.0.0.1", "::ffff:a9fe:a9fe", "::ffff:0:0"],
@@ -61,6 +61,27 @@ describe("strictPolicy", () => {
   ] as const)("IPv6 %s", (_range, inside, outside) => {
     for (const ip of inside) expect(strictPolicy(ip), ip).toBe(false);
     for (const ip of outside) expect(strictPolicy(ip), ip).toBe(true);
+  });
+
+  it.each([
+    [
+      "64:ff9b:1::/48 (local NAT64)",
+      ["64:ff9b:1::", "64:ff9b:1:ffff:ffff:ffff:ffff:ffff", "64:ff9b:1::a00:1"],
+      ["64:ff9b:2::1"],
+    ],
+    ["::ffff:0:0:0/96 (IPv4-translated)", ["::ffff:0:0:0", "::ffff:0:808:808", "::ffff:0:127.0.0.1"], []],
+    ["2002::/16 (6to4)", ["2002::", "2002:7f00:1::1", "2002:ffff:ffff::1"], ["2001:ffff::1", "2003::1"]],
+    ["fec0::/10 (site-local)", ["fec0::1", "feff:ffff::1"], []],
+  ] as const)("IPv6 %s, beyond spec §8", (_range, inside, outside) => {
+    for (const ip of inside) expect(strictPolicy(ip), ip).toBe(false);
+    for (const ip of outside) expect(strictPolicy(ip), ip).toBe(true);
+  });
+
+  it("cannot be altered at run time", () => {
+    expect(Object.isFrozen(strictPolicy)).toBe(true);
+    expect(Object.isFrozen(loopbackForTests)).toBe(true);
+    expect(() => Object.assign(strictPolicy, { anyPortOnLoopback: true })).toThrow(TypeError);
+    expect(strictPolicy.anyPortOnLoopback).toBeUndefined();
   });
 
   it.each(["", "localhost", "example.com", "1.2.3", "256.0.0.1", "::ffff:999.1.1.1", "[::1]", "1::2::3"])(

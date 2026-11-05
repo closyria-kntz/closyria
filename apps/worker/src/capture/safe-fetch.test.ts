@@ -1,6 +1,6 @@
 import type dns from "node:dns";
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
-import { brotliCompressSync, gzipSync } from "node:zlib";
+import { brotliCompressSync, deflateSync, gzipSync } from "node:zlib";
 import { type FakeRoute, type FakeShop, startFakeShop } from "@closyria/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import { CaptureError } from "./capture-error";
@@ -169,6 +169,21 @@ describe("safeFetch with the fake shop and loopbackForTests", () => {
     expect(response.body.toString()).toBe("<p>compressé</p>");
   });
 
+  it("does not ask for deflate and refuses a deflate body with invalid_data", async () => {
+    const echo = await headerEcho();
+    try {
+      await safeFetch(`${echo.origin}/`, { accept: "page", policy: loopbackForTests });
+      expect(echo.seen[0]?.["accept-encoding"]).toBe("gzip, br");
+    } finally {
+      await echo.close();
+    }
+    const { origin } = await serve({
+      "/d": { headers: { ...HTML, "content-encoding": "deflate" }, body: deflateSync(Buffer.from("<p>x</p>")) },
+    });
+    const error = await captureError(safeFetch(`${origin}/d`, { accept: "page", policy: loopbackForTests }));
+    expect(error.code).toBe("invalid_data");
+  });
+
   it("gives timeout when the shop answers after the deadline", async () => {
     const { origin } = await serve({ "/slow": { headers: HTML, body: "tard", delayMs: 200 } });
     const error = await captureError(
@@ -204,6 +219,33 @@ describe("safeFetch with the fake shop and loopbackForTests", () => {
     expect(error.code).toBe("blocked");
   });
 
+  it.each([
+    ["captcha-delivery", 503, {}],
+    ["cf-chl", 503, {}],
+    ["_incapsula_", 500, {}],
+    ["captcha-delivery", 404, { "content-encoding": "gzip" }],
+  ] as const)("gives blocked for a %s challenge page served with %i %o", async (marker, status, extra) => {
+    const html = Buffer.from(`<html><script src="https://x/${marker}/a.js"></script></html>`);
+    const body = "content-encoding" in extra ? gzipSync(html) : html;
+    const { origin } = await serve({ "/c": { status, headers: { ...HTML, ...extra }, body } });
+    const error = await captureError(safeFetch(`${origin}/c`, { accept: "page", policy: loopbackForTests }));
+    expect(error.code).toBe("blocked");
+    expect(error.httpStatus).toBe(status);
+  });
+
+  it("keeps http_error for an error page whose marker lies beyond the first 64 KB, or is not HTML", async () => {
+    const late = Buffer.concat([Buffer.alloc(SIX_MB, 0x61), Buffer.from("captcha-delivery")]);
+    const { origin } = await serve({
+      "/late": { status: 503, headers: HTML, body: late },
+      "/json": { status: 503, headers: { "content-type": "application/json" }, body: '{"captcha-delivery":1}' },
+    });
+    for (const path of ["/late", "/json"]) {
+      const error = await captureError(safeFetch(`${origin}${path}`, { accept: "page", policy: loopbackForTests }));
+      expect(error.code, path).toBe("http_error");
+      expect(error.httpStatus, path).toBe(503);
+    }
+  });
+
   it.each([404, 410, 500, 503])("gives http_error with the status for %i", async (status) => {
     const { origin } = await serve({ "/e": { status, headers: HTML, body: "erreur" } });
     const error = await captureError(safeFetch(`${origin}/e`, { accept: "page", policy: loopbackForTests }));
@@ -216,6 +258,8 @@ describe("safeFetch with the fake shop and loopbackForTests", () => {
     ["page", "image/png"],
     ["json", "text/html"],
     ["image", "text/html"],
+    ["image", "image/svg+xml"],
+    ["image", "image/svg+xml; charset=utf-8"],
     ["page", ""],
   ] as const)("gives invalid_data when %s receives %s", async (accept, contentType) => {
     const headers: Record<string, string> = contentType ? { "content-type": contentType } : {};
@@ -344,11 +388,25 @@ describe("safeFetch URL rules", () => {
     expect(error.code).toBe("forbidden_address");
   });
 
-  it("refuses the fake shop on 127.0.0.1 with the default strict policy", async () => {
-    const { origin, hits } = await serve({ "/p": { headers: HTML, body: "secret" } });
-    const error = await captureError(safeFetch(`${origin}/p`, { accept: "page" }));
+  it("refuses, under the default strict policy, a port-80 host that resolves to 127.0.0.1", async () => {
+    // Port 80 passes the URL rules: only the address check can refuse this one.
+    const calls: string[] = [];
+    const error = await captureError(
+      safeFetch("http://boutique.test/p", {
+        accept: "page",
+        lookup: fakeLookup({ "boutique.test": ["127.0.0.1"] }, calls),
+      }),
+    );
     expect(error.code).toBe("forbidden_address");
-    expect(hits).toEqual([]);
+    expect(calls).toEqual(["boutique.test"]);
+  });
+
+  it("turns a resolver that throws into http_error", async () => {
+    const throwing = (() => {
+      throw new Error("resolver exploded");
+    }) as unknown as typeof dns.lookup;
+    const error = await captureError(safeFetch("http://shop.example/", { accept: "page", lookup: throwing }));
+    expect(error.code).toBe("http_error");
   });
 
   it("refuses a non-standard port under loopbackForTests unless the vetted address is 127.0.0.1", async () => {

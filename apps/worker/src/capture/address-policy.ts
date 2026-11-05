@@ -51,8 +51,11 @@ function ipv6Groups(ip: string): number[] {
   return [...left, ...middle, ...right].map((group) => Number.parseInt(group, 16));
 }
 
-/** Refuses every range of spec §8; IPv4-mapped IPv6 addresses are checked as IPv4. */
-export const strictPolicy: AddressPolicy = (input: string): boolean => {
+/**
+ * Refuses every range of spec §8; IPv4-mapped IPv6 addresses are checked as IPv4. Also refuses
+ * the other IPv6 forms that embed or route to IPv4 or local networks (see the comments below).
+ */
+export const strictPolicy: AddressPolicy = Object.freeze((input: string): boolean => {
   // A zone index (fe80::1%eth0) does not change the address.
   const ip = input.includes("%") ? input.slice(0, input.indexOf("%")) : input;
   if (isIPv4(ip)) return ipv4Allowed(ipv4ToInt(ip));
@@ -64,12 +67,17 @@ export const strictPolicy: AddressPolicy = (input: string): boolean => {
   const firstFiveZero = g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0;
   // ::ffff:0:0/96: IPv4-mapped, checked as IPv4.
   if (firstFiveZero && g5 === 0xffff) return ipv4Allowed(embeddedV4);
+  // ::ffff:0:0:0/96: IPv4-translated (SIIT), refused.
+  if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0xffff && g5 === 0) return false;
   // ::/96 holds :: and ::1 (spec) and the deprecated IPv4-compatible addresses: all refused.
   if (firstFiveZero && g5 === 0) return false;
   // 64:ff9b::/96: NAT64, refused outright (spec §8).
   if (g0 === 0x64 && g1 === 0xff9b && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0) return false;
+  if (g0 === 0x64 && g1 === 0xff9b && g2 === 1) return false; // 64:ff9b:1::/48, local NAT64 (RFC 8215)
+  if (g0 === 0x2002) return false; // 2002::/16, 6to4 embeds an IPv4 address
   if ((g0 & 0xfe00) === 0xfc00) return false; // fc00::/7
   if ((g0 & 0xffc0) === 0xfe80) return false; // fe80::/10
+  if ((g0 & 0xffc0) === 0xfec0) return false; // fec0::/10, deprecated site-local
   if ((g0 & 0xff00) === 0xff00) return false; // ff00::/8
   return true;
-};
+});
