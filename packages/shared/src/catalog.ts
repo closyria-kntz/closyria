@@ -29,6 +29,9 @@ export type CaptureErrorCode = z.infer<typeof captureErrorCodeSchema>;
 export const productSourceSchema = z.enum(["captured", "manual"]);
 export type ProductSource = z.infer<typeof productSourceSchema>;
 
+export const productCaptureStatusSchema = z.enum(["pending", "ok", "failed", "manual"]);
+export type ProductCaptureStatus = z.infer<typeof productCaptureStatusSchema>;
+
 export const MAX_PRODUCT_IMAGES = 8;
 
 const currencySchema = z.string().length(3);

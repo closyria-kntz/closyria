@@ -7,6 +7,7 @@
 export * from "./audit";
 export * from "./auth";
 export * from "./auth-limits";
+export * from "./catalog";
 export * from "./entitlements";
 export * from "./events";
 export * from "./media";
