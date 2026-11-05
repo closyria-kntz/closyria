@@ -7,7 +7,8 @@
     "dev": "tsdown --watch --on-success \"node --env-file-if-exists=.env --enable-source-maps dist/index.mjs\"",
     "build": "tsdown",
     "start": "node --enable-source-maps dist/index.mjs",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test": "vitest run"
   },
   "dependencies": {
     "@closyria/shared": "workspace:*",
@@ -16,6 +17,8 @@
   },
   "devDependencies": {
     "@closyria/config": "workspace:*",
-    "tsdown": "^0.23.1"
+    "@closyria/testing": "workspace:*",
+    "tsdown": "^0.23.1",
+    "vitest": "^5.0.5"
   }
 }
