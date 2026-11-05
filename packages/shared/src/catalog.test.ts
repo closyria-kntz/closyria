@@ -56,3 +56,9 @@ describe("productViewSchema source", () => {
     expect(productViewSchema.shape.source).toBe(productSourceSchema);
   });
 });
+
+describe("productViewSchema captureStatus", () => {
+  it("is the product's own status, not a capture's", () => {
+    expect(productViewSchema.shape.captureStatus.options).toEqual(["pending", "ok", "failed", "manual"]);
+  });
+});

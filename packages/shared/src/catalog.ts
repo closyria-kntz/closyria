@@ -78,7 +78,7 @@ export const productViewSchema = z.object({
     }),
   ),
   source: productSourceSchema,
-  captureStatus: captureStatusSchema,
+  captureStatus: productCaptureStatusSchema,
   lastCapturedAt: z.string().nullable(),
 });
 export type ProductView = z.infer<typeof productViewSchema>;
@@ -105,3 +105,17 @@ export const CAPTURE_QUEUES = {
   admin: "capture-admin",
   monitor: "capture-monitor",
 } as const;
+
+/** 202 body of `POST /api/captures`. */
+export const captureAcceptedSchema = z.object({
+  productId: z.uuid(),
+  captureId: z.uuid(),
+  status: captureStatusSchema,
+});
+export type CaptureAccepted = z.infer<typeof captureAcceptedSchema>;
+
+/** Error bodies of the capture, product and catalog image routes. */
+export const catalogErrorSchema = z.object({
+  error: z.enum(["invalid_url", "invalid_request", "rate_limited", "not_found"]),
+});
+export type CatalogError = z.infer<typeof catalogErrorSchema>;

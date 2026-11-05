@@ -64,6 +64,7 @@ beforeAll(async () => {
     auth,
     media: { db: handle.db, store: memoryStore() },
     events: { db: handle.db },
+    catalog: { db: handle.db, store: memoryStore(), queue: { enqueue: async () => {} } },
     admin: { db: handle.db, now: () => NOW },
   });
 }, 60_000);

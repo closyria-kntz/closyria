@@ -1,11 +1,19 @@
 import { brevoMailer, createAuth, memoryMailer } from "@closyria/auth";
 import { createDb, type Database, pingDb } from "@closyria/db";
 import { memoryStore, s3Store } from "@closyria/storage";
+import { PgBoss } from "pg-boss";
 import { createApp } from "./app";
+import { pgBossQueue } from "./catalog/capture-queue";
 import type { Env } from "./env";
 import { registerOwnedTables } from "./owned-tables";
 
-export type Api = { app: ReturnType<typeof createApp>; db: Database; pool: ReturnType<typeof createDb>["pool"] };
+export type Api = {
+  app: ReturnType<typeof createApp>;
+  db: Database;
+  pool: ReturnType<typeof createDb>["pool"];
+  /** Stops the job queue connection (no-op when it never started). Call before closing the pool. */
+  stopQueue: () => Promise<void>;
+};
 
 /**
  * Builds the API process from its validated configuration: database, mailer, auth, storage, the owned
@@ -39,6 +47,10 @@ export function bootstrap(env: Env): Api {
           secretAccessKey: env.S3_SECRET_ACCESS_KEY,
         })
       : memoryStore();
+  // Sending only: no supervision (maintenance) and no scheduling, which stay with the worker. It connects on
+  // the first capture, so the API starts without it.
+  const boss = new PgBoss({ connectionString: env.DATABASE_URL, max: 2, supervise: false, schedule: false });
+  boss.on("error", (error) => console.error("pg-boss error:", error));
   const app = createApp({
     env: env.APP_ENV,
     version: env.APP_VERSION,
@@ -47,9 +59,10 @@ export function bootstrap(env: Env): Api {
     auth,
     media: { db, store },
     events: { db },
+    catalog: { db, store, queue: pgBossQueue(boss) },
     admin: { db },
     // R18: the browser tests read their codes here; env.ts guarantees the memory mailer with APP_ENV=test.
     ...(env.APP_ENV === "test" && memory ? { testMail: memory } : {}),
   });
-  return { app, db, pool };
+  return { app, db, pool, stopQueue: () => boss.stop({ graceful: true, timeout: 5_000 }) };
 }

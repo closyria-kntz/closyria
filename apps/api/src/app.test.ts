@@ -10,6 +10,7 @@ const auth = {
 // The media, events and admin routes never run here: it needs no real database.
 const media = { db: {} as Database, store: memoryStore() };
 const events = { db: {} as Database };
+const catalog = { db: {} as Database, store: memoryStore(), queue: { enqueue: async () => {} } };
 const ORIGIN = "http://localhost:3001";
 const make = (dbOk: boolean) =>
   createApp({
@@ -19,6 +20,7 @@ const make = (dbOk: boolean) =>
     pingDb: async () => dbOk,
     auth,
     media,
+    catalog,
     events,
     admin: events,
   });
@@ -108,6 +110,7 @@ describe("GET /api/test/emails", () => {
       pingDb: async () => true,
       auth,
       media,
+      catalog,
       events,
       admin: events,
       testMail: { messages },

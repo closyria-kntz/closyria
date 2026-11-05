@@ -1,0 +1,67 @@
+import { createAuth, memoryMailer } from "@closyria/auth";
+import { createDb, schema } from "@closyria/db";
+import { memoryStore, type ObjectStore } from "@closyria/storage";
+import { createTestDatabase } from "@closyria/testing/vitest";
+import { expect } from "vitest";
+import { createApp } from "../app";
+import type { CaptureQueue } from "./capture-queue";
+import type { CatalogDeps } from "./deps";
+
+export const BASE_URL = "http://localhost:3001";
+
+/** A queue that only records what was enqueued. */
+export function recordingQueue() {
+  const calls: { queue: string; captureId: string }[] = [];
+  const queue: CaptureQueue = {
+    async enqueue(name, captureId) {
+      calls.push({ queue: name, captureId });
+    },
+  };
+  return { queue, calls };
+}
+
+/** A migrated database, the app wired with a recording queue and an in-memory store. */
+export async function createCatalogHarness(overrides: Partial<Omit<CatalogDeps, "db" | "store">> = {}) {
+  const database = await createTestDatabase();
+  const handle = createDb(database.url, { max: 8 });
+  const auth = createAuth({
+    db: handle.db,
+    mailer: memoryMailer(),
+    baseUrl: BASE_URL,
+    secret: "test-secret-that-is-long-enough-0123456789",
+  });
+  const store: ObjectStore = memoryStore();
+  const recorder = recordingQueue();
+  const app = createApp({
+    origin: BASE_URL,
+    env: "test",
+    version: "t",
+    pingDb: async () => true,
+    auth,
+    media: { db: handle.db, store },
+    events: { db: handle.db },
+    admin: { db: handle.db },
+    catalog: { db: handle.db, store, queue: recorder.queue, ...overrides },
+  });
+  let ipCounter = 0;
+  async function signIn() {
+    const res = await auth.handler(
+      new Request(`${BASE_URL}/api/auth/sign-in/anonymous`, {
+        method: "POST",
+        headers: { origin: BASE_URL, "x-forwarded-for": `10.9.0.${++ipCounter}`, "user-agent": "closyria-tests" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { user: { id: string } };
+    const cookie = res.headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0])
+      .join("; ");
+    return { cookie, userId: body.user.id };
+  }
+  async function stop() {
+    await handle.pool.end();
+    await database.stop();
+  }
+  return { ...handle, app, store, signIn, stop, ...recorder, schema };
+}
