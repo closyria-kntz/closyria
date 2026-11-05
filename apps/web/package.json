@@ -10,7 +10,8 @@
     "prebuild": "pnpm --filter @closyria/design-tokens build:css",
     "start": "next start",
     "typecheck": "next typegen && tsc",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:icons": "tsx scripts/build-icons.ts"
   },
   "dependencies": {
     "@closyria/auth": "workspace:*",
@@ -31,7 +32,9 @@
     "@tailwindcss/postcss": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
     "vitest": "^5.0.5"
   }
 }

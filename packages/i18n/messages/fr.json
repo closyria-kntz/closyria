@@ -110,5 +110,58 @@
       "registerFailed": "La passkey n’a pas pu être enregistrée. Si tu en as déjà une, connecte-toi avec elle ; sinon, réessaie.",
       "signInFailed": "La connexion par passkey a échoué ou a été annulée. Réessaie."
     }
+  },
+  "Capture": {
+    "field": "Coller un lien",
+    "placeholder": "https://…",
+    "hint": "Le lien d’un article, depuis n’importe quelle boutique.",
+    "submit": "Ajouter",
+    "busy": "Un instant…",
+    "errors": {
+      "invalidUrl": "Ce lien n'est pas valide.",
+      "rateLimited": "Trop d'ajouts d'un coup. Réessaie dans une heure.",
+      "failed": "L’ajout n’a pas marché. Réessaie dans un instant."
+    },
+    "share": {
+      "title": "Partager un article",
+      "noLink": "Ce partage ne contient pas de lien.",
+      "adding": "Ajout en cours…"
+    },
+    "product": {
+      "metadataTitle": "Article · Closyria",
+      "loading": "Lecture de l’article chez {shop}…",
+      "notFound": "Cet article n’existe pas.",
+      "loadFailed": "L’article ne s’affiche pas. Réessaie dans un instant.",
+      "retry": "Réessayer",
+      "slow": "Ça prend plus de temps que prévu. Complète la fiche en attendant : si la lecture réussit, elle se remplira toute seule.",
+      "manualShop": "{shop} ne permet pas la lecture automatique. Complète la fiche en quelques secondes.",
+      "failure": {
+        "not_a_product": "Cette page ne ressemble pas à un article.",
+        "timeout": "La boutique n'a pas répondu à temps.",
+        "blocked": "La boutique refuse la lecture automatique.",
+        "robots_disallowed": "La boutique refuse la lecture automatique.",
+        "other": "La lecture automatique n'a pas marché."
+      },
+      "viewAt": "Voir chez {shop}",
+      "updatedAt": "Mis à jour le {date}",
+      "sizes": "Tailles",
+      "unavailable": "indisponible",
+      "comparePrice": "Prix avant réduction",
+      "untitled": "Article sans nom"
+    },
+    "manual": {
+      "nameLabel": "Nom de l’article",
+      "priceLabel": "Prix (en euros)",
+      "pricePlaceholder": "29,99",
+      "sizesLabel": "Tailles",
+      "sizesHint": "Sépare-les par des virgules : S, M, L",
+      "save": "Enregistrer la fiche",
+      "errors": {
+        "name": "Donne un nom à l’article.",
+        "price": "Ce prix n’est pas valide. Écris par exemple 29,99.",
+        "sizes": "Une taille ne peut pas dépasser 40 caractères, et 30 tailles au plus.",
+        "failed": "La fiche n’a pas été enregistrée. Réessaie dans un instant."
+      }
+    }
   }
 }
