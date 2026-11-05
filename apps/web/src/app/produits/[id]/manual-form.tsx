@@ -2,7 +2,7 @@
 
 import { type ManualEntry, manualEntrySchema, nameFromUrl, type ProductView } from "@closyria/shared";
 import { useTranslations } from "next-intl";
-import { type FormEvent, useId, useState } from "react";
+import { type FormEvent, useId, useRef, useState } from "react";
 import { inputClass, primaryButtonClass } from "@/components/ui";
 import { saveManual } from "@/lib/catalog-client";
 import { parsePriceCents, parseSizes } from "@/lib/price";
@@ -26,17 +26,28 @@ export function ManualForm({
   const [sizes, setSizes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorKey | null>(null);
+  const fields = {
+    name: useRef<HTMLInputElement>(null),
+    price: useRef<HTMLInputElement>(null),
+    sizes: useRef<HTMLInputElement>(null),
+  };
+
+  /** Shows the error and moves the focus to the first invalid field. */
+  const invalidField = (key: "name" | "price" | "sizes") => {
+    setError(key);
+    fields[key].current?.focus();
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const parsedPrice = parsePriceCents(price);
-    if (!parsedPrice.ok) return setError("price");
+    if (!parsedPrice.ok) return invalidField("price");
     const entry: ManualEntry = { name: name.trim(), sizes: parseSizes(sizes) };
     if (parsedPrice.cents !== undefined) entry.priceCents = parsedPrice.cents;
     const checked = manualEntrySchema.safeParse(entry);
     if (!checked.success) {
       const field = checked.error.issues[0]?.path[0];
-      return setError(field === "name" ? "name" : field === "priceCents" ? "price" : "sizes");
+      return invalidField(field === "name" ? "name" : field === "priceCents" ? "price" : "sizes");
     }
     setBusy(true);
     setError(null);
@@ -55,6 +66,7 @@ export function ManualForm({
         {t("manual.nameLabel")}
       </label>
       <input
+        ref={fields.name}
         id={ids.name}
         name="name"
         type="text"
@@ -70,6 +82,7 @@ export function ManualForm({
         {t("manual.priceLabel")}
       </label>
       <input
+        ref={fields.price}
         id={ids.price}
         name="price"
         type="text"
@@ -86,6 +99,7 @@ export function ManualForm({
         {t("manual.sizesLabel")}
       </label>
       <input
+        ref={fields.sizes}
         id={ids.sizes}
         name="sizes"
         type="text"

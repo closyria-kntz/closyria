@@ -45,14 +45,22 @@ export async function createCapture(url: string, deps: ClientDeps = defaultDeps)
   return { ok: false, error: "failed" };
 }
 
-export async function fetchCaptureView(id: string, deps: ClientDeps = defaultDeps): Promise<CaptureView> {
-  const response = await deps.fetch(`/api/captures/${id}`, { cache: "no-store" });
+export async function fetchCaptureView(
+  id: string,
+  deps: ClientDeps = defaultDeps,
+  signal?: AbortSignal,
+): Promise<CaptureView> {
+  const response = await deps.fetch(`/api/captures/${id}`, { cache: "no-store", signal: signal ?? null });
   if (!response.ok) throw new Error(`capture ${response.status}`);
   return captureViewSchema.parse(await response.json());
 }
 
-export async function fetchProduct(id: string, deps: ClientDeps = defaultDeps): Promise<ProductView | "not_found"> {
-  const response = await deps.fetch(`/api/products/${id}`, { cache: "no-store" });
+export async function fetchProduct(
+  id: string,
+  deps: ClientDeps = defaultDeps,
+  signal?: AbortSignal,
+): Promise<ProductView | "not_found"> {
+  const response = await deps.fetch(`/api/products/${id}`, { cache: "no-store", signal: signal ?? null });
   if (response.status === 404) return "not_found";
   if (!response.ok) throw new Error(`product ${response.status}`);
   return productViewSchema.parse(await response.json());

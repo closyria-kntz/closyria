@@ -29,16 +29,22 @@ export function CaptureForm({ initialUrl = "", autoSubmit = false }: { initialUr
   const [busy, setBusy] = useState(autoSubmit);
   const [error, setError] = useState<ErrorKey | null>(null);
   const started = useRef(false);
+  const input = useRef<HTMLInputElement>(null);
+
+  const fail = (key: ErrorKey) => {
+    setBusy(false);
+    setError(key);
+    input.current?.focus();
+  };
 
   const submit = async (value: string) => {
     const link = value.trim();
-    if (!isHttpUrl(link)) return setError("invalidUrl");
+    if (!isHttpUrl(link)) return fail("invalidUrl");
     setBusy(true);
     setError(null);
     const result = await createCapture(link);
     if (!result.ok) {
-      setBusy(false);
-      return setError(
+      return fail(
         result.error === "failed" ? "failed" : result.error === "rate_limited" ? "rateLimited" : "invalidUrl",
       );
     }
@@ -54,6 +60,15 @@ export function CaptureForm({ initialUrl = "", autoSubmit = false }: { initialUr
     void submit(initialUrl);
   }, []);
 
+  // Back/forward cache: a page restored mid-request must not keep a disabled button.
+  useEffect(() => {
+    const restore = (event: PageTransitionEvent) => {
+      if (event.persisted) setBusy(false);
+    };
+    window.addEventListener("pageshow", restore);
+    return () => window.removeEventListener("pageshow", restore);
+  }, []);
+
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     void submit(url);
@@ -65,6 +80,7 @@ export function CaptureForm({ initialUrl = "", autoSubmit = false }: { initialUr
         {t("field")}
       </label>
       <input
+        ref={input}
         id={ids.field}
         name="url"
         type="url"
@@ -82,14 +98,12 @@ export function CaptureForm({ initialUrl = "", autoSubmit = false }: { initialUr
       <p id={ids.hint} className="text-sm text-ink-muted">
         {t("hint")}
       </p>
-      <div aria-live="polite">
-        {error && (
-          <p id={ids.error} role="alert" className="text-danger">
-            {t(`errors.${error}`)}
-          </p>
-        )}
-        {busy && autoSubmit && !error && <p role="status">{t("share.adding")}</p>}
-      </div>
+      {error && (
+        <p id={ids.error} role="alert" className="text-danger">
+          {t(`errors.${error}`)}
+        </p>
+      )}
+      {busy && autoSubmit && !error && <p role="status">{t("share.adding")}</p>}
       <button type="submit" className={primaryButtonClass} disabled={busy}>
         {busy ? t("busy") : t("submit")}
       </button>

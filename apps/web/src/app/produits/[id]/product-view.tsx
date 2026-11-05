@@ -2,9 +2,9 @@
 
 import type { CaptureView, ProductView as Product } from "@closyria/shared";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { buttonClass, primaryButtonClass } from "@/components/ui";
-import { pollCapture } from "@/lib/capture-poll";
+import { pollCapture, pollUntil } from "@/lib/capture-poll";
 import { fetchCaptureView, fetchProduct } from "@/lib/catalog-client";
 import { formatPrice } from "@/lib/price";
 import { ManualForm } from "./manual-form";
@@ -39,6 +39,18 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   const [attempt, setAttempt] = useState(0);
   const [capture, setCapture] = useState<CaptureState | null>(null);
   const [slow, setSlow] = useState(false);
+  const [gaveUp, setGaveUp] = useState(false);
+  const [focusHeading, setFocusHeading] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+
+  // A different product or capture starts from a blank state (declared first: effects run in order).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the ids are the triggers, the body only resets.
+  useEffect(() => {
+    setProduct(null);
+    setCapture(null);
+    setSlow(false);
+    setGaveUp(false);
+  }, [productId, captureId]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` re-runs the load on « Réessayer ».
   useEffect(() => {
@@ -61,7 +73,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
 
   useEffect(() => {
     if (!captureId) return;
-    return pollCapture(captureId, (id) => fetchCaptureView(id), {
+    return pollCapture(captureId, (id, signal) => fetchCaptureView(id, undefined, signal), {
       onUpdate: (view) => {
         setCapture({ status: view.status, errorCode: view.errorCode });
         if (view.product) {
@@ -70,8 +82,35 @@ export function ProductView({ productId, captureId }: { productId: string; captu
         }
       },
       onSoftTimeout: () => setSlow(true),
+      onGiveUp: () => setGaveUp(true),
     });
   }, [captureId]);
+
+  // A reload without ?capture= of a sheet whose capture is still pending: re-read the sheet on the same schedule.
+  const rereadPending = captureId === null && product?.captureStatus === "pending" && product.name === null;
+  useEffect(() => {
+    if (!rereadPending) return;
+    return pollUntil(
+      (signal) => fetchProduct(productId, undefined, signal),
+      (result) => result === "not_found" || result.captureStatus !== "pending",
+      {
+        onUpdate: (result) => {
+          if (result === "not_found") return setLoad("not_found");
+          setProduct(result);
+        },
+        onSoftTimeout: () => setSlow(true),
+        onGiveUp: () => setGaveUp(true),
+      },
+    );
+  }, [rereadPending, productId]);
+
+  // After a manual save the form disappears: the focus goes to the sheet's heading.
+  useEffect(() => {
+    if (focusHeading && product?.name) {
+      heading.current?.focus();
+      setFocusHeading(false);
+    }
+  }, [focusHeading, product]);
 
   if (load === "not_found") return <p role="alert">{t("product.notFound")}</p>;
   if (load === "error" && !product) {
@@ -87,7 +126,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   if (!product) {
     return (
       <div role="status" aria-busy="true" className="flex flex-col gap-space-4">
-        <span className="sr-only">{t("busy")}</span>
+        <h1 className="sr-only">{t("busy")}</h1>
         <Skeleton className="aspect-square w-full" />
         <Skeleton className="h-space-6 w-3/4" />
         <Skeleton className="h-space-5 w-1/3" />
@@ -98,20 +137,20 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   const shop = product.shop.name;
   const hasName = product.name !== null;
   const capturing =
-    captureId !== null && (capture === null || capture.status === "queued" || capture.status === "running");
-  const reloadedPending = captureId === null && product.captureStatus === "pending" && !hasName;
+    !gaveUp && captureId !== null && (capture === null || capture.status === "queued" || capture.status === "running");
+  const reloadedPending = !gaveUp && rereadPending;
   const waiting = !hasName && (capturing || reloadedPending);
-  const failed = capture ? capture.status === "failed" : product.captureStatus === "failed";
+  const failed = gaveUp || (capture ? capture.status === "failed" : product.captureStatus === "failed");
   const manualShop = capture ? capture.status === "skipped_manual" : product.captureStatus === "manual";
   const failureKey = capture?.errorCode
     ? (FAILURE_KEYS[capture.errorCode as keyof typeof FAILURE_KEYS] ?? "other")
     : "other";
-  const showForm = !hasName && (failed || manualShop || (slow && capturing));
+  const showForm = !hasName && (failed || manualShop || (slow && (capturing || reloadedPending)));
   const currency = product.currency ?? "EUR";
   const noPhotoYet = product.images.length === 0 && (capturing || reloadedPending);
 
   return (
-    <article className="flex flex-col gap-space-5" aria-busy={capturing || undefined}>
+    <article className="flex flex-col gap-space-5" aria-busy={capturing || reloadedPending || undefined}>
       {product.images.length > 0 ? (
         <div className="grid grid-cols-2 gap-space-2">
           {product.images.map((image, index) => (
@@ -135,16 +174,15 @@ export function ProductView({ productId, captureId }: { productId: string; captu
         <p className="text-sm text-ink-muted">
           {waiting ? <span role="status">{t("product.loading", { shop })}</span> : shop}
         </p>
-        {hasName ? (
-          <>
-            {product.brand && <p className="text-sm font-strong uppercase text-ink-muted">{product.brand}</p>}
-            <h1 className="font-display text-title font-strong">{product.name}</h1>
-          </>
-        ) : waiting ? (
-          <Skeleton className="h-space-6 w-3/4" />
-        ) : (
-          <h1 className="font-display text-title font-strong">{shop}</h1>
-        )}
+        {hasName && product.brand && <p className="text-sm font-strong uppercase text-ink-muted">{product.brand}</p>}
+        <h1
+          ref={heading}
+          tabIndex={-1}
+          className={waiting ? "sr-only" : "font-display text-title font-strong focus:outline-none"}
+        >
+          {product.name ?? shop}
+        </h1>
+        {waiting && <Skeleton className="h-space-6 w-3/4" />}
       </header>
 
       {hasName && product.priceCents !== null && (
@@ -185,7 +223,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
           {manualShop ? t("product.manualShop", { shop }) : t(`product.failure.${failureKey}`)}
         </p>
       )}
-      {!hasName && slow && capturing && (
+      {!hasName && slow && (capturing || reloadedPending) && (
         <p role="status" className="text-ink-muted">
           {t("product.slow")}
         </p>
@@ -197,6 +235,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
           onSaved={(saved) => {
             setProduct(saved);
             setLoad("ready");
+            setFocusHeading(true);
           }}
         />
       )}

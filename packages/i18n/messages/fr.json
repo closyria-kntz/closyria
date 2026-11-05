@@ -146,8 +146,7 @@
       "updatedAt": "Mis à jour le {date}",
       "sizes": "Tailles",
       "unavailable": "indisponible",
-      "comparePrice": "Prix avant réduction",
-      "untitled": "Article sans nom"
+      "comparePrice": "Prix avant réduction"
     },
     "manual": {
       "nameLabel": "Nom de l’article",
