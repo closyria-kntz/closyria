@@ -1,38 +1,15 @@
 @import "tailwindcss";
 @import "../styles/tokens.css";
 
-/* Phone tab bar: its own padding for the home indicator, and the room the page keeps clear below it. */
+/* Phone tab bar: its own padding for the home indicator. */
 @utility tabbar-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-@utility tabbar-clearance {
-  padding-bottom: calc(var(--spacing-space-8) + env(safe-area-inset-bottom));
-
-  /* No tab bar from the tablet up: the usual bottom padding. */
-  @variant md {
-    padding-bottom: var(--spacing-space-6);
-  }
-}
-
-/* Same, with the « Plus » panel open above the bar (three links, their gaps and padding). */
-@utility tabbar-clearance-open {
-  padding-bottom: calc(
-    var(--spacing-space-8) +
-    3 *
-    var(--spacing-touch-target) +
-    var(--spacing-space-5) +
-    env(safe-area-inset-bottom)
-  );
-
-  @variant md {
-    padding-bottom: var(--spacing-space-6);
-  }
-}
-
 /* While a modal window is open (photo viewer, « Ajouter une photo »), the page behind does not scroll and shows no
-   scroll bar of its own. */
-html:has(dialog:modal) {
+   scroll bar of its own: neither the window nor the app content (the only area that scrolls in the app frame). */
+html:has(dialog:modal),
+#app-content:has(dialog:modal) {
   overflow: hidden;
 }
 
