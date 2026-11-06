@@ -1,14 +1,15 @@
 "use client";
 
-import type { ProfileView } from "@closyria/shared";
+import type { ProfileView, StageCounts } from "@closyria/shared";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ReactNode, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
 import { fetchSummary } from "@/lib/catalog-client";
-import { ProfilesContext, profileHref, useCurrentProfile } from "@/lib/profile-context";
+import { ProfilesContext, profileHref, useCurrentProfile, useStageCounts } from "@/lib/profile-context";
+import { getUndo, subscribeUndo } from "@/lib/undo";
 import { AccountPrompt } from "./account-prompt";
-import { type AppNavItem, desktopNav, isCurrent, moreNav, phoneTabs, tabletTabs } from "./app-nav";
+import { type AppNavItem, countFor, desktopNav, helpNav, isCurrent, moreNav, phoneTabs, tabletTabs } from "./app-nav";
 import { CaptureForm } from "./capture-form";
 import { ProfileSwitcher } from "./profile-switcher";
 import { buttonClass, focusRing } from "./ui";
@@ -19,10 +20,12 @@ const linkBase = `${linkShape} px-space-3`;
 /** Phone tabs: five across the narrowest screens, so almost no side padding. */
 const tabBase = `${linkShape} min-w-space-0 px-space-1`;
 
-function NavLink({ item, className }: { item: AppNavItem; className: string }) {
+function NavLink({ item, className, counted = false }: { item: AppNavItem; className: string; counted?: boolean }) {
   const t = useTranslations("Shell.nav");
   const pathname = usePathname();
   const { id, isDefault } = useCurrentProfile();
+  const count = countFor(item, useStageCounts());
+  const shown = counted && count !== null;
   return (
     <Link
       href={profileHref(item.href, id, isDefault)}
@@ -30,6 +33,15 @@ function NavLink({ item, className }: { item: AppNavItem; className: string }) {
       className={className}
     >
       {t(item.key)}
+      {shown && (
+        <>
+          {/* Read as « Envies 1 article »; the bare number is for the eye. */}
+          <span className="sr-only">{t("count", { count })}</span>
+          <span aria-hidden="true" className="ml-auto text-sm text-ink-muted tabular-nums">
+            {count}
+          </span>
+        </>
+      )}
     </Link>
   );
 }
@@ -155,13 +167,17 @@ export function AppShell({ children }: { children: ReactNode }) {
     content.current?.scrollTo({ top: 0 });
   }, [pathname]);
   const [profiles, setProfiles] = useState<readonly ProfileView[]>([]);
+  const [stageCounts, setStageCounts] = useState<Readonly<Record<string, StageCounts>>>({});
   const [ready, setReady] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const alive = useRef(true);
 
   const refreshProfiles = useCallback(async () => {
     const summary = await fetchSummary();
-    if (summary && alive.current) setProfiles(summary.profiles);
+    if (summary && alive.current) {
+      setProfiles(summary.profiles);
+      setStageCounts(summary.stageCounts);
+    }
     if (alive.current) setReady(true);
   }, []);
 
@@ -176,8 +192,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [refreshProfiles]);
 
+  // Every action that changes her items announces itself with a toast (« … · Annuler »), and so does its undo:
+  // the counts of the menu and of the home page are read again then.
+  useEffect(() => {
+    let last = getUndo()?.id ?? null;
+    return subscribeUndo(() => {
+      const entry = getUndo();
+      if (!entry || entry.id === last) return;
+      last = entry.id;
+      void refreshProfiles();
+    });
+  }, [refreshProfiles]);
+
   return (
-    <ProfilesContext.Provider value={{ profiles, ready, refreshProfiles }}>
+    <ProfilesContext.Provider value={{ profiles, ready, stageCounts, refreshProfiles }}>
       <a
         href="#app-content"
         className={`sr-only rounded-button bg-surface-raised px-space-3 py-space-2 focus:not-sr-only focus:absolute focus:top-space-2 focus:left-space-2 focus:z-30 ${focusRing}`}
@@ -194,12 +222,15 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Suspense>
                 {desktopNav.map((item) => (
                   <li key={item.key} className="flex flex-col">
-                    <NavLink item={item} className={`${linkBase} justify-start`} />
+                    <NavLink item={item} counted className={`${linkBase} justify-start`} />
                   </li>
                 ))}
               </Suspense>
             </ul>
           </nav>
+          <Suspense>
+            <NavLink item={helpNav} className={`${linkBase} mt-auto justify-start text-ink-muted`} />
+          </Suspense>
         </aside>
 
         <div className="flex min-h-space-0 min-w-space-0 flex-1 flex-col">
@@ -208,11 +239,20 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Link href="/" className={`font-display text-lead font-strong lg:invisible ${focusRing}`}>
                 {t("brand")}
               </Link>
+              {!onHome && (
+                <div className="hidden w-full max-w-paste lg:block">
+                  <CaptureForm compact />
+                </div>
+              )}
               <div className="flex items-center gap-space-2">
                 <Suspense>
                   <ProfileSwitcher />
                 </Suspense>
-                {!onHome && <AddLink />}
+                {!onHome && (
+                  <div className="lg:hidden">
+                    <AddLink />
+                  </div>
+                )}
               </div>
             </div>
             <nav

@@ -80,6 +80,7 @@ export const defaultSemanticTokens = {
   "container-app": container.app,
   "container-measure": container.measure,
   "container-sidebar": container.sidebar,
+  "container-paste": container.paste,
   "spacing-touch-target": size.touchTarget,
 } as const;
 

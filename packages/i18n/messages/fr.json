@@ -24,8 +24,10 @@
       "forSale": "À vendre",
       "lists": "Listes",
       "settings": "Réglages",
+      "help": "Aide",
       "more": "Plus",
-      "moreMenu": "Autres pages"
+      "moreMenu": "Autres pages",
+      "count": "{count, plural, one {# article} other {# articles}}"
     },
     "profile": {
       "label": "Profil",

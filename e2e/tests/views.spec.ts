@@ -31,7 +31,8 @@ test("un article gardé apparaît dans Envies, l'onglet courant est marqué, et 
   await expect(card).toContainText(PRODUCT.name);
   await expect(card.getByRole("img", { name: "Favori" })).toBeVisible();
   const nav = page.getByRole("navigation", { name: /Menu principal|Onglets/ }).filter({ visible: true });
-  await expect(nav.locator("[aria-current=page]")).toHaveText("Envies");
+  // From the desktop up the side menu adds the count to the name (« Envies 1 article »).
+  await expect(nav.locator("[aria-current=page]")).toHaveAccessibleName(/^Envies( \d+ articles?)?$/);
 
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);

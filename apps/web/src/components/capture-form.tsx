@@ -25,9 +25,12 @@ export function CaptureForm({
   initialUrl = "",
   autoSubmit = false,
   fieldId,
+  compact = false,
 }: {
   initialUrl?: string;
   autoSubmit?: boolean;
+  /** One row for the desktop header: the label and the hint stay for screen readers only. */
+  compact?: boolean;
   /** A fixed id for the field, when something else on the page must find it (the recents send the focus back). */
   fieldId?: string;
 }) {
@@ -85,8 +88,12 @@ export function CaptureForm({
   };
 
   return (
-    <form noValidate onSubmit={onSubmit} className="flex w-full flex-col gap-space-3 text-left">
-      <label htmlFor={ids.field} className="font-strong">
+    <form
+      noValidate
+      onSubmit={onSubmit}
+      className={`flex w-full gap-space-3 text-left ${compact ? "flex-row flex-wrap items-center gap-space-2" : "flex-col"}`}
+    >
+      <label htmlFor={ids.field} className={compact ? "sr-only" : "font-strong"}>
         {t("field")}
       </label>
       <input
@@ -103,13 +110,13 @@ export function CaptureForm({
         onChange={(e) => setUrl(e.target.value)}
         aria-invalid={error === "invalidUrl" || undefined}
         aria-describedby={error ? `${ids.hint} ${ids.error}` : ids.hint}
-        className={inputClass}
+        className={compact ? `${inputClass} min-w-space-0 flex-1` : inputClass}
       />
-      <p id={ids.hint} className="text-sm text-ink-muted">
+      <p id={ids.hint} className={compact ? "sr-only" : "text-sm text-ink-muted"}>
         {t("hint")}
       </p>
       {error && (
-        <p id={ids.error} role="alert" className="text-danger">
+        <p id={ids.error} role="alert" className={compact ? "basis-full text-sm text-danger" : "text-danger"}>
           {t(`errors.${error}`)}
         </p>
       )}

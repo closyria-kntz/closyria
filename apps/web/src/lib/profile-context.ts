@@ -1,6 +1,6 @@
 "use client";
 
-import type { ProfileView } from "@closyria/shared";
+import type { ProfileView, StageCounts } from "@closyria/shared";
 import { useSearchParams } from "next/navigation";
 import { createContext, useContext } from "react";
 import { z } from "zod";
@@ -36,7 +36,12 @@ export type ProfilesState = {
   profiles: readonly ProfileView[];
   /** False until the first read of the profiles ended (a view waits for it to know which profile to ask). */
   ready: boolean;
-  /** Re-reads the profiles; the settings pages call it after creating, renaming or deleting one. */
+  /** Active items per stage, per profile id (empty until the first read). */
+  stageCounts: Readonly<Record<string, StageCounts>>;
+  /**
+   * Re-reads the profiles and the counts; the settings pages call it after creating, renaming or deleting a profile,
+   * the sheet after keeping, moving, changing the stage of or deleting an item.
+   */
   refreshProfiles: () => Promise<void>;
 };
 
@@ -44,6 +49,7 @@ export type ProfilesState = {
 export const ProfilesContext = createContext<ProfilesState>({
   profiles: [],
   ready: true,
+  stageCounts: {},
   refreshProfiles: async () => {},
 });
 
@@ -62,4 +68,11 @@ export function useRefreshProfiles(): () => Promise<void> {
 export function useCurrentProfile(): CurrentProfile {
   const profiles = useProfiles();
   return resolveCurrentProfile(profiles, readProfileParam(useSearchParams()));
+}
+
+/** The current profile's counts per stage, null until they are read (no false zero). */
+export function useStageCounts(): StageCounts | null {
+  const { id } = useCurrentProfile();
+  const counts = useContext(ProfilesContext).stageCounts;
+  return id ? (counts[id] ?? null) : null;
 }

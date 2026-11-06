@@ -68,10 +68,13 @@ test.describe("1440 px", () => {
   test("« + Ajouter » ouvre le champ « Coller un lien », Échap le ferme et rend le focus au bouton", async ({
     page,
   }) => {
+    // From 1024 px the header has the field itself (Passe design §2): « + Ajouter » is for tablets and phones.
+    await page.setViewportSize({ width: 820, height: 1180 });
     await openSheet(page);
     const button = page.getByRole("button", { name: "+ Ajouter" });
     await button.click();
-    const field = page.getByLabel("Coller un lien");
+    // The header's own field exists from 1024 px only (hidden here): by role, only the visible one.
+    const field = page.getByRole("textbox", { name: "Coller un lien" });
     await expect(field).toBeVisible();
     await expect(field).toBeFocused();
     await page.keyboard.press("Escape");
@@ -126,6 +129,44 @@ test.describe("1440 px", () => {
     await page.goto("/");
     const field = await page.getByLabel("Coller un lien").boundingBox();
     expect(field?.width ?? 0).toBeGreaterThan(32 * REM);
+  });
+});
+
+// Passe design §2: counts beside the places, « Aide » at the bottom of the side menu, the paste field in the header.
+test.describe("menu et en-tête, ordinateur", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("le menu latéral montre les compteurs du profil courant et Aide en bas", async ({ page }) => {
+    await openSheet(page);
+    await page.getByRole("button", { name: "Favori" }).click();
+    await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+    const side = page.getByRole("navigation", { name: "Menu principal" });
+    await expect(side.getByRole("link", { name: "Envies 1 article", exact: true })).toBeVisible();
+    await expect(side.getByRole("link", { name: "Commandé 0 article", exact: true })).toBeVisible();
+    await expect(page.locator("aside a").last()).toHaveText("Aide");
+  });
+
+  test("changer de profil met à jour les compteurs, sans recharger", async ({ page }) => {
+    await openSheet(page);
+    await page.getByRole("button", { name: "Favori" }).click();
+    await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+    const created = await page.request.post("/api/me/profiles", {
+      data: { name: "Léa", audience: "women", color: "rose" },
+    });
+    const { id } = (await created.json()) as { id: string };
+    await page.goto("/envies");
+    const side = page.getByRole("navigation", { name: "Menu principal" });
+    await expect(side.getByRole("link", { name: "Envies 1 article", exact: true })).toBeVisible();
+    await page.getByRole("combobox", { name: "Profil" }).selectOption(id);
+    await expect(side.getByRole("link", { name: "Envies 0 article", exact: true })).toBeVisible();
+  });
+
+  test("l'en-tête a le champ Coller un lien hors de l'accueil", async ({ page }) => {
+    await page.goto("/dressing");
+    await expect(page.locator("header").getByLabel("Coller un lien")).toBeVisible();
+    await expect(page.getByRole("button", { name: "+ Ajouter" })).toBeHidden();
+    await page.goto("/");
+    await expect(page.locator("header").getByLabel("Coller un lien")).toHaveCount(0);
   });
 });
 
