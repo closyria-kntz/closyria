@@ -146,7 +146,7 @@ export function PhotoViewer({
             ))}
           </section>
 
-          <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-space-2 p-space-3">
+          <div className="pointer-events-none absolute inset-x-space-0 top-space-0 flex items-start justify-between gap-space-2 p-space-3">
             {total > 1 && (
               <p aria-live="polite" className="rounded-button bg-surface-raised px-space-3 py-space-2 text-sm">
                 {t("counter", { current: current + 1, total })}

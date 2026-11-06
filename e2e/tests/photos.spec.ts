@@ -77,6 +77,11 @@ test("la visionneuse s'ouvre sur la photo cliquée, navigue, zoome et rend le fo
   const viewer = page.getByRole("dialog");
   await expect(viewer).toBeVisible();
   await expect(viewer.getByText("2 / 3")).toBeVisible();
+  // The viewer fits the window (no scroll bar) and « Fermer » sits in its top right corner.
+  expect(await viewer.evaluate((d) => d.scrollHeight - d.clientHeight)).toBe(0);
+  const close = await viewer.getByRole("button", { name: "Fermer" }).boundingBox();
+  const size = page.viewportSize();
+  expect(close && size && close.y < 80 && close.x + close.width > size.width - 80).toBe(true);
 
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
