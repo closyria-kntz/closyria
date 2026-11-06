@@ -518,7 +518,7 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
 
 ## Bilan de l'exécution
 
-Le plan a été exécuté en entier (tâches 1 à 18) sur la branche `chantier-2a`. Statut : terminé sur la branche `chantier-2a`, pas encore fusionné dans `dev` ni déployé ; 2b reste à faire. Écarts
+Le plan a été exécuté en entier (tâches 1 à 18) sur la branche `chantier-2a`. Statut : fusionné dans `dev` (`19443a1`) et déployé en dev le 2026-11-06 (version `20261106-011252-19443a1ab679`), tests de la fondatrice au vert ; la prod suit avec le chantier 1, après les sauvegardes automatiques ; 2b reste à faire. Écarts
 et décisions prises en route :
 
 - **Annuler** : chaque action renvoie une « annulation » exacte (les opérations inverses, regroupées par valeur

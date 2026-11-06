@@ -99,15 +99,18 @@ Mêmes étapes, avec les noms de prod :
 ### Dev
 
 > Le chantier 1 est déjà déployé sur dev (0007 à 0010 appliquées, captures présentes) : pour dev, seules 0011 et 0012
-> sont nouvelles.
+> sont nouvelles. **Déployé en dev le 2026-11-06** (version `20261106-011252-19443a1ab679`, fusion `19443a1`) ; tests
+> de la fondatrice au vert le même jour.
 
-1. [ ] `sudo closyria-deploy dev <id>` : migrations 0011 et 0012 appliquées, worker `active`, `network barrier: active`
-2. [ ] Journal du worker dev : `grep 'starting reference lists'` montre la ligne, `grep 'seed:'` est vide ; les filtres Type et Couleur se chargent
-3. [ ] Coller un lien d'article, appuyer sur ♡ : l'article est dans « Envies » ; « Annuler » le retire
-4. [ ] Changer l'étape (« Reçu » avec un prix payé) : il passe dans « Dressing » ; « Annuler » le remet
+1. [x] `sudo closyria-deploy dev <id>` : migrations 0011 et 0012 appliquées, worker `active`, `network barrier: active`
+2. [x] Journal du worker dev : `grep 'starting reference lists'` montre la ligne, `grep 'seed:'` est vide ; les filtres Type et Couleur se chargent
+   (2026-11-06 : `starting reference lists: 62 added`, aucune ligne `seed:`)
+3. [x] Coller un lien d'article, appuyer sur ♡ : l'article est dans « Envies » ; « Annuler » le retire
+4. [x] Changer l'étape (« Reçu » avec un prix payé) : il passe dans « Dressing » ; « Annuler » le remet
 5. [ ] Créer une liste, y mettre un article, la partager, ouvrir le lien dans une fenêtre privée : ni notes ni taille
-   visibles ; « Arrêter le partage » puis recharger : page « Ce lien ne marche plus »
-6. [ ] Créer un second profil, y déplacer deux articles, changer de profil en haut de page
+   visibles ; « Arrêter le partage » puis recharger : page « Ce lien ne marche plus » (2026-11-06 : partage et
+   fenêtre privée testés ; « Arrêter le partage » reste à essayer)
+6. [x] Créer un second profil, y déplacer deux articles, changer de profil en haut de page
 7. [ ] Anonyme avec 3 articles : le bandeau propose un compte ; connexion par code : les articles sont toujours là
 8. [ ] Sur iPhone : l'aide « Ajouter Closyria au menu Partager » (Réglages) et le Raccourci fonctionnent
 9. [ ] Purge : rien à vérifier à la main (aucun article n'a 30 jours) ; le lendemain, pas d'erreur de `wardrobe-purge`
