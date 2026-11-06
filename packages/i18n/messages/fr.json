@@ -4,8 +4,14 @@
     "description": "Ton dressing en ligne, et le suivi de tes articles préférés."
   },
   "Home": {
-    "title": "Closyria",
-    "tagline": "Ton dressing en ligne arrive bientôt.",
+    "title": "Quel article as-tu repéré ?",
+    "summary": {
+      "title": "Mon dressing en bref",
+      "ordered": "{count, plural, one {commandé en route} other {commandés en route}}",
+      "wishes": "{count, plural, one {envie} other {envies}}",
+      "wardrobe": "dans ton dressing",
+      "forSale": "à vendre"
+    },
     "recents": {
       "title": "Derniers liens",
       "forget": "Retirer {name} de la liste"

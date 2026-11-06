@@ -70,9 +70,15 @@ export function useCurrentProfile(): CurrentProfile {
   return resolveCurrentProfile(profiles, readProfileParam(useSearchParams()));
 }
 
-/** The current profile's counts per stage, null until they are read (no false zero). */
+const NOTHING_YET: StageCounts = { spotted: 0, ordered: 0, owned: 0, for_sale: 0, sold: 0, returned: 0 };
+
+/**
+ * The current profile's counts per stage, null until they are read (no false zero). A visitor without any profile
+ * yet (nothing kept, no session) has zeros everywhere.
+ */
 export function useStageCounts(): StageCounts | null {
   const { id } = useCurrentProfile();
-  const counts = useContext(ProfilesContext).stageCounts;
-  return id ? (counts[id] ?? null) : null;
+  const { stageCounts, ready, profiles } = useContext(ProfilesContext);
+  if (id) return stageCounts[id] ?? null;
+  return ready && profiles.length === 0 ? NOTHING_YET : null;
 }

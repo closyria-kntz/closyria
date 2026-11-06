@@ -127,10 +127,36 @@ test.describe("1440 px", () => {
     await expect(page.getByLabel("Coller un lien")).toBeVisible();
   });
 
-  test("la page d'accueil donne un champ confortable sur ordinateur", async ({ page }) => {
+  test("l'accueil demande quel article, puis résume le dressing (Passe design §4)", async ({ page }) => {
     await page.goto("/");
-    const field = await page.getByLabel("Coller un lien").boundingBox();
-    expect(field?.width ?? 0).toBeGreaterThan(32 * REM);
+    const content = page.locator("#app-content");
+    const title = content.getByRole("heading", { level: 1, name: "Quel article as-tu repéré ?" });
+    await expect(title).toBeVisible();
+    await expect(content.getByText("Closyria", { exact: true })).toHaveCount(0);
+    await expect(content.getByText(/arrive bientôt/)).toHaveCount(0);
+    // A comfortable but compact field, aligned with the title (no more centred text).
+    const field = page.getByLabel("Coller un lien");
+    const fieldBox = await field.boundingBox();
+    const titleBox = await title.boundingBox();
+    expect(fieldBox?.width ?? 0).toBeGreaterThan(30 * REM);
+    expect(fieldBox?.width ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(35 * REM);
+    expect(Math.abs((fieldBox?.x ?? 0) - (titleBox?.x ?? -100))).toBeLessThanOrEqual(1);
+
+    // A new account: the four places, at zero.
+    const summary = page.getByRole("navigation", { name: "Mon dressing en bref" });
+    for (const name of ["0 commandé en route", "0 envie", "0 dans ton dressing", "0 à vendre"]) {
+      await expect(summary.getByRole("link", { name, exact: true })).toBeVisible();
+    }
+
+    await field.fill(autoProductUrl());
+    await page.getByRole("button", { name: "Ajouter" }).click();
+    await page.getByRole("button", { name: "Favori" }).click();
+    await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+    await page.getByRole("navigation", { name: "Menu principal" }).getByRole("link", { name: "Accueil" }).click();
+    const wishes = summary.getByRole("link", { name: "1 envie", exact: true });
+    await expect(wishes).toBeVisible();
+    await wishes.click();
+    await expect(page).toHaveURL(/\/envies$/);
   });
 });
 
