@@ -89,6 +89,13 @@ if [ ! -d "$REL" ]; then
   as_user mv -T "$REL.tmp" "$REL"
 fi
 
+# Prod: a fresh encrypted copy of the database before any migration; no copy, no deploy.
+if [ "$ENV_" = prod ]; then
+  echo "backing up prod"
+  systemctl start closyria-backup@prod.service ||
+    die "backup failed: nothing deployed (journalctl -u closyria-backup@prod)"
+fi
+
 echo "migrating $ENV_ database"
 systemd-run --quiet --wait --pipe --collect --uid="$USER_" --gid="$USER_" \
   -p EnvironmentFile="$ENV_FILE" -E MIGRATIONS_DIR="$REL/migrations" \

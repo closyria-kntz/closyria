@@ -1,0 +1,28 @@
+# Nightly encrypted copy of the %i database to OVH (docs/plans/2026-11-06-sauvegardes-prod.md).
+# The account comes from closyria-backup@<env>.service.d/user.conf (the app account, owner of the database).
+[Unit]
+Description=Closyria backup (%i)
+After=network-online.target postgresql.service
+Wants=network-online.target
+OnFailure=closyria-backup-alert@%n.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/closyria/%i.env
+EnvironmentFile=/etc/closyria/backup.env
+Environment=TZ=UTC
+Environment=HOME=/tmp
+ExecStart=/usr/local/bin/closyria-backup %i
+TimeoutStartSec=1h
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+UMask=0077

@@ -134,7 +134,7 @@ Mêmes étapes, avec les noms de prod :
 
 ### Prod
 
-- [ ] **Prérequis : « Sauvegardes automatiques de la prod »** livrées et la restauration essayée (copie chiffrée de la
+- [ ] **Prérequis : « Sauvegardes automatiques de la prod »** (`docs/plans/2026-11-06-sauvegardes-prod.md`, installation : `deploy/README.md` § Sauvegardes ; `closyria-deploy prod` refuse de déployer sans sauvegarde réussie) livrées et la restauration essayée (copie chiffrée de la
   base chaque nuit sur OVH, gardée 30 jours ; spec 2a §9). Sans elles, pas de prod : les articles des utilisatrices
   seront des données à ne pas perdre.
 - [ ] Premier déploiement de 0007 à 0013 ensemble : `select count(*) from captures;` en prod → 0, sinon 0008 échoue (`url` NOT NULL sans défaut)

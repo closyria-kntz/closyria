@@ -1,0 +1,15 @@
+# Sent by OnFailure= of the backup units: e-mails the founder that unit %i failed.
+[Unit]
+Description=Closyria backup alert (%i)
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+SupplementaryGroups=systemd-journal
+EnvironmentFile=/etc/closyria/backup.env
+Environment=HOME=/tmp
+ExecStart=/usr/local/bin/closyria-backup-alert %i
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes

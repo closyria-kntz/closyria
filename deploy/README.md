@@ -251,3 +251,77 @@ tant qu'il en reste une enregistrée. Pour repartir :
 2. **Aussitôt**, refaire les étapes 1, 3, 4 et 5 ci-dessus (connexion par code sur `/connexion`, puis
    `/admin/passkey-required`) : tant que le compte n'en a aucune, l'accès à la boîte e-mail suffit pour en enregistrer
    une.
+
+## Sauvegardes de la base
+
+Plan et décisions : `docs/plans/2026-11-06-sauvegardes-prod.md`.
+
+| Quand | Quoi |
+|---|---|
+| Chaque nuit, 03:30 UTC | `closyria-backup@<env>` : `pg_dump`, chiffré avec `age`, envoyé dans le bucket `closyria-backups` (OVH Strasbourg) sous `<env>/closyria-<env>-<AAAAMMJJTHHMMSSZ>.dump.age`. |
+| Chaque matin, 05:00 UTC | `closyria-backup-check@<env>` : la dernière copie est téléchargée, déchiffrée, restaurée dans la base jetable `closyria_restore_check`, comparée à la vraie base (mêmes tables, mêmes migrations, au moins 90 % des lignes de `user`, `items`, `products`), puis effacée. Échoue aussi si la dernière copie a plus de 26 h. |
+| Avant chaque `closyria-deploy prod` | Une sauvegarde ; si elle échoue, rien n'est déployé. |
+| En cas d'échec | `closyria-backup-alert@…` envoie un e-mail (Brevo) à `BACKUP_ALERT_TO`. |
+
+Les copies sont verrouillées 30 jours (Object Lock, mode « compliance ») : personne ne peut les effacer ni les
+remplacer avant, même avec les clés du serveur. Elles expirent seules après 31 jours.
+
+### `/etc/closyria/backup.env` (root:root 600)
+
+| Variable | Valeur |
+|---|---|
+| `BACKUP_STORE` | `s3://closyria-backups` |
+| `S3_ENDPOINT` | `https://s3.sbg.io.cloud.ovh.net` (remplace celui du fichier de l'environnement, lu avant) |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Utilisateur S3 `closyria-backups` (écrire, lire, lister ; pas effacer) |
+| `AWS_DEFAULT_REGION` | `sbg` |
+| `BACKUP_AGE_RECIPIENT` | Clé publique `age1…` (affichée par `age-keygen`) |
+| `BREVO_API_KEY` | La même clé Brevo que l'appli |
+| `MAIL_FROM` | `Closyria <bonjour@closyria.com>` |
+| `BACKUP_ALERT_TO` | L'adresse qui reçoit les alertes |
+
+La clé privée est dans `/etc/closyria/backup.key` (root:root 600) ; seul le service de vérification la reçoit
+(`LoadCredential=`). **Une copie de son contenu est gardée dans le gestionnaire de mots de passe** : sans elle, si le
+serveur est perdu, les sauvegardes sont illisibles.
+
+### Installer
+
+```bash
+sudo apt install age
+sudo install -m 755 -o root -g root deploy/backup/closyria-backup deploy/backup/closyria-backup-check \
+  deploy/backup/closyria-backup-alert /usr/local/bin/
+sudo install -m 644 -o root -g root deploy/backup/lib.sh /usr/local/bin/
+sudo cp -r deploy/systemd/closyria-backup* /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start closyria-backup@dev.service closyria-backup-check@dev.service
+sudo journalctl -u closyria-backup-check@dev -n 5 --no-pager   # « ok: dev/closyria-dev-… restored, N tables »
+sudo systemctl enable --now closyria-backup@dev.timer closyria-backup-check@dev.timer
+```
+
+Même chose avec `prod` une fois la dev validée. `systemctl list-timers 'closyria-backup*'` montre les prochains
+passages.
+
+### Restaurer une base (sinistre ou erreur grave)
+
+Exemple pour la prod ; pour la dev, remplacer `prod` par `dev`, la base `closyria` par `closyria_dev`, le compte
+`closyria` par `closyria-dev` (entre guillemets dans le SQL : `owner "closyria-dev"`) et le port 3001 par 3101. L'ancienne base est **renommée**, jamais effacée tout de suite.
+
+```bash
+# 1. Choisir la copie (la plus récente, ou celle d'avant l'erreur)
+sudo bash -c 'set -a; . /etc/closyria/backup.env; aws --endpoint-url "$S3_ENDPOINT" s3 ls s3://closyria-backups/prod/'
+# 2. La télécharger et la déchiffrer
+sudo bash -c 'set -a; . /etc/closyria/backup.env; aws --endpoint-url "$S3_ENDPOINT" s3 cp \
+  s3://closyria-backups/prod/closyria-prod-AAAAMMJJTHHMMSSZ.dump.age /root/restore.dump.age'
+sudo age --decrypt --identity /etc/closyria/backup.key --output /root/restore.dump /root/restore.dump.age
+# 3. Arrêter l'appli, mettre l'ancienne base de côté, recréer la base
+sudo systemctl stop closyria-prod.target
+sudo -u postgres psql -c 'alter database closyria rename to closyria_old'
+sudo -u postgres psql -c 'create database closyria owner closyria'
+# 4. Restaurer avec le compte de l'appli (les tables lui appartiennent), puis redémarrer
+sudo install -m 600 -o closyria /root/restore.dump /tmp/restore.dump
+sudo -u closyria pg_restore --exit-on-error --no-owner --dbname=closyria /tmp/restore.dump
+sudo systemctl start closyria-prod.target
+curl -s http://127.0.0.1:3001/api/health
+# 5. Vérifier l'appli ; le lendemain seulement, effacer l'ancienne base et les fichiers
+sudo -u postgres psql -c 'drop database closyria_old'
+sudo rm -f /root/restore.dump /root/restore.dump.age /tmp/restore.dump
+```
