@@ -6,6 +6,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { internalApiFor } from "@/lib/admin-api";
 import { formatOptionalPrice } from "@/lib/price";
 import { fetchSharedList } from "@/lib/shared-list";
+import { CoverPhoto } from "./cover-photo";
 
 // A shared list: public, no account, no cookies. Product data only (G4); never indexed.
 export async function generateMetadata(): Promise<Metadata> {
@@ -42,14 +43,10 @@ export default async function SharedListPage({ params }: { params: Promise<{ tok
             return (
               <li key={`${item.url}:${item.name}`} className="card flex flex-col gap-space-2">
                 <div className="relative aspect-3/4 overflow-hidden rounded-card bg-media-backdrop">
-                  {item.imageUrl ? (
-                    // biome-ignore lint/performance/noImgElement: photos come from our own API, already resized.
-                    <img
-                      src={item.imageUrl}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      className="card-photo size-full object-contain"
+                  {item.imageUrl && item.imageWidth && item.imageHeight ? (
+                    <CoverPhoto
+                      photos={[{ url: item.imageUrl, width: item.imageWidth, height: item.imageHeight }]}
+                      name={name}
                     />
                   ) : (
                     <span

@@ -69,6 +69,15 @@
     }
   },
   "Media": {
+    "viewer": {
+      "open": "Agrandir la photo {n}",
+      "close": "Fermer",
+      "previous": "Photo précédente",
+      "next": "Photo suivante",
+      "counter": "{current} / {total}",
+      "actualSize": "Voir en taille réelle",
+      "fit": "Ajuster à l'écran"
+    },
     "errors": {
       "unsupported_image": "Format non pris en charge",
       "image_too_large": "Photo trop lourde, 20 Mo maximum",

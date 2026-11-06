@@ -256,6 +256,9 @@ export const sharedWishlistViewSchema = z.object({
       priceCents: centsSchema.nullable(),
       currency: currencySchema.nullable(),
       imageUrl: z.string().nullable(),
+      /** Natural size of `imageUrl` (for the viewer's « actual size »); null with it. */
+      imageWidth: z.number().int().positive().nullable(),
+      imageHeight: z.number().int().positive().nullable(),
       shopName: z.string(),
       url: z.string(),
     }),

@@ -3,6 +3,7 @@
 import type { CaptureView, ItemView, ProductView as Product } from "@closyria/shared";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PhotoViewer } from "@/components/photo-viewer";
 import { buttonClass, primaryButtonClass } from "@/components/ui";
 import { pollCapture, pollUntil } from "@/lib/capture-poll";
 import { fetchCaptureView, fetchProduct } from "@/lib/catalog-client";
@@ -43,6 +44,8 @@ function Skeleton({ className }: { className: string }) {
 export function ProductView({ productId, captureId }: { productId: string; captureId: string | null }) {
   const t = useTranslations("Capture");
   const tItem = useTranslations("Item");
+  const tMedia = useTranslations("Media");
+  const [viewing, setViewing] = useState<number | null>(null);
   const locale = useLocale();
   const format = useFormatter();
   const [product, setProduct] = useState<Product | null>(null);
@@ -181,9 +184,12 @@ export function ProductView({ productId, captureId }: { productId: string; captu
           <div className="grid grid-cols-2 gap-space-2">
             {product.images.map((image, index) => (
               // The whole photo in a 3:4 frame on the media backdrop, never cropped (visual direction §6).
-              <div
+              <button
+                type="button"
                 key={image.id}
-                className={`aspect-3/4 overflow-hidden rounded-card bg-media-backdrop ${index === 0 && product.images.length === 1 ? "col-span-2" : index === 0 ? "col-span-2 md:landscape:col-span-1 lg:col-span-1" : ""}`}
+                aria-label={tMedia("viewer.open", { n: index + 1 })}
+                onClick={() => setViewing(index)}
+                className={`aspect-3/4 overflow-hidden rounded-card bg-media-backdrop focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring focus-visible:outline-solid ${index === 0 && product.images.length === 1 ? "col-span-2" : index === 0 ? "col-span-2 md:landscape:col-span-1 lg:col-span-1" : ""}`}
               >
                 {/* biome-ignore lint/performance/noImgElement: photos come from our own /api/catalog-images, sized by the API. */}
                 <img
@@ -194,8 +200,14 @@ export function ProductView({ productId, captureId }: { productId: string; captu
                   loading={index === 0 ? "eager" : "lazy"}
                   className="size-full object-contain"
                 />
-              </div>
+              </button>
             ))}
+            <PhotoViewer
+              photos={product.images}
+              index={viewing}
+              alt={product.name ?? ""}
+              onClose={() => setViewing(null)}
+            />
           </div>
         ) : noPhotoYet ? (
           <Skeleton className="aspect-3/4 w-full" />

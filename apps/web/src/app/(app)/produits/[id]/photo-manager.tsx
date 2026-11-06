@@ -4,6 +4,7 @@ import { type ItemPhotoView, type ItemView, MAX_ITEM_PHOTOS } from "@closyria/sh
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 import { Dialog } from "@/components/dialog";
+import { PhotoViewer } from "@/components/photo-viewer";
 import { buttonClass, primaryButtonClass } from "@/components/ui";
 import { requestAccountPrompt } from "@/lib/account-prompt-request";
 import { checkPhoto } from "@/lib/photo-check";
@@ -25,10 +26,25 @@ export function PhotoPlaceholder({ label }: { label: string }) {
 
 const touch = "min-h-touch-target";
 
-function Frame({ photo, alt }: { photo: ItemPhotoView; alt: string }) {
+function Frame({
+  photo,
+  alt,
+  openLabel,
+  onOpen,
+}: {
+  photo: ItemPhotoView;
+  alt: string;
+  openLabel: string;
+  onOpen: () => void;
+}) {
   return (
     // The whole photo in a 3:4 frame on the media backdrop, never cropped (visual direction §6).
-    <div className="aspect-3/4 overflow-hidden rounded-card bg-media-backdrop">
+    <button
+      type="button"
+      aria-label={openLabel}
+      onClick={onOpen}
+      className="aspect-3/4 w-full overflow-hidden rounded-card bg-media-backdrop focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring focus-visible:outline-solid"
+    >
       {/* biome-ignore lint/performance/noImgElement: photos come from our own API, sized by it. */}
       <img
         src={photo.url}
@@ -38,7 +54,7 @@ function Frame({ photo, alt }: { photo: ItemPhotoView; alt: string }) {
         loading="lazy"
         className="size-full object-contain"
       />
-    </div>
+    </button>
   );
 }
 
@@ -53,6 +69,8 @@ export function PhotoManager({
   reload: () => Promise<void>;
 }) {
   const t = useTranslations("Item");
+  const tMedia = useTranslations("Media");
+  const [viewing, setViewing] = useState<{ group: "private" | "shop"; index: number } | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +128,12 @@ export function PhotoManager({
         <ul aria-label={t("photos.private")} className="grid grid-cols-2 gap-space-2">
           {mine.map((photo, index) => (
             <li key={photo.id} className="flex flex-col gap-space-2">
-              <Frame photo={photo} alt={t("photos.alt", { n: index + 1, name })} />
+              <Frame
+                photo={photo}
+                alt={t("photos.alt", { n: index + 1, name })}
+                openLabel={tMedia("viewer.open", { n: index + 1 })}
+                onOpen={() => setViewing({ group: "private", index })}
+              />
               <div className="flex flex-wrap gap-space-1">
                 <button
                   type="button"
@@ -192,11 +215,23 @@ export function PhotoManager({
         <ul aria-label={t("photos.shop")} className="grid grid-cols-2 gap-space-2">
           {shop.map((photo, index) => (
             <li key={photo.id}>
-              <Frame photo={photo} alt={t("photos.alt", { n: index + 1, name })} />
+              <Frame
+                photo={photo}
+                alt={t("photos.alt", { n: index + 1, name })}
+                openLabel={tMedia("viewer.open", { n: index + 1 })}
+                onOpen={() => setViewing({ group: "shop", index })}
+              />
             </li>
           ))}
         </ul>
       )}
+
+      <PhotoViewer
+        photos={viewing?.group === "shop" ? shop : mine}
+        index={viewing?.index ?? null}
+        alt={name}
+        onClose={() => setViewing(null)}
+      />
     </section>
   );
 }
