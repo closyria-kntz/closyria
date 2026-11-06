@@ -13,6 +13,7 @@ import { ItemPanel } from "./item-panel";
 import { KeepActions } from "./keep-actions";
 import { ManualForm } from "./manual-form";
 import { PhotoManager, PhotoPlaceholder } from "./photo-manager";
+import { ProductTraits } from "./product-traits";
 
 type Load = "loading" | "ready" | "not_found" | "error";
 type CaptureState = { status: CaptureView["status"]; errorCode: CaptureView["errorCode"] };
@@ -253,6 +254,8 @@ export function ProductView({ productId, captureId }: { productId: string; captu
           </section>
         )}
         {waiting && <Skeleton className="h-space-6 w-1/2" />}
+
+        {hasName && <ProductTraits traits={product.traits} />}
 
         {hasName && item && current.id && item.profileId !== current.id && (
           <p role="status" className="rounded-card border border-line bg-hint px-space-3 py-space-2 text-sm">

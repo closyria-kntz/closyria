@@ -40,7 +40,8 @@ export async function createCatalogHarness(overrides: Partial<Omit<CatalogDeps, 
     auth,
     media: { db: handle.db, store },
     events: { db: handle.db },
-    admin: { db: handle.db },
+    // The same clock as the catalog routes, so the overview's 24 h / 7 day windows match fixed test dates.
+    admin: { db: handle.db, ...(overrides.now ? { now: overrides.now } : {}) },
     wardrobe: { db: handle.db },
     catalog: { db: handle.db, store, queue: recorder.queue, ...overrides },
   });

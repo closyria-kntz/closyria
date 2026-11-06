@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export const audienceSchema = z.enum(["women", "men", "child", "mixed"]);
+export const childDetailSchema = z.enum(["girl", "boy", "baby"]);
+export const seasonSchema = z.enum(["summer", "winter", "mid", "all"]);
 export const shopStatusSchema = z.enum(["pending", "draft", "published"]);
 export const captureModeSchema = z.enum(["auto", "manual"]);
 export const listingKindSchema = z.enum(["catalog", "secondhand"]);
@@ -80,6 +83,21 @@ export const extractedProductSchema = z.object({
 });
 export type ExtractedProduct = z.infer<typeof extractedProductSchema>;
 
+/**
+ * What the sheet says the product is (filled by the worker's rules or corrected in the admin), with the labels
+ * already resolved. `category` is the path from the root (« Femme », « Hauts », « Chemises »), empty when unknown.
+ */
+export const productTraitsSchema = z.object({
+  category: z.array(z.string()),
+  color: z.object({ name: z.string(), hex: z.string() }).nullable(),
+  material: z.string().nullable(),
+  pattern: z.string().nullable(),
+  season: seasonSchema.nullable(),
+  audience: audienceSchema.nullable(),
+  childDetail: childDetailSchema.nullable(),
+});
+export type ProductTraits = z.infer<typeof productTraitsSchema>;
+
 /** A product as the API shows it. */
 export const productViewSchema = z.object({
   id: z.uuid(),
@@ -102,6 +120,7 @@ export const productViewSchema = z.object({
   source: productSourceSchema,
   captureStatus: productCaptureStatusSchema,
   lastCapturedAt: z.string().nullable(),
+  traits: productTraitsSchema,
 });
 export type ProductView = z.infer<typeof productViewSchema>;
 

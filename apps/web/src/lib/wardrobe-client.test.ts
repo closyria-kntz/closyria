@@ -32,6 +32,7 @@ const product = {
   source: "captured",
   captureStatus: "ok",
   lastCapturedAt: null,
+  traits: { category: [], color: null, material: null, pattern: null, season: null, audience: null, childDetail: null },
 };
 const item = {
   id,

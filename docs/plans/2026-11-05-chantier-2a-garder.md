@@ -521,6 +521,10 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
 Le plan a été exécuté en entier (tâches 1 à 18) sur la branche `chantier-2a`. Statut : fusionné dans `dev` (`19443a1`) et déployé en dev le 2026-11-06 (version `20261106-011252-19443a1ab679`), tests de la fondatrice au vert ; la prod suit avec le chantier 1, après les sauvegardes automatiques ; 2b reste à faire. Écarts
 et décisions prises en route :
 
+- **Bloc « Caractéristiques »** (ajouté le 2026-11-06, après les tests en dev) : la fiche montre en lecture seule le
+  type (chemin depuis « Femme », « Homme » ou « Enfant »), la couleur, la matière, le motif et la saison ; le public
+  seulement s'il n'y a pas de type. L'API les renvoie avec leurs libellés (`traits` dans la vue produit). Avant, ces
+  champs ne servaient qu'aux filtres et à l'admin.
 - **Annuler** : chaque action renvoie une « annulation » exacte (les opérations inverses, regroupées par valeur
   précédente, et les événements créés à supprimer), rejouée d'un bloc par `POST /api/me/items/undo`. Une opération
   `setFields` (montants, taille, notes, couverture, favori…) permet d'annuler un changement d'étape ou une modification de

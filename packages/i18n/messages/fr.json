@@ -503,7 +503,33 @@
       "unavailable": "indisponible",
       "comparePrice": "Prix avant réduction",
       "priceMissing": "Prix non renseigné",
-      "noPhoto": "Pas de photo"
+      "noPhoto": "Pas de photo",
+      "traits": {
+        "title": "Caractéristiques",
+        "type": "Type",
+        "color": "Couleur",
+        "material": "Matière",
+        "pattern": "Motif",
+        "season": "Saison",
+        "audience": "Public",
+        "audiences": {
+          "women": "Femme",
+          "men": "Homme",
+          "child": "Enfant",
+          "mixed": "Mixte"
+        },
+        "childDetails": {
+          "girl": "Fille",
+          "boy": "Garçon",
+          "baby": "Bébé"
+        },
+        "seasons": {
+          "summer": "Été",
+          "winter": "Hiver",
+          "mid": "Mi-saison",
+          "all": "Toutes saisons"
+        }
+      }
     },
     "manual": {
       "nameLabel": "Nom de l’article",

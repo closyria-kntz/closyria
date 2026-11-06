@@ -25,7 +25,8 @@ trier avec des étiquettes et partager une liste d'envies.
 
 **Hors périmètre (et où ça va)**
 - Détourage, couleur calculée sur la photo, classement par IA, article sans lien (né d'une photo), « déjà quelque
-  chose de proche », mes tailles par profil, recherche, consultation sans réseau, séance de tri : **2b**.
+  chose de proche », mes tailles par profil, recherche, consultation sans réseau, séance de tri, correction des
+  caractéristiques (type, couleur, matière, motif, saison) par l'utilisatrice pour elle seule : **2b**.
 - Lecture des e-mails de commande, budget et vue « historique par année » : **chantier 3**.
 - Alertes de prix et de stock : **chantier 4**.
 - Limites de la formule gratuite (nombre d'articles, de profils) : **chantier 6**.

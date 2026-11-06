@@ -61,6 +61,68 @@ describe("GET /api/products/:id", () => {
     });
   });
 
+  it("shows what the sheet says the product is, with the labels resolved", async () => {
+    const n = ++counter;
+    const [women] = await t.db
+      .insert(schema.categories)
+      .values({ slug: `t-women-${n}`, name: "Femme" })
+      .returning();
+    const [tops] = await t.db
+      .insert(schema.categories)
+      .values({ slug: `t-tops-${n}`, name: "Hauts", parentId: women?.id })
+      .returning();
+    const [shirts] = await t.db
+      .insert(schema.categories)
+      .values({ slug: `t-shirts-${n}`, name: "Chemises", parentId: tops?.id })
+      .returning();
+    const [color] = await t.db
+      .insert(schema.colors)
+      .values({ slug: `t-black-${n}`, name: "Noir", hex: "#111111" })
+      .returning();
+    const [material] = await t.db
+      .insert(schema.materials)
+      .values({ slug: `t-linen-${n}`, name: "Lin" })
+      .returning();
+    const [pattern] = await t.db
+      .insert(schema.patterns)
+      .values({ slug: `t-stripes-${n}`, name: "Rayé" })
+      .returning();
+    const product = await newProduct({
+      name: "Chemise",
+      categoryId: shirts?.id,
+      colorId: color?.id,
+      materialId: material?.id,
+      patternId: pattern?.id,
+      season: "summer",
+      audience: "women",
+    });
+    const res = await t.app.request(`/api/products/${product.id}`);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { traits: unknown }).traits).toEqual({
+      category: ["Femme", "Hauts", "Chemises"],
+      color: { name: "Noir", hex: "#111111" },
+      material: "Lin",
+      pattern: "Rayé",
+      season: "summer",
+      audience: "women",
+      childDetail: null,
+    });
+  });
+
+  it("shows empty traits for a sheet that is not filed", async () => {
+    const product = await newProduct({ name: "Robe" });
+    const res = await t.app.request(`/api/products/${product.id}`);
+    expect(((await res.json()) as { traits: unknown }).traits).toEqual({
+      category: [],
+      color: null,
+      material: null,
+      pattern: null,
+      season: null,
+      audience: null,
+      childDetail: null,
+    });
+  });
+
   it("answers 404 for an unknown product and 400 for a malformed id", async () => {
     expect((await t.app.request(`/api/products/${UNKNOWN_ID}`)).status).toBe(404);
     expect((await t.app.request("/api/products/nope")).status).toBe(400);

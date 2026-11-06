@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { currencySchema, productViewSchema } from "./catalog";
+import { audienceSchema, childDetailSchema, currencySchema, productViewSchema, seasonSchema } from "./catalog";
+
+// Defined next to the product view (which shows them); re-exported here, where they began.
+export { audienceSchema, childDetailSchema, seasonSchema };
 
 export const itemStageSchema = z.enum(["spotted", "ordered", "owned", "for_sale", "sold", "returned"]);
-export const audienceSchema = z.enum(["women", "men", "child", "mixed"]);
-export const childDetailSchema = z.enum(["girl", "boy", "baby"]);
-export const seasonSchema = z.enum(["summer", "winter", "mid", "all"]);
 export const itemEventTypeSchema = z.enum(["stage", "profile"]);
 export const classifiedBySchema = z.enum(["rule", "admin"]);
 /** Names of palette tokens, never raw colours. */
