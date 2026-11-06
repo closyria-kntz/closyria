@@ -112,3 +112,32 @@ test("la 1re photo ajoutée propose un compte, la proposition se ferme sans bloq
   await expect(page.getByRole("list", { name: "Mes photos" }).getByRole("img").first()).toBeVisible();
   await expect(banner).toHaveCount(0);
 });
+
+test("retirer le ♡ d'une simple envie la retire, « Annuler » la remet", async ({ page, context }) => {
+  await keepFavorite(page);
+  await page.getByRole("button", { name: "Favori", exact: true }).click();
+  await expect(toast(page)).toContainText("Retiré de tes envies");
+  await expect(page.getByRole("heading", { name: "Garder cet article" })).toBeVisible();
+
+  // A second tab, so that the first one keeps its « Annuler » toast (8 s).
+  const other = await context.newPage();
+  await other.goto("/envies");
+  await expect(other.getByRole("heading", { level: 1, name: "Envies" })).toBeVisible();
+  await expect(other.getByTestId("item-card")).toHaveCount(0);
+
+  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await expect(toast(page)).toContainText("C’est annulé.");
+  await other.reload();
+  await expect(other.getByTestId("item-card")).toHaveCount(1);
+});
+
+test("retirer le ♡ d'une envie rangée dans une liste ne retire que le favori", async ({ page }) => {
+  await keepFavorite(page);
+  await page.getByLabel("Nouvelle liste").fill("Été");
+  await page.getByRole("button", { name: "Créer et ajouter" }).and(page.locator(":enabled")).click();
+  await expect(toast(page)).toContainText("Ajouté à Été");
+  await page.getByRole("button", { name: "Favori", exact: true }).click();
+  await expect(toast(page)).toContainText("Retiré des favoris");
+  await expect(toast(page)).not.toContainText("Retiré de tes envies");
+  await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+});

@@ -14,6 +14,7 @@ import {
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { buttonClass, inputClass, primaryButtonClass } from "@/components/ui";
+import { isBareWish } from "@/lib/bare-wish";
 import { formatPrice } from "@/lib/price";
 import { useProfiles } from "@/lib/profile-context";
 import { pushUndo } from "@/lib/undo";
@@ -102,6 +103,13 @@ export function ItemPanel({ item, onChange, onGone, reload }: Props) {
 
   const toggleFavorite = () =>
     run(async () => {
+      if (item.favorite && isBareWish(item)) {
+        const trashed = await trashItem(item.id);
+        if (!trashed.ok) return fail(trashed.error);
+        onGone();
+        pushUndo(t("toast.wishRemoved"), undoWith(trashed.undo, reload));
+        return;
+      }
       const result = await patchItem(item.id, { favorite: !item.favorite });
       if (!result.ok) return fail(result.error);
       onChange(result.item);
