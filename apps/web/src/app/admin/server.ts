@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import type { z } from "zod";
 import { loadAdminAccess } from "@/lib/admin-access";
-import { fetchAdminJson, fetchAdminSession, type InternalApi, internalApiFor } from "@/lib/admin-api";
+import { type AdminResult, fetchAdminJson, fetchAdminSession, type InternalApi, internalApiFor } from "@/lib/admin-api";
 
 // Server only: imported by the admin layouts and pages, never by a client component.
 
@@ -30,12 +30,28 @@ export async function requireAdminPage(options: { allowPasskeyRequired?: boolean
 }
 
 /**
- * Reads an admin API route with the visitor's cookies. A 401 or 403 means the session changed since the
- * layout checked it: answer 404 like the layout does. Any other refusal (e.g. a bad cursor) gives null.
+ * An admin API read through one of the `fetchAdmin*` helpers, with the visitor's cookies. A 401 or 403 means
+ * the session changed since the layout checked it: answer 404 like the layout does. Any other refusal is a
+ * result for the page to interpret; a server error throws.
  */
+export async function adminCall<T>(call: (api: InternalApi) => Promise<AdminResult<T>>): Promise<AdminResult<T>> {
+  const result = await call(await internalApi());
+  if (!result.ok && (result.status === 401 || result.status === 403)) notFound();
+  return result;
+}
+
+/** Like `adminCall`, for a read that must succeed: any refusal throws, so the admin error page shows (never empty data). */
+export async function adminCallOrThrow<T>(
+  what: string,
+  call: (api: InternalApi) => Promise<AdminResult<T>>,
+): Promise<T> {
+  const result = await adminCall(call);
+  if (!result.ok) throw new Error(`${what} answered ${result.status}`);
+  return result.data;
+}
+
+/** Reads an admin API route by path; null for a refusal other than 401/403. */
 export async function adminRead<T>(path: string, schema: z.ZodType<T>): Promise<T | null> {
-  const result = await fetchAdminJson(await internalApi(), path, schema);
-  if (result.ok) return result.data;
-  if (result.status === 401 || result.status === 403) notFound();
-  return null;
+  const result = await adminCall((api) => fetchAdminJson(api, path, schema));
+  return result.ok ? result.data : null;
 }

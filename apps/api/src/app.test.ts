@@ -23,6 +23,7 @@ const make = (dbOk: boolean) =>
     catalog,
     events,
     admin: events,
+    wardrobe: events,
   });
 
 describe("GET /api/health", () => {
@@ -113,6 +114,7 @@ describe("GET /api/test/emails", () => {
       catalog,
       events,
       admin: events,
+      wardrobe: events,
       testMail: { messages },
     });
 

@@ -254,7 +254,7 @@ Chaque chantier est livré en dev, testé par la fondatrice, puis mis en prod. C
 |---|---|---|
 | 0 | Socle V1 ✅ (en prod le 2026-11-05) | Direction visuelle (spec dédiée, maquettes), comptes, droits, traductions, photos OVH, mesure d'audience, coque de l'admin, HSTS |
 | 1 | Capture et boutiques (conception : `2026-11-05-chantier-1-capture-boutiques.md`) | `extract`, worker sécurisé, fiche produit, admin boutiques et santé |
-| 2 | Mon dressing | Favoris, wishlists, dressing, photo et détourage, « déjà quelque chose de proche », mes tailles, recherche, hors ligne, PWA et partage |
+| 2 | Mon dressing (2a « Garder » terminé sur la branche `chantier-2a`, pas encore fusionné dans `dev` ni déployé ; 2b reste à faire) | Favoris, wishlists, dressing, photo et détourage, « déjà quelque chose de proche », mes tailles, recherche, hors ligne, PWA et partage |
 | 3 | Commandes et argent | Transfert d'e-mail, colis, retours, remboursements, avoirs, budget, admin IA et coûts |
 | 4 | Alertes | Stock et prix, notifications, résumé du jour, calendrier des soldes |
 | 5 | Annuaire | Annuaire public, filtres, affiliation, sponsorisé |

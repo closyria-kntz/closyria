@@ -29,7 +29,23 @@ export async function pingDb(db: Database): Promise<boolean> {
 }
 
 /** Query operators, re-exported so consumers need no direct drizzle-orm dependency. */
-export { and, asc, count, desc, eq, gte, inArray, isNull, lt, ne, sql } from "drizzle-orm";
+export {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 export type { AuditDetails } from "./schema/audit";
 export { type TrackedEvent, trackServer } from "./track";
 export { schema };

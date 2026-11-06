@@ -8,12 +8,24 @@ import { catalogLimiter } from "./catalog/limiter";
 import { auditRoutes } from "./routes/admin/audit";
 import { adminCapturesRoutes } from "./routes/admin/captures";
 import { type AdminDeps, overviewRoutes } from "./routes/admin/overview";
+import { adminProductsRoutes } from "./routes/admin/products";
+import { adminReferenceRoutes } from "./routes/admin/reference";
 import { adminShopsRoutes } from "./routes/admin/shops";
 import { capturesRoutes } from "./routes/captures";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
-import { type MediaDeps, mediaRoutes } from "./routes/media";
+import { bulkRoutes } from "./routes/me/bulk";
+import { facetsRoutes } from "./routes/me/facets";
+import { itemMediaRoutes } from "./routes/me/item-media";
+import { itemsRoutes } from "./routes/me/items";
+import { profilesRoutes } from "./routes/me/profiles";
+import { tagsRoutes } from "./routes/me/tags";
+import { wishlistsRoutes } from "./routes/me/wishlists";
+import { createMediaPipeline, type MediaDeps, mediaRoutes } from "./routes/media";
 import { productsRoutes } from "./routes/products";
+import { referenceRoutes } from "./routes/reference";
+import { sharedRoutes } from "./routes/shared";
 import { type TestMailDeps, testMailRoutes } from "./routes/test-mail";
+import type { WardrobeDeps } from "./wardrobe/deps";
 
 export type AppDeps = {
   env: string;
@@ -31,6 +43,8 @@ export type AppDeps = {
   events: EventsDeps;
   /** Admin area: dashboard figures and the audit log. */
   admin: AdminDeps;
+  /** Her profiles and items (`/api/me/…`). */
+  wardrobe: WardrobeDeps;
   /** The memory mailer, exposed to the browser tests. Only ever given with APP_ENV=test (R18). */
   testMail?: TestMailDeps;
 };
@@ -77,6 +91,8 @@ export function createApp(deps: AppDeps) {
   app.on(["GET", "POST"], "/auth/*", (c) => deps.auth.handler(c.req.raw));
 
   // One limiter for the captures and the manual entry: they count in the same hour.
+  // One pipeline: `POST /api/media` and the item photos share the upload limits and the re-encoding semaphore.
+  const mediaPipeline = createMediaPipeline(deps.media);
   const captureLimiter = catalogLimiter(deps.catalog.limits);
   const routes = app
     .openapi(healthRoute, async (c) => {
@@ -89,14 +105,25 @@ export function createApp(deps: AppDeps) {
       } as const;
       return dbOk ? c.json(body, 200) : c.json(body, 503);
     })
-    .route("/", mediaRoutes(deps.media))
+    .route("/", mediaRoutes(deps.media, mediaPipeline))
     .route("/", capturesRoutes(deps.catalog, captureLimiter))
     .route("/", productsRoutes(deps.catalog, captureLimiter))
     .route("/", eventsRoutes(deps.events))
+    .route("/", profilesRoutes(deps.wardrobe))
+    .route("/", bulkRoutes(deps.wardrobe))
+    .route("/", itemsRoutes(deps.wardrobe))
+    .route("/", itemMediaRoutes({ ...deps.wardrobe, store: deps.media.store }, mediaPipeline))
+    .route("/", tagsRoutes(deps.wardrobe))
+    .route("/", facetsRoutes(deps.wardrobe))
+    .route("/", referenceRoutes(deps.wardrobe))
+    .route("/", wishlistsRoutes(deps.wardrobe))
+    .route("/", sharedRoutes(deps.wardrobe))
     .route("/", overviewRoutes(deps.admin))
     .route("/", auditRoutes(deps.admin))
     .route("/", adminShopsRoutes(deps.catalog))
-    .route("/", adminCapturesRoutes(deps.catalog));
+    .route("/", adminCapturesRoutes(deps.catalog))
+    .route("/", adminProductsRoutes(deps.catalog))
+    .route("/", adminReferenceRoutes(deps.catalog));
 
   // Not part of AppType: no client calls it, and it is absent from every real environment.
   if (deps.testMail) app.route("/", testMailRoutes(deps.testMail));

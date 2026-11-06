@@ -1,7 +1,13 @@
 import type dns from "node:dns";
 import { and, type Database, eq, ne, schema } from "@closyria/db";
 import { extract, isShopifyPage, shopifyJsUrl } from "@closyria/extract";
-import { type CaptureErrorCode, type CaptureMethod, type ExtractedProduct, shopDomain } from "@closyria/shared";
+import {
+  type CaptureErrorCode,
+  type CaptureMethod,
+  classify,
+  type ExtractedProduct,
+  shopDomain,
+} from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import { type AddressPolicy, strictPolicy } from "./address-policy";
 import { CaptureError } from "./capture-error";
@@ -9,6 +15,7 @@ import { copyImages } from "./copy-images";
 import { decodeBody } from "./decode";
 import type { RobotsCache } from "./robots";
 import { type SafeFetchAccept, safeFetch } from "./safe-fetch";
+import { loadReferenceSet } from "./seed-reference";
 import type { Throttle } from "./throttle";
 
 export type CaptureDeps = {
@@ -60,17 +67,58 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
       if (!capture.productId) throw new Error("user capture without a product");
       const productId = capture.productId;
       const at = now();
+      // Small tables, read once per capture and only for a product the rules may still touch.
+      const [before] = await db
+        .select({ classifiedBy: schema.products.classifiedBy })
+        .from(schema.products)
+        .where(eq(schema.products.id, productId));
+      const reference = before?.classifiedBy === "admin" ? undefined : await loadReferenceSet(db);
       await db.transaction(async (tx) => {
+        const [current] = await tx
+          .select({
+            classifiedBy: schema.products.classifiedBy,
+            audience: schema.products.audience,
+            childDetail: schema.products.childDetail,
+            categoryId: schema.products.categoryId,
+            colorId: schema.products.colorId,
+            materialId: schema.products.materialId,
+            patternId: schema.products.patternId,
+            season: schema.products.season,
+          })
+          .from(schema.products)
+          .where(eq(schema.products.id, productId))
+          .for("update");
+        // Rule classification only; an admin-corrected product (also if it became one meanwhile) keeps its own.
+        const found =
+          current && current.classifiedBy !== "admin" && reference
+            ? classify({ name: product.name, url: capture.url, shopData: product.shopData ?? {} }, reference)
+            : undefined;
         await tx
           .update(schema.products)
           .set({
-            name: product.name,
-            brand: product.brand ?? null,
+            // Admin corrections to the name and brand survive a re-capture; prices, sizes and photos always come from the shop.
+            ...(current?.classifiedBy === "admin" ? {} : { name: product.name, brand: product.brand ?? null }),
             description: product.description ?? null,
             currency: product.currency,
             priceCents: product.priceCents,
             compareAtCents: product.compareAtCents ?? null,
             externalId: product.externalId ?? null,
+            publishedAt: product.publishedAt ? new Date(product.publishedAt) : null,
+            gtin: product.gtin ?? null,
+            sku: product.sku ?? null,
+            shopData: product.shopData ?? {},
+            // A field with no new match keeps its previous value; a new match overwrites it.
+            ...(found && current
+              ? {
+                  audience: found.audience ?? current.audience,
+                  childDetail: found.childDetail ?? current.childDetail,
+                  categoryId: found.categoryId ?? current.categoryId,
+                  colorId: found.colorId ?? current.colorId,
+                  materialId: found.materialId ?? current.materialId,
+                  patternId: found.patternId ?? current.patternId,
+                  season: found.season ?? current.season,
+                }
+              : {}),
             source: "captured",
             captureStatus: "ok",
             lastCapturedAt: at,

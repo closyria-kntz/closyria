@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import type { AddressPolicy } from "./address-policy";
 import { createRobotsCache, safeRobotsFetcher } from "./robots";
 import { type CaptureDeps, runCapture } from "./run-capture";
+import { seedReference } from "./seed-reference";
 import { loopbackForTests } from "./testing";
 import { createThrottle } from "./throttle";
 
@@ -227,6 +228,71 @@ describe("runCapture", () => {
       expect(r.history).toEqual([]);
       expect(r.images).toEqual([]);
     }
+  });
+
+  it("files a rule-classified product and stores the raw shop fields", async () => {
+    await seedReference(handle.db);
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
+
+    await runCapture(t.capture.id, deps);
+
+    const r = await load(t.capture.id, t.product.id);
+    const [pantalons] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "pantalons"));
+    expect(r.product?.categoryId).toBe(pantalons?.id);
+    expect(r.product?.classifiedBy).toBe("rule");
+    expect(r.product?.publishedAt).toBeInstanceOf(Date);
+    expect(r.product?.shopData).toBeTypeOf("object");
+    expect(Object.keys(r.product?.shopData ?? {}).length).toBeGreaterThan(0);
+  });
+
+  it("never changes the classification of an admin-corrected product, but refreshes the raw fields", async () => {
+    await seedReference(handle.db);
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const [sacs] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "sacs"));
+    const t = await setup("/products/produit-3679", {
+      shop: { platform: "shopify" },
+      product: {
+        classifiedBy: "admin",
+        name: "Nom corrigé",
+        brand: "Marque corrigée",
+        priceCents: 1,
+        categoryId: sacs?.id ?? null,
+        audience: "men",
+        season: "all",
+      },
+    });
+
+    await runCapture(t.capture.id, deps);
+
+    const r = await load(t.capture.id, t.product.id);
+    expect(r.product?.categoryId).toBe(sacs?.id);
+    expect(r.product?.audience).toBe("men");
+    expect(r.product?.season).toBe("all");
+    expect(r.product?.classifiedBy).toBe("admin");
+    expect(r.product?.name).toBe("Nom corrigé");
+    expect(r.product?.brand).toBe("Marque corrigée");
+    expect(r.product?.priceCents).toBeGreaterThan(1);
+    expect(r.product?.publishedAt).toBeInstanceOf(Date);
+    expect(Object.keys(r.product?.shopData ?? {}).length).toBeGreaterThan(0);
+  });
+
+  it("keeps the previous classification when a re-capture finds less", async () => {
+    await seedReference(handle.db);
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const [robes] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "robes"));
+    const [noir] = await handle.db.select().from(schema.colors).where(eq(schema.colors.slug, "noir"));
+    const t = await setup("/products/produit-3679", {
+      shop: { platform: "shopify" },
+      product: { categoryId: robes?.id ?? null, colorId: noir?.id ?? null, audience: "women" },
+    });
+    // « PANTALON LEONIE » finds Pantalons (new match overwrites), no audience or colour (kept).
+    await runCapture(t.capture.id, deps);
+    const r = await load(t.capture.id, t.product.id);
+    const [pantalons] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "pantalons"));
+    expect(r.product?.categoryId).toBe(pantalons?.id);
+    expect(r.product?.colorId).toBe(noir?.id);
+    expect(r.product?.audience).toBe("women");
   });
 
   it("falls back to the HTML page when the .js fails", async () => {
@@ -490,12 +556,12 @@ describe("runCapture", () => {
     const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
     const select = handle.db.select.bind(handle.db);
     let calls = 0;
-    // The first select after the data transaction is copyImages' read of existing photos.
+    // Selects before the data transaction: shop, product classification, 4 reference lists; then copyImages' read.
     const db = new Proxy(handle.db, {
       get(target, prop) {
         if (prop === "select") {
           return (...args: Parameters<typeof select>) => {
-            if (++calls === 2) throw new Error("db down");
+            if (++calls === 7) throw new Error("db down");
             return select(...args);
           };
         }

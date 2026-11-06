@@ -1,16 +1,20 @@
 import {
+  audienceSchema,
   captureErrorCodeSchema,
   captureMethodSchema,
   captureModeSchema,
   captureStatusSchema,
   captureTriggerSchema,
+  childDetailSchema,
+  classifiedBySchema,
   listingKindSchema,
   platformSchema,
   productCaptureStatusSchema,
   productSourceSchema,
+  seasonSchema,
   shopStatusSchema,
 } from "@closyria/shared";
-import { type SQL, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   boolean,
@@ -25,13 +29,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
-
-/** `column IN ('a', 'b')` built from a closed value set shared with the API, so the lists never drift. */
-const oneOf = (column: AnyPgColumn, values: readonly string[]): SQL =>
-  sql`${column} IN (${sql.join(
-    values.map((v) => sql.raw(`'${v}'`)),
-    sql.raw(", "),
-  )})`;
+import { oneOf } from "./helpers";
+import { categories, colors, materials, patterns } from "./reference";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).defaultNow().notNull();
@@ -89,11 +88,36 @@ export const products = pgTable(
     source: text("source").notNull().default("captured"),
     captureStatus: text("capture_status").notNull().default("pending"),
     lastCapturedAt: timestamp("last_captured_at", { withTimezone: true }),
+    /** When the shop put the product online. */
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    gtin: text("gtin"),
+    sku: text("sku"),
+    /** Shop breadcrumb, keywords, colours, material, care, collection, as read (lengths capped). */
+    shopData: jsonb("shop_data").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    audience: text("audience"),
+    childDetail: text("child_detail"),
+    categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
+    colorId: uuid("color_id").references(() => colors.id, { onDelete: "set null" }),
+    materialId: uuid("material_id").references(() => materials.id, { onDelete: "set null" }),
+    patternId: uuid("pattern_id").references(() => patterns.id, { onDelete: "set null" }),
+    season: text("season"),
+    classifiedBy: text("classified_by").notNull().default("rule"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     index("products_shop_id_idx").on(t.shopId),
+    index("products_category_id_idx").on(t.categoryId),
+    index("products_color_id_idx").on(t.colorId),
+    index("products_material_id_idx").on(t.materialId),
+    index("products_pattern_id_idx").on(t.patternId),
+    check("products_audience_check", sql`${t.audience} IS NULL OR ${oneOf(t.audience, audienceSchema.options)}`),
+    check(
+      "products_child_detail_check",
+      sql`${t.childDetail} IS NULL OR ${oneOf(t.childDetail, childDetailSchema.options)}`,
+    ),
+    check("products_season_check", sql`${t.season} IS NULL OR ${oneOf(t.season, seasonSchema.options)}`),
+    check("products_classified_by_check", oneOf(t.classifiedBy, classifiedBySchema.options)),
     check("products_source_check", oneOf(t.source, productSourceSchema.options)),
     check("products_capture_status_check", oneOf(t.captureStatus, productCaptureStatusSchema.options)),
     check("products_currency_check", sql`char_length(${t.currency}) = 3`),

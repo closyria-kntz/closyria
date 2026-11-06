@@ -7,6 +7,30 @@
     "title": "Closyria",
     "tagline": "Ton dressing en ligne arrive bientôt."
   },
+  "Shell": {
+    "brand": "Closyria",
+    "skipToContent": "Aller au contenu",
+    "nav": {
+      "desktop": "Menu principal",
+      "tabs": "Onglets",
+      "wishes": "Envies",
+      "ordered": "Commandé",
+      "wardrobe": "Dressing",
+      "forSale": "À vendre",
+      "lists": "Listes",
+      "settings": "Réglages",
+      "more": "Plus",
+      "moreMenu": "Autres pages"
+    },
+    "profile": {
+      "label": "Profil",
+      "me": "Moi"
+    },
+    "add": {
+      "open": "+ Ajouter",
+      "close": "Fermer"
+    }
+  },
   "Auth": {
     "email": {
       "subject": "Ton code de connexion Closyria",
@@ -62,7 +86,9 @@
       "dashboard": "Tableau de bord",
       "shops": "Boutiques",
       "captures": "Captures",
-      "audit": "Journal d’audit"
+      "audit": "Journal d’audit",
+      "products": "Fiches",
+      "reference": "Listes de référence"
     },
     "palette": {
       "open": "Commandes",
@@ -165,7 +191,11 @@
         "invalidMerge": "Cette fusion n’est pas possible.",
         "invalidUrl": "Ce lien n’est pas valide.",
         "generic": "L’action a échoué. Réessaie.",
-        "invalidFields": "Vérifie le slug et les domaines."
+        "invalidFields": "Vérifie le slug et les domaines.",
+        "cycle": "Ce déplacement créerait une boucle.",
+        "hasChildren": "Supprime ou déplace d’abord ses sous-catégories.",
+        "invalidEntry": "Vérifie le nom, la teinte et les mots-clés.",
+        "invalidProduct": "Vérifie le nom, la marque, le prix et les choix."
       }
     },
     "shops": {
@@ -286,6 +316,154 @@
       "retried": "Capture relancée.",
       "retryLabel": "Relancer la capture de {shop} du {date}",
       "actions": "Actions"
+    },
+    "products": {
+      "title": "Fiches",
+      "intro": "Les fiches produit capturées, de la plus récente à la plus ancienne. « Gardée par » compte les articles actifs, sans dire par qui.",
+      "search": "Rechercher",
+      "searchHint": "Nom de la fiche",
+      "filterShop": "Boutique",
+      "filterCapture": "Lecture",
+      "filterClassified": "Rangement",
+      "apply": "Filtrer",
+      "reset": "Réinitialiser",
+      "empty": "Aucune fiche ne correspond.",
+      "name": "Fiche",
+      "shop": "Boutique",
+      "price": "Prix",
+      "capture": "Lecture",
+      "category": "Type",
+      "keptBy": "Gardée par",
+      "created": "Ajoutée (UTC)",
+      "unnamed": "Sans nom",
+      "noPrice": "Prix non renseigné",
+      "noPhoto": "Pas de photo",
+      "next": "Page suivante",
+      "first": "Revenir aux plus récentes",
+      "pagination": "Pagination des fiches",
+      "captureStatuses": {
+        "pending": "En cours",
+        "ok": "Réussie",
+        "failed": "Échouée",
+        "manual": "Manuelle"
+      },
+      "classifiedFilter": {
+        "rule": "Rangée par règle",
+        "admin": "Corrigée",
+        "none": "Sans type"
+      },
+      "corrected": "Corrigée",
+      "byRule": "Par règle",
+      "back": "Retour aux fiches",
+      "open": "Ouvrir la fiche {name}",
+      "photos": "Photos de la boutique",
+      "noPhotos": "Aucune photo.",
+      "dates": "Dates",
+      "published": "Mise en ligne (UTC)",
+      "createdAt": "Ajoutée (UTC)",
+      "lastCaptured": "Dernière lecture (UTC)",
+      "updatedAt": "Modifiée (UTC)",
+      "address": "Adresse",
+      "brand": "Marque",
+      "currency": "Devise",
+      "source": "Source",
+      "gtin": "GTIN",
+      "sku": "SKU",
+      "description": "Description",
+      "sizes": "Tailles",
+      "available": "disponible",
+      "unavailable": "épuisée",
+      "noSizes": "Aucune taille.",
+      "filing": "Rangement",
+      "classifiedBy": "Rangée par",
+      "notSet": "Non renseigné",
+      "audience": "Public",
+      "childDetail": "Précision enfant",
+      "categoryField": "Type",
+      "color": "Couleur",
+      "material": "Matière",
+      "pattern": "Motif",
+      "season": "Saison",
+      "rawData": "Données brutes de la boutique",
+      "keptByLine": "Gardée par {count, plural, =0 {personne} one {# compte} other {# comptes}}",
+      "correct": "Corriger la fiche",
+      "correctTitle": "Corriger la fiche",
+      "nameField": "Nom",
+      "brandField": "Marque",
+      "priceField": "Prix (en euros)",
+      "priceHint": "Laisser vide si le prix est inconnu. Le prix est remis à jour à chaque lecture de la boutique.",
+      "noneOption": "Aucun",
+      "save": "Enregistrer la correction",
+      "saved": "Fiche corrigée.",
+      "cancel": "Annuler",
+      "recapture": "Relancer la lecture",
+      "recapturing": "Relance…",
+      "recaptured": "Lecture relancée.",
+      "audiences": {
+        "women": "Femme",
+        "men": "Homme",
+        "child": "Enfant",
+        "mixed": "Mixte"
+      },
+      "childDetails": {
+        "girl": "Fille",
+        "boy": "Garçon",
+        "baby": "Bébé"
+      },
+      "seasons": {
+        "summer": "Été",
+        "winter": "Hiver",
+        "mid": "Mi-saison",
+        "all": "Toutes saisons"
+      },
+      "fieldErrors": {
+        "name": "Le nom doit faire entre 1 et 300 caractères.",
+        "brand": "La marque ne doit pas dépasser 120 caractères.",
+        "price": "Le prix n’est pas valide.",
+        "nothing": "Rien n’a changé."
+      }
+    },
+    "reference": {
+      "title": "Listes de référence",
+      "intro": "Les types, couleurs, matières et motifs utilisés pour ranger les fiches. Les mots-clés servent à reconnaître un type, une couleur, une matière ou un motif dans le nom d’une fiche.",
+      "categoriesTitle": "Types",
+      "colorsTitle": "Couleurs",
+      "materialsTitle": "Matières",
+      "patternsTitle": "Motifs",
+      "name": "Nom",
+      "slug": "Identifiant",
+      "slugHint": "Minuscules, chiffres et tirets.",
+      "keywords": "Mots-clés",
+      "keywordsHint": "Séparés par des virgules.",
+      "hex": "Teinte (#RRGGBB)",
+      "parent": "Sous-type de",
+      "root": "Aucun (type principal)",
+      "add": "Ajouter",
+      "adding": "Ajout…",
+      "added": "Ajouté.",
+      "save": "Enregistrer",
+      "saved": "Enregistré.",
+      "delete": "Supprimer",
+      "deleted": "Supprimé.",
+      "edit": "Modifier",
+      "close": "Fermer",
+      "empty": "Aucune entrée.",
+      "addCategory": "Ajouter un type",
+      "addColor": "Ajouter une couleur",
+      "addMaterial": "Ajouter une matière",
+      "addPattern": "Ajouter un motif",
+      "editLabel": "Modifier {name}",
+      "deleteLabel": "Supprimer {name}",
+      "deleteConfirm": "Supprimer « {name} » ? Les fiches qui l’utilisent la perdent.",
+      "confirmDelete": "Confirmer la suppression",
+      "cancel": "Annuler",
+      "move": "Déplacer vers",
+      "hexText": "Teinte {hex}",
+      "noKeywords": "Aucun mot-clé",
+      "subCategories": "{count, plural, =0 {Aucune sous-catégorie} one {# sous-catégorie} other {# sous-catégories}}",
+      "cycle": "boucle",
+      "cycleHint": "Ce type est pris dans une boucle : déplace-le pour la défaire.",
+      "colorSwatch": "Aperçu de la teinte {hex}"
     }
   },
   "Capture": {
@@ -323,7 +501,9 @@
       "updatedAt": "Mis à jour le {date}",
       "sizes": "Tailles",
       "unavailable": "indisponible",
-      "comparePrice": "Prix avant réduction"
+      "comparePrice": "Prix avant réduction",
+      "priceMissing": "Prix non renseigné",
+      "noPhoto": "Pas de photo"
     },
     "manual": {
       "nameLabel": "Nom de l’article",
@@ -339,5 +519,485 @@
         "failed": "La fiche n’a pas été enregistrée. Réessaie dans un instant."
       }
     }
+  },
+  "Item": {
+    "keep": {
+      "title": "Garder cet article",
+      "favorite": "Favori",
+      "favoriteHint": "♡ pour le retrouver",
+      "addToList": "Ajouter à une liste",
+      "ordered": "Je l’ai commandé",
+      "alreadyIn": "Déjà dans le profil {name}",
+      "alreadyInOther": "Cet article est déjà gardé : voici ta fiche.",
+      "working": "Un instant…"
+    },
+    "toast": {
+      "label": "Notifications",
+      "undo": "Annuler",
+      "undone": "C’est annulé.",
+      "favorite": "Gardé en favori",
+      "list": "Ajouté à la liste {name}",
+      "ordered": "Marqué comme commandé",
+      "saved": "Modifications enregistrées",
+      "stage": "Étape : {stage}",
+      "moved": "Déplacé vers {name}",
+      "deleted": "Article supprimé",
+      "photoAdded": "Photo ajoutée",
+      "photoRemoved": "Photo retirée",
+      "cover": "Vignette choisie",
+      "coverDefault": "Vignette par défaut rétablie",
+      "favoriteOn": "Ajouté aux favoris",
+      "favoriteOff": "Retiré des favoris",
+      "listAdded": "Ajouté à {name}",
+      "listRemoved": "Retiré de {name}",
+      "tagAdded": "Étiquette {name} ajoutée",
+      "tagRemoved": "Étiquette {name} retirée",
+      "failed": "Impossible d’annuler."
+    },
+    "panel": {
+      "title": "Mon article",
+      "favorite": "Favori",
+      "stages": "Étapes",
+      "stagesHint": "Où en est cet article ?",
+      "currentStage": "étape actuelle",
+      "changeStage": "Passer à « {stage} »",
+      "paid": "Payé : {amount}",
+      "salePrice": "Prix demandé : {amount}",
+      "soldFor": "Vendu : {amount}",
+      "channel": "Où : {channel}",
+      "details": "Mes infos",
+      "size": "Taille",
+      "sizeNote": "Note de taille",
+      "notes": "Notes",
+      "save": "Enregistrer",
+      "lists": "Mes listes",
+      "noLists": "Aucune liste pour l’instant.",
+      "newList": "Nouvelle liste",
+      "newListAdd": "Créer et ajouter",
+      "tags": "Étiquettes",
+      "noTags": "Aucune étiquette pour l’instant.",
+      "newTag": "Nouvelle étiquette",
+      "newTagAdd": "Créer et ajouter",
+      "profile": "Profil",
+      "moveTo": "Déplacer vers…",
+      "move": "Déplacer",
+      "delete": "Supprimer",
+      "deleteHint": "L’article va dans la corbeille pendant 30 jours.",
+      "loadingExtras": "Chargement…",
+      "retry": "Réessayer"
+    },
+    "stage": {
+      "spotted": "Repéré",
+      "ordered": "Commandé",
+      "owned": "Reçu",
+      "for_sale": "À vendre",
+      "sold": "Vendu",
+      "returned": "Renvoyé"
+    },
+    "stageDialog": {
+      "title": "Passer à « {stage} »",
+      "date": "Date",
+      "amountPaid": "Montant payé (facultatif)",
+      "amountSale": "Prix demandé (facultatif)",
+      "amountSold": "Prix de vente (facultatif)",
+      "amountReturned": "Montant remboursé (facultatif)",
+      "channel": "Où le vends-tu ? (facultatif)",
+      "channelSold": "Où l’as-tu vendu ? (facultatif)",
+      "confirm": "Valider",
+      "cancel": "Fermer",
+      "invalidAmount": "Le montant n’est pas valide."
+    },
+    "photos": {
+      "title": "Photos",
+      "private": "Mes photos",
+      "shop": "Photos de la boutique",
+      "add": "Ajouter une photo",
+      "cover": "Choisir comme vignette",
+      "isCover": "Vignette actuelle",
+      "defaultCover": "Vignette par défaut",
+      "remove": "Retirer cette photo",
+      "alt": "Photo {n} de {name}",
+      "count": "{count} sur {max}",
+      "uploading": "Envoi de la photo…",
+      "empty": "Pas encore de photo",
+      "confirmTitle": "Supprimer cette photo ?",
+      "confirmBody": "Elle sera effacée définitivement.",
+      "confirm": "Supprimer",
+      "keep": "Garder la photo"
+    },
+    "errors": {
+      "failed": "Ça n’a pas marché. Réessaie dans un instant.",
+      "invalid_request": "Cette demande n’est pas valide.",
+      "invalid_cursor": "Cette demande n’est pas valide.",
+      "not_found": "Cet élément n’existe plus.",
+      "rate_limited": "Trop de demandes. Réessaie dans quelques minutes.",
+      "profile_not_empty": "Ce profil contient encore des articles.",
+      "same_stage": "L’article est déjà à cette étape.",
+      "same_profile": "L’article est déjà dans ce profil.",
+      "invalid_cover": "Cette photo ne peut pas servir de vignette.",
+      "invalid_category": "Cette catégorie n’existe pas.",
+      "invalid_color": "Cette couleur n’existe pas.",
+      "item_deleted": "Cet article est dans la corbeille.",
+      "item_not_deleted": "Cet article n’est pas dans la corbeille.",
+      "tag_exists": "Cette étiquette existe déjà.",
+      "tag_limit": "Tu as atteint le nombre maximum d’étiquettes (200).",
+      "too_many_photos": "Dix photos au maximum par article.",
+      "unsupported_image": "Cette image n’est pas prise en charge (JPEG, PNG, WebP ou AVIF).",
+      "image_too_large": "Cette image est trop lourde.",
+      "invalid_upload": "Aucune photo reçue.",
+      "busy": "Le traitement des photos est occupé. Réessaie dans un instant.",
+      "itemLoad": "Ton article ne s’affiche pas. Réessaie dans un instant.",
+      "extrasLoad": "Tes listes et étiquettes ne s’affichent pas."
+    }
+  },
+  "Account": {
+    "title": "Garde tes articles",
+    "body": "Garde tes articles : crée ton compte avec ton e-mail.",
+    "action": "Créer mon compte",
+    "dismiss": "Plus tard",
+    "label": "Proposition de compte"
+  },
+  "Views": {
+    "title": {
+      "envies": "Envies",
+      "commande": "Commandé",
+      "dressing": "Dressing",
+      "a-vendre": "À vendre"
+    },
+    "metadata": {
+      "envies": "Mes envies",
+      "commande": "Mes commandes",
+      "dressing": "Mon dressing",
+      "a-vendre": "Mes articles à vendre"
+    },
+    "loading": "Chargement de tes articles…",
+    "loadError": "Tes articles ne s’affichent pas. Réessaie dans un instant.",
+    "retry": "Réessayer",
+    "loadingMore": "Chargement de la suite…",
+    "loadMore": "Voir la suite",
+    "end": "C’est tout pour l’instant.",
+    "empty": {
+      "envies": {
+        "title": "Aucune envie pour l’instant",
+        "body": "Colle le lien d’un article pour le retrouver ici."
+      },
+      "commande": {
+        "title": "Aucune commande en cours",
+        "body": "Colle le lien d’un article, puis marque-le comme commandé."
+      },
+      "dressing": {
+        "title": "Ton dressing est vide",
+        "body": "Colle le lien d’un article reçu pour le ranger ici."
+      },
+      "a-vendre": {
+        "title": "Rien à vendre pour l’instant",
+        "body": "Passe un article de ton dressing à « À vendre » pour le retrouver ici."
+      },
+      "filtered": {
+        "title": "Aucun article ne correspond",
+        "body": "Essaie avec moins de filtres.",
+        "reset": "Effacer les filtres"
+      },
+      "action": "Coller un lien"
+    },
+    "card": {
+      "noPrice": "Prix non renseigné",
+      "noName": "Article sans nom",
+      "noPhoto": "Pas de photo",
+      "favorite": "Favori",
+      "select": "Sélectionner {name}",
+      "open": "Ouvrir {name}"
+    },
+    "filters": {
+      "title": "Filtres",
+      "show": "Filtrer et trier",
+      "hide": "Masquer les filtres",
+      "active": "{count, plural, =0 {Filtres} one {Filtres (#)} other {Filtres (#)}}",
+      "favorite": "Favoris seulement",
+      "shop": "Boutique",
+      "category": "Type",
+      "color": "Couleur",
+      "audience": "Public",
+      "tag": "Étiquette",
+      "stage": "Étape",
+      "sort": "Trier par",
+      "any": "Tous",
+      "anyF": "Toutes",
+      "stageView": "Cette vue",
+      "reset": "Effacer les filtres",
+      "audienceOptions": {
+        "women": "Femme",
+        "men": "Homme",
+        "child": "Enfant",
+        "mixed": "Mixte"
+      },
+      "sortOptions": {
+        "recent": "Plus récents",
+        "oldest": "Plus anciens",
+        "name": "Nom",
+        "price_asc": "Prix croissant",
+        "price_desc": "Prix décroissant"
+      },
+      "reference": "Les filtres Type et Couleur ne se chargent pas.",
+      "stageOptions": {
+        "sold": "Vendu",
+        "returned": "Renvoyé"
+      }
+    },
+    "selection": {
+      "count": "{count, plural, one {# article choisi} other {# articles choisis}}",
+      "all": "Tout choisir",
+      "none": "Tout désélectionner",
+      "stage": "Étape",
+      "list": "Liste",
+      "profile": "Profil",
+      "tag": "Étiquette",
+      "delete": "Supprimer",
+      "bar": "Actions sur la sélection",
+      "stageTitle": "Changer d’étape",
+      "listTitle": "Ajouter à une liste",
+      "profileTitle": "Déplacer vers un profil",
+      "tagTitle": "Poser une étiquette",
+      "close": "Fermer",
+      "noLists": "Aucune liste pour l’instant.",
+      "noTags": "Aucune étiquette pour l’instant.",
+      "choiceFailed": "Tes listes ou étiquettes ne s’affichent pas.",
+      "tooMany": "Tu peux agir sur 200 articles à la fois.",
+      "toast": {
+        "stage": "{count, plural, one {# article passé} other {# articles passés}} à « {stage} »",
+        "list": "{count, plural, one {# article ajouté} other {# articles ajoutés}} à {name}",
+        "profile": "{count, plural, one {# article déplacé} other {# articles déplacés}} vers {name}",
+        "tag": "Étiquette {name} posée sur {count, plural, one {# article} other {# articles}}",
+        "delete": "{count, plural, one {# article supprimé} other {# articles supprimés}}"
+      },
+      "loading": "Un instant…"
+    }
+  },
+  "Lists": {
+    "title": "Listes",
+    "metadata": "Mes listes",
+    "loading": "Chargement de tes listes…",
+    "loadError": "Tes listes ne s’affichent pas. Réessaie dans un instant.",
+    "retry": "Réessayer",
+    "empty": {
+      "title": "Aucune liste pour l’instant",
+      "body": "Crée une liste pour rassembler des articles, puis partage-la avec qui tu veux."
+    },
+    "create": {
+      "label": "Nom de la nouvelle liste",
+      "submit": "Créer la liste",
+      "created": "Liste « {name} » créée",
+      "failed": "La liste n’a pas pu être créée. Réessaie."
+    },
+    "listsLabel": "Mes listes",
+    "count": "{count, plural, =0 {Aucun article} one {# article} other {# articles}}",
+    "shared": "Partagée",
+    "moveUp": "Monter {name}",
+    "moveDown": "Descendre {name}",
+    "moved": "« {name} » est en position {position} sur {count}",
+    "moveFailed": "L’ordre n’a pas pu être changé. Réessaie.",
+    "detail": {
+      "back": "← Toutes mes listes",
+      "itemsLabel": "Articles de la liste",
+      "close": "Fermer",
+      "notFound": {
+        "title": "Cette liste n’existe plus",
+        "body": "Elle a peut-être été supprimée.",
+        "back": "Voir mes listes"
+      },
+      "rename": {
+        "open": "Renommer",
+        "label": "Nom de la liste",
+        "save": "Enregistrer",
+        "cancel": "Annuler",
+        "done": "Liste renommée en « {name} »",
+        "failed": "Le nom n’a pas pu être changé. Réessaie."
+      },
+      "delete": {
+        "open": "Supprimer la liste",
+        "title": "Supprimer « {name} » ?",
+        "body": "Les articles restent dans ton dressing. Si la liste est partagée, son lien cesse de marcher.",
+        "confirm": "Supprimer la liste",
+        "cancel": "Annuler",
+        "done": "Liste « {name} » supprimée",
+        "failed": "La liste n’a pas pu être supprimée. Réessaie."
+      },
+      "empty": {
+        "title": "Cette liste est vide",
+        "body": "Ajoute des articles depuis une vue : choisis-les, puis « Liste »."
+      },
+      "remove": "Retirer {name}",
+      "removed": "« {name} » retiré de la liste",
+      "removeFailed": "L’article n’a pas pu être retiré. Réessaie.",
+      "itemsFailed": "Certains articles ne s’affichent pas."
+    },
+    "share": {
+      "title": "Partage",
+      "intro": "Toute personne qui a le lien voit le nom de la liste, les photos de la boutique, le nom, le prix et le lien vers la boutique. Jamais tes photos, notes, tailles ni profils.",
+      "notShared": "Cette liste n’est pas partagée.",
+      "sharedSince": "Partagée depuis le {date}.",
+      "action": "Partager",
+      "renewWarning": "Le lien n’est montré qu’au moment où il est créé. Cliquer de nouveau sur « Partager » crée un nouveau lien et désactive l’ancien.",
+      "created": "Lien créé. Copie-le maintenant.",
+      "linkLabel": "Lien de partage",
+      "copy": "Copier le lien",
+      "copied": "Lien copié",
+      "copyFailed": "Copie impossible ici : le lien est sélectionné, copie-le à la main.",
+      "stop": "Arrêter le partage",
+      "stopped": "Partage arrêté : le lien ne marche plus.",
+      "failed": "Le partage n’a pas abouti. Réessaie."
+    }
+  },
+  "SharedList": {
+    "metadata": "Liste partagée",
+    "itemsLabel": "Articles",
+    "empty": "Cette liste est vide pour l’instant.",
+    "noPrice": "Prix non renseigné",
+    "noName": "Article sans nom",
+    "noPhoto": "Pas de photo",
+    "visit": "Voir chez {shop}",
+    "footer": "Liste partagée avec Closyria.",
+    "footerLink": "Découvrir Closyria",
+    "notFound": {
+      "title": "Ce lien ne marche plus",
+      "body": "La personne a arrêté de partager cette liste, ou le lien est incomplet.",
+      "home": "Découvrir Closyria"
+    },
+    "visitFor": "{name}, s’ouvre dans un nouvel onglet"
+  },
+  "Settings": {
+    "title": "Réglages",
+    "nav": {
+      "label": "Réglages",
+      "profiles": "Profils",
+      "tags": "Étiquettes",
+      "trash": "Corbeille",
+      "iphone": "Aide iPhone"
+    },
+    "colors": {
+      "plum": "Prune",
+      "rose": "Rose",
+      "sage": "Sauge",
+      "sand": "Sable",
+      "slate": "Ardoise",
+      "sky": "Ciel"
+    },
+    "loading": "Chargement…",
+    "loadError": "Ça ne s’affiche pas. Réessaie dans un instant.",
+    "retry": "Réessayer",
+    "failed": "L’enregistrement n’a pas abouti. Réessaie.",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "profiles": {
+      "title": "Profils",
+      "metadata": "Profils",
+      "intro": "Un profil par personne dont tu ranges les vêtements : toi, ta fille…",
+      "listLabel": "Tes profils",
+      "name": "Nom",
+      "audience": "Public",
+      "childDetail": "Précision",
+      "color": "Couleur",
+      "audienceOptions": {
+        "women": "Femme",
+        "men": "Homme",
+        "child": "Enfant",
+        "mixed": "Mixte"
+      },
+      "childOptions": {
+        "girl": "Fille",
+        "boy": "Garçon",
+        "baby": "Bébé"
+      },
+      "childNone": "Non précisé",
+      "groupLabel": "Profil {name}",
+      "itemCount": "{count, plural, =0 {Aucun article} one {# article} other {# articles}}",
+      "save": "Enregistrer",
+      "saved": "Profil « {name} » enregistré",
+      "add": "Ajouter un profil",
+      "addTitle": "Nouveau profil",
+      "added": "Profil « {name} » ajouté",
+      "delete": "Supprimer",
+      "deleteTitle": "Supprimer le profil « {name} » ?",
+      "deleteBody": "Ses articles dans la corbeille passent dans ton premier autre profil.",
+      "deleteConfirm": "Supprimer le profil",
+      "deleted": "Profil « {name} » supprimé",
+      "notEmpty": "Déplace d’abord ses articles.",
+      "moveUp": "Monter {name}",
+      "moveDown": "Descendre {name}",
+      "moved": "« {name} » est en position {position} sur {count}"
+    },
+    "tags": {
+      "title": "Étiquettes",
+      "metadata": "Étiquettes",
+      "intro": "Pour retrouver tes articles par thème : « été », « cadeau »…",
+      "listLabel": "Tes étiquettes",
+      "empty": "Aucune étiquette pour l’instant.",
+      "name": "Nom",
+      "color": "Couleur",
+      "noColor": "Sans couleur",
+      "create": "Créer l’étiquette",
+      "newLabel": "Nouvelle étiquette",
+      "created": "Étiquette « {name} » créée",
+      "groupLabel": "Étiquette {name}",
+      "save": "Enregistrer",
+      "saved": "Étiquette « {name} » enregistrée",
+      "delete": "Supprimer",
+      "deleteTitle": "Supprimer l’étiquette « {name} » ?",
+      "deleteBody": "Elle est retirée de tes articles ; les articles restent.",
+      "deleteConfirm": "Supprimer l’étiquette",
+      "deleted": "Étiquette « {name} » supprimée",
+      "exists": "Une étiquette porte déjà ce nom.",
+      "limit": "Tu as atteint la limite de 200 étiquettes."
+    },
+    "trash": {
+      "title": "Corbeille",
+      "metadata": "Corbeille",
+      "notice": "Effacés automatiquement après 30 jours",
+      "empty": "La corbeille est vide.",
+      "listLabel": "Articles dans la corbeille",
+      "deletedOn": "Supprimé le {date}",
+      "restore": "Restaurer",
+      "restored": "« {name} » restauré",
+      "merged": "« {name} » est réuni avec l’article que tu avais déjà gardé",
+      "purge": "Supprimer définitivement",
+      "purgeTitle": "Supprimer définitivement ?",
+      "purgeBody": "« {name} » et ses photos seront effacés pour toujours. Tu ne pourras pas annuler.",
+      "purgeCancel": "Garder dans la corbeille",
+      "purged": "« {name} » supprimé définitivement",
+      "loadMore": "Voir la suite",
+      "noName": "Article sans nom",
+      "noPhoto": "Pas de photo",
+      "restoreFailed": "L’article n’a pas pu être restauré. Réessaie.",
+      "purgeFailed": "L’article n’a pas pu être supprimé. Réessaie.",
+      "alreadyGone": "Cet article n’est plus dans la corbeille."
+    }
+  },
+  "IphoneHelp": {
+    "metadata": "Aide iPhone",
+    "back": "← Réglages",
+    "title": "Ajouter Closyria au menu Partager",
+    "intro": "Sur iPhone, Closyria n’apparaît pas tout seul dans le menu Partager. Un Raccourci que tu crées en 4 étapes ajoute « Envoyer à Closyria » à ce menu.",
+    "stepsLabel": "Les 4 étapes",
+    "steps": {
+      "1": {
+        "title": "Crée le raccourci",
+        "body": "Ouvre l’app Raccourcis, touche +, puis nomme le raccourci « Envoyer à Closyria »."
+      },
+      "2": {
+        "title": "Montre-le dans le menu Partager",
+        "body": "Touche l’icône de détails, active « Afficher dans la feuille de partage », puis garde seulement « URL » dans les types acceptés."
+      },
+      "3": {
+        "title": "Encode le lien, puis ouvre-le",
+        "body": "Ajoute d’abord l’action « Encoder l’URL » : elle prend l’« Entrée du raccourci », le lien partagé. Ajoute ensuite l’action « Ouvrir les URL » et écris dans son champ l’adresse ci-dessous, suivie du résultat de « Encoder l’URL »."
+      },
+      "4": {
+        "title": "Essaie",
+        "body": "Dans Safari, ouvre la page d’un article, touche Partager, puis « Envoyer à Closyria ». L’article s’ajoute à tes envies."
+      }
+    },
+    "addressLabel": "Adresse à écrire dans l’action",
+    "address": "https://closyria.com/partager?url=",
+    "note": "Le fichier du raccourci n’est pas fourni : tu le crées toi-même, en quelques secondes."
   }
 }

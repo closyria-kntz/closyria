@@ -41,6 +41,7 @@ export async function createCatalogHarness(overrides: Partial<Omit<CatalogDeps, 
     media: { db: handle.db, store },
     events: { db: handle.db },
     admin: { db: handle.db },
+    wardrobe: { db: handle.db },
     catalog: { db: handle.db, store, queue: recorder.queue, ...overrides },
   });
   let ipCounter = 0;

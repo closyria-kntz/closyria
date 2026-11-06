@@ -44,8 +44,25 @@ afterAll(async () => {
 describe("owned tables of the API process", () => {
   it("registers every table holding user data, each with a cascading foreign key to user(id)", async () => {
     const tables = listOwnedColumns().map((o) => o.table);
-    expect(tables.sort()).toEqual(["events", "media", "usage_counters", "user_plans"]);
+    expect(tables.sort()).toEqual([
+      "events",
+      "items",
+      "media",
+      "profiles",
+      "tags",
+      "usage_counters",
+      "user_plans",
+      "wishlists",
+    ]);
     expect(await findOwnedColumnsWithoutCascade(api.db)).toEqual([]);
+  });
+
+  it("merges the wardrobe in an order where every step sees its parents already moved", () => {
+    // Registration order is execution order (wardrobe/merge.ts relies on it).
+    const order = listOwnedColumns()
+      .map((o) => o.table)
+      .filter((t) => ["media", "profiles", "tags", "items", "wishlists"].includes(t));
+    expect(order).toEqual(["media", "profiles", "tags", "items", "wishlists"]);
   });
 
   it("leaves no foreign key to user(id) unregistered, except the explicit allowlist", async () => {

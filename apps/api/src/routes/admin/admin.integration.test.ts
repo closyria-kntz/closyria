@@ -66,6 +66,7 @@ beforeAll(async () => {
     events: { db: handle.db },
     catalog: { db: handle.db, store: memoryStore(), queue: { enqueue: async () => {} } },
     admin: { db: handle.db, now: () => NOW },
+    wardrobe: { db: handle.db },
   });
 }, 60_000);
 

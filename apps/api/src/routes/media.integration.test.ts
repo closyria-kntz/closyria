@@ -101,6 +101,7 @@ beforeAll(async () => {
     events: { db: handle.db },
     catalog: { db: handle.db, store: memoryStore(), queue: { enqueue: async () => {} } },
     admin: { db: handle.db },
+    wardrobe: { db: handle.db },
   });
 }, 60_000);
 
@@ -190,6 +191,7 @@ describe("upload limits", () => {
       events: { db: handle.db },
       catalog: { db: handle.db, store: memoryStore(), queue: { enqueue: async () => {} } },
       admin: { db: handle.db },
+      wardrobe: { db: handle.db },
     });
 
   it("documents the default limits: 30 uploads an hour per user, 60 per address, 2 at once", async () => {

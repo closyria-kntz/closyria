@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { securityHeaders } from "./security-headers";
+import { securityHeaders, sharedListHeaders } from "./security-headers";
 
 const headerMap = () => Object.fromEntries(securityHeaders.map((h) => [h.key, h.value]));
 const directive = (name: string) =>
@@ -49,7 +49,10 @@ describe("next.config headers()", () => {
   it("applies the security headers to every path", async () => {
     const { default: config } = await import("../next.config");
     const rules = await config.headers?.();
-    expect(rules).toEqual([{ source: "/:path*", headers: securityHeaders }]);
+    expect(rules).toEqual([
+      { source: "/:path*", headers: securityHeaders },
+      { source: "/l/:path*", headers: sharedListHeaders },
+    ]);
   });
 });
 
@@ -61,4 +64,10 @@ describe("Caddy HSTS", () => {
       expect(text).not.toContain("preload");
     });
   }
+});
+
+describe("sharedListHeaders", () => {
+  it("keeps shared lists out of search engines", () => {
+    expect(sharedListHeaders).toEqual([{ key: "X-Robots-Tag", value: "noindex" }]);
+  });
 });

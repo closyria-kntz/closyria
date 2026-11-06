@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type Database, schema } from "@closyria/db";
-import { mediaErrorSchema, uploadedMediaSchema } from "@closyria/shared";
+import { type MediaErrorCode, mediaErrorSchema, uploadedMediaSchema } from "@closyria/shared";
 import {
   ImageTooLargeError,
   MAX_IMAGE_BYTES,
@@ -14,6 +14,7 @@ import { bodyLimit } from "hono/body-limit";
 import { type AccessEnv, defineAccess } from "../access";
 import { rateLimit } from "../rate-limit";
 import { createSemaphore, type Semaphore } from "../semaphore";
+import type { Tx } from "../wardrobe/events";
 
 type Window = { max: number; windowMs: number };
 type Concurrency = { max: number; maxWaiting: number; waitMs: number };
@@ -50,6 +51,82 @@ const errorContent = (description: string) => ({
   description,
   content: { "application/json": { schema: mediaErrorSchema } },
 });
+
+type NormalizedImage = Awaited<ReturnType<typeof normalizeImage>>;
+type StoredImage = { id: string; key: string; image: NormalizedImage };
+/** `attach` refused the photo: rolls the transaction back. */
+class Refused extends Error {}
+
+/** What the upload routes share: rate limits, the re-encoding semaphore and the store-and-record step. */
+export type MediaPipeline = {
+  /** Per-address then per-user rate limits; add them to the route after `user` access. */
+  limits: MiddlewareHandler<AccessEnv>[];
+  /** Re-encodes one uploaded file to WebP (under the semaphore) and stores it; the error answer when it cannot. */
+  ingest(
+    userId: string,
+    file: File,
+  ): Promise<({ ok: true } & StoredImage) | { ok: false; status: 413 | 415 | 503; body: { error: MediaErrorCode } }>;
+  /**
+   * Inserts the `media` row of a stored object, then runs `attach` in the same transaction; when `attach` answers
+   * false nothing is kept and the object is deleted (returns false). The object is also deleted when anything throws.
+   */
+  record(userId: string, stored: StoredImage, attach?: (tx: Tx) => Promise<boolean>): Promise<boolean>;
+};
+
+export function createMediaPipeline(deps: MediaDeps): MediaPipeline {
+  const perUser = deps.limits?.perUser ?? MEDIA_LIMITS.perUser;
+  const perAddress = deps.limits?.perAddress ?? MEDIA_LIMITS.perAddress;
+  const concurrency = { ...MEDIA_LIMITS.concurrency, ...deps.limits?.concurrency };
+  const semaphore = deps.semaphore ?? createSemaphore(concurrency);
+  const limited = (c: Context<AccessEnv>) => c.json(rateLimited, 429);
+  return {
+    limits: [
+      rateLimit<AccessEnv>(perAddress, limited),
+      // `user` access ran first, so the session is there.
+      rateLimit<AccessEnv>({ ...perUser, key: (c) => `user:${c.var.session?.user.id ?? ""}` }, limited),
+    ],
+    async ingest(userId, file) {
+      if (file.size > MAX_IMAGE_BYTES) return { ok: false, status: 413, body: tooLarge };
+      const release = await semaphore.acquire(concurrency.waitMs);
+      if (!release) return { ok: false, status: 503, body: busy };
+      let image: NormalizedImage;
+      try {
+        image = await normalizeImage(Buffer.from(await file.arrayBuffer()));
+      } catch (error) {
+        if (error instanceof ImageTooLargeError) return { ok: false, status: 413, body: tooLarge };
+        if (error instanceof UnsupportedImageError) return { ok: false, status: 415, body: unsupported };
+        throw error;
+      } finally {
+        release();
+      }
+      const id = randomUUID();
+      const key = `users/${userId}/${id}.webp`;
+      await deps.store.put(key, image.data, image.contentType);
+      return { ok: true, id, key, image };
+    },
+    async record(userId, stored, attach) {
+      try {
+        await deps.db.transaction(async (tx) => {
+          await tx.insert(schema.media).values({
+            id: stored.id,
+            userId,
+            key: stored.key,
+            contentType: stored.image.contentType,
+            sizeBytes: stored.image.data.length,
+            width: stored.image.width,
+            height: stored.image.height,
+          });
+          if (attach && !(await attach(tx))) throw new Refused();
+        });
+        return true;
+      } catch (error) {
+        await deps.store.delete(stored.key).catch(() => {}); // no orphan object; the insert error is the one that matters
+        if (error instanceof Refused) return false;
+        throw error;
+      }
+    },
+  };
+}
 
 const uploadRoute = (limits: MiddlewareHandler<AccessEnv>[]) =>
   defineAccess(
@@ -91,59 +168,21 @@ const uploadRoute = (limits: MiddlewareHandler<AccessEnv>[]) =>
     "user",
   );
 
-export function mediaRoutes(deps: MediaDeps) {
+export function mediaRoutes(deps: MediaDeps, pipeline: MediaPipeline = createMediaPipeline(deps)) {
   const app = new OpenAPIHono<AccessEnv>({
     defaultHook: (result, c) => (result.success ? undefined : c.json(invalid, 400)),
   });
-  const perUser = deps.limits?.perUser ?? MEDIA_LIMITS.perUser;
-  const perAddress = deps.limits?.perAddress ?? MEDIA_LIMITS.perAddress;
-  const concurrency = { ...MEDIA_LIMITS.concurrency, ...deps.limits?.concurrency };
-  const semaphore = deps.semaphore ?? createSemaphore(concurrency);
-  const limited = (c: Context<AccessEnv>) => c.json(rateLimited, 429);
-
-  const route = uploadRoute([
-    rateLimit<AccessEnv>(perAddress, limited),
-    // `user` access ran first, so the session is there.
-    rateLimit<AccessEnv>({ ...perUser, key: (c) => `user:${c.var.session?.user.id ?? ""}` }, limited),
-  ]);
+  const route = uploadRoute(pipeline.limits);
 
   return app.openapi(route, async (c) => {
     // `user` access: the middleware has answered 401 already when there is no session.
     const userId = c.var.session?.user.id;
     if (!userId) throw new Error("media route reached without a session");
     const { file } = c.req.valid("form");
-    if (file.size > MAX_IMAGE_BYTES) return c.json(tooLarge, 413);
-
-    const release = await semaphore.acquire(concurrency.waitMs);
-    if (!release) return c.json(busy, 503);
-    let image: Awaited<ReturnType<typeof normalizeImage>>;
-    try {
-      image = await normalizeImage(Buffer.from(await file.arrayBuffer()));
-    } catch (error) {
-      if (error instanceof ImageTooLargeError) return c.json(tooLarge, 413);
-      if (error instanceof UnsupportedImageError) return c.json(unsupported, 415);
-      throw error;
-    } finally {
-      release();
-    }
-
-    const id = randomUUID();
-    const key = `users/${userId}/${id}.webp`;
-    await deps.store.put(key, image.data, image.contentType);
-    try {
-      await deps.db.insert(schema.media).values({
-        id,
-        userId,
-        key,
-        contentType: image.contentType,
-        sizeBytes: image.data.length,
-        width: image.width,
-        height: image.height,
-      });
-    } catch (error) {
-      await deps.store.delete(key).catch(() => {}); // no orphan object; the insert error is the one that matters
-      throw error;
-    }
-    return c.json({ id, width: image.width, height: image.height, contentType: image.contentType }, 201);
+    const stored = await pipeline.ingest(userId, file);
+    if (!stored.ok) return c.json(stored.body, stored.status);
+    await pipeline.record(userId, stored);
+    const { image } = stored;
+    return c.json({ id: stored.id, width: image.width, height: image.height, contentType: image.contentType }, 201);
   });
 }

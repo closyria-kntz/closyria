@@ -64,7 +64,7 @@ export function CommandPalette({ items, labels }: { items: Array<{ href: string;
             <Command.Input
               autoFocus
               placeholder={labels.placeholder}
-              className={`w-full border-b border-line bg-surface-raised px-space-4 py-space-3 text-base text-ink placeholder:text-ink-muted ${focusRing}`}
+              className={`w-full border-b border-line bg-surface-raised px-space-4 py-space-3 text-body text-ink placeholder:text-ink-muted ${focusRing}`}
             />
             <Command.List className="max-h-dvh overflow-y-auto p-space-2">
               <Command.Empty className="px-space-3 py-space-2 text-sm text-ink-muted">{labels.empty}</Command.Empty>
@@ -74,7 +74,7 @@ export function CommandPalette({ items, labels }: { items: Array<{ href: string;
                     key={item.href}
                     value={item.label}
                     onSelect={() => go(item.href)}
-                    className="cursor-pointer rounded-button px-space-3 py-space-2 text-base text-ink data-[selected=true]:bg-surface-strong"
+                    className="cursor-pointer rounded-button px-space-3 py-space-2 text-body text-ink data-[selected=true]:bg-surface-strong"
                   >
                     {item.label}
                   </Command.Item>

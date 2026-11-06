@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { cleanImages, cleanText } from "./clean";
+import { buildShopData, cleanDate, cleanGtin, cleanImages, cleanList, cleanText } from "./clean";
 import type { Candidate } from "./types";
 
 /** True when the HTML carries Shopify markers. */
@@ -33,6 +33,8 @@ const shopifyProductSchema = z.object({
       z.object({
         available: z.boolean().optional(),
         price: z.number().optional(),
+        sku: z.string().nullish(),
+        barcode: z.union([z.string(), z.number()]).nullish(),
         option1: z.string().nullish(),
         option2: z.string().nullish(),
         option3: z.string().nullish(),
@@ -40,6 +42,9 @@ const shopifyProductSchema = z.object({
     )
     .default([]),
   price: z.number(),
+  published_at: z.string().nullish(),
+  type: z.string().nullish(),
+  tags: z.union([z.array(z.string()), z.string()]).nullish(),
   compare_at_price: z.number().nullish(),
 });
 
@@ -84,8 +89,14 @@ export function extractShopify(json: string, pageUrl: string): Candidate | null 
     ...(s.priceCents !== undefined && s.priceCents !== p.price ? { priceCents: s.priceCents } : {}),
   }));
 
+  const tags = typeof p.tags === "string" ? p.tags.split(",") : (p.tags ?? []);
+  // No product-level code in Shopify: per-size barcodes are kept apart in shopData.gtins.
+  const gtins = cleanList(p.variants.map((v) => cleanGtin(v.barcode)));
+
   return {
     name,
+    publishedAt: cleanDate(p.published_at),
+    shopData: buildShopData({ gtins, category: cleanText(p.type, 200), tags: cleanList(tags) }),
     brand: cleanText(p.vendor, 120),
     description: cleanText(p.description, 5000),
     priceCents: p.price,

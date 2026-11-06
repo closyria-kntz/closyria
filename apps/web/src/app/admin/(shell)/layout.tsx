@@ -49,8 +49,12 @@ export default async function AdminShellLayout({ children }: { children: ReactNo
         >
           <AdminNavLinks items={items} />
         </nav>
-        <main id="admin-content" tabIndex={-1} className="flex-1 px-space-5 py-space-5 focus:outline-none">
-          <div className="mx-auto flex max-w-wide flex-col gap-space-5">{children}</div>
+        <main
+          id="admin-content"
+          tabIndex={-1}
+          className="min-w-space-0 flex-1 px-space-5 py-space-5 focus:outline-none md:px-space-6"
+        >
+          <div className="mx-auto flex max-w-app flex-col gap-space-5">{children}</div>
         </main>
       </div>
     </div>

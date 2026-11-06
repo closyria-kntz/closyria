@@ -22,6 +22,11 @@ describe("isActive", () => {
     expect(entry("captures")?.href).toBe("/admin/captures");
   });
 
+  it("lists the product sheets and reference lists screens", () => {
+    expect(entry("products")?.href).toBe("/admin/fiches");
+    expect(entry("reference")?.href).toBe("/admin/references");
+  });
+
   it("keeps the shops entry active on a shop page", () => {
     const shops = entry("shops");
     expect(shops && isActive(shops, "/admin/boutiques/abc")).toBe(true);

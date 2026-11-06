@@ -51,12 +51,13 @@ export const primitives = {
     body: '"Jost Variable", ui-sans-serif, system-ui, sans-serif',
     display: '"Cormorant Garamond Variable", ui-serif, Georgia, serif',
   },
+  // Fluid: each size grows linearly from the 20rem phone width to `breakpoint.lg`, then stays put.
   fontSize: {
     sm: "0.875rem",
-    base: "1rem",
-    lead: "1.25rem",
-    title: "1.75rem",
-    display: "2.5rem",
+    body: "clamp(1rem, 0.9432rem + 0.2841vw, 1.125rem)",
+    lead: "clamp(1.25rem, 1.1364rem + 0.5682vw, 1.5rem)",
+    title: "clamp(1.75rem, 1.4091rem + 1.7045vw, 2.5rem)",
+    display: "clamp(2.5rem, 1.8182rem + 3.4091vw, 4rem)",
   },
   fontWeight: { regular: "400", medium: "500", strong: "600" },
   duration: { instant: "0ms", fast: "150ms", base: "250ms", slow: "400ms" },
@@ -69,5 +70,6 @@ export const primitives = {
     lifted: "0 4px 12px rgb(46 26 42 / 0.12)",
   },
   breakpoint: { sm: "40rem", md: "48rem", lg: "64rem" },
-  container: { narrow: "36rem", wide: "72rem" },
+  container: { narrow: "36rem", wide: "72rem", app: "90rem", measure: "70ch", sidebar: "15rem" },
+  size: { touchTarget: "44px" },
 } as const;

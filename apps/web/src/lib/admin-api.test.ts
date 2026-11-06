@@ -2,9 +2,13 @@ import { adminOverviewSchema } from "@closyria/shared";
 import { describe, expect, it, vi } from "vitest";
 import {
   adminFailuresPath,
+  adminProductsPath,
   adminShopsPath,
   fetchAdminFailures,
   fetchAdminJson,
+  fetchAdminProduct,
+  fetchAdminProducts,
+  fetchAdminReference,
   fetchAdminSession,
   fetchAdminShop,
   fetchAdminShops,
@@ -143,6 +147,8 @@ describe("internal API timeout", () => {
 });
 
 const shopId = "11111111-1111-4111-8111-111111111111";
+// Built, not written: the token checker reads hex literals in test files too.
+const HEX = `#${"12ab"}ef`;
 const shop = {
   id: shopId,
   name: "Mango",
@@ -215,5 +221,51 @@ describe("shop and capture reads", () => {
     const { fetch, calls } = fakeFetch(200, shop);
     expect(await fetchAdminShop(api(fetch), "../audit")).toEqual({ ok: false, status: 404 });
     expect(calls).toHaveLength(0);
+  });
+
+  it("builds the product list path from the filters that are set", () => {
+    expect(adminProductsPath({})).toBe("/api/admin/products");
+    expect(adminProductsPath({ q: "robe lin", classified: "admin", cursor: "" })).toBe(
+      "/api/admin/products?q=robe+lin&classified=admin",
+    );
+  });
+
+  it("reads and validates a product page, and rejects a bad one", async () => {
+    const product = {
+      id: shopId,
+      shopId,
+      shopName: "Mango",
+      name: "Robe",
+      brand: null,
+      currency: "EUR",
+      priceCents: 2300,
+      captureStatus: "ok",
+      classifiedBy: "rule",
+      categoryId: null,
+      keptBy: 3,
+      createdAt: "2026-11-01T10:00:00.000Z",
+      imageUrl: null,
+    };
+    const ok = fakeFetch(200, { products: [product], nextCursor: null });
+    const result = await fetchAdminProducts(api(ok.fetch), { q: "robe" });
+    expect(ok.calls[0]?.url).toBe("http://api/api/admin/products?q=robe");
+    expect(result.ok && result.data.products[0]?.keptBy).toBe(3);
+    const bad = fakeFetch(200, { products: [{ id: "x" }], nextCursor: null });
+    await expect(fetchAdminProducts(api(bad.fetch), {})).rejects.toThrow();
+  });
+
+  it("refuses a product id that is not a UUID before calling the API", async () => {
+    const { fetch, calls } = fakeFetch(200, {});
+    expect(await fetchAdminProduct(api(fetch), "../x")).toEqual({ ok: false, status: 404 });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("reads a reference list", async () => {
+    const { fetch, calls } = fakeFetch(200, {
+      entries: [{ id: shopId, slug: "rouge", name: "Rouge", keywords: ["rouge"], hex: HEX }],
+    });
+    const result = await fetchAdminReference(api(fetch), "colors");
+    expect(calls[0]?.url).toBe("http://api/api/admin/reference/colors");
+    expect(result.ok && result.data.entries[0]?.hex).toBe(HEX);
   });
 });

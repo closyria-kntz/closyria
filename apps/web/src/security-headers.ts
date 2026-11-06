@@ -34,3 +34,6 @@ export const securityHeaders = [
   { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
   { key: "Content-Security-Policy-Report-Only", value: contentSecurityPolicy },
 ];
+
+/** A shared list stays out of search engines, whatever the page itself says. */
+export const sharedListHeaders = [{ key: "X-Robots-Tag", value: "noindex" }];

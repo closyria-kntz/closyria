@@ -1,7 +1,7 @@
 # Chantier 2a — Garder : plan d'implémentation
 
 > **Pour les agents :** sous-skill requis : `superpowers:subagent-driven-development` (recommandé) ou
-> `superpowers:executing-plans`, tâche par tâche. Les étapes utilisent des cases à cocher (`- [ ]`).
+> `superpowers:executing-plans`, tâche par tâche. Les étapes utilisent des cases à cocher.
 
 **But :** une utilisatrice garde un article en un geste depuis la fiche, le retrouve dans ses vues, le fait avancer
 d'étape en étape (dates et montants), le range par profils, étiquettes et listes partageables, avec ses photos
@@ -87,14 +87,14 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
 - `eventNames` gagne : `item_saved`, `item_stage_changed`, `item_moved`, `wishlist_shared`, `account_prompt_shown`,
   `account_created_from_prompt`.
 
-- [ ] **Étape 1 : tests qui échouent** — étapes et publics exacts ; `itemCreateSchema` refuse `action: "list"` sans
+- [x] **Étape 1 : tests qui échouent** — étapes et publics exacts ; `itemCreateSchema` refuse `action: "list"` sans
   `wishlistId` ; `itemBulkSchema` refuse 201 ids ; `itemStageInputSchema` refuse une date invalide ;
   `sharedWishlistViewSchema` n'a aucune clé `notes`, `sizeLabel`, `profile`, `media` (vérifié sur `.shape`) ;
   `ITEM_STAGE_ORDER.sold > ITEM_STAGE_ORDER.owned`.
-- [ ] **Étape 2 :** `pnpm --filter @closyria/shared test` → ÉCHEC.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests au vert.
-- [ ] **Étape 5 :** commit `feat(shared): wardrobe schemas`.
+- [x] **Étape 2 :** `pnpm --filter @closyria/shared test` → ÉCHEC.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests au vert.
+- [x] **Étape 5 :** commit `feat(shared): wardrobe schemas`.
 
 ### Task 2: Listes de référence et enrichissement des fiches (base)
 
@@ -110,12 +110,12 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
   construits depuis les énumérations de la tâche 1 ; suppressions de référence → `set null`.
 - Migration générée (`pnpm --filter @closyria/db generate`), jamais écrite à la main.
 
-- [ ] **Étape 1 : test d'intégration qui échoue** — insertion d'une catégorie enfant ; `audience = 'kids'` refusé ;
+- [x] **Étape 1 : test d'intégration qui échoue** — insertion d'une catégorie enfant ; `audience = 'kids'` refusé ;
   supprimer une couleur met `products.color_id` à null ; `shop_data` vaut `{}` par défaut.
-- [ ] **Étape 2 :** le test échoue.
-- [ ] **Étape 3 :** schéma, génération, relecture du SQL.
-- [ ] **Étape 4 :** tests au vert (`pnpm test` complet).
-- [ ] **Étape 5 :** commit `feat(db): reference lists and product classification fields`.
+- [x] **Étape 2 :** le test échoue.
+- [x] **Étape 3 :** schéma, génération, relecture du SQL.
+- [x] **Étape 4 :** tests au vert (`pnpm test` complet).
+- [x] **Étape 5 :** commit `feat(db): reference lists and product classification fields`.
 
 ### Task 3: Tables de l'utilisatrice (base)
 
@@ -133,15 +133,15 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
   - index unique partiel `items (user_id, product_id) WHERE deleted_at IS NULL` ;
   - unique `tags (user_id, lower(name))` ; `CHECK` de longueurs et d'énumérations (tâche 1).
 
-- [ ] **Étape 1 : test d'intégration qui échoue** — deux articles actifs pour la même fiche refusés, mais un
+- [x] **Étape 1 : test d'intégration qui échoue** — deux articles actifs pour la même fiche refusés, mais un
   supprimé + un actif acceptés ; supprimer l'utilisatrice supprime profils, articles, événements, listes,
   étiquettes ; supprimer un profil qui a un article est refusé ; `stage = 'gone'` refusé.
-- [ ] **Étape 2 :** le test échoue.
-- [ ] **Étape 3 :** schéma, génération, relecture.
-- [ ] **Étape 4 :** tests au vert (le test `owned-tables` de l'API échouera jusqu'à la tâche 10 : l'y ajouter dès
+- [x] **Étape 2 :** le test échoue.
+- [x] **Étape 3 :** schéma, génération, relecture.
+- [x] **Étape 4 :** tests au vert (le test `owned-tables` de l'API échouera jusqu'à la tâche 10 : l'y ajouter dès
   maintenant en `NOT_OWNED` provisoire est interdit — enregistrer plutôt les quatre tables comme possédées par la
   voie générique dans `apps/api/src/owned-tables.ts`, la tâche 10 remplacera par les fusions).
-- [ ] **Étape 5 :** commit `feat(db): wardrobe tables`.
+- [x] **Étape 5 :** commit `feat(db): wardrobe tables`.
 
 ### Task 4: Extraction des nouveaux champs
 
@@ -156,13 +156,13 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
   vide) ; JSON-LD `releaseDate`, `gtin13|gtin8|gtin|gtin12|gtin14`, `sku`, `color`, `material`, `category`,
   `BreadcrumbList` (noms, sans le dernier s'il égale le nom du produit).
 
-- [ ] **Étape 1 : tests qui échouent** — sur les pages réelles enregistrées : chaque fiche Shopify a `publishedAt` et
+- [x] **Étape 1 : tests qui échouent** — sur les pages réelles enregistrées : chaque fiche Shopify a `publishedAt` et
   `shopData.category` ; la page Zalando a un `gtin` ou un `sku` et un `breadcrumb` non vide ; un `gtin` de 14 chiffres
   avec espaces est nettoyé ; un JSON-LD sans ces champs reste valide.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter (couverture ≥ 90 % maintenue).
-- [ ] **Étape 4 :** tests au vert.
-- [ ] **Étape 5 :** commit `feat(extract): publication date, codes and shop data`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter (couverture ≥ 90 % maintenue).
+- [x] **Étape 4 :** tests au vert.
+- [x] **Étape 5 :** commit `feat(extract): publication date, codes and shop data`.
 
 ### Task 5: Classement par mots-clés, listes de départ, branchement au worker
 
@@ -192,14 +192,14 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
 - `runCapture` : après une capture réussie, si `classified_by = 'rule'`, applique `classify` aux champs de la fiche
   (et enregistre `published_at`, `gtin`, `sku`, `shop_data`) ; ne touche jamais une fiche `classified_by = 'admin'`.
 
-- [ ] **Étape 1 : tests qui échouent** — « Robe longue fleurie » dans « Femme > Robes » → Robe longue, fleuri,
+- [x] **Étape 1 : tests qui échouent** — « Robe longue fleurie » dans « Femme > Robes » → Robe longue, fleuri,
   `women` ; « Jean Mahaut à pois » → Jeans, à pois ; adresse `/kids/` → `child` ; un nom contenant « menthe » ne donne
   pas `men` (mot entier) ; seed deux fois → aucun ajout la 2ᵉ fois, une entrée renommée par l'admin intacte ;
   capture sur fiche `admin` → rangement inchangé.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests au vert (`pnpm test` complet).
-- [ ] **Étape 5 :** commit `feat: keyword classification and starting reference lists`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests au vert (`pnpm test` complet).
+- [x] **Étape 5 :** commit `feat: keyword classification and starting reference lists`.
 
 ### Task 6: API — profils et articles
 
@@ -227,16 +227,16 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
   - Événements d'audience : `item_saved`, `item_stage_changed`, `item_moved` via `trackServer`.
   - Limite : 300 créations d'articles par heure et par compte → 429 `rate_limited`.
 
-- [ ] **Étape 1 : tests d'intégration qui échouent** — profil « Moi » créé au premier appel ; ♡ crée `spotted`
+- [x] **Étape 1 : tests d'intégration qui échouent** — profil « Moi » créé au premier appel ; ♡ crée `spotted`
   favori ; `ordered` crée `ordered` + événement ; deuxième `POST` sur la même fiche depuis un autre profil → 200 avec
   l'article existant (point de vigilance 1) ; `stage` écrit l'événement avec date et montant ; `move` écrit
   `from/to` ; supprimer un profil non vide → 409 ; **chaque route** sur l'article / profil d'une autre utilisatrice →
   404 ; corbeille puis restauration avec un actif pour la même fiche → réunis (point de vigilance 2) ; pagination
   stable sur 120 articles ; 301ᵉ création dans l'heure → 429 ; `undo` d'un `stage` rétablit l'étape.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests au vert (`pnpm test` complet).
-- [ ] **Étape 5 :** commit `feat(api): profiles and items`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests au vert (`pnpm test` complet).
+- [x] **Étape 5 :** commit `feat(api): profiles and items`.
 
 ### Task 7: API — actions en lot, étiquettes
 
@@ -250,13 +250,13 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
   lot ; renvoie `undo`) ; `GET/POST /api/me/tags`, `PATCH/DELETE /api/me/tags/:id` (supprimer une étiquette la
   retire des articles, les articles restent) ; nom d'étiquette en double (casse ignorée) → 409 `tag_exists`.
 
-- [ ] **Étape 1 : tests qui échouent** — lot de 200 `move` + un `undo` qui rétablit chaque profil d'origine ; lot de
+- [x] **Étape 1 : tests qui échouent** — lot de 200 `move` + un `undo` qui rétablit chaque profil d'origine ; lot de
   201 → 400 ; lot contenant un id d'autrui → 404 et rien de modifié ; `addTag` puis suppression de l'étiquette ;
   `delete` puis `restore` en lot ; doublon d'étiquette « Vinted » / « vinted » → 409.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests au vert.
-- [ ] **Étape 5 :** commit `feat(api): bulk item actions and tags`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests au vert.
+- [x] **Étape 5 :** commit `feat(api): bulk item actions and tags`.
 
 ### Task 8: API — listes et partage
 
@@ -272,14 +272,14 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
   `sharedWishlistViewSchema` ; `newShareToken(): { token, hash }`, `hashShareToken(token): string`.
 - Événement `wishlist_shared`.
 
-- [ ] **Étape 1 : tests qui échouent** — la page partagée ne contient ni notes, ni taille, ni profil, ni photo
+- [x] **Étape 1 : tests qui échouent** — la page partagée ne contient ni notes, ni taille, ni profil, ni photo
   privée (comparaison de clés sur la réponse brute) ; article supprimé absent, article passé à « Vendu » toujours
   présent (point de vigilance 3) ; repartager invalide l'ancien jeton ; partage coupé → 404 ; jeton mal formé → 404 ;
   la base ne contient jamais le jeton en clair ; fiche sans prix → `priceCents: null` (point de vigilance 5).
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests au vert.
-- [ ] **Étape 5 :** commit `feat(api): wishlists and sharing`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests au vert.
+- [x] **Étape 5 :** commit `feat(api): wishlists and sharing`.
 
 ### Task 9: API — photos de l'article
 
@@ -293,13 +293,13 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
   supprime la photo ; si c'était la vignette, `cover_media_id` repasse à null) ; `GET /api/me/media/:id` (la photo
   privée, seulement pour sa propriétaire, `Cache-Control: private, max-age=86400`).
 
-- [ ] **Étape 1 : tests qui échouent** — envoi d'une photo → visible dans `GET /api/me/items/:id` ; métadonnées GPS
+- [x] **Étape 1 : tests qui échouent** — envoi d'une photo → visible dans `GET /api/me/items/:id` ; métadonnées GPS
   absentes du fichier stocké ; 11ᵉ photo → 409 ; photo d'autrui → 404 ; suppression de la vignette → `coverUrl`
   redevient la première photo de la boutique.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests au vert.
-- [ ] **Étape 5 :** commit `feat(api): private item photos`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests au vert.
+- [x] **Étape 5 :** commit `feat(api): private item photos`.
 
 ### Task 10: Fusion anonyme → compte
 
@@ -319,12 +319,12 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
     sinon déplacés ;
   - listes : déplacées (noms identiques gardés tels quels).
 
-- [ ] **Étape 1 : tests qui échouent** — scénario complet du point de vigilance 4 ; aucune ligne orpheline ;
+- [x] **Étape 1 : tests qui échouent** — scénario complet du point de vigilance 4 ; aucune ligne orpheline ;
   l'anonyme supprimé après fusion ne laisse rien ; le test `owned-tables` exige toujours la cascade.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests au vert (`pnpm test` complet).
-- [ ] **Étape 5 :** commit `feat(api): merge wardrobe on sign-in`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests au vert (`pnpm test` complet).
+- [x] **Étape 5 :** commit `feat(api): merge wardrobe on sign-in`.
 
 ### Task 11: Admin — fiches et listes de référence (API)
 
@@ -340,13 +340,13 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
   `GET/POST/PATCH/DELETE /api/admin/reference/{categories|colors|materials|patterns}[/:id]` (catégorie : déplacer vers
   un autre parent refusé s'il crée un cycle → 400 `cycle`).
 
-- [ ] **Étape 1 : tests qui échouent** — non-admin → 403 partout ; `keptBy` compte 2 pour deux utilisatrices et la
+- [x] **Étape 1 : tests qui échouent** — non-admin → 403 partout ; `keptBy` compte 2 pour deux utilisatrices et la
   réponse ne contient aucun `userId` ; `PATCH` passe `classified_by` à `admin` et une capture suivante ne change pas
   le rangement ; cycle de catégories refusé ; chaque mutation écrit dans le journal admin.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests au vert.
-- [ ] **Étape 5 :** commit `feat(api): product and reference administration`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests au vert.
+- [x] **Étape 5 :** commit `feat(api): product and reference administration`.
 
 ### Task 12: Worker — vidage de la corbeille
 
@@ -359,12 +359,12 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
   dont `deleted_at` a plus de 30 jours (photos privées comprises, objets du stockage compris) ; file
   `wardrobe-purge` planifiée à `30 3 * * *`.
 
-- [ ] **Étape 1 : test qui échoue** — article supprimé il y a 31 jours effacé avec ses photos (objets absents du
+- [x] **Étape 1 : test qui échoue** — article supprimé il y a 31 jours effacé avec ses photos (objets absents du
   stockage en mémoire) ; supprimé il y a 29 jours gardé ; article actif jamais touché.
-- [ ] **Étape 2 :** le test échoue.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests au vert.
-- [ ] **Étape 5 :** commit `feat(worker): purge the trash after 30 days`.
+- [x] **Étape 2 :** le test échoue.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests au vert.
+- [x] **Étape 5 :** commit `feat(worker): purge the trash after 30 days`.
 
 ### Task 13: Web — coque adaptative et reprise des pages existantes
 
@@ -384,14 +384,14 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
   `container.app`).
 - E2E : nouveau projet « iPad (gen 7) » (Playwright `devices["iPad (gen 7)"]`).
 
-- [ ] **Étape 1 : tests qui échouent** — tests des tokens (les `clamp()` existent, `container.app` = `90rem`) ;
+- [x] **Étape 1 : tests qui échouent** — tests des tokens (les `clamp()` existent, `container.app` = `90rem`) ;
   `profile-context` lit `?profil=` et retombe sur « Moi » ; test e2e de mise en page : à 1440 px la fiche affiche
   deux colonnes et le contenu dépasse 60 rem de large ; à 390 px la barre d'onglets est visible en bas ; à 820 px les
   onglets sont en haut.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests, `pnpm lint` (tokens), build et `pnpm e2e` au vert.
-- [ ] **Étape 5 :** commit `feat(web): responsive app shell`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests, `pnpm lint` (tokens), build et `pnpm e2e` au vert.
+- [x] **Étape 5 :** commit `feat(web): responsive app shell`.
 
 ### Task 14: Web — de la fiche à l'article
 
@@ -411,12 +411,12 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
 - Fenêtre d'étape : date (aujourd'hui par défaut), montant facultatif ; pour « À vendre » prix demandé et endroit.
 - Fiche sans prix → « Prix non renseigné » ; sans photo → vignette de remplacement aux tokens (point de vigilance 5).
 
-- [ ] **Étape 1 : tests qui échouent** — `undo` expire après 8 s (horloge simulée) ; `wardrobe-client` refuse une
+- [x] **Étape 1 : tests qui échouent** — `undo` expire après 8 s (horloge simulée) ; `wardrobe-client` refuse une
   réponse mal formée ; formatage « Prix non renseigné » pour `priceCents: null`.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests, lint, build au vert.
-- [ ] **Étape 5 :** commit `feat(web): keep an item from its sheet`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests, lint, build au vert.
+- [x] **Étape 5 :** commit `feat(web): keep an item from its sheet`.
 
 ### Task 15: Web — vues, filtres, sélection multiple, proposition de compte
 
@@ -435,12 +435,12 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
   7 jours (date de fermeture dans `localStorage`, lecture protégée). Événements `account_prompt_shown`,
   `account_created_from_prompt`.
 
-- [ ] **Étape 1 : tests qui échouent** — `shouldPromptAccount` : 2ᵉ article → non, 3ᵉ → oui, partage → oui même au
+- [x] **Étape 1 : tests qui échouent** — `shouldPromptAccount` : 2ᵉ article → non, 3ᵉ → oui, partage → oui même au
   1ᵉʳ article, compte non anonyme → jamais, refermé hier → non ; `localStorage` qui lève une erreur → pas de plantage.
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests, lint, build au vert.
-- [ ] **Étape 5 :** commit `feat(web): wardrobe views`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests, lint, build au vert.
+- [x] **Étape 5 :** commit `feat(web): wardrobe views`.
 
 ### Task 16: Web — listes, page partagée, réglages, aide iPhone
 
@@ -461,12 +461,12 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
   `https://closyria.com/partager?url=<lien>` ; le fichier du raccourci n'est pas dans le dépôt : la page explique
   comment le créer en 4 étapes (action « Ouvrir les URL » sur l'entrée de partage).
 
-- [ ] **Étape 1 : tests qui échouent** — unitaires des fonctions de mise en forme (lien de partage absolu depuis
+- [x] **Étape 1 : tests qui échouent** — unitaires des fonctions de mise en forme (lien de partage absolu depuis
   `{ url }`) ; la page publique renvoie 404 pour un jeton inconnu (test de route Next ou e2e de la tâche 18).
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests, lint, build au vert.
-- [ ] **Étape 5 :** commit `feat(web): lists, sharing, settings and iPhone help`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests, lint, build au vert.
+- [x] **Étape 5 :** commit `feat(web): lists, sharing, settings and iPhone help`.
 
 ### Task 17: Web — admin des fiches et des listes de référence
 
@@ -482,12 +482,12 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
 - Listes de référence : arbre des types (ajouter, renommer, déplacer, mots-clés séparés par des virgules), couleurs
   (avec aperçu de la teinte), matières, motifs.
 
-- [ ] **Étape 1 : tests qui échouent** — `nav.test.ts` contient `products` et `reference` ; appels admin validés
+- [x] **Étape 1 : tests qui échouent** — `nav.test.ts` contient `products` et `reference` ; appels admin validés
   (`admin-api.test.ts`).
-- [ ] **Étape 2 :** les tests échouent.
-- [ ] **Étape 3 :** implémenter.
-- [ ] **Étape 4 :** tests, lint, build au vert.
-- [ ] **Étape 5 :** commit `feat(web): product and reference admin`.
+- [x] **Étape 2 :** les tests échouent.
+- [x] **Étape 3 :** implémenter.
+- [x] **Étape 4 :** tests, lint, build au vert.
+- [x] **Étape 5 :** commit `feat(web): product and reference admin`.
 
 ### Task 18: Bout en bout et mise en service
 
@@ -503,10 +503,10 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
   partage → 404 ; créer « Léa », déplacer deux articles en lot, filtrer par profil ; anonyme avec 3 articles → bandeau
   → connexion par code e-mail → articles toujours là ; axe sur chaque nouvelle page.
 
-- [ ] **Étape 1 :** écrire les parcours (ils échouent tant qu'une pièce manque).
-- [ ] **Étape 2 :** `pnpm build && pnpm e2e` au vert sur les trois formats.
-- [ ] **Étape 3 :** compléter la liste de mise en service et la conception V1.
-- [ ] **Étape 4 :** commit `test(e2e): keep, lists, profiles and account merge`.
+- [x] **Étape 1 :** écrire les parcours (ils échouent tant qu'une pièce manque).
+- [x] **Étape 2 :** `pnpm build && pnpm e2e` au vert sur les trois formats.
+- [x] **Étape 3 :** compléter la liste de mise en service et la conception V1.
+- [x] **Étape 4 :** commit `test(e2e): keep, lists, profiles and account merge`.
 
 ---
 
@@ -515,3 +515,41 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
 - Revue de toute la branche, fusion dans `dev` avec l'accord de la fondatrice, déploiement en dev, tests de la
   fondatrice.
 - Petit chantier « Sauvegardes automatiques de la prod », puis mise en prod des chantiers 1 et 2a ensemble.
+
+## Bilan de l'exécution
+
+Le plan a été exécuté en entier (tâches 1 à 18) sur la branche `chantier-2a`. Statut : terminé sur la branche `chantier-2a`, pas encore fusionné dans `dev` ni déployé ; 2b reste à faire. Écarts
+et décisions prises en route :
+
+- **Annuler** : chaque action renvoie une « annulation » exacte (les opérations inverses, regroupées par valeur
+  précédente, et les événements créés à supprimer), rejouée d'un bloc par `POST /api/me/items/undo`. Une opération
+  `setFields` (montants, taille, notes, couverture, favori…) permet d'annuler un changement d'étape ou une modification de
+  la fiche. Les actions en lot ignorent les articles déjà dans l'état demandé.
+- **Adresse d'une liste partagée** : `/l/<jeton>` et non `/listes/<jeton>`, qui serait entrée en conflit avec
+  `/listes/[id]` (listes privées). Seule l'empreinte du jeton est stockée : l'adresse n'est renvoyée qu'au moment du
+  partage, jamais relue ensuite.
+- **Coque adaptative** : une seule coque pour toutes les pages connectées (`(app)`), la page partagée et l'admin restent
+  en dehors. Grille de 2, 3 ou 5 colonnes selon l'écran.
+- **Identité d'un modèle** : `sku` et `gtin` d'une fiche désignent le modèle, pas une taille ; Shopify n'en fournit pas,
+  les codes-barres par taille sont gardés à part. Le public d'un article vient du fil d'Ariane, de la catégorie ou de
+  l'adresse, jamais des étiquettes ; les mots-clés trop ambigus (« bas », « top », « short »…) ne classent plus.
+- **Nouvelles routes non prévues** : `GET /api/reference` (catégories et couleurs, pour les filtres), `GET /api/me/facets`
+  (boutiques présentes dans ses articles) et `DELETE /api/me/items/{id}/purge` (supprimer définitivement depuis la
+  corbeille, sans annulation possible).
+- **Fusion anonyme → compte** : « Moi » est le premier profil (position, création, identifiant), comme partout dans
+  l'API ; l'article fusionné reprend la couverture anonyme si celle du compte est vide.
+- **Admin « Relancer la lecture »** : crée une capture de type utilisateur, pour que la fiche soit réellement réécrite.
+- **Pastilles de couleur** : les couleurs enregistrées sont des données ; un seul composant (`color-swatch.tsx`) est
+  dispensé de la règle des tokens, avec un test qui vérifie que le contrôle signale toujours une couleur en dur ailleurs.
+- **Bandeau de compte** : le texte parle d'e-mail seulement (seule connexion configurée aujourd'hui).
+- **Limites** : 300 tentatives de création d'articles par heure et par compte (toutes tentatives comptées), 200
+  étiquettes par compte ; suppression d'une photo privée avec confirmation (pas d'annulation côté API).
+- **Pas de limite de débit** sur `GET /api/shared/:token` pour l'instant (jeton de 128 bits, lecture indexée) ; à
+  ajouter en bordure si besoin.
+- **Instabilité corrigée au passage** : le champ « Code à 6 chiffres » perdait parfois le focus clavier à la
+  connexion ; corrigé (vrai défaut d'usage, pas seulement de test).
+- **Reste pour plus tard** (noté, non bloquant) : pas de plafond de listes par compte ni d'articles par liste ; une
+  action en lot annulée laisse ses événements d'audience ; l'annulation de masse est « dernier écrivain gagne » ; le
+  cache de 1 h de `/api/reference` retarde les modifications de l'admin.
+- **Mise en prod** : après la livraison en dev, les tests de la fondatrice et le petit chantier « Sauvegardes
+  automatiques de la prod » (voir `docs/plans/2026-11-05-mise-en-service-chantier-1.md`, section « Chantier 2a »).

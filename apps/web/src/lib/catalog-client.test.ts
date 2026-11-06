@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createCapture, fetchProduct, saveManual } from "./catalog-client";
+import { createCapture, fetchProduct, fetchSummary, saveManual } from "./catalog-client";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const json = (body: unknown, status = 200) =>
@@ -48,5 +48,21 @@ describe("saveManual", () => {
   it("reports rate limiting", async () => {
     const result = await saveManual(id, { name: "Robe", sizes: [] }, deps(json({ error: "rate_limited" }, 429)));
     expect(result).toEqual({ ok: false, error: "rate_limited" });
+  });
+});
+
+describe("fetchSummary", () => {
+  const summary = { isAnonymous: true, itemCount: 0, profiles: [] };
+
+  it("reads the validated summary, without opening a session", async () => {
+    const d = deps(json(summary));
+    expect(await fetchSummary(d)).toEqual(summary);
+    expect(d.fetch).toHaveBeenCalledWith("/api/me/summary", expect.objectContaining({ cache: "no-store" }));
+    expect(d.ensure).not.toHaveBeenCalled();
+  });
+
+  it("is null without a session or with an unexpected answer", async () => {
+    expect(await fetchSummary(deps(json({ error: "unauthorized" }, 401)))).toBeNull();
+    expect(await fetchSummary(deps(json({ nope: 1 })))).toBeNull();
   });
 });

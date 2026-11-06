@@ -124,6 +124,7 @@ describe("route coverage", () => {
       events: { db: {} as Database },
       catalog: { db: {} as Database, store: memoryStore(), queue: { enqueue: async () => {} } },
       admin: { db: {} as Database },
+      wardrobe: { db: {} as Database },
     });
   const openapi = async (app: ReturnType<typeof make>) =>
     (await (await app.request("/api/openapi.json")).json()) as OpenApiDocument;
@@ -156,6 +157,7 @@ describe("route coverage", () => {
       events: { db: {} as Database },
       catalog: { db: {} as Database, store: memoryStore(), queue: { enqueue: async () => {} } },
       admin: { db: {} as Database },
+      wardrobe: { db: {} as Database },
       testMail: { messages: [] },
     });
     const doc = await openapi(app);

@@ -1,0 +1,183 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  changeStage,
+  createItem,
+  deleteProfile,
+  fetchFacets,
+  fetchItemForProduct,
+  fetchItemsPage,
+  fetchReference,
+  purgeItem,
+  reorderWishlists,
+  shareWishlist,
+  undoMutation,
+} from "./wardrobe-client";
+
+const id = "00000000-0000-4000-8000-000000000001";
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+const deps = (response: Response) => ({ fetch: vi.fn(async () => response), ensure: vi.fn(async () => {}) });
+
+const product = {
+  id,
+  shop: { name: "Shop", slug: "shop" },
+  canonicalUrl: "https://a.fr/p",
+  name: "Robe",
+  brand: null,
+  currency: "EUR",
+  priceCents: null,
+  compareAtCents: null,
+  sizes: [],
+  images: [],
+  source: "captured",
+  captureStatus: "ok",
+  lastCapturedAt: null,
+};
+const item = {
+  id,
+  profileId: id,
+  product,
+  stage: "spotted",
+  favorite: true,
+  name: "Robe",
+  brand: null,
+  sizeLabel: null,
+  sizeNote: null,
+  notes: null,
+  pricePaidCents: null,
+  salePriceCents: null,
+  saleChannel: null,
+  nameOverride: null,
+  brandOverride: null,
+  categoryId: null,
+  colorId: null,
+  coverMediaId: null,
+  coverUrl: null,
+  photos: [],
+  tags: [],
+  wishlistIds: [],
+  deletedAt: null,
+  createdAt: "2026-11-05T10:00:00.000Z",
+  updatedAt: "2026-11-05T10:00:00.000Z",
+};
+
+describe("createItem", () => {
+  it("tells a creation (201) from an existing item (200)", async () => {
+    const body = { itemIds: [id], undo: null, item };
+    expect(await createItem({ productId: id, action: "favorite" }, deps(json(body, 201)))).toMatchObject({
+      ok: true,
+      created: true,
+    });
+    expect(await createItem({ productId: id, action: "favorite" }, deps(json(body, 200)))).toMatchObject({
+      ok: true,
+      created: false,
+    });
+  });
+
+  it("refuses a malformed answer", async () => {
+    expect(await createItem({ productId: id, action: "favorite" }, deps(json({ item: {} }, 201)))).toEqual({
+      ok: false,
+      error: "failed",
+    });
+  });
+});
+
+describe("errors", () => {
+  it("maps a known API error code", async () => {
+    const result = await changeStage(
+      id,
+      { stage: "owned", at: "2026-11-05T10:00:00.000Z" },
+      deps(json({ error: "same_stage" }, 400)),
+    );
+    expect(result).toEqual({ ok: false, error: "same_stage" });
+  });
+
+  it("falls back to failed for an unknown code or a network error", async () => {
+    expect(await undoMutation({ ops: [], removeEventIds: [] }, deps(json({ error: "weird" }, 500)))).toEqual({
+      ok: false,
+      error: "failed",
+    });
+    const broken = { fetch: vi.fn().mockRejectedValue(new Error("x")), ensure: vi.fn(async () => {}) };
+    expect(await undoMutation({ ops: [], removeEventIds: [] }, broken)).toEqual({ ok: false, error: "failed" });
+  });
+});
+
+describe("fetchItemForProduct", () => {
+  it("asks for the product and returns the first item, or null", async () => {
+    const d = deps(json({ items: [item], nextCursor: null }));
+    expect(await fetchItemForProduct(id, d)).toMatchObject({ id });
+    expect(d.fetch).toHaveBeenCalledWith(`/api/me/items?product=${id}`, expect.anything());
+    expect(await fetchItemForProduct(id, deps(json({ items: [], nextCursor: null })))).toBeNull();
+  });
+
+  it("rejects a malformed page", async () => {
+    await expect(fetchItemForProduct(id, deps(json({ items: [{}] })))).rejects.toThrow();
+  });
+});
+
+describe("view reads", () => {
+  it("asks a page with the filters and the cursor", async () => {
+    const d = deps(json({ items: [], nextCursor: "abc" }));
+    const page = await fetchItemsPage({ stage: "owned", favorite: "true" }, "cur", d);
+    expect(page.nextCursor).toBe("abc");
+    expect(d.fetch).toHaveBeenCalledWith("/api/me/items?stage=owned&favorite=true&cursor=cur", expect.anything());
+  });
+
+  it("shows nothing without a session, and throws on a server error", async () => {
+    expect(await fetchItemsPage({}, null, deps(json({}, 401)))).toEqual({ items: [], nextCursor: null });
+    await expect(fetchItemsPage({}, null, deps(json({}, 500)))).rejects.toThrow();
+    expect(await fetchFacets(deps(json({}, 401)))).toEqual({ shops: [] });
+  });
+
+  it("validates the reference lists", async () => {
+    const ok = { categories: [{ id, parentId: null, name: "Robes", position: 0 }], colors: [] };
+    expect((await fetchReference(deps(json(ok)))).categories).toHaveLength(1);
+    await expect(fetchReference(deps(json({ categories: 3 })))).rejects.toThrow();
+  });
+});
+
+describe("lists, sharing, profiles and trash", () => {
+  const listId = "00000000-0000-4000-8000-000000000002";
+
+  it("shareWishlist returns the path the API gave, once", async () => {
+    const d = deps(json({ url: "/l/abcDEF_-123" }));
+    const result = await shareWishlist(listId, d);
+    expect(result).toMatchObject({ ok: true, url: "/l/abcDEF_-123" });
+    expect(d.fetch).toHaveBeenCalledWith(`/api/me/wishlists/${listId}/share`, { method: "POST" });
+  });
+
+  it("shareWishlist refuses an answer that is not a share path", async () => {
+    expect(await shareWishlist(listId, deps(json({ url: "https://evil.test/x" })))).toEqual({
+      ok: false,
+      error: "failed",
+    });
+  });
+
+  it("reorderWishlists posts the ids in their new order", async () => {
+    const d = deps(json({ wishlists: [] }));
+    expect(await reorderWishlists([listId, id], d)).toMatchObject({ ok: true });
+    expect(d.fetch).toHaveBeenCalledWith(
+      "/api/me/wishlists/order",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ ids: [listId, id] }) }),
+    );
+  });
+
+  it("deleteProfile keeps the API's profile_not_empty code", async () => {
+    expect(await deleteProfile(id, deps(json({ error: "profile_not_empty" }, 409)))).toEqual({
+      ok: false,
+      error: "profile_not_empty",
+    });
+  });
+
+  it("deleteProfile and purgeItem succeed on 204 with no body", async () => {
+    expect(await deleteProfile(id, deps(new Response(null, { status: 204 })))).toEqual({ ok: true });
+    expect(await purgeItem(id, deps(new Response(null, { status: 204 })))).toEqual({ ok: true });
+  });
+
+  it("purgeItem keeps item_not_deleted", async () => {
+    expect(await purgeItem(id, deps(json({ error: "item_not_deleted" }, 409)))).toEqual({
+      ok: false,
+      error: "item_not_deleted",
+    });
+  });
+});

@@ -35,5 +35,6 @@ export function extractOpenGraph(html: string, url: string): Candidate | null {
     ),
     sizes: [],
     siteName: cleanText(first("og:site_name"), 120),
+    sku: cleanText(first("product:retailer_item_id"), 200),
   };
 }

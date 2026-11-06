@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { adminRequest, catalogErrorKey, readCaptureResult, shopPatchErrorKey } from "./admin-catalog";
+import { describe, expect, it, vi } from "vitest";
+import {
+  adminRequest,
+  catalogErrorKey,
+  productErrorKey,
+  readCaptureResult,
+  referenceErrorKey,
+  shopPatchErrorKey,
+} from "./admin-catalog";
 
 describe("catalogErrorKey", () => {
   it("maps the API refusals to a message key", () => {
@@ -70,5 +77,28 @@ describe("shopPatchErrorKey", () => {
     expect(shopPatchErrorKey(409, { error: "slug_taken" })).toBe("slugTaken");
     expect(shopPatchErrorKey(409, { error: "domain_taken" })).toBe("domainTaken");
     expect(shopPatchErrorKey(500, null)).toBe("generic");
+  });
+
+  it("maps the reference refusals", () => {
+    expect(referenceErrorKey(400, { error: "cycle" })).toBe("cycle");
+    expect(referenceErrorKey(409, { error: "has_children" })).toBe("hasChildren");
+    expect(referenceErrorKey(409, { error: "slug_taken" })).toBe("slugTaken");
+    expect(referenceErrorKey(400, { error: "invalid_request" })).toBe("invalidEntry");
+    expect(referenceErrorKey(500, null)).toBe("generic");
+  });
+
+  it("maps the product refusals", () => {
+    expect(productErrorKey(400, { error: "invalid_request" })).toBe("invalidProduct");
+    expect(productErrorKey(409, { error: "capture_active" })).toBe("captureActive");
+  });
+
+  it("sends a DELETE without a body", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ deleted: true }), { status: 200 }));
+    const result = await adminRequest("DELETE", "/api/admin/reference/colors/1", undefined, fetchImpl as typeof fetch);
+    expect(result.ok).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledWith("/api/admin/reference/colors/1", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+    });
   });
 });

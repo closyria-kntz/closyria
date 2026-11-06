@@ -5,8 +5,14 @@ import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 /** A database handle or an open transaction. */
 export type DbExecutor = Pick<Database, "execute">;
 
-/** Moves one table's rows when the generic `update … set user_id` cannot (unique constraints to merge). */
-export type OwnedTableReassign = (fromUserId: string, toUserId: string, tx: DbExecutor) => Promise<void>;
+/** An open Drizzle transaction, as handed to `db.transaction(async (tx) => …)`. */
+export type DbTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/**
+ * Moves one table's rows when the generic `update … set user_id` cannot (unique constraints to merge). Gets the
+ * link transaction itself, so it can use the full query builder.
+ */
+export type OwnedTableReassign = (fromUserId: string, toUserId: string, tx: DbTransaction) => Promise<void>;
 
 const ownedTables = new Map<PgTable, { column: PgColumn; reassign?: OwnedTableReassign }>();
 
@@ -25,8 +31,8 @@ export function registerOwnedTable(table: PgTable, userIdColumn: PgColumn, reass
   ownedTables.set(table, reassign ? { column: userIdColumn, reassign } : { column: userIdColumn });
 }
 
-/** Moves every row of the registered tables from one user to another. */
-export async function reassignUserData(fromUserId: string, toUserId: string, tx: DbExecutor): Promise<void> {
+/** Moves every row of the registered tables from one user to another, inside the given transaction. */
+export async function reassignUserData(fromUserId: string, toUserId: string, tx: DbTransaction): Promise<void> {
   if (fromUserId === toUserId) return;
   for (const [table, { column, reassign }] of ownedTables) {
     if (reassign) {
