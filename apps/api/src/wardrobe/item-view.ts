@@ -149,15 +149,18 @@ function validKeyValue(type: KeyType, value: string): boolean {
 }
 
 const effectiveName = sql`coalesce(${schema.items.nameOverride}, ${schema.products.name})`;
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 const idKey: SortKey = { expr: sql`${schema.items.id}`, type: "uuid" };
 
 /**
  * Keyset of each sort. Every key is non-null and all keys of a sort go the same way, so a row comparison
  * `(k1, k2, id) < (…)` gives the next page; unknown names and prices come last.
  */
-type ListSort = ItemSort | "trash";
+type ListSort = ItemSort | "trash" | "list";
 
 const SORTS: Record<ListSort, { keys: SortKey[]; desc: boolean }> = {
+  /** With `wishlist=`: the list's own order. */
+  list: { keys: [{ expr: sql`${schema.wishlistItems.position}`, type: "integer" }, idKey], desc: false },
   /** Default of the trash view: latest deleted first. */
   trash: { keys: [{ expr: sql`${schema.items.deletedAt}`, type: "timestamptz" }, idKey], desc: true },
   recent: { keys: [{ expr: sql`${schema.items.createdAt}`, type: "timestamptz" }, idKey], desc: true },
@@ -189,7 +192,7 @@ const SORTS: Record<ListSort, { keys: SortKey[]; desc: boolean }> = {
 };
 
 const cursorSchema = z.object({
-  s: z.enum([...itemSortSchema.options, "trash"]),
+  s: z.enum([...itemSortSchema.options, "trash", "list"]),
   k: z.array(z.string()).min(2).max(3),
 });
 
@@ -220,12 +223,13 @@ function decodeCursor(sort: ListSort, cursor: string): string[] {
  * Throws `InvalidCursorError` for a foreign or malformed cursor.
  */
 export async function listItems(db: Database, userId: string, query: ItemListQuery): Promise<ItemPage> {
-  const sort: ListSort = query.sort ?? (query.deleted ? "trash" : "recent");
+  const sort: ListSort = query.wishlist ? "list" : (query.sort ?? (query.deleted ? "trash" : "recent"));
   const { keys, desc } = SORTS[sort];
   const conditions: SQL[] = [
     eq(schema.items.userId, userId),
     query.deleted ? isNotNull(schema.items.deletedAt) : isNull(schema.items.deletedAt),
   ];
+  if (query.wishlist) conditions.push(isNotNull(schema.wishlistItems.itemId));
   if (query.stage) conditions.push(eq(schema.items.stage, query.stage));
   if (query.profile) conditions.push(eq(schema.items.profileId, query.profile));
   if (query.product) conditions.push(eq(schema.items.productId, query.product));
@@ -270,6 +274,13 @@ export async function listItems(db: Database, userId: string, query: ItemListQue
     .from(schema.items)
     .innerJoin(schema.products, eq(schema.products.id, schema.items.productId))
     .innerJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
+    .leftJoin(
+      schema.wishlistItems,
+      and(
+        eq(schema.wishlistItems.itemId, schema.items.id),
+        eq(schema.wishlistItems.wishlistId, query.wishlist ?? NIL_UUID),
+      ),
+    )
     .where(and(...conditions))
     .orderBy(...keys.map((k) => (desc ? sql`${k.expr} desc` : sql`${k.expr} asc`)))
     .limit(ITEMS_PAGE_SIZE + 1)) as unknown as Record<string, string>[];

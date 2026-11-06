@@ -780,6 +780,52 @@ describe("purge from the trash", () => {
   });
 });
 
+describe("items of a list", () => {
+  it("lists a list's items in the list's order, paged, without trashed ones", async () => {
+    const { cookie } = await t.signIn();
+    const ids: string[] = [];
+    for (let i = 0; i < 50; i++) {
+      const product = await newProduct();
+      ids.push((await keep(cookie, { productId: product.id, action: "favorite" })).item.id);
+    }
+    const created = await call("POST", "/api/me/wishlists", cookie, { name: "Ordre" });
+    const list = (await created.json()) as { id: string };
+    await call("POST", "/api/me/items/bulk", cookie, { op: "addToList", ids, wishlistId: list.id });
+    const reversed = [...ids].reverse();
+    expect((await call("POST", `/api/me/wishlists/${list.id}/order`, cookie, { ids: reversed })).status).toBe(200);
+    await call("DELETE", `/api/me/items/${reversed[3]}`, cookie);
+    const expected = reversed.filter((id) => id !== reversed[3]);
+
+    const first = (await (await call("GET", `/api/me/items?wishlist=${list.id}`, cookie)).json()) as {
+      items: ItemView[];
+      nextCursor: string | null;
+    };
+    expect(first.items).toHaveLength(48);
+    expect(first.nextCursor).not.toBeNull();
+    const second = (await (
+      await call("GET", `/api/me/items?wishlist=${list.id}&cursor=${first.nextCursor}`, cookie)
+    ).json()) as { items: ItemView[]; nextCursor: string | null };
+    expect([...first.items, ...second.items].map((i) => i.id)).toEqual(expected);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it("answers 404 for an unknown or another account's list", async () => {
+    const owner = await t.signIn();
+    const other = await t.signIn();
+    const list = (await (await call("POST", "/api/me/wishlists", owner.cookie, { name: "Privée" })).json()) as {
+      id: string;
+    };
+    for (const [cookie, id] of [
+      [other.cookie, list.id],
+      [owner.cookie, UNKNOWN_ID],
+    ] as const) {
+      const res = await call("GET", `/api/me/items?wishlist=${id}`, cookie);
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ error: "not_found" });
+    }
+  });
+});
+
 describe("isolation", () => {
   it("answers 404 on every item route for another user's item", async () => {
     const owner = await t.signIn();

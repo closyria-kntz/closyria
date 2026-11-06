@@ -713,7 +713,6 @@
   },
   "Settings": {
     "title": "Réglages",
-    "metadata": "Réglages",
     "nav": {
       "label": "Réglages",
       "profiles": "Profils",
@@ -804,11 +803,9 @@
       "listLabel": "Articles dans la corbeille",
       "deletedOn": "Supprimé le {date}",
       "restore": "Restaurer",
-      "restoreLabel": "Restaurer {name}",
       "restored": "« {name} » restauré",
       "merged": "« {name} » est réuni avec l’article que tu avais déjà gardé",
       "purge": "Supprimer définitivement",
-      "purgeLabel": "Supprimer définitivement {name}",
       "purgeTitle": "Supprimer définitivement ?",
       "purgeBody": "« {name} » et ses photos seront effacés pour toujours. Tu ne pourras pas annuler.",
       "purgeCancel": "Garder dans la corbeille",
@@ -837,8 +834,8 @@
         "body": "Touche l’icône de détails, active « Afficher dans la feuille de partage », puis garde seulement « URL » dans les types acceptés."
       },
       "3": {
-        "title": "Ajoute l’action « Ouvrir les URL »",
-        "body": "Dans le champ de l’action, écris l’adresse ci-dessous, puis touche le champ et ajoute juste après la variable « Entrée du raccourci » : c’est le lien partagé."
+        "title": "Encode le lien, puis ouvre-le",
+        "body": "Ajoute d’abord l’action « Encoder l’URL » : elle prend l’« Entrée du raccourci », le lien partagé. Ajoute ensuite l’action « Ouvrir les URL » et écris dans son champ l’adresse ci-dessous, suivie du résultat de « Encoder l’URL »."
       },
       "4": {
         "title": "Essaie",

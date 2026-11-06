@@ -1,3 +1,4 @@
+import { and, eq, schema } from "@closyria/db";
 import {
   itemCreateSchema,
   itemListQuerySchema,
@@ -79,6 +80,7 @@ const listRoute = defineAccess(
     responses: {
       200: json("A page", itemPageSchema),
       400: errorContent("Invalid query (invalid_request) or cursor (invalid_cursor)"),
+      404: errorContent("`wishlist` is unknown or another account's list (not_found)"),
     },
   }),
   "user",
@@ -232,7 +234,15 @@ export function itemsRoutes(deps: WardrobeDeps) {
     })
     .openapi(listRoute, async (c) => {
       try {
-        return c.json(await listItems(db, userIdOf(c), c.req.valid("query")), 200);
+        const query = c.req.valid("query");
+        if (query.wishlist) {
+          const [own] = await db
+            .select({ id: schema.wishlists.id })
+            .from(schema.wishlists)
+            .where(and(eq(schema.wishlists.id, query.wishlist), eq(schema.wishlists.userId, userIdOf(c))));
+          if (!own) return c.json(notFound, 404);
+        }
+        return c.json(await listItems(db, userIdOf(c), query), 200);
       } catch (error) {
         if (error instanceof InvalidCursorError) return c.json({ error: "invalid_cursor" } as const, 400);
         throw error;

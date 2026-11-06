@@ -81,6 +81,7 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   const other = await visitor.newPage();
   const response = await other.goto(shareUrl);
   expect(response?.status()).toBe(200);
+  expect(response?.headers()["x-robots-tag"]).toBe("noindex");
   await expect(other.getByRole("heading", { level: 1, name: "Été à Nice" })).toBeVisible();
   const items = other.getByRole("list", { name: "Articles" }).getByRole("listitem");
   await expect(items).toHaveCount(1);

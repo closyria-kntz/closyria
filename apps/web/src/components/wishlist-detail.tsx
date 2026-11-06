@@ -9,7 +9,7 @@ import { moveId } from "@/lib/reorder";
 import { pushUndo } from "@/lib/undo";
 import {
   deleteWishlist,
-  fetchItem,
+  fetchItemsPage,
   fetchWishlists,
   removeFromWishlist,
   renameWishlist,
@@ -46,9 +46,21 @@ export function WishlistDetail({ id }: { id: string }) {
     try {
       const list = (await fetchWishlists()).find((candidate) => candidate.id === id);
       if (!list) return setState({ status: "missing" });
-      const fetched = await Promise.all(list.itemIds.map((itemId) => fetchItem(itemId).catch(() => undefined)));
-      const items = fetched.filter((item): item is ItemView => item != null && item.deletedAt === null);
-      setState({ status: "ready", list, items, partial: fetched.some((item) => item === undefined) });
+      // The list's items, in its order, page by page (the API filters and orders by the list).
+      const items: ItemView[] = [];
+      let cursor: string | null = null;
+      let failed = false;
+      do {
+        try {
+          const page = await fetchItemsPage({ wishlist: id }, cursor);
+          items.push(...page.items);
+          cursor = page.nextCursor;
+        } catch {
+          failed = true;
+          cursor = null;
+        }
+      } while (cursor);
+      setState({ status: "ready", list, items, partial: failed || items.length !== list.itemIds.length });
     } catch {
       setState({ status: "error" });
     }
@@ -114,12 +126,9 @@ export function WishlistDetail({ id }: { id: string }) {
   }
 
   async function move(itemId: string, direction: MoveDirection) {
-    const ids = moveId(
-      items.map((item) => item.id),
-      itemId,
-      direction,
-    );
-    if (!ids) return;
+    // The whole list as the API knows it, never only the items that were fetched.
+    const ids = moveId(list.itemIds, itemId, direction);
+    if (!ids || partial) return;
     const result = await reorderWishlistItems(list.id, ids);
     if (!result.ok) return setError(t("moveFailed"));
     setError(null);
@@ -227,6 +236,7 @@ export function WishlistDetail({ id }: { id: string }) {
                   id={item.id}
                   index={index}
                   count={items.length}
+                  disabled={partial}
                   upLabel={t("moveUp", { name: nameOf(item) })}
                   downLabel={t("moveDown", { name: nameOf(item) })}
                   onMove={move}

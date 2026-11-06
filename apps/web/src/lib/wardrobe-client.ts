@@ -10,7 +10,6 @@ import {
   type ItemView,
   itemMutationResultSchema,
   itemPageSchema,
-  itemViewSchema,
   mediaErrorCodes,
   mutationResultSchema,
   type ProfileInput,
@@ -215,14 +214,6 @@ async function callNoContent(deps: ClientDeps, path: string, init: RequestInit):
     // Falls through to the generic error.
   }
   return { ok: false, error: "failed" };
-}
-
-/** One of her items by id (trashed ones included). Throws on a network error or a malformed answer; null if gone. */
-export async function fetchItem(id: string, deps: ClientDeps = defaultDeps): Promise<ItemView | null> {
-  const response = await deps.fetch(`/api/me/items/${id}`, { cache: "no-store" });
-  if (response.status === 404 || response.status === 401) return null;
-  if (!response.ok) throw new Error(`item ${response.status}`);
-  return itemViewSchema.parse(await response.json());
 }
 
 export async function renameWishlist(id: string, name: string, deps: ClientDeps = defaultDeps) {

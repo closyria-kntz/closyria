@@ -155,6 +155,8 @@ export const itemListQuerySchema = z.object({
   color: z.uuid().optional(),
   audience: audienceSchema.optional(),
   sort: itemSortSchema.optional(),
+  /** Only the items of one of her lists, in the list's order (`sort` is ignored). */
+  wishlist: z.uuid().optional(),
   /** Trash view: only deleted items. */
   deleted: z.stringbool().optional(),
   /** Opaque; room for a 300-character name key in UTF-8, base64url-encoded. */

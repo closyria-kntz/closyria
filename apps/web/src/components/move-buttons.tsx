@@ -25,6 +25,7 @@ export function MoveButtons({
   count,
   upLabel,
   downLabel,
+  disabled = false,
   onMove,
 }: {
   id: string;
@@ -32,6 +33,8 @@ export function MoveButtons({
   count: number;
   upLabel: string;
   downLabel: string;
+  /** The list is not fully known (partial load): no reorder. */
+  disabled?: boolean;
   onMove: (id: string, direction: MoveDirection) => void;
 }) {
   return (
@@ -39,7 +42,7 @@ export function MoveButtons({
       <button
         type="button"
         data-move={`${id}:up`}
-        disabled={index === 0}
+        disabled={disabled || index === 0}
         aria-label={upLabel}
         onClick={() => onMove(id, "up")}
         className={`${buttonClass} min-h-touch-target min-w-touch-target justify-center disabled:opacity-40`}
@@ -49,7 +52,7 @@ export function MoveButtons({
       <button
         type="button"
         data-move={`${id}:down`}
-        disabled={index === count - 1}
+        disabled={disabled || index === count - 1}
         aria-label={downLabel}
         onClick={() => onMove(id, "down")}
         className={`${buttonClass} min-h-touch-target min-w-touch-target justify-center disabled:opacity-40`}
