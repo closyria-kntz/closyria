@@ -332,3 +332,10 @@ Décisions prises pendant l'exécution :
 - Tâche 6 : un rattachement refusé est enregistré en `failed`/`failed` (la contrainte de la base n'accepte que les
   codes du worker) ; seule la lecture qui rattache signale `too_many_photos` ou `item_deleted`. Coût si on se
   trompe : une lecture ultérieure affiche une erreur générique.
+- Revue finale : une photo donnée par lien est aussi rattachée côté serveur à la lecture de l'article
+  (`GET /api/me/items/{id}` et la liste `GET /api/me/items`, dont la lecture de la fiche par produit), avec le même
+  rattachement verrouillé que l'interrogation de l'import. Fermer la fenêtre, quitter la page ou l'abandon de
+  l'attente (~75 s) ne perdent donc plus la photo : elle est sur la fiche au prochain chargement, et la fenêtre dit
+  « La photo arrive : elle apparaîtra sur la fiche dans un instant. » quand l'attente abandonne. Une fusion
+  d'articles emporte aussi leurs imports de photo. Coût si on se trompe : une requête de plus (indexée, vide en
+  général) à chaque lecture d'article.

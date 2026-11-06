@@ -100,7 +100,7 @@ Mêmes étapes, avec les noms de prod :
   uniquement des `CREATE`, sans risque pour les données existantes.
 - **Nouvelle file `photo-import`** : le worker lit les images données par lien (« Ajouter une photo »). Contrôle après
   déploiement : `sudo journalctl -u closyria-<env>-worker --no-pager | grep -E 'photo-import|transient'` ne montre
-  aucune erreur.
+  aucune ligne d’erreur (la ligne d’information `transient purge:` est normale).
 
 ### Dev
 
@@ -122,7 +122,8 @@ Mêmes étapes, avec les noms de prod :
 9. [ ] Purge : rien à vérifier à la main (aucun article n'a 30 jours) ; le lendemain, pas d'erreur de `wardrobe-purge`
    dans `sudo journalctl -u closyria-dev-worker --no-pager | grep 'wardrobe-purge'`
 10. [ ] Finitions du 2a, après déploiement de 0013 : migration 0013 appliquée, worker `active`, et
-    `sudo journalctl -u closyria-dev-worker --no-pager | grep -E 'photo-import|transient'` sans erreur
+    `sudo journalctl -u closyria-dev-worker --no-pager | grep -E 'photo-import|transient'` : aucune ligne d’erreur
+    (la ligne d’information `transient purge:` est normale)
 11. [ ] « Derniers liens » sur l'accueil : coller un lien sans rien garder, revenir à l'accueil, la fiche y est ; ✕ la retire
 12. [ ] Retirer le ♡ d'une simple envie (rien d'autre sur l'article) : l'article quitte Envies, « Annuler » le remet ;
     avec une note ou une liste, seul le ♡ est retiré
@@ -140,7 +141,8 @@ Mêmes étapes, avec les noms de prod :
 - [ ] Les étapes « Prod » ci-dessus (variables comparées, barrière, déploiement), avec migrations 0007 à 0013
 - [ ] `grep 'starting reference lists'` présent au premier démarrage, `grep 'seed:'` vide ; filtres Type et Couleur chargés sur https://closyria.com
 - [ ] Parcours ♡, étape, liste partagée (fenêtre privée), profil, comme en dev
-- [ ] `grep -E 'photo-import|transient'` sur le journal du worker prod : aucune erreur ; « Ajouter une photo » (lien) et « Derniers liens » essayés
+- [ ] `grep -E 'photo-import|transient'` sur le journal du worker prod : aucune ligne d’erreur (la ligne d’information
+  `transient purge:` est normale) ; « Ajouter une photo » (lien) et « Derniers liens » essayés
 - [ ] Le lendemain : pas d'erreur de `wardrobe-purge` dans le journal du worker prod
 
 ## Retour arrière
