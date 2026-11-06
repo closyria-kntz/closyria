@@ -266,6 +266,12 @@ Plan et décisions : `docs/plans/2026-11-06-sauvegardes-prod.md`.
 Les copies sont verrouillées 30 jours (Object Lock, mode « compliance ») : personne ne peut les effacer ni les
 remplacer avant, même avec les clés du serveur. Elles expirent seules après 31 jours.
 
+Limite constatée chez OVH (2026-11-06) : malgré la politique sans `s3:DeleteObject`, un effacement simple est
+accepté et pose une étiquette « supprimé » (*delete marker*) sur la copie. La copie elle-même reste intacte et ne
+peut pas être détruite (essai de destruction par version : `AccessDenied`). Une copie ainsi cachée fait échouer la
+vérification du matin (alerte). Pour la faire réapparaître : `list-object-versions`, puis `delete-object` avec le
+`--version-id` de l'étiquette.
+
 ### `/etc/closyria/backup.env` (root:root 600)
 
 | Variable | Valeur |
