@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquettes Passe design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Closyria's own tokens (apps/web/src/styles/tokens.css). Layout idea: each proposal = a desktop frame and a phone
+   frame side by side, both with a fixed frame and a content area that scrolls on its own. */
+:root {
+  --surface: #F7F0ED;
+  --raised: #FFFDFB;
+  --sunken: #EFE2DF;
+  --line: #E8DCD8;
+  --ink: #2E1A2A;
+  --muted: #6F5A67;
+  --accent: #7A2E5F;
+  --accent-ink: #FFF6F0;
+  --success: #1F4A3F;
+  --success-surface: #DCEBE2;
+  --hint: #F6EAD8;
+  --display: "Cormorant Garamond", ui-serif, Georgia, serif;
+  --body: "Jost", ui-sans-serif, system-ui, sans-serif;
+  --photo: repeating-linear-gradient(115deg, rgb(255 255 255 / 0.10) 0 2px, transparent 2px 7px),
+           linear-gradient(165deg, #EDC3CD 0%, #DFA0B2 55%, #C9849A 100%);
+  --photo-2: repeating-linear-gradient(65deg, rgb(255 255 255 / 0.10) 0 2px, transparent 2px 7px),
+           linear-gradient(200deg, #F1D3D9 0%, #E2AABB 60%, #CF8FA4 100%);
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--surface); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.5; }
+h1, h2, h3 { text-wrap: balance; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.page { max-width: 1320px; margin: 0 auto; padding: 40px 24px 80px; display: flex; flex-direction: column; gap: 56px; }
+.intro { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+.intro h1 { font-family: var(--display); font-weight: 600; font-size: 44px; line-height: 1.05; margin: 0 0 12px; }
+.intro p { margin: 0 0 10px; max-width: 62ch; }
+.verdict { background: var(--raised); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; padding: 18px 20px; }
+.verdict h2 { font-family: var(--display); font-size: 26px; margin: 0 0 6px; }
+.verdict p { margin: 0 0 8px; }
+.common { background: var(--sunken); border-radius: 12px; padding: 18px 22px; }
+.common h2 { font-family: var(--display); font-size: 26px; margin: 0 0 8px; }
+.common ul { margin: 0; padding-left: 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 32px; }
+
+.proposal { display: flex; flex-direction: column; gap: 20px; }
+.proposal-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; }
+.proposal-head h2 { font-family: var(--display); font-weight: 700; font-size: 38px; margin: 0; }
+.proposal-head .tag { font-size: 14px; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 10px; }
+.proposal-head p { flex-basis: 100%; margin: 0; max-width: 70ch; color: var(--muted); }
+.frames { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+.caption { font-size: 14px; color: var(--muted); margin: 0 0 6px; }
+.scroll-x { overflow-x: auto; padding-bottom: 6px; }
+.tradeoffs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.tradeoffs div { background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; }
+.tradeoffs h3 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+.tradeoffs ul { margin: 0; padding-left: 18px; }
+
+/* ---------- Mock building blocks ---------- */
+.desk { width: 100%; min-width: 860px; height: 600px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  background: var(--surface); display: grid; font-size: 13px; box-shadow: 0 4px 12px rgb(46 26 42 / 0.10); }
+.phone { width: 340px; height: 700px; border: 10px solid var(--ink); border-radius: 36px; overflow: hidden; background: var(--surface);
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; font-size: 13px; box-shadow: 0 4px 12px rgb(46 26 42 / 0.12); }
+.scroller { overflow-y: auto; min-height: 0; scrollbar-width: thin; }
+.brand { font-family: var(--display); font-weight: 700; font-size: 22px; color: var(--accent); letter-spacing: 0.01em; }
+.side { background: var(--sunken); border-right: 1px solid var(--line); padding: 16px 12px; display: flex; flex-direction: column; gap: 14px; }
+.side nav { display: flex; flex-direction: column; gap: 2px; }
+.navlink { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink); text-decoration: none; }
+.navlink svg { width: 16px; height: 16px; flex: none; }
+.navlink.on { background: var(--raised); color: var(--accent); font-weight: 600; box-shadow: 0 1px 2px rgb(46 26 42 / 0.08); }
+.navlink .count { margin-left: auto; font-size: 11px; color: var(--muted); }
+.side .group { font-size: 11px; color: var(--muted); padding: 8px 10px 2px; }
+.topbar { background: var(--raised); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
+.paste { flex: 1; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px; padding: 6px 6px 6px 14px; color: var(--muted); background: var(--surface); max-width: 520px; }
+.paste b { margin-left: auto; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 3px 12px; font-weight: 500; }
+.avatar { width: 28px; height: 28px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 600; font-size: 12px; }
+.profile { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px 3px 3px; background: var(--raised); }
+.footer { border-top: 1px solid var(--line); background: var(--raised); color: var(--muted); font-size: 11px; display: flex; gap: 16px; padding: 6px 16px; }
+.footer span:first-child { margin-right: auto; }
+.tabs { background: var(--raised); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, 1fr); padding: 6px 2px 14px; }
+.tab { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10.5px; color: var(--muted); }
+.tab svg { width: 20px; height: 20px; }
+.tab.on { color: var(--accent); font-weight: 600; }
+.ptop { background: var(--raised); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.ptop .title { font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.icon-btn { width: 30px; height: 30px; border-radius: 999px; border: 1px solid var(--line); display: grid; place-items: center; background: var(--raised); color: var(--ink); flex: none; }
+.icon-btn svg { width: 16px; height: 16px; }
+
+.photo { background: var(--photo); border-radius: 10px; position: relative; }
+.photo.alt { background: var(--photo-2); }
+.photo .knit { position: absolute; inset: 18% 22% 10%; border-radius: 40% 40% 12px 12px / 30% 30% 12px 12px; background: rgb(255 255 255 / 0.18); }
+.shopline { color: var(--muted); font-size: 12px; }
+.pname { font-family: var(--display); font-weight: 700; font-size: 26px; line-height: 1.05; margin: 2px 0 4px; }
+.price { font-size: 17px; font-weight: 600; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; padding: 7px 12px; border: 1px solid var(--line); background: var(--raised); color: var(--ink); font-weight: 500; white-space: nowrap; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.ghost { background: transparent; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.card { background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.card h3, .sheet h3 { font-family: var(--display); font-size: 21px; font-weight: 700; margin: 0; }
+.label { font-size: 11.5px; color: var(--muted); }
+.stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.step { text-align: center; font-size: 11px; padding: 6px 2px; border-radius: 8px; background: var(--sunken); color: var(--muted); }
+.step.done { background: var(--success-surface); color: var(--success); }
+.step.now { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 11.5px; background: var(--surface); }
+.chip.add { border-style: dashed; color: var(--muted); }
+.kv { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 4px 10px; margin: 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+.sheet { display: flex; flex-direction: column; gap: 12px; }
+.sizes { display: flex; gap: 6px; }
+.size { border: 1px solid var(--line); border-radius: 8px; padding: 3px 9px; background: var(--raised); font-size: 12px; }
+.desc { margin: 0; }
+.more-menu { position: absolute; right: 0; top: 36px; width: 200px; background: var(--raised); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 4px 12px rgb(46 26 42 / 0.14); padding: 6px; display: flex; flex-direction: column; z-index: 2; }
+.more-menu span { padding: 7px 10px; border-radius: 6px; }
+.more-menu span.danger { color: #9B1C31; }
+.note { font-size: 11.5px; color: var(--muted); }
+.pin { background: var(--hint); border-radius: 8px; padding: 6px 10px; font-size: 11.5px; color: var(--ink); }
+.segmented { display: grid; grid-template-columns: 1fr 1fr; background: var(--sunken); border-radius: 10px; padding: 3px; }
+.segmented span { text-align: center; padding: 6px; border-radius: 8px; color: var(--muted); }
+.segmented span.on { background: var(--raised); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(46 26 42 / 0.08); }
+.actionbar { background: var(--raised); border-top: 1px solid var(--line); display: flex; gap: 8px; padding: 8px 12px; }
+.actionbar .btn { flex: 1; }
+
+/* ---------- Home titles ---------- */
+.homes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.home-card { background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 22px; display: flex; flex-direction: column; gap: 12px; }
+.home-card .opt { font-size: 14px; color: var(--accent); font-weight: 600; }
+.home-card .big { font-family: var(--display); font-size: 34px; font-weight: 700; line-height: 1.05; margin: 0; }
+.home-card .paste { max-width: none; background: var(--surface); }
+.recents { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.recents .photo { aspect-ratio: 3 / 4; border-radius: 8px; }
+
+.questions { background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; }
+.questions h2 { font-family: var(--display); font-size: 28px; margin: 0 0 8px; }
+.questions ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+
+@media (max-width: 1100px) {
+  .frames { grid-template-columns: minmax(0, 1fr); }
+  .phone { justify-self: center; }
+  .intro { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .page { padding: 24px 16px 60px; gap: 44px; }
+  .intro h1 { font-size: 34px; }
+  .common ul, .tradeoffs, .homes { grid-template-columns: minmax(0, 1fr); }
+  .proposal-head h2 { font-size: 30px; }
+  .phone { width: 300px; height: 640px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+    <symbol id="i-hanger" viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 1 2-2c0 1-2 1.5-2 3l9 7.5a1 1 0 0 1-.7 1.5H3.7a1 1 0 0 1-.7-1.5L12 9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8zM7.5 7.5h.01" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<main class="page">
+  <header class="intro">
+    <div>
+      <h1>Passe design : trois façons de ranger la fiche et l’écran</h1>
+      <p>Chaque proposition est montrée sur ordinateur et sur téléphone, avec le pull Lioran de Sahoma. Dans chaque cadre, le menu, l’en-tête et le pied restent en place : <strong>fais défiler l’intérieur</strong> pour voir que seul le contenu bouge.</p>
+      <p>Les couleurs et les polices restent celles de Closyria. On change la mise en page, pas l’identité.</p>
+    </div>
+    <aside class="verdict" aria-labelledby="verdict-title">
+      <h2 id="verdict-title">Ma recommandation : A, « Vitrine »</h2>
+      <p>C’est la plus simple à lire sur téléphone et elle utilise toute la largeur sur ordinateur sans devenir un tableau de bord. Les photos restent visibles pendant qu’on remplit « Mon article ».</p>
+      <p class="note">B convient si tu modifies souvent tes articles ; C met les photos très en avant mais cache « Mon article » plus bas.</p>
+    </aside>
+  </header>
+
+  <section class="common" aria-labelledby="common-title">
+    <h2 id="common-title">Ce qui est pareil dans les trois</h2>
+    <ul>
+      <li>Cadre fixe : menu, en-tête, pied et onglets ne bougent pas ; seul le contenu défile.</li>
+      <li>Ordre de la fiche : l’essentiel, puis <strong>Mon article</strong>, puis <strong>La boutique</strong> (tailles, caractéristiques, détails, description).</li>
+      <li>« Autres actions » (changer de profil, supprimer) passe dans un menu <strong>⋯</strong> à côté du nom.</li>
+      <li>Les étapes deviennent une frise : Repéré, Commandé, Reçu, À vendre, d’un coup d’œil.</li>
+      <li>« Coller un lien » est dans l’en-tête sur ordinateur, partout ; sur téléphone il reste sur l’Accueil.</li>
+      <li>Le profil actif est en haut à droite, toujours visible.</li>
+    </ul>
+  </section>
+
+  <!-- ===================== A ===================== -->
+  <section class="proposal" aria-labelledby="a-title">
+    <div class="proposal-head">
+      <h2 id="a-title">A. Vitrine</h2><span class="tag">recommandée</span>
+      <p>Menu à gauche, photos à gauche de la fiche qui restent en place, tout le reste à droite dans l’ordre de lecture.</p>
+    </div>
+    <div class="frames">
+      <div>
+        <p class="caption">Ordinateur, 1440 px de large</p>
+        <div class="scroll-x">
+          <div class="desk" style="grid-template-columns: 200px minmax(0,1fr); grid-template-rows: auto minmax(0,1fr) auto;">
+            <aside class="side" style="grid-row: 1 / 4;">
+              <span class="brand">Closyria</span>
+              <nav aria-label="Menu, proposition A">
+                <a class="navlink" href="#a-title"><svg><use href="#i-home"/></svg>Accueil</a>
+                <a class="navlink on" href="#a-title"><svg><use href="#i-heart"/></svg>Envies<span class="count">12</span></a>
+                <a class="navlink" href="#a-title"><svg><use href="#i-bag"/></svg>Commandé<span class="count">3</span></a>
+                <a class="navlink" href="#a-title"><svg><use href="#i-hanger"/></svg>Dressing<span class="count">48</span></a>
+                <a class="navlink" href="#a-title"><svg><use href="#i-tag"/></svg>À vendre<span class="count">2</span></a>
+                <span class="group">Rangement</span>
+                <a class="navlink" href="#a-title"><svg><use href="#i-list"/></svg>Listes</a>
+                <a class="navlink" href="#a-title"><svg><use href="#i-gear"/></svg>Réglages</a>
+              </nav>
+            </aside>
+            <div class="topbar">
+              <span class="paste">Coller le lien d’un article<b>Ajouter</b></span>
+              <span class="profile"><span class="avatar">M</span>Moi</span>
+            </div>
+            <div class="scroller" style="padding: 18px 22px;">
+              <div style="display:grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 22px; align-items: start;">
+                <div style="position: sticky; top: 0; display: grid; grid-template-columns: 56px minmax(0,1fr); gap: 8px;">
+                  <div style="display:flex; flex-direction:column; gap:6px;">
+                    <div class="photo" style="height:72px"></div><div class="photo alt" style="height:72px"></div><div class="photo" style="height:72px"></div><div class="photo alt" style="height:72px"></div>
+                  </div>
+                  <div class="photo" style="aspect-ratio: 3/4;"><div class="knit"></div></div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:16px;">
+                  <div style="position:relative;">
+                    <div class="row" style="justify-content: space-between; align-items: start;">
+                      <div>
+                        <div class="shopline">Sahoma</div>
+                        <div class="pname">Pull Lioran rose</div>
+                        <div class="price">49,90 €</div>
+                      </div>
+                      <span class="icon-btn" aria-label="Autres actions"><svg><use href="#i-dots"/></svg></span>
+                    </div>
+                    <div class="row" style="margin-top:10px;"><span class="btn primary">Voir chez Sahoma</span><span class="btn">♥ Favori</span></div>
+                  </div>
+                  <div class="card">
+                    <div class="row" style="justify-content: space-between;"><h3>Mon article</h3><span class="label">Profil : Moi</span></div>
+                    <div class="stepper"><span class="step done">Repéré</span><span class="step now">Commandé</span><span class="step">Reçu</span><span class="step">À vendre</span></div>
+                    <dl class="kv"><dt>Ma taille</dt><dd>Taille unique</dd><dt>Payé</dt><dd>49,90 € le 6 nov.</dd><dt>Note</dt><dd>À porter avec le jean brut.</dd></dl>
+                    <div><div class="label" style="margin-bottom:4px;">Listes et étiquettes</div><div class="chips"><span class="chip">Hiver 2026</span><span class="chip">Mohair</span><span class="chip add">+ Ajouter</span></div></div>
+                  </div>
+                  <div class="sheet">
+                    <h3>La boutique</h3>
+                    <div class="sizes"><span class="size">Taille unique</span></div>
+                    <dl class="kv"><dt>Type</dt><dd>Femme › Hauts › Pulls</dd><dt>Couleur</dt><dd>Rose</dd><dt>Matière</dt><dd>Mohair</dd></dl>
+                    <div><div class="label" style="margin-bottom:4px;">Détails de la boutique</div>
+                    <dl class="kv"><dt>Composition</dt><dd>60% mohair 22% polyamide 18% acrylique</dd><dt>Dimensions</dt><dd>Aisselle à aisselle : 63 cm. Longueur : 50 cm</dd><dt>Entretien</dt><dd>Lavage à la main conseillé</dd></dl></div>
+                    <p class="desc">Un pull rose en maille douce contenant du mohair, aux manches longues évasées. Fabriqué en Italie, col rond. Le mannequin mesure 1m73 et porte habituellement une taille S.</p>
+                    <p class="note">Mise à jour le 6 novembre 2026</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="footer"><span>Closyria</span><span>Aide</span><span>Confidentialité</span><span>Conditions</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="caption">Téléphone</p>
+        <div class="phone">
+          <div class="ptop"><span class="icon-btn"><svg><use href="#i-back"/></svg></span><span class="title">Pull Lioran rose</span><span class="icon-btn"><svg><use href="#i-dots"/></svg></span></div>
+          <div class="scroller" style="padding: 12px; display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; gap:8px; overflow-x:auto;">
+              <div class="photo" style="flex:0 0 82%; height: 330px;"><div class="knit"></div></div>
+              <div class="photo alt" style="flex:0 0 82%; height: 330px;"></div>
+            </div>
+            <div><div class="shopline">Sahoma · 1 / 8 photos</div><div class="pname">Pull Lioran rose</div><div class="price">49,90 €</div></div>
+            <div class="row"><span class="btn primary" style="flex:1">Voir chez Sahoma</span><span class="btn">♥</span></div>
+            <div class="card">
+              <h3>Mon article</h3>
+              <div class="stepper"><span class="step done">Repéré</span><span class="step now">Commandé</span><span class="step">Reçu</span><span class="step">À vendre</span></div>
+              <dl class="kv"><dt>Ma taille</dt><dd>Taille unique</dd><dt>Payé</dt><dd>49,90 €</dd></dl>
+              <div class="chips"><span class="chip">Hiver 2026</span><span class="chip add">+ Ajouter</span></div>
+            </div>
+            <div class="sheet">
+              <h3>La boutique</h3>
+              <dl class="kv"><dt>Composition</dt><dd>60% mohair…</dd><dt>Entretien</dt><dd>Lavage à la main</dd></dl>
+              <p class="desc">Un pull rose en maille douce contenant du mohair, aux manches longues évasées…</p>
+            </div>
+          </div>
+          <div class="tabs">
+            <span class="tab"><svg><use href="#i-home"/></svg>Accueil</span>
+            <span class="tab on"><svg><use href="#i-heart"/></svg>Envies</span>
+            <span class="tab"><svg><use href="#i-bag"/></svg>Commandé</span>
+            <span class="tab"><svg><use href="#i-hanger"/></svg>Dressing</span>
+            <span class="tab"><svg><use href="#i-dots"/></svg>Plus</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tradeoffs">
+      <div><h3>Pour</h3><ul><li>Lecture naturelle de haut en bas, la même sur téléphone et ordinateur.</li><li>Photos toujours visibles sur ordinateur pendant qu’on remplit sa fiche.</li><li>Peu de changements dans le code actuel.</li></ul></div>
+      <div><h3>Contre</h3><ul><li>Sur un très grand écran, la colonne de droite reste longue.</li><li>« La boutique » arrive après « Mon article » : il faut descendre pour la composition.</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== B ===================== -->
+  <section class="proposal" aria-labelledby="b-title">
+    <div class="proposal-head">
+      <h2 id="b-title">B. Atelier</h2>
+      <p>Trois colonnes sur ordinateur : un menu étroit, la fiche de la boutique au centre, et « Mon article » en panneau fixe à droite, toujours à portée de main.</p>
+    </div>
+    <div class="frames">
+      <div>
+        <p class="caption">Ordinateur, 1440 px de large</p>
+        <div class="scroll-x">
+          <div class="desk" style="grid-template-columns: 76px minmax(0,1fr) 300px; grid-template-rows: auto minmax(0,1fr) auto;">
+            <aside class="side" style="grid-row: 1 / 4; padding: 14px 6px; align-items: center;">
+              <span class="brand" style="font-size:20px;">C</span>
+              <nav aria-label="Menu, proposition B" style="width:100%;">
+                <a class="navlink" href="#b-title" style="flex-direction:column; gap:2px; font-size:10.5px;"><svg><use href="#i-home"/></svg>Accueil</a>
+                <a class="navlink on" href="#b-title" style="flex-direction:column; gap:2px; font-size:10.5px;"><svg><use href="#i-heart"/></svg>Envies</a>
+                <a class="navlink" href="#b-title" style="flex-direction:column; gap:2px; font-size:10.5px;"><svg><use href="#i-bag"/></svg>Commandé</a>
+                <a class="navlink" href="#b-title" style="flex-direction:column; gap:2px; font-size:10.5px;"><svg><use href="#i-hanger"/></svg>Dressing</a>
+                <a class="navlink" href="#b-title" style="flex-direction:column; gap:2px; font-size:10.5px;"><svg><use href="#i-tag"/></svg>À vendre</a>
+                <a class="navlink" href="#b-title" style="flex-direction:column; gap:2px; font-size:10.5px;"><svg><use href="#i-list"/></svg>Listes</a>
+              </nav>
+            </aside>
+            <div class="topbar" style="grid-column: 2 / 4;">
+              <span class="paste">Coller le lien d’un article<b>Ajouter</b></span>
+              <span class="profile" style="margin-left:auto;"><span class="avatar">M</span>Moi</span>
+            </div>
+            <div class="scroller" style="padding: 18px 22px; display:flex; flex-direction:column; gap:16px;">
+              <div class="row" style="justify-content: space-between; align-items: start;">
+                <div><div class="shopline">Sahoma</div><div class="pname">Pull Lioran rose</div><div class="price">49,90 €</div></div>
+                <div class="row"><span class="btn primary">Voir chez Sahoma</span></div>
+              </div>
+              <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px;">
+                <div class="photo" style="grid-column: span 2; grid-row: span 2; aspect-ratio: 3/4;"><div class="knit"></div></div>
+                <div class="photo alt" style="aspect-ratio: 3/4;"></div><div class="photo" style="aspect-ratio: 3/4;"></div>
+                <div class="photo" style="aspect-ratio: 3/4;"></div><div class="photo alt" style="aspect-ratio: 3/4;"></div>
+              </div>
+              <div class="sheet">
+                <h3>La boutique</h3>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                  <dl class="kv"><dt>Type</dt><dd>Femme › Hauts › Pulls</dd><dt>Couleur</dt><dd>Rose</dd><dt>Matière</dt><dd>Mohair</dd><dt>Tailles</dt><dd>Taille unique</dd></dl>
+                  <dl class="kv"><dt>Composition</dt><dd>60% mohair 22% polyamide 18% acrylique</dd><dt>Dimensions</dt><dd>63 cm × 50 cm à plat</dd><dt>Entretien</dt><dd>Lavage à la main conseillé</dd></dl>
+                </div>
+                <p class="desc">Un pull rose en maille douce contenant du mohair, aux manches longues évasées. Fabriqué en Italie, col rond.</p>
+              </div>
+            </div>
+            <aside class="scroller" style="border-left: 1px solid var(--line); background: var(--raised); padding: 16px; display:flex; flex-direction:column; gap:14px;">
+              <div class="row" style="justify-content: space-between;"><h3 style="font-family: var(--display); font-size: 21px; margin:0;">Mon article</h3><span class="btn ghost" style="padding:4px 8px;">♥</span></div>
+              <div class="stepper" style="grid-template-columns: 1fr 1fr;"><span class="step done">Repéré</span><span class="step now">Commandé</span><span class="step">Reçu</span><span class="step">À vendre</span></div>
+              <dl class="kv" style="grid-template-columns: 70px 1fr;"><dt>Ma taille</dt><dd>Taille unique</dd><dt>Payé</dt><dd>49,90 €</dd><dt>Note</dt><dd>À porter avec le jean brut.</dd></dl>
+              <div class="chips"><span class="chip">Hiver 2026</span><span class="chip">Mohair</span><span class="chip add">+ Ajouter</span></div>
+              <div style="margin-top:auto; border-top: 1px solid var(--line); padding-top: 10px; display:flex; flex-direction:column; gap:6px;">
+                <span class="label">Autres actions</span>
+                <span class="btn">Changer de profil</span><span class="btn" style="color:#9B1C31;">Supprimer</span>
+              </div>
+            </aside>
+            <div class="footer" style="grid-column: 2 / 4;"><span>Closyria</span><span>Aide</span><span>Confidentialité</span><span>Conditions</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="caption">Téléphone</p>
+        <div class="phone">
+          <div class="ptop"><span class="icon-btn"><svg><use href="#i-back"/></svg></span><span class="title">Pull Lioran rose</span><span class="icon-btn"><svg><use href="#i-dots"/></svg></span></div>
+          <div class="scroller" style="padding: 12px; display:flex; flex-direction:column; gap:14px;">
+            <div class="photo" style="aspect-ratio: 4/4;"><div class="knit"></div></div>
+            <div><div class="shopline">Sahoma</div><div class="pname">Pull Lioran rose</div><div class="price">49,90 €</div></div>
+            <div class="segmented"><span class="on">Mon article</span><span>La boutique</span></div>
+            <div class="stepper"><span class="step done">Repéré</span><span class="step now">Commandé</span><span class="step">Reçu</span><span class="step">À vendre</span></div>
+            <dl class="kv"><dt>Ma taille</dt><dd>Taille unique</dd><dt>Payé</dt><dd>49,90 €</dd><dt>Note</dt><dd>À porter avec le jean brut.</dd></dl>
+            <div class="chips"><span class="chip">Hiver 2026</span><span class="chip add">+ Ajouter</span></div>
+          </div>
+          <div class="tabs">
+            <span class="tab"><svg><use href="#i-home"/></svg>Accueil</span>
+            <span class="tab on"><svg><use href="#i-heart"/></svg>Envies</span>
+            <span class="tab"><svg><use href="#i-bag"/></svg>Commandé</span>
+            <span class="tab"><svg><use href="#i-hanger"/></svg>Dressing</span>
+            <span class="tab"><svg><use href="#i-dots"/></svg>Plus</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tradeoffs">
+      <div><h3>Pour</h3><ul><li>« Mon article » toujours visible : idéal pour modifier vite plusieurs articles.</li><li>Toutes les photos visibles d’un coup sur ordinateur.</li><li>Sur téléphone, un bouton pour passer de « Mon article » à « La boutique ».</li></ul></div>
+      <div><h3>Contre</h3><ul><li>Plus chargé ; demande un écran d’au moins 1280 px, sinon le panneau passe dessous.</li><li>Menu réduit à des icônes : moins lisible au début.</li><li>Le plus gros chantier des trois.</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== C ===================== -->
+  <section class="proposal" aria-labelledby="c-title">
+    <div class="proposal-head">
+      <h2 id="c-title">C. Magazine</h2>
+      <p>Pas de menu latéral : le menu passe dans l’en-tête, les photos défilent en bandeau sur toute la largeur, puis trois colonnes de texte.</p>
+    </div>
+    <div class="frames">
+      <div>
+        <p class="caption">Ordinateur, 1440 px de large</p>
+        <div class="scroll-x">
+          <div class="desk" style="grid-template-columns: minmax(0,1fr); grid-template-rows: auto minmax(0,1fr) auto;">
+            <div class="topbar" style="gap: 18px;">
+              <span class="brand">Closyria</span>
+              <nav class="row" aria-label="Menu, proposition C" style="gap: 2px;">
+                <a class="navlink" href="#c-title">Accueil</a><a class="navlink on" href="#c-title">Envies</a><a class="navlink" href="#c-title">Commandé</a><a class="navlink" href="#c-title">Dressing</a><a class="navlink" href="#c-title">À vendre</a><a class="navlink" href="#c-title">Listes</a>
+              </nav>
+              <span class="paste" style="max-width: 280px;">Coller un lien<b>Ajouter</b></span>
+              <span class="avatar">M</span>
+            </div>
+            <div class="scroller" style="display:flex; flex-direction:column; gap:18px; padding-bottom: 18px;">
+              <div style="display:flex; gap:8px; padding: 14px 22px 0; overflow-x:auto;">
+                <div class="photo" style="flex: 0 0 200px; height: 260px;"><div class="knit"></div></div>
+                <div class="photo alt" style="flex: 0 0 200px; height: 260px;"></div>
+                <div class="photo" style="flex: 0 0 200px; height: 260px;"></div>
+                <div class="photo alt" style="flex: 0 0 200px; height: 260px;"></div>
+                <div class="photo" style="flex: 0 0 200px; height: 260px;"></div>
+              </div>
+              <div style="display:grid; grid-template-columns: 1fr 1.1fr 1.2fr; gap: 18px; padding: 0 22px;">
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                  <div class="row" style="justify-content: space-between; align-items:start;"><div><div class="shopline">Sahoma</div><div class="pname">Pull Lioran rose</div></div><span class="icon-btn"><svg><use href="#i-dots"/></svg></span></div>
+                  <div class="price">49,90 €</div>
+                  <span class="btn primary">Voir chez Sahoma</span>
+                </div>
+                <div class="card">
+                  <h3>Mon article</h3>
+                  <div class="stepper"><span class="step done">Repéré</span><span class="step now">Commandé</span><span class="step">Reçu</span><span class="step">À vendre</span></div>
+                  <dl class="kv" style="grid-template-columns: 70px 1fr;"><dt>Ma taille</dt><dd>Taille unique</dd><dt>Payé</dt><dd>49,90 €</dd></dl>
+                  <div class="chips"><span class="chip">Hiver 2026</span><span class="chip add">+ Ajouter</span></div>
+                </div>
+                <div class="sheet">
+                  <h3>La boutique</h3>
+                  <dl class="kv"><dt>Composition</dt><dd>60% mohair 22% polyamide 18% acrylique</dd><dt>Entretien</dt><dd>Lavage à la main conseillé</dd><dt>Dimensions</dt><dd>63 cm × 50 cm à plat</dd></dl>
+                  <p class="desc">Un pull rose en maille douce contenant du mohair, aux manches longues évasées.</p>
+                </div>
+              </div>
+            </div>
+            <div class="footer"><span>Closyria</span><span>Aide</span><span>Confidentialité</span><span>Conditions</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="caption">Téléphone</p>
+        <div class="phone" style="grid-template-rows: auto minmax(0,1fr) auto auto;">
+          <div class="ptop"><span class="icon-btn"><svg><use href="#i-back"/></svg></span><span class="title">Pull Lioran rose</span><span class="icon-btn"><svg><use href="#i-dots"/></svg></span></div>
+          <div class="scroller" style="display:flex; flex-direction:column; gap:14px; padding-bottom: 14px;">
+            <div class="photo" style="aspect-ratio: 3/4; border-radius: 0;"><div class="knit"></div></div>
+            <div style="padding: 0 12px;"><div class="shopline">Sahoma · 1 / 8</div><div class="pname">Pull Lioran rose</div><div class="price">49,90 €</div></div>
+            <div class="sheet" style="padding: 0 12px;">
+              <h3>La boutique</h3>
+              <dl class="kv"><dt>Composition</dt><dd>60% mohair…</dd><dt>Entretien</dt><dd>Lavage à la main</dd></dl>
+            </div>
+            <div class="pin" style="margin: 0 12px;">« Mon article » s’ouvre depuis la barre en bas.</div>
+          </div>
+          <div class="actionbar"><span class="btn">♥ Envie</span><span class="btn primary">Commandé ▾</span></div>
+          <div class="tabs">
+            <span class="tab"><svg><use href="#i-home"/></svg>Accueil</span>
+            <span class="tab on"><svg><use href="#i-heart"/></svg>Envies</span>
+            <span class="tab"><svg><use href="#i-bag"/></svg>Commandé</span>
+            <span class="tab"><svg><use href="#i-hanger"/></svg>Dressing</span>
+            <span class="tab"><svg><use href="#i-dots"/></svg>Plus</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tradeoffs">
+      <div><h3>Pour</h3><ul><li>Les photos d’abord, comme sur le site d’une boutique.</li><li>Toute la largeur de l’écran est utilisée, sans menu à gauche.</li><li>Sur téléphone, l’étape se change d’un pouce depuis la barre du bas.</li></ul></div>
+      <div><h3>Contre</h3><ul><li>Menu en haut limité à 6 entrées : les autres pages passent dans un menu.</li><li>Deux barres fixes en bas sur téléphone : moins de place pour le contenu.</li><li>« Mon article » moins visible sur téléphone.</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== Home ===================== -->
+  <section class="proposal" aria-labelledby="home-title">
+    <div class="proposal-head">
+      <h2 id="home-title">Accueil : le titre</h2>
+      <p>Aujourd’hui « Closyria » apparaît deux fois et une phrase dit « arrive bientôt ». Deux façons de le remplacer, valables avec A, B ou C.</p>
+    </div>
+    <div class="homes">
+      <div class="home-card">
+        <span class="opt">Option 1 : l’action d’abord (recommandée)</span>
+        <p class="big">Quel article as-tu repéré ?</p>
+        <span class="paste">Colle son lien ici<b>Ajouter</b></span>
+        <span class="label">Derniers liens</span>
+        <div class="recents"><div class="photo"></div><div class="photo alt"></div><div class="photo"></div><div class="photo alt"></div></div>
+      </div>
+      <div class="home-card">
+        <span class="opt">Option 2 : un résumé de ton dressing</span>
+        <p class="big">Bonsoir Moi</p>
+        <p style="margin:0;">3 articles commandés en route, 1 baisse de prix sur tes envies.</p>
+        <span class="paste">Colle le lien d’un article<b>Ajouter</b></span>
+        <span class="label">Derniers liens</span>
+        <div class="recents"><div class="photo"></div><div class="photo alt"></div><div class="photo"></div><div class="photo alt"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="questions" aria-labelledby="q-title">
+    <h2 id="q-title">Ce qu’il me faut de toi</h2>
+    <ol>
+      <li>Quelle proposition pour la fiche et le cadre : A, B ou C (ou un mélange, par exemple A avec la frise des étapes de B) ?</li>
+      <li>Quelle option pour le titre de l’accueil : 1 ou 2 ?</li>
+      <li>Sur ordinateur, veux-tu le petit pied de page fixe (Aide, Confidentialité, Conditions) ou le retirer pour gagner de la place ?</li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>
