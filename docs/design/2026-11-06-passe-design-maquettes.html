@@ -181,7 +181,7 @@ a { color: var(--accent); }
     </div>
     <aside class="verdict" aria-labelledby="verdict-title">
       <h2 id="verdict-title">Ma recommandation : A, « Vitrine »</h2>
-      <p>C’est la plus simple à lire sur téléphone et elle utilise toute la largeur sur ordinateur sans devenir un tableau de bord. Les photos restent visibles pendant qu’on remplit « Mon article ».</p>
+      <p>C’est la plus simple à lire sur téléphone et elle utilise toute la largeur sur ordinateur sans devenir un tableau de bord. La boutique passe d’abord ; ton étape et ta taille restent visibles en haut grâce à un résumé.</p>
       <p class="note">B convient si tu modifies souvent tes articles ; C met les photos très en avant mais cache « Mon article » plus bas.</p>
     </aside>
   </header>
@@ -190,7 +190,7 @@ a { color: var(--accent); }
     <h2 id="common-title">Ce qui est pareil dans les trois</h2>
     <ul>
       <li>Cadre fixe : menu, en-tête, pied et onglets ne bougent pas ; seul le contenu défile.</li>
-      <li>Ordre de la fiche : l’essentiel, puis <strong>Mon article</strong>, puis <strong>La boutique</strong> (tailles, caractéristiques, détails, description).</li>
+      <li>Ordre de la fiche : l’essentiel avec ton étape et ta taille en résumé, puis <strong>La boutique</strong> (tailles, caractéristiques, détails, description), puis <strong>Mon article</strong> pour modifier.</li>
       <li>« Autres actions » (changer de profil, supprimer) passe dans un menu <strong>⋯</strong> à côté du nom.</li>
       <li>Les étapes deviennent une frise : Repéré, Commandé, Reçu, À vendre, d’un coup d’œil.</li>
       <li>« Coller un lien » est dans l’en-tête sur ordinateur, partout ; sur téléphone il reste sur l’Accueil.</li>
@@ -202,7 +202,7 @@ a { color: var(--accent); }
   <section class="proposal" aria-labelledby="a-title">
     <div class="proposal-head">
       <h2 id="a-title">A. Vitrine</h2><span class="tag">recommandée</span>
-      <p>Menu à gauche, photos à gauche de la fiche qui restent en place, tout le reste à droite dans l’ordre de lecture.</p>
+      <p>Menu à gauche, photos à gauche de la fiche qui restent en place. À droite : l’essentiel avec ton étape en un coup d’œil, puis la fiche de la boutique, puis « Mon article » pour modifier.</p>
     </div>
     <div class="frames">
       <div>
@@ -236,21 +236,16 @@ a { color: var(--accent); }
                 </div>
                 <div style="display:flex; flex-direction:column; gap:16px;">
                   <div style="position:relative;">
-                    <div class="row" style="justify-content: space-between; align-items: start;">
-                      <div>
+                    <div class="row" style="justify-content: space-between; align-items: start; flex-wrap: nowrap;">
+                      <div style="flex:1; min-width:0;">
                         <div class="shopline">Sahoma</div>
                         <div class="pname">Pull Lioran rose</div>
                         <div class="price">49,90 €</div>
+                        <div class="chips" style="margin-top:6px;"><span class="chip" style="background:var(--accent); color:var(--accent-ink); border-color:var(--accent);">Commandé</span><span class="chip">Ma taille : unique</span><a class="chip" href="#a-title" style="text-decoration:none;">Voir mon article ↓</a></div>
                       </div>
                       <span class="icon-btn" aria-label="Autres actions"><svg><use href="#i-dots"/></svg></span>
                     </div>
                     <div class="row" style="margin-top:10px;"><span class="btn primary">Voir chez Sahoma</span><span class="btn">♥ Favori</span></div>
-                  </div>
-                  <div class="card">
-                    <div class="row" style="justify-content: space-between;"><h3>Mon article</h3><span class="label">Profil : Moi</span></div>
-                    <div class="stepper"><span class="step done">Repéré</span><span class="step now">Commandé</span><span class="step">Reçu</span><span class="step">À vendre</span></div>
-                    <dl class="kv"><dt>Ma taille</dt><dd>Taille unique</dd><dt>Payé</dt><dd>49,90 € le 6 nov.</dd><dt>Note</dt><dd>À porter avec le jean brut.</dd></dl>
-                    <div><div class="label" style="margin-bottom:4px;">Listes et étiquettes</div><div class="chips"><span class="chip">Hiver 2026</span><span class="chip">Mohair</span><span class="chip add">+ Ajouter</span></div></div>
                   </div>
                   <div class="sheet">
                     <h3>La boutique</h3>
@@ -260,6 +255,12 @@ a { color: var(--accent); }
                     <dl class="kv"><dt>Composition</dt><dd>60% mohair 22% polyamide 18% acrylique</dd><dt>Dimensions</dt><dd>Aisselle à aisselle : 63 cm. Longueur : 50 cm</dd><dt>Entretien</dt><dd>Lavage à la main conseillé</dd></dl></div>
                     <p class="desc">Un pull rose en maille douce contenant du mohair, aux manches longues évasées. Fabriqué en Italie, col rond. Le mannequin mesure 1m73 et porte habituellement une taille S.</p>
                     <p class="note">Mise à jour le 6 novembre 2026</p>
+                  </div>
+                  <div class="card">
+                    <div class="row" style="justify-content: space-between;"><h3>Mon article</h3><span class="label">Profil : Moi</span></div>
+                    <div class="stepper"><span class="step done">Repéré</span><span class="step now">Commandé</span><span class="step">Reçu</span><span class="step">À vendre</span></div>
+                    <dl class="kv"><dt>Ma taille</dt><dd>Taille unique</dd><dt>Payé</dt><dd>49,90 € le 6 nov.</dd><dt>Note</dt><dd>À porter avec le jean brut.</dd></dl>
+                    <div><div class="label" style="margin-bottom:4px;">Listes et étiquettes</div><div class="chips"><span class="chip">Hiver 2026</span><span class="chip">Mohair</span><span class="chip add">+ Ajouter</span></div></div>
                   </div>
                 </div>
               </div>
@@ -273,22 +274,22 @@ a { color: var(--accent); }
         <div class="phone">
           <div class="ptop"><span class="icon-btn"><svg><use href="#i-back"/></svg></span><span class="title">Pull Lioran rose</span><span class="icon-btn"><svg><use href="#i-dots"/></svg></span></div>
           <div class="scroller" style="padding: 12px; display:flex; flex-direction:column; gap:14px;">
-            <div style="display:flex; gap:8px; overflow-x:auto;">
+            <div style="display:flex; gap:8px; overflow-x:auto; flex:none;">
               <div class="photo" style="flex:0 0 82%; height: 330px;"><div class="knit"></div></div>
               <div class="photo alt" style="flex:0 0 82%; height: 330px;"></div>
             </div>
-            <div><div class="shopline">Sahoma · 1 / 8 photos</div><div class="pname">Pull Lioran rose</div><div class="price">49,90 €</div></div>
+            <div><div class="shopline">Sahoma · 1 / 8 photos</div><div class="pname">Pull Lioran rose</div><div class="price">49,90 €</div><div class="chips" style="margin-top:6px;"><span class="chip" style="background:var(--accent); color:var(--accent-ink); border-color:var(--accent);">Commandé</span><span class="chip">Taille unique</span></div></div>
             <div class="row"><span class="btn primary" style="flex:1">Voir chez Sahoma</span><span class="btn">♥</span></div>
+            <div class="sheet">
+              <h3>La boutique</h3>
+              <dl class="kv"><dt>Composition</dt><dd>60% mohair…</dd><dt>Entretien</dt><dd>Lavage à la main</dd></dl>
+              <p class="desc">Un pull rose en maille douce contenant du mohair, aux manches longues évasées…</p>
+            </div>
             <div class="card">
               <h3>Mon article</h3>
               <div class="stepper"><span class="step done">Repéré</span><span class="step now">Commandé</span><span class="step">Reçu</span><span class="step">À vendre</span></div>
               <dl class="kv"><dt>Ma taille</dt><dd>Taille unique</dd><dt>Payé</dt><dd>49,90 €</dd></dl>
               <div class="chips"><span class="chip">Hiver 2026</span><span class="chip add">+ Ajouter</span></div>
-            </div>
-            <div class="sheet">
-              <h3>La boutique</h3>
-              <dl class="kv"><dt>Composition</dt><dd>60% mohair…</dd><dt>Entretien</dt><dd>Lavage à la main</dd></dl>
-              <p class="desc">Un pull rose en maille douce contenant du mohair, aux manches longues évasées…</p>
             </div>
           </div>
           <div class="tabs">
@@ -303,7 +304,7 @@ a { color: var(--accent); }
     </div>
     <div class="tradeoffs">
       <div><h3>Pour</h3><ul><li>Lecture naturelle de haut en bas, la même sur téléphone et ordinateur.</li><li>Photos toujours visibles sur ordinateur pendant qu’on remplit sa fiche.</li><li>Peu de changements dans le code actuel.</li></ul></div>
-      <div><h3>Contre</h3><ul><li>Sur un très grand écran, la colonne de droite reste longue.</li><li>« La boutique » arrive après « Mon article » : il faut descendre pour la composition.</li></ul></div>
+      <div><h3>Contre</h3><ul><li>Sur un très grand écran, la colonne de droite reste longue.</li><li>Pour modifier son article, il faut descendre après la fiche de la boutique (le résumé en haut et « Voir mon article ↓ » y mènent).</li></ul></div>
     </div>
   </section>
 
