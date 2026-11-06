@@ -25,6 +25,7 @@ import {
   restoreItem,
   trashItem,
 } from "../../wardrobe/items";
+import type { ImportAttacher } from "../../wardrobe/photo-imports";
 
 const invalidRequest = { error: "invalid_request" } as const;
 const notFound = { error: "not_found" } as const;
@@ -76,7 +77,8 @@ const listRoute = defineAccess(
     description:
       "48 per page, newest first by default; `nextCursor` gives the next page. `deleted=true`: the trash. " +
       "`category`/`color` match her correction, else the product's; `audience` and the price sorts use the product. " +
-      "`wishlist` keeps the items of one of her lists; `product` her item for one product.",
+      "`wishlist` keeps the items of one of her lists; `product` her item for one product. Photos imported by link " +
+      "that the worker has finished are attached first.",
     request: { query: itemListQuerySchema },
     responses: {
       200: json("A page", itemPageSchema),
@@ -92,7 +94,7 @@ const getRoute = defineAccess(
     method: "get",
     path: "/me/items/{id}",
     summary: "One of her items",
-    description: "Trashed items included.",
+    description: "Trashed items included. Photos imported by link that the worker has finished are attached first.",
     request: { params: idParams },
     responses: {
       200: json("The item", itemViewSchema),
@@ -200,7 +202,7 @@ function userIdOf(c: Context<AccessEnv>): string {
   return id;
 }
 
-export function itemsRoutes(deps: WardrobeDeps) {
+export function itemsRoutes(deps: WardrobeDeps, { attachReadyImports }: Pick<ImportAttacher, "attachReadyImports">) {
   const { db } = deps;
   const now = deps.now ?? (() => new Date());
   const app = new OpenAPIHono<AccessEnv>({
@@ -243,6 +245,8 @@ export function itemsRoutes(deps: WardrobeDeps) {
             .where(and(eq(schema.wishlists.id, query.wishlist), eq(schema.wishlists.userId, userIdOf(c))));
           if (!own) return c.json(notFound, 404);
         }
+        // Her photos imported by link land before she sees the list (the sheet reads its item this way).
+        await attachReadyImports(userIdOf(c));
         return c.json(await listItems(db, userIdOf(c), query), 200);
       } catch (error) {
         if (error instanceof InvalidCursorError) return c.json({ error: "invalid_cursor" } as const, 400);
@@ -250,7 +254,10 @@ export function itemsRoutes(deps: WardrobeDeps) {
       }
     })
     .openapi(getRoute, async (c) => {
-      const item = await loadItemView(db, userIdOf(c), c.req.valid("param").id);
+      const userId = userIdOf(c);
+      const { id } = c.req.valid("param");
+      await attachReadyImports(userId, [id]);
+      const item = await loadItemView(db, userId, id);
       return item ? c.json(item, 200) : c.json(notFound, 404);
     })
     .openapi(patchRoute, async (c) => {

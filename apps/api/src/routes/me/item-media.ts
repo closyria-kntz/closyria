@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { and, eq, schema } from "@closyria/db";
 import {
   itemMutationResultSchema,
@@ -18,16 +17,9 @@ import { bodyLimit } from "hono/body-limit";
 import { type AccessEnv, defineAccess } from "../../access";
 import type { CaptureQueue } from "../../catalog/capture-queue";
 import type { WardrobeDeps } from "../../wardrobe/deps";
-import {
-  type AttachOutcome,
-  attachPhoto,
-  ownsActiveItem,
-  photoRoom,
-  purgeTrashedItem,
-  removePhoto,
-} from "../../wardrobe/item-photos";
+import { attachPhoto, ownsActiveItem, photoRoom, purgeTrashedItem, removePhoto } from "../../wardrobe/item-photos";
 import { loadItemView } from "../../wardrobe/item-view";
-import { lockOwnItem } from "../../wardrobe/items";
+import type { ImportAttacher } from "../../wardrobe/photo-imports";
 import type { MediaPipeline } from "../media";
 
 const notFound = { error: "not_found" } as const;
@@ -183,7 +175,8 @@ const importStatusRoute = defineAccess(
     summary: "Where a photo import stands",
     description:
       "`queued` while the worker works, `failed` with its reason, or `attached` with the item. The first read after " +
-      "the worker is done attaches the photo (once, even with reads at the same time); when the item has reached 10 " +
+      "the worker is done attaches the photo (once, even with reads at the same time; reading the item attaches it " +
+      "too, so the photo is never lost when nobody polls); when the item has reached 10 " +
       "photos or went to the trash meanwhile, the photo is discarded and the answer is `failed` with " +
       "`too_many_photos` or `item_deleted` (later reads say `failed`).",
     request: { params: importParams },
@@ -203,11 +196,10 @@ function userIdOf(c: Context<AccessEnv>): string {
   return id;
 }
 
-type ImportRow = typeof schema.photoImports.$inferSelect;
-
 export function itemMediaRoutes(
   deps: WardrobeDeps & { store: ObjectStore; queue: CaptureQueue },
   pipeline: MediaPipeline,
+  { attachImport }: ImportAttacher,
 ) {
   const { db, store, queue } = deps;
   const now = deps.now ?? (() => new Date());
@@ -225,64 +217,6 @@ export function itemMediaRoutes(
       );
     return row;
   };
-
-  /**
-   * Attaches the photo of a `ready` import: `media` row, `item_media` row and the import `attached`, in one
-   * transaction. The item then the import are locked (the purge locks the item before the imports go with it), and
-   * the import is re-read under its lock: a read that comes second finds it attached and changes nothing. The object
-   * is never deleted on an error: the import stays `ready` and the next read tries again (the transient purge
-   * removes it after 24 h). On a refusal the import fails first, its key cleared, and only then is the object deleted.
-   */
-  async function attachImport(row: ImportRow): Promise<AttachOutcome | "superseded"> {
-    const { id, userId, itemId, mediaKey, contentType, sizeBytes, width, height } = row;
-    if (mediaKey === null || contentType === null || sizeBytes === null || width === null || height === null) {
-      throw new Error(`photo import ${id} is ready without its photo`);
-    }
-    const result: { outcome: AttachOutcome | "superseded" } = { outcome: "attached" };
-    const stored = { id: randomUUID(), key: mediaKey, contentType, sizeBytes, width, height };
-    await pipeline.recordStored(
-      userId,
-      stored,
-      async (tx) => {
-        result.outcome = await attachPhoto(tx, userId, itemId, stored.id);
-        if (result.outcome !== "attached") return false;
-        await tx
-          .update(schema.photoImports)
-          .set({ status: "attached", updatedAt: now() })
-          .where(eq(schema.photoImports.id, id));
-        return true;
-      },
-      {
-        keepObject: true,
-        // Before the `media` row: a second read waits here, then finds the import attached and keeps the object.
-        claim: async (tx) => {
-          await lockOwnItem(tx, userId, itemId);
-          const [locked] = await tx
-            .select({ status: schema.photoImports.status })
-            .from(schema.photoImports)
-            .where(eq(schema.photoImports.id, id))
-            .for("update");
-          if (locked?.status === "ready") return true;
-          result.outcome = "superseded";
-          return false;
-        },
-      },
-    );
-    if (result.outcome === "item_deleted" || result.outcome === "too_many_photos") {
-      // Its stored code is the generic one (the column allows the worker's codes only); this answer carries the reason.
-      const failed = await db
-        .update(schema.photoImports)
-        .set({ status: "failed", errorCode: "failed", mediaKey: null, updatedAt: now() })
-        .where(and(eq(schema.photoImports.id, id), eq(schema.photoImports.status, "ready")))
-        .returning({ id: schema.photoImports.id });
-      if (failed.length > 0) {
-        await store
-          .delete(mediaKey)
-          .catch((error) => console.error(`photo import ${id}: refused photo not deleted (${mediaKey})`, error));
-      }
-    }
-    return result.outcome;
-  }
 
   const app = new OpenAPIHono<AccessEnv>({
     defaultHook: (result, c) => {

@@ -27,6 +27,7 @@ import { referenceRoutes } from "./routes/reference";
 import { sharedRoutes } from "./routes/shared";
 import { type TestMailDeps, testMailRoutes } from "./routes/test-mail";
 import type { WardrobeDeps } from "./wardrobe/deps";
+import { createImportAttacher } from "./wardrobe/photo-imports";
 
 export type AppDeps = {
   env: string;
@@ -94,6 +95,13 @@ export function createApp(deps: AppDeps) {
   // One limiter for the captures and the manual entry: they count in the same hour.
   // One pipeline: `POST /api/media` and the item photos share the upload limits and the re-encoding semaphore.
   const mediaPipeline = createMediaPipeline(deps.media);
+  // Item reads and the import poll both attach photos imported by link (a closed dialog never loses one).
+  const importAttacher = createImportAttacher({
+    db: deps.wardrobe.db,
+    store: deps.media.store,
+    pipeline: mediaPipeline,
+    ...(deps.wardrobe.now ? { now: deps.wardrobe.now } : {}),
+  });
   const captureLimiter = catalogLimiter(deps.catalog.limits);
   const routes = app
     .openapi(healthRoute, async (c) => {
@@ -112,10 +120,14 @@ export function createApp(deps: AppDeps) {
     .route("/", eventsRoutes(deps.events))
     .route("/", profilesRoutes(deps.wardrobe))
     .route("/", bulkRoutes(deps.wardrobe))
-    .route("/", itemsRoutes(deps.wardrobe))
+    .route("/", itemsRoutes(deps.wardrobe, importAttacher))
     .route(
       "/",
-      itemMediaRoutes({ ...deps.wardrobe, store: deps.media.store, queue: deps.catalog.queue }, mediaPipeline),
+      itemMediaRoutes(
+        { ...deps.wardrobe, store: deps.media.store, queue: deps.catalog.queue },
+        mediaPipeline,
+        importAttacher,
+      ),
     )
     .route("/", tagsRoutes(deps.wardrobe))
     .route("/", recentsRoutes(deps.wardrobe))

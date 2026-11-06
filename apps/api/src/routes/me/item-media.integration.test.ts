@@ -433,6 +433,127 @@ describe("/api/me/items/:id/media/imports", () => {
     expect(again.item.photos).toHaveLength(2);
   });
 
+  it("reading the item attaches its ready import, even when nobody polls the import", async () => {
+    const { cookie, userId } = await t.signIn();
+    const item = await newItem(cookie);
+    const importId = await startImport(item.id, cookie);
+    const key = await simulateReady(importId, userId);
+
+    const res = await call("GET", `/api/me/items/${item.id}`, cookie);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ItemView;
+    expect(body.photos).toHaveLength(1);
+    const [media] = await t.db
+      .select()
+      .from(schema.media)
+      .where(eq(schema.media.id, body.photos[0]?.id ?? ""));
+    expect(media?.key).toBe(key);
+    const [row] = await t.db.select().from(schema.photoImports).where(eq(schema.photoImports.id, importId));
+    expect(row?.status).toBe("attached");
+
+    // The poll that comes afterwards finds it attached, with the same single photo.
+    const poll = (await (await call("GET", importPath(item.id, importId), cookie)).json()) as {
+      status: string;
+      item: ItemView;
+    };
+    expect(poll.status).toBe("attached");
+    expect(poll.item.photos).toHaveLength(1);
+    expect(await exists(key)).toBe(true);
+  });
+
+  it("reading the item of a product (the sheet's read) attaches its ready import", async () => {
+    const { cookie, userId } = await t.signIn();
+    const item = await newItem(cookie);
+    const importId = await startImport(item.id, cookie);
+    await simulateReady(importId, userId);
+
+    const res = await call("GET", `/api/me/items?product=${item.product.id}`, cookie);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: ItemView[] };
+    expect(body.items[0]?.photos).toHaveLength(1);
+    const [row] = await t.db.select().from(schema.photoImports).where(eq(schema.photoImports.id, importId));
+    expect(row?.status).toBe("attached");
+  });
+
+  it("reading the item while a poll attaches at the same time: one photo", async () => {
+    const { cookie, userId } = await t.signIn();
+    const item = await newItem(cookie);
+    const importId = await startImport(item.id, cookie);
+    const key = await simulateReady(importId, userId);
+    const answers = await Promise.all([
+      call("GET", `/api/me/items/${item.id}`, cookie),
+      call("GET", importPath(item.id, importId), cookie),
+      call("GET", `/api/me/items?product=${item.product.id}`, cookie),
+    ]);
+    for (const res of answers) expect(res.status).toBe(200);
+    const photos = await t.db.select().from(schema.itemMedia).where(eq(schema.itemMedia.itemId, item.id));
+    expect(photos).toHaveLength(1);
+    expect(await exists(key)).toBe(true);
+  });
+
+  it("reading a full item fails its ready import and deletes the photo; the read still answers", async () => {
+    const { cookie, userId } = await t.signIn();
+    const item = await newItem(cookie);
+    const importId = await startImport(item.id, cookie);
+    await fillPhotos(item.id, userId, 10);
+    const key = await simulateReady(importId, userId);
+    const res = await call("GET", `/api/me/items/${item.id}`, cookie);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as ItemView).photos).toHaveLength(10);
+    expect(await exists(key)).toBe(false);
+    const [row] = await t.db.select().from(schema.photoImports).where(eq(schema.photoImports.id, importId));
+    expect(row).toMatchObject({ status: "failed", mediaKey: null });
+  });
+
+  it("a failure while attaching on an item read keeps the import ready and still answers the item", async () => {
+    const { cookie, userId } = await t.signIn();
+    const item = await newItem(cookie);
+    const importId = await startImport(item.id, cookie);
+    const key = await simulateReady(importId, userId);
+    await t.db.execute(
+      sql`create function fail_item_media() returns trigger language plpgsql as $$ begin raise exception 'boom'; end $$`,
+    );
+    await t.db.execute(
+      sql`create trigger fail_item_media before insert on item_media for each row execute function fail_item_media()`,
+    );
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await call("GET", `/api/me/items/${item.id}`, cookie);
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as ItemView).photos).toHaveLength(0);
+      expect(error).toHaveBeenCalled();
+    } finally {
+      await t.db.execute(sql`drop trigger fail_item_media on item_media`);
+      await t.db.execute(sql`drop function fail_item_media()`);
+      error.mockRestore();
+    }
+    const [row] = await t.db.select().from(schema.photoImports).where(eq(schema.photoImports.id, importId));
+    expect(row).toMatchObject({ status: "ready", mediaKey: key });
+    expect(await exists(key)).toBe(true);
+  });
+
+  it("a merge moves the imports of the merged item: its ready photo reaches the item that stays", async () => {
+    const { cookie, userId } = await t.signIn();
+    const trashed = await newItem(cookie);
+    const importId = await startImport(trashed.id, cookie);
+    const key = await simulateReady(importId, userId);
+    // Into the trash, kept again (a new active item), then restored: merged into the active one.
+    expect((await call("DELETE", `/api/me/items/${trashed.id}`, cookie)).status).toBe(200);
+    const again = await call("POST", "/api/me/items", cookie, { productId: trashed.product.id, action: "favorite" });
+    const active = ((await again.json()) as ItemResult).item;
+    expect(active.id).not.toBe(trashed.id);
+    const restored = await call("POST", `/api/me/items/${trashed.id}/restore`, cookie);
+    expect(restored.status).toBe(200);
+    expect(((await restored.json()) as ItemResult).item.id).toBe(active.id);
+
+    const [moved] = await t.db.select().from(schema.photoImports).where(eq(schema.photoImports.id, importId));
+    expect(moved).toMatchObject({ itemId: active.id, status: "ready", mediaKey: key });
+    expect(moved?.updatedAt.getTime()).toBeGreaterThan(moved?.createdAt.getTime() ?? 0);
+    const read = (await (await call("GET", `/api/me/items/${active.id}`, cookie)).json()) as ItemView;
+    expect(read.photos).toHaveLength(1);
+    expect(await exists(key)).toBe(true);
+  });
+
   it("attaches once when two reads arrive together", async () => {
     const { cookie, userId } = await t.signIn();
     const item = await newItem(cookie);
