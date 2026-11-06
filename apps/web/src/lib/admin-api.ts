@@ -1,10 +1,14 @@
 import {
   type AdminSession,
   adminCaptureFailuresSchema,
+  adminProductDetailSchema,
+  adminProductListSchema,
   adminSessionSchema,
   adminShopDetailSchema,
   adminShopListSchema,
   lastForwardedAddress,
+  type ReferenceKind,
+  referenceListSchema,
 } from "@closyria/shared";
 import { z } from "zod";
 
@@ -99,3 +103,25 @@ export async function fetchAdminShop(api: InternalApi, id: string) {
 
 export const fetchAdminFailures = (api: InternalApi, filters: FailureFilters) =>
   fetchAdminJson(api, adminFailuresPath(filters), adminCaptureFailuresSchema);
+
+export type ProductFilters = {
+  q?: string | undefined;
+  shopId?: string | undefined;
+  captureStatus?: string | undefined;
+  classified?: string | undefined;
+  cursor?: string | undefined;
+};
+
+export const adminProductsPath = (filters: ProductFilters) => withQuery("/api/admin/products", filters);
+
+export const fetchAdminProducts = (api: InternalApi, filters: ProductFilters) =>
+  fetchAdminJson(api, adminProductsPath(filters), adminProductListSchema);
+
+/** One product sheet; an id that is not a UUID is an unknown sheet. */
+export async function fetchAdminProduct(api: InternalApi, id: string) {
+  if (!UUID.test(id)) return { ok: false, status: 404 } as const;
+  return fetchAdminJson(api, `/api/admin/products/${id}`, adminProductDetailSchema);
+}
+
+export const fetchAdminReference = (api: InternalApi, kind: ReferenceKind) =>
+  fetchAdminJson(api, `/api/admin/reference/${kind}`, referenceListSchema);
