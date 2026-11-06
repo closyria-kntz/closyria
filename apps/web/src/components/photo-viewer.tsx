@@ -132,8 +132,16 @@ export function PhotoViewer({
                 setActual(false);
               } else if (shown === pending.current) pending.current = null;
             }}
-            onScrollEnd={() => {
+            onScrollEnd={(event) => {
               pending.current = null;
+              // A swipe that interrupted an animated scroll was ignored while it ran: the photo where it stopped wins.
+              const element = event.currentTarget;
+              if (element.clientWidth === 0) return;
+              const shown = Math.round(element.scrollLeft / element.clientWidth);
+              if (shown !== currentRef.current) {
+                setCurrent(shown);
+                setActual(false);
+              }
             }}
             className="flex size-full snap-x snap-mandatory overflow-x-auto scroll-smooth motion-reduce:scroll-auto"
           >
