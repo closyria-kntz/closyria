@@ -65,3 +65,9 @@ body {
     bottom: var(--spacing-space-8);
   }
 }
+
+/* The product sheet from 1280 px: the main column and the side panel (« Mon article »), Passe design §3. */
+@utility sheet-grid {
+  grid-template-columns: minmax(0, 1fr) var(--container-panel);
+  column-gap: var(--spacing-space-6);
+}

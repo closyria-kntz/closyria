@@ -44,7 +44,9 @@ test.describe("1440 px", () => {
 
     const side = page.getByRole("navigation", { name: "Menu principal" });
     await expect(side).toBeVisible();
-    await expect(side.getByRole("link")).toHaveText([
+    // The four stage places carry their count in their name (« Envies 0 article »).
+    const names = await side.getByRole("link").evaluateAll((links) => links.map((a) => a.textContent ?? ""));
+    expect(names.map((name) => name.replace(/\d+ articles?\d+$/, ""))).toEqual([
       "Accueil",
       "Envies",
       "Commandé",
@@ -57,12 +59,12 @@ test.describe("1440 px", () => {
     await expect(side.locator("[aria-current=page]")).toHaveCount(0);
     await expect(page.getByTestId("app-nav-bottom")).toBeHidden();
 
-    const gallery = await box(page, "[data-testid=product-gallery]");
-    const info = await box(page, "[data-testid=product-info]");
-    expect(info.x).toBeGreaterThan(gallery.x + gallery.width - 1);
-    expect(Math.abs(info.y - gallery.y)).toBeLessThan(2 * REM);
-    // The sheet itself (gallery + information columns) uses the width, it is not a narrow strip in the middle.
-    expect(info.x + info.width - gallery.x).toBeGreaterThan(60 * REM);
+    // Passe design §3: the main column and the side panel, side by side, using the width.
+    const main = await box(page, "[data-testid=product-main]");
+    const panel = await box(page, "[data-testid=product-side]");
+    expect(panel.x).toBeGreaterThan(main.x + main.width - 1);
+    expect(Math.abs(panel.y - main.y)).toBeLessThan(2 * REM);
+    expect(panel.x + panel.width - main.x).toBeGreaterThan(60 * REM);
   });
 
   test("« + Ajouter » ouvre le champ « Coller un lien », Échap le ferme et rend le focus au bouton", async ({
@@ -196,7 +198,7 @@ test.describe("390 px", () => {
     await page.setViewportSize({ width: 390, height: 844 });
 
     const gallery = await box(page, "[data-testid=product-gallery]");
-    const info = await box(page, "[data-testid=product-info]");
+    const info = await box(page, "[data-testid=product-header]");
     expect(info.y).toBeGreaterThan(gallery.y + gallery.height - 1);
 
     await bar.getByRole("button", { name: "Plus" }).click();
@@ -209,7 +211,7 @@ test.describe("390 px", () => {
     page,
   }) => {
     await openSheet(page);
-    const last = page.locator("[data-testid=product-info] > :last-child");
+    const last = page.locator("#app-content article > :last-child");
     const bar = page.getByTestId("app-nav-bottom");
 
     const expectLastAboveBar = async () => {
@@ -251,59 +253,116 @@ test.describe("structure de la fiche", () => {
     expect(ys).toEqual([...ys].sort((a, b) => a - b));
   };
 
-  test("fiche gardée : en-tête, Mon article, La fiche de la boutique, Autres actions", async ({ page }) => {
+  const keep = async (page: Page) => {
+    await page.getByRole("button", { name: "Favori" }).click();
+    await expect(page.getByRole("region", { name: "Mon article" })).toBeVisible();
+  };
+
+  test("fiche gardée, 1440 px : la boutique au centre, Mon article à droite qui défile seul", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await openSheet(page);
     const created = await page.request.post("/api/me/profiles", {
       data: { name: "Léa", audience: "women", color: "rose" },
     });
     expect(created.ok()).toBe(true);
     await page.reload();
-    await page.getByRole("button", { name: "Favori" }).click();
-    const mine = page.getByRole("region", { name: "Mon article" });
-    await expect(mine).toBeVisible();
+    await keep(page);
 
     const header = page.getByTestId("product-header");
-    await expect(header.getByRole("link", { name: /Voir chez/ })).toBeVisible();
     await expect(header.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Voir chez/ })).toHaveCount(1);
+    // Her stage, at a glance under the price (Passe design §3).
+    await expect(page.getByTestId("item-summary")).toContainText("Repéré");
+
     const shop = page.getByRole("region", { name: "La fiche de la boutique" });
-    await expect(shop.getByRole("region", { name: "Tailles" })).toBeVisible();
-    // Its parts (sizes, traits, description) are h3 under the part's own h2.
     await expect(shop.getByRole("heading", { level: 3, name: "Tailles" })).toBeVisible();
     await expect(shop.getByRole("heading", { level: 2 })).toHaveText(["La fiche de la boutique"]);
-    await expect(shop.getByText(/Mis à jour le/)).toBeVisible();
-    await expect(page.getByRole("link", { name: /Voir chez/ })).toHaveCount(1);
-    const more = page.getByRole("region", { name: "Autres actions" });
-    await expect(more.getByRole("button", { name: "Déplacer" })).toBeVisible();
-    await expect(more.getByRole("button", { name: "Supprimer" })).toBeVisible();
-    // Her item keeps its own controls inside the first box, not in the shop's part.
-    await expect(mine.getByRole("button", { name: /Passer à/ }).first()).toBeVisible();
-    await expect(mine.getByLabel("Taille", { exact: true })).toBeVisible();
     await expect(shop.getByLabel("Taille", { exact: true })).toHaveCount(0);
 
-    await verticalOrder(page, [
-      "[data-testid=product-header]",
-      "section[aria-labelledby=mine-title]",
-      "section[aria-labelledby=shop-title]",
-      "section[aria-labelledby=more-title]",
-    ]);
+    const side = page.getByTestId("product-side");
+    const mine = side.getByRole("region", { name: "Mon article" });
+    await expect(mine.getByRole("button", { name: /Passer à/ }).first()).toBeVisible();
+    await expect(mine.getByLabel("Taille", { exact: true })).toBeVisible();
+    const more = side.getByRole("region", { name: "Autres actions" });
+    await expect(more.getByRole("button", { name: "Déplacer" })).toBeVisible();
+
+    const shopBox = await box(page, "section[aria-labelledby=shop-title]");
+    const mineBox = await box(page, "section[aria-labelledby=mine-title]");
+    expect(mineBox.x).toBeGreaterThan(shopBox.x + shopBox.width - 1);
+    expect(mineBox.y).toBeLessThan(shopBox.y + shopBox.height);
+    expect(await side.evaluate((el) => getComputedStyle(el).overflowY)).toBe("auto");
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   });
 
-  test("fiche non gardée : en-tête, Garder cet article, La fiche de la boutique", async ({ page }) => {
+  for (const width of [1100, 390]) {
+    test(`fiche gardée, ${width} px : une colonne, photos, en-tête, boutique, Mon article, Autres actions`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openSheet(page);
+      await keep(page);
+      await expect(page.getByTestId("item-summary")).toContainText("Repéré");
+      await verticalOrder(page, [
+        "[data-testid=product-gallery]",
+        "[data-testid=product-header]",
+        "section[aria-labelledby=shop-title]",
+        "section[aria-labelledby=mine-title]",
+        "section[aria-labelledby=more-title]",
+      ]);
+    });
+  }
+
+  test("fiche non gardée, 1440 px : les boutons pour garder sont dans le panneau de droite", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openSheet(page);
+    const side = page.getByTestId("product-side");
+    await expect(side.getByRole("button", { name: "Favori" })).toBeVisible();
+    await expect(side.getByRole("region", { name: "La fiche de la boutique" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Mon article" })).toHaveCount(0);
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  });
+
+  test("fiche non gardée, 390 px : photos, en-tête, garder, boutique", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     await openSheet(page);
     await expect(page.getByRole("heading", { name: "Garder cet article" })).toBeAttached();
-    await expect(page.getByRole("button", { name: "Favori" })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Mon article" })).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Autres actions" })).toHaveCount(0);
-    await expect(
-      page.getByRole("region", { name: "La fiche de la boutique" }).getByRole("region", { name: "Tailles" }),
-    ).toBeVisible();
     await verticalOrder(page, [
+      "[data-testid=product-gallery]",
       "[data-testid=product-header]",
       "section[aria-labelledby=keep-title]",
       "section[aria-labelledby=shop-title]",
     ]);
-    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  });
+
+  test("1440 px, fenêtre basse : le panneau défile seul jusqu'à « Supprimer », la page ne bouge pas", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 500 });
+    await openSheet(page);
+    await keep(page);
+    const remove = page.getByTestId("product-side").getByRole("button", { name: "Supprimer" });
+    await remove.scrollIntoViewIfNeeded();
+    const removeBox = await remove.boundingBox();
+    expect(removeBox ? removeBox.y + removeBox.height : Number.POSITIVE_INFINITY).toBeLessThanOrEqual(500);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  });
+
+  test("1440 px : la visionneuse s'ouvre par-dessus le cadre, Échap la ferme, le contenu n'a pas bougé", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 700 });
+    await openSheet(page);
+    const contentTop = () => page.evaluate(() => document.getElementById("app-content")?.scrollTop ?? -1);
+    const opener = page.getByTestId("product-gallery").getByRole("button").first();
+    // Playwright scrolls the photo into view before clicking: the position to keep is the one after that.
+    await opener.scrollIntoViewIfNeeded();
+    const before = await contentTop();
+    await opener.click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
+    expect(await contentTop()).toBe(before);
   });
 
   test.describe("360 px", () => {

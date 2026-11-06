@@ -614,6 +614,9 @@
       "tagRemoved": "Étiquette {name} retirée",
       "failed": "Impossible d’annuler."
     },
+    "summary": {
+      "size": "Ma taille : {size}"
+    },
     "sections": {
       "mine": "Mon article",
       "shop": "La fiche de la boutique",
