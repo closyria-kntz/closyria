@@ -68,6 +68,9 @@ Remarques de la fondatrice après les tests en dev, avec la réponse proposée. 
 
 ## Passe design (avant l'ouverture au public)
 
+> Décisions : `docs/specs/2026-11-06-passe-design.md` (fiche D, accueil option 3, pas de pied de page) ; plan
+> `docs/plans/2026-11-06-passe-design.md` [codé sur la branche `passe-design`, pas encore en dev].
+
 - **Menu à revoir** (onglets téléphone, menu latéral ordinateur). L'accueil y est depuis le 2026-11-06.
 - Design de la fiche (trois parties en place, à embellir) ; accueil : titre « Closyria » en double et phrase
   « arrive bientôt » à revoir.
