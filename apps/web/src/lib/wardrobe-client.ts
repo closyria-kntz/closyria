@@ -16,7 +16,9 @@ import {
   type ProfilePatch,
   profileListSchema,
   profileViewSchema,
+  type RecentList,
   type ReferenceView,
+  recentListSchema,
   referenceViewSchema,
   shareResultSchema,
   type TagPatch,
@@ -278,4 +280,16 @@ export async function restoreItem(id: string, deps: ClientDeps = defaultDeps) {
 /** Deletes a trashed item for good (photos included). No undo. */
 export async function purgeItem(id: string, deps: ClientDeps = defaultDeps) {
   return await callNoContent(deps, `/api/me/items/${id}/purge`, { method: "DELETE" });
+}
+
+/** The links she pasted lately and has not kept. Null without a session; throws on any other failure. */
+export async function fetchRecents(deps: ClientDeps = defaultDeps): Promise<RecentList | null> {
+  const response = await deps.fetch("/api/me/recents", { cache: "no-store" });
+  if (response.status === 401) return null;
+  if (!response.ok) throw new Error(`recents ${response.status}`);
+  return recentListSchema.parse(await response.json());
+}
+
+export async function forgetRecent(productId: string, deps: ClientDeps = defaultDeps) {
+  return await callNoContent(deps, `/api/me/recents/${productId}`, { method: "DELETE" });
 }

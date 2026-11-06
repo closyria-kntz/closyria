@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { CaptureForm } from "@/components/capture-form";
+import { RecentProducts } from "@/components/recent-products";
 
 export default async function Home() {
   const t = await getTranslations("Home");
@@ -10,6 +11,7 @@ export default async function Home() {
       <div className="w-full max-w-measure">
         <CaptureForm />
       </div>
+      <RecentProducts />
     </main>
   );
 }

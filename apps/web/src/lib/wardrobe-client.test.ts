@@ -6,7 +6,9 @@ import {
   fetchFacets,
   fetchItemForProduct,
   fetchItemsPage,
+  fetchRecents,
   fetchReference,
+  forgetRecent,
   purgeItem,
   reorderWishlists,
   shareWishlist,
@@ -181,5 +183,34 @@ describe("lists, sharing, profiles and trash", () => {
       ok: false,
       error: "item_not_deleted",
     });
+  });
+});
+
+describe("recents", () => {
+  const recent = { product, visitedAt: "2026-11-06T10:00:00.000Z" };
+
+  it("returns the list, without opening a session", async () => {
+    const d = deps(json({ recents: [recent] }));
+    const list = await fetchRecents(d);
+    expect(list?.recents).toHaveLength(1);
+    expect(d.ensure).not.toHaveBeenCalled();
+  });
+
+  it("returns null without a session (401)", async () => {
+    expect(await fetchRecents(deps(json({ error: "unauthorized" }, 401)))).toBeNull();
+  });
+
+  it("throws on an invalid answer", async () => {
+    await expect(fetchRecents(deps(json({ recents: [{ nope: 1 }] })))).rejects.toThrow();
+  });
+
+  it("throws on a server error", async () => {
+    await expect(fetchRecents(deps(json({}, 500)))).rejects.toThrow();
+  });
+
+  it("forgets a recent with a DELETE", async () => {
+    const d = deps(new Response(null, { status: 204 }));
+    expect(await forgetRecent(id, d)).toEqual({ ok: true });
+    expect(d.fetch).toHaveBeenCalledWith(`/api/me/recents/${id}`, { method: "DELETE" });
   });
 });

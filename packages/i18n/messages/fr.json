@@ -5,7 +5,11 @@
   },
   "Home": {
     "title": "Closyria",
-    "tagline": "Ton dressing en ligne arrive bientôt."
+    "tagline": "Ton dressing en ligne arrive bientôt.",
+    "recents": {
+      "title": "Derniers liens",
+      "forget": "Retirer {name} de la liste"
+    }
   },
   "Shell": {
     "brand": "Closyria",
