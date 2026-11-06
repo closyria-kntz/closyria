@@ -2,7 +2,7 @@
 
 import { createAuthClient } from "@closyria/auth/client";
 import { useTranslations } from "next-intl";
-import { type FormEvent, useId, useRef, useState } from "react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { buttonClass, inputClass, primaryButtonClass } from "@/components/ui";
 import { type CodeErrorKey, codeErrorKey, isSixDigitCode, type SendErrorKey, sendErrorKey } from "@/lib/sign-in";
 
@@ -21,6 +21,14 @@ export function SignInForm({ next }: { next: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorKey | null>(null);
   const codeInput = useRef<HTMLInputElement>(null);
+  // Bumped each time a code has been sent (first send or resend): the code field takes the focus.
+  const [codeSentCount, setCodeSentCount] = useState(0);
+
+  // An effect, not a `requestAnimationFrame` in `sendCode`: that state update is made after an `await`, and under
+  // load the frame could fire before React had committed the code step (ref still null, focus lost).
+  useEffect(() => {
+    if (codeSentCount > 0) codeInput.current?.focus();
+  }, [codeSentCount]);
 
   const sendCode = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -35,8 +43,8 @@ export function SignInForm({ next }: { next: string }) {
     if (result.error) return setError(sendErrorKey(result.error));
     setCode("");
     setStep("code");
-    // The code field appears: move the focus there (keyboard and screen reader users).
-    requestAnimationFrame(() => codeInput.current?.focus());
+    // The code field appears: move the focus there (keyboard and screen reader users), see the effect above.
+    setCodeSentCount((n) => n + 1);
   };
 
   const signIn = async (event: FormEvent) => {
