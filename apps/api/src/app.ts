@@ -18,6 +18,7 @@ import { facetsRoutes } from "./routes/me/facets";
 import { itemMediaRoutes } from "./routes/me/item-media";
 import { itemsRoutes } from "./routes/me/items";
 import { profilesRoutes } from "./routes/me/profiles";
+import { recentsRoutes } from "./routes/me/recents";
 import { tagsRoutes } from "./routes/me/tags";
 import { wishlistsRoutes } from "./routes/me/wishlists";
 import { createMediaPipeline, type MediaDeps, mediaRoutes } from "./routes/media";
@@ -114,6 +115,7 @@ export function createApp(deps: AppDeps) {
     .route("/", itemsRoutes(deps.wardrobe))
     .route("/", itemMediaRoutes({ ...deps.wardrobe, store: deps.media.store }, mediaPipeline))
     .route("/", tagsRoutes(deps.wardrobe))
+    .route("/", recentsRoutes(deps.wardrobe))
     .route("/", facetsRoutes(deps.wardrobe))
     .route("/", referenceRoutes(deps.wardrobe))
     .route("/", wishlistsRoutes(deps.wardrobe))

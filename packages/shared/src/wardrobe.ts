@@ -335,6 +335,12 @@ export type WishlistsOrder = z.infer<typeof wishlistsOrderSchema>;
 export const wishlistListSchema = z.object({ wishlists: z.array(wishlistViewSchema) });
 export type WishlistList = z.infer<typeof wishlistListSchema>;
 
+export const recentProductViewSchema = z.object({ product: productViewSchema, visitedAt: dateTimeSchema });
+export type RecentProductView = z.infer<typeof recentProductViewSchema>;
+
+export const recentListSchema = z.object({ recents: z.array(recentProductViewSchema) });
+export type RecentList = z.infer<typeof recentListSchema>;
+
 export const wishlistItemInputSchema = z.object({ itemId: z.uuid() });
 export type WishlistItemInput = z.infer<typeof wishlistItemInputSchema>;
 
