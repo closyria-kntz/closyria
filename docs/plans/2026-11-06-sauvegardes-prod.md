@@ -43,7 +43,7 @@ chiffrées ») et §10 (« suppression réelle (sauvegardes expirées sous 30 jo
 ## Review Focus
 
 1. Un `pg_dump` qui échoue au milieu du tube ne doit jamais laisser une copie tronquée considérée comme bonne (`pipefail`, vérification de taille non nulle, et la vérification du matin la rejette).
-2. Une nuit sans sauvegarde (minuterie arrêtée, serveur éteint) doit déclencher une alerte : la vérification refuse une copie de plus de **26 h**.
+2. Une nuit sans sauvegarde (minuterie arrêtée, serveur éteint) doit déclencher une alerte : la vérification refuse une copie de plus de **6 h** (26 h au départ ; ramené à 6 h après la revue finale : à 05:00 la copie de la veille n’a que 25 h 30).
 3. La vérification ne doit jamais toucher la base vivante en écriture ni laisser la base jetable derrière elle, même si elle échoue (`trap` qui supprime la base et le fichier déchiffré).
 4. La clé privée ne doit jamais être lisible par les comptes de l'appli (`closyria`, `closyria-dev`) : elle passe par `LoadCredential=` au seul service de vérification.
 5. Un déploiement prod dont la sauvegarde échoue ne doit appliquer aucune migration.
@@ -59,13 +59,13 @@ chiffrées ») et §10 (« suppression réelle (sauvegardes expirées sous 30 jo
 **Interfaces:**
 - Produces:
   - `closyria-backup <dev|prod>` : lit `DATABASE_URL`, `BACKUP_STORE`, `BACKUP_AGE_RECIPIENT` ; écrit `<env>/closyria-<env>-<horodatage>.dump.age` et imprime son nom ; sortie ≠ 0 si quoi que ce soit échoue.
-  - `closyria-backup-check <dev|prod>` : lit `DATABASE_URL` (base vivante, lecture seule), `BACKUP_STORE`, `BACKUP_AGE_IDENTITY` (chemin de la clé privée), `BACKUP_MAX_AGE_HOURS` (défaut 26), `BACKUP_SCRATCH_DB` (défaut `closyria_restore_check`), `BACKUP_ADMIN_URL` (connexion à la base `postgres` pour créer/supprimer la base jetable) ; imprime `ok: <copie> restored, <n> tables` ou échoue avec la raison.
+  - `closyria-backup-check <dev|prod>` : lit `DATABASE_URL` (base vivante, lecture seule), `BACKUP_STORE`, `BACKUP_AGE_IDENTITY` (chemin de la clé privée), `BACKUP_MAX_AGE_HOURS` (défaut 6), `BACKUP_SCRATCH_DB` (défaut `closyria_restore_check_<env>`), `BACKUP_ADMIN_URL` (connexion à la base `postgres` pour créer/supprimer la base jetable) ; imprime `ok: <copie> restored, <n> tables` ou échoue avec la raison.
   - `closyria-backup-alert <nom d'unité>` : lit `BREVO_API_KEY`, `BACKUP_ALERT_TO`, `MAIL_FROM` ; envoie « Closyria : <unité> a échoué » avec les 30 dernières lignes de `journalctl -u <unité>` ; sans `BREVO_API_KEY` (tests) écrit le message sur la sortie.
   - `lib.sh` : `store_put <clé>` (stdin → magasin), `store_get <clé>` (magasin → stdout), `store_latest <préfixe>` (nom de la plus récente, vide si aucune), `store_age_hours <clé>`. S3 via `aws s3 cp`/`aws s3api list-objects-v2` avec `--endpoint-url "$S3_ENDPOINT"` ; dossier local via `cp`/`ls`.
 
 - [ ] **Step 1: Write the failing tests** (`scripts/backup.test.ts`, base jetable `startTestDatabase()` + `migrateTestDatabase()` de `@closyria/testing`, clé générée par `age-keygen` dans un dossier temporaire, `BACKUP_STORE` = dossier temporaire) :
   - `sauvegarde puis vérification : la copie est chiffrée et se restaure` — après `closyria-backup dev`, un seul fichier `dev/closyria-dev-*.dump.age` ; ses premiers octets sont `age-encryption.org/v1` ; il ne contient pas le texte d'une ligne insérée avant (table `"user"`, e-mail `secret-de-test@example.com`) ; `closyria-backup-check dev` sort 0 et imprime `ok:` ; la base jetable n'existe plus après.
-  - `une copie de plus de 26 h est refusée` — fichier daté de 27 h (`touch -d`) : sortie ≠ 0, message contenant `older than 26 h`.
+  - `une copie de plus de 6 h est refusée` — fichier daté de 7 h : sortie ≠ 0, message contenant `older than 6 h`. Plus, après la revue finale : `lib.sh absent`, `dev et prod vérifiés en même temps`, `S3 : envoi avec MD5 et sommes de contrôle CRC désactivées`.
   - `aucune copie : la vérification échoue` — sortie ≠ 0, message `no backup`.
   - `pg_dump en échec : pas de copie` — `DATABASE_URL` vers une base inexistante : sortie ≠ 0 et aucun fichier dans le magasin.
   - `une copie tronquée est refusée et la base jetable est supprimée` — copie coupée à la moitié : vérification ≠ 0, base jetable absente.

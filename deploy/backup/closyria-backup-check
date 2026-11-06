@@ -2,14 +2,17 @@
 # closyria-backup-check <dev|prod>: proves the newest copy can be used. Downloads it, decrypts it, restores it into a
 # throwaway database (BACKUP_SCRATCH_DB) and compares it with the live database (read only): same tables, same
 # migrations, and at least 90 % of the live rows of "user", items and products. Fails when the newest copy is older
-# than BACKUP_MAX_AGE_HOURS (26 by default), so a night without backup is noticed too.
-source "$(dirname "$(readlink -f "$0")")/lib.sh"
+# than BACKUP_MAX_AGE_HOURS (6 by default: the check runs 1 h 30 after the nightly backup), so a night without backup
+# is noticed the same morning.
+set -euo pipefail
+source "$(dirname "$(readlink -f "$0")")/lib.sh" || exit 1
 
 env=$(env_arg "${1:-}")
 need DATABASE_URL BACKUP_STORE BACKUP_AGE_IDENTITY BACKUP_ADMIN_URL
 is_s3 && need S3_ENDPOINT
-max_hours=${BACKUP_MAX_AGE_HOURS:-26}
-scratch=${BACKUP_SCRATCH_DB:-closyria_restore_check}
+max_hours=${BACKUP_MAX_AGE_HOURS:-6}
+# One throwaway database per environment: the dev and prod checks may run at the same time.
+scratch=${BACKUP_SCRATCH_DB:-closyria_restore_check_$env}
 [[ "$scratch" =~ ^[a-z_][a-z0-9_]*$ ]] || die "invalid BACKUP_SCRATCH_DB"
 
 # The admin URL with another database name (works for socket URLs with an empty host too).

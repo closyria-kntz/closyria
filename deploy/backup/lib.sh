@@ -23,7 +23,11 @@ env_arg() {
 
 is_s3() { [[ "$BACKUP_STORE" == s3://* ]]; }
 bucket() { echo "${BACKUP_STORE#s3://}"; }
-aws_() { aws --endpoint-url "$S3_ENDPOINT" "$@"; }
+# aws-cli 2.23+ adds CRC checksums by default, which OVH refuses (as in packages/storage/src/s3.ts).
+aws_() {
+  AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required \
+    aws --endpoint-url "$S3_ENDPOINT" "$@"
+}
 
 # store_put <key> <file>: uploads in one request, with its MD5 (required by buckets with Object Lock).
 store_put() {

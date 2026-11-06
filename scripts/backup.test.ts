@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm, stat, truncate, utimes } from "node:fs/promises";
+import { chmod, copyFile, mkdtemp, readdir, readFile, rm, stat, truncate, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,9 +26,9 @@ async function psql(sql: string, url = database.url): Promise<string> {
 
 type Result = { code: number; out: string };
 
-async function script(name: string, args: string[], env: Record<string, string> = {}): Promise<Result> {
+async function script(name: string, args: string[], env: Record<string, string> = {}, bin = BIN): Promise<Result> {
   try {
-    const { stdout, stderr } = await run(join(BIN, name), args, {
+    const { stdout, stderr } = await run(join(bin, name), args, {
       env: {
         PATH: process.env.PATH ?? "",
         DATABASE_URL: database.url,
@@ -95,14 +95,56 @@ describe("closyria-backup et closyria-backup-check", () => {
     expect(await scratchExists()).toBe(false);
   }, 60_000);
 
-  it("une copie de plus de 26 h est refusée", async () => {
+  it("une copie de plus de 6 h est refusée (une nuit manquée alerte dès le matin)", async () => {
     expect((await script("closyria-backup", ["dev"])).code).toBe(0);
     const file = join(store, "dev", (await copies())[0] ?? "");
-    const old = new Date(Date.now() - 27 * 3600 * 1000);
+    const old = new Date(Date.now() - 7 * 3600 * 1000);
     await utimes(file, old, old);
     const checked = await script("closyria-backup-check", ["dev"]);
     expect(checked.code).not.toBe(0);
-    expect(checked.out).toContain("older than 26 h");
+    expect(checked.out).toContain("older than 6 h");
+  }, 60_000);
+
+  it("lib.sh absent : les scripts échouent au lieu de passer", async () => {
+    const bin = await mkdtemp(join(work, "bin-"));
+    for (const name of ["closyria-backup", "closyria-backup-check"]) await copyFile(join(BIN, name), join(bin, name));
+    const saved = await script("closyria-backup", ["dev"], {}, bin);
+    expect(saved.code).not.toBe(0);
+    const checked = await script("closyria-backup-check", ["dev"], {}, bin);
+    expect(checked.code).not.toBe(0);
+    expect(checked.out).not.toContain("ok:");
+  });
+
+  it("dev et prod vérifiés en même temps : chacun sa base jetable", async () => {
+    expect((await script("closyria-backup", ["dev"])).code).toBe(0);
+    expect((await script("closyria-backup", ["prod"])).code).toBe(0);
+    const [dev, prod] = await Promise.all(
+      (["dev", "prod"] as const).map((env) => script("closyria-backup-check", [env], { BACKUP_SCRATCH_DB: "" })),
+    );
+    expect(dev?.code, dev?.out).toBe(0);
+    expect(prod?.code, prod?.out).toBe(0);
+    expect(await psql("select count(*) from pg_database where datname like 'closyria_restore_check%'")).toBe("0");
+  }, 120_000);
+
+  it("S3 : envoi avec MD5 et sommes de contrôle CRC désactivées (OVH)", async () => {
+    const bin = await mkdtemp(join(work, "fake-aws-"));
+    const calls = join(bin, "calls.log");
+    await writeFile(
+      join(bin, "aws"),
+      `#!/usr/bin/env bash\necho "$AWS_REQUEST_CHECKSUM_CALCULATION $AWS_RESPONSE_CHECKSUM_VALIDATION $*" >>"${calls}"\n`,
+    );
+    await chmod(join(bin, "aws"), 0o755);
+    // The fake aws stores nothing, so the size check fails afterwards: only the upload call matters here.
+    await script("closyria-backup", ["dev"], {
+      BACKUP_STORE: "s3://closyria-backups",
+      S3_ENDPOINT: "https://s3.sbg.io.cloud.ovh.net",
+      PATH: `${bin}:${process.env.PATH ?? ""}`,
+    });
+    const log = await readFile(calls, "utf8");
+    const put = log.split("\n").find((line) => line.includes("put-object")) ?? "";
+    expect(put).toMatch(/^when_required when_required /);
+    expect(put).toContain("--content-md5");
+    expect(put).toContain("--endpoint-url https://s3.sbg.io.cloud.ovh.net");
   }, 60_000);
 
   it("aucune copie : la vérification échoue", async () => {
