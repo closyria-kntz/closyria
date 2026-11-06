@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { buildShopData, cleanDate, cleanGtin, cleanImages, cleanList, cleanText } from "./clean";
+import { buildShopData, cleanDate, cleanGtin, cleanImages, cleanList, cleanRichText, cleanText } from "./clean";
 import type { Candidate } from "./types";
 
 /** True when the HTML carries Shopify markers. */
@@ -98,7 +98,7 @@ export function extractShopify(json: string, pageUrl: string): Candidate | null 
     publishedAt: cleanDate(p.published_at),
     shopData: buildShopData({ gtins, category: cleanText(p.type, 200), tags: cleanList(tags) }),
     brand: cleanText(p.vendor, 120),
-    description: cleanText(p.description, 5000),
+    description: cleanRichText(p.description, 5000),
     priceCents: p.price,
     compareAtCents: p.compare_at_price ?? undefined,
     images: cleanImages(p.images, pageUrl),

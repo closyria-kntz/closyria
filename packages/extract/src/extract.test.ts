@@ -233,8 +233,9 @@ describe("decoding and machine prices", () => {
     const a = ld({ "@type": "Product", name: "n", description: text, offers: { price: 1 } });
     const b = og(text);
     if (!a.ok || !b.ok) throw new Error("not ok");
-    expect(a.product.description).toBe("Hello x");
-    expect(b.product.description).toBe("Hello x");
+    // The escaped paragraph is decoded, then kept as a paragraph.
+    expect(a.product.description).toBe("Hello\n\nx");
+    expect(b.product.description).toBe("Hello\n\nx");
     expect(b.product.images).toEqual(["https://a.com/i.jpg?a=1&b=2"]);
   });
   it("decodes exactly once", () => {

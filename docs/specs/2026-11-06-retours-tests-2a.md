@@ -41,7 +41,15 @@ Remarques de la fondatrice après les tests en dev, avec la réponse proposée. 
 - **Pas d'accueil dans le menu** [corrigé] : l'accueil (coller un lien, Derniers liens) était une page à part, sans
   menu, et le menu n'avait pas d'« Accueil ». L'accueil est maintenant dans le même cadre : « Accueil » en tête du
   menu, 5 onglets sur téléphone (Accueil, Envies, Commandé, Dressing, Plus) ; « + Ajouter » est masqué sur l'accueil.
+- **Visionneuse, 2e passage** [corrigé] : la barre verticale était celle de la page derrière ; la page ne défile plus
+  tant qu'une fenêtre est ouverte (visionneuse, « Ajouter une photo »). Un clic à côté de la photo ferme.
+- **Description sans la mise en forme du site** [corrigé] : paragraphes, retours à la ligne et listes (« • ») sont
+  gardés, en texte seul (gras, liens et couleurs non repris : pas de HTML de boutique stocké). Nouvelles fiches, et
+  les anciennes à leur prochaine relecture.
 - Structure de la fiche : mieux, design à revoir (Passe design).
+- **Ordre de la fiche, « Mon article », « Autres actions », largeur sur PC** : la fiche boutique en bas paraît
+  bizarre, « Mon article » et « Autres actions » sont à redessiner, et sur grand écran le contenu reste au centre au
+  lieu d'utiliser la largeur. À traiter ensemble dans la Passe design (maquettes à valider d'abord).
 
 ## Passe design (avant l'ouverture au public)
 

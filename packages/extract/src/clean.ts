@@ -39,6 +39,34 @@ export function cleanText(value: unknown, max: number): string | undefined {
   return text === "" ? undefined : text.slice(0, max);
 }
 
+/** Block tags become line breaks (a paragraph or a list ends with a blank line), list items become bullets. */
+const structureMarkup = (value: string): string =>
+  stripMarkup(
+    value
+      .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/?(p|ul|ol)\b[^<>]*>/gi, "\n\n")
+      .replace(/<li\b[^<>]*>/gi, "\n• ")
+      .replace(/<\/(div|h[1-6]|tr|blockquote|section|article)\s*>/gi, "\n")
+      .replace(/<\/t[dh]\s*>/gi, " "),
+  );
+
+/**
+ * Like `cleanText`, but keeps the shape of a description: paragraphs (blank line), line breaks and list items
+ * (« • »). Plain text only: no markup is kept (bold, links and colours are dropped).
+ */
+export function cleanRichText(value: unknown, max: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const text = structureMarkup(decodeEntities(structureMarkup(value)))
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[^\S\n]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return text === "" ? undefined : text.slice(0, max).trimEnd();
+}
+
 /** Absolute http(s) URLs, without duplicates, at most MAX_PRODUCT_IMAGES. */
 export function cleanImages(values: unknown[], baseUrl: string): string[] {
   const out: string[] = [];

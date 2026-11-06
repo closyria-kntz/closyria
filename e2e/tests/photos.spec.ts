@@ -147,6 +147,46 @@ test("avec une seule photo, ni flèches ni compteur", async ({ page }) => {
   expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
 });
 
+test("la page derrière ne défile plus, un clic à côté de la photo ferme, un clic dessus zoome", async ({ page }) => {
+  await keepWithPhotos(page, 1);
+  const opener = mine(page).getByRole("button", { name: "Agrandir ta photo 1" });
+  const overflow = () => page.evaluate(() => getComputedStyle(document.documentElement).overflow);
+  expect(await overflow()).not.toBe("hidden");
+  await opener.click();
+  const viewer = page.getByRole("dialog");
+  await expect(viewer).toBeVisible();
+  expect(await overflow()).toBe("hidden");
+
+  // A point on the photo, and one in the band beside it (the photo is fitted, « object-contain »).
+  const photo = viewer.getByRole("img");
+  await expect.poll(() => photo.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  const points = await photo.evaluate((img: HTMLImageElement) => {
+    const box = img.getBoundingClientRect();
+    const scale = Math.min(box.width / img.naturalWidth, box.height / img.naturalHeight);
+    const width = img.naturalWidth * scale;
+    const height = img.naturalHeight * scale;
+    const side = (box.width - width) / 2;
+    const above = (box.height - height) / 2;
+    return {
+      on: { x: box.left + box.width / 2, y: box.top + box.height / 2 },
+      // Beside the photo: the wider band, away from the corner buttons.
+      beside:
+        side >= above
+          ? { x: box.left + side / 2, y: box.top + box.height - 20 }
+          : { x: box.left + box.width / 2, y: box.top + box.height - above / 2 },
+      band: Math.max(side, above),
+    };
+  });
+  expect(points.band).toBeGreaterThan(10);
+  await page.mouse.click(points.on.x, points.on.y);
+  await expect(viewer).toHaveAttribute("data-zoom", "actual");
+  await page.mouse.click(points.on.x, points.on.y);
+  await expect(viewer).toHaveAttribute("data-zoom", "fit");
+  await page.mouse.click(points.beside.x, points.beside.y);
+  await expect(viewer).toBeHidden();
+  expect(await overflow()).not.toBe("hidden");
+});
+
 test("la fiche d'un article pas encore gardé ouvre aussi les photos de la boutique", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(autoProductUrl());

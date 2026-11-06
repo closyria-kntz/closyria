@@ -4,6 +4,7 @@ import {
   cleanGtin,
   cleanImages,
   cleanList,
+  cleanRichText,
   cleanText,
   parseMachinePriceCents,
 } from "./clean";
@@ -142,7 +143,7 @@ function productCandidate(node: Json, url: string, breadcrumbs: Json[]): Candida
       material: cleanText(nameOf(node.material), 200),
     }),
     brand: cleanText(brandRaw, 120),
-    description: cleanText(node.description, 5000),
+    description: cleanRichText(node.description, 5000),
     currency: typeof currencyRaw === "string" ? currencyRaw.toUpperCase() : undefined,
     priceCents,
     images: cleanImages(images, url),

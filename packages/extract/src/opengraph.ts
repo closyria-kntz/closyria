@@ -1,4 +1,4 @@
-import { cleanImages, cleanText, decodeEntities, parseMachinePriceCents } from "./clean";
+import { cleanImages, cleanRichText, cleanText, decodeEntities, parseMachinePriceCents } from "./clean";
 import type { Candidate } from "./types";
 
 function metaTags(html: string): [string, string][] {
@@ -26,7 +26,7 @@ export function extractOpenGraph(html: string, url: string): Candidate | null {
   const currency = first("product:price:currency", "og:price:currency")?.trim().toUpperCase();
   return {
     name,
-    description: cleanText(first("og:description"), 5000),
+    description: cleanRichText(first("og:description"), 5000),
     currency: currency || undefined,
     priceCents,
     images: cleanImages(

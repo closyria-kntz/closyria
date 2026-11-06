@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { buttonClass } from "./ui";
 
 export type ViewerPhoto = { url: string; width: number; height: number };
@@ -15,6 +15,21 @@ const control = `${buttonClass} min-h-touch-target`;
  * size » (natural pixels, the slide scrolls; ←/→ then pan it instead of changing photo). Changing photo goes back to
  * « fitted ». `index === null` is closed.
  */
+/** Whether a click on a fitted (`object-contain`) image landed on the photo itself, not on the bands beside it. */
+function onPhoto(event: MouseEvent<HTMLImageElement>): boolean {
+  const image = event.currentTarget;
+  const box = image.getBoundingClientRect();
+  if (!image.naturalWidth || !image.naturalHeight) return true;
+  const scale = Math.min(box.width / image.naturalWidth, box.height / image.naturalHeight);
+  const width = image.naturalWidth * scale;
+  const height = image.naturalHeight * scale;
+  const left = box.left + (box.width - width) / 2;
+  const top = box.top + (box.height - height) / 2;
+  return (
+    event.clientX >= left && event.clientX <= left + width && event.clientY >= top && event.clientY <= top + height
+  );
+}
+
 export function PhotoViewer({
   photos,
   index,
@@ -123,9 +138,13 @@ export function PhotoViewer({
             className="flex size-full snap-x snap-mandatory overflow-x-auto scroll-smooth motion-reduce:scroll-auto"
           >
             {photos.map((photo, position) => (
+              // biome-ignore lint/a11y/useKeyWithClickEvents lint/a11y/noStaticElementInteractions: a click beside the photo closes, like Escape and « Fermer ».
               <div
                 key={photo.url}
                 data-testid="viewer-slide"
+                onClick={(event) => {
+                  if (event.target === event.currentTarget) onClose();
+                }}
                 className="flex size-full shrink-0 snap-center snap-always overflow-auto"
               >
                 {/* biome-ignore lint/performance/noImgElement: photos come from our own API, sized by it. */}
@@ -135,7 +154,11 @@ export function PhotoViewer({
                   width={photo.width}
                   height={photo.height}
                   alt={total > 1 ? `${alt} (${position + 1}/${total})` : alt}
-                  onClick={() => setActual((value) => !value)}
+                  onClick={(event) => {
+                    // Fitted, the image box fills the window: a click on the bands beside the photo closes.
+                    if (!actual && !onPhoto(event)) onClose();
+                    else setActual((value) => !value);
+                  }}
                   className={
                     actual
                       ? "m-auto max-h-none max-w-none shrink-0 cursor-zoom-out"
