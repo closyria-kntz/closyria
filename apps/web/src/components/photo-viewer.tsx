@@ -12,7 +12,8 @@ const control = `${buttonClass} min-h-touch-target`;
  * Full-screen viewer on the native `<dialog>` (like `Dialog`): the browser traps the focus, closes on Escape and gives
  * the focus back to the thumbnail that opened it. The photos sit side by side in a scroll-snap track, so swiping is the
  * browser's own scrolling. A click on the photo toggles between « fitted » (whole photo, never cropped) and « actual
- * size » (natural pixels, the slide scrolls). `index === null` is closed.
+ * size » (natural pixels, the slide scrolls; ←/→ then pan it instead of changing photo). Changing photo goes back to
+ * « fitted ». `index === null` is closed.
  */
 export function PhotoViewer({
   photos,
@@ -32,7 +33,9 @@ export function PhotoViewer({
   const pending = useRef<number | null>(null);
   const [current, setCurrent] = useState(0);
   const [actual, setActual] = useState(false);
+  const actualRef = useRef(false);
   currentRef.current = current;
+  actualRef.current = actual;
   const open = index !== null;
   const total = photos.length;
 
@@ -60,6 +63,7 @@ export function PhotoViewer({
     // The CSS `scroll-smooth motion-reduce:scroll-auto` of the track decides whether it animates.
     element.scrollTo({ left: target * element.clientWidth });
     setCurrent(target);
+    setActual(false);
   }
 
   // On the document, not the dialog: the focus falls back to the body when the button just pressed gets disabled.
@@ -68,6 +72,16 @@ export function PhotoViewer({
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      if (actualRef.current) {
+        // In actual size the arrows pan the photo shown, a quarter of the screen at a time. Not the track's own
+        // scrolling either: that would snap to the next photo.
+        event.preventDefault();
+        const slide = track.current?.children[currentRef.current];
+        const direction = event.key === "ArrowRight" ? 1 : -1;
+        if (slide instanceof HTMLElement) slide.scrollBy({ left: direction * Math.round(slide.clientWidth / 4) });
+        return;
+      }
       const base = pending.current ?? currentRef.current;
       if (event.key === "ArrowRight") step.current(base + 1);
       if (event.key === "ArrowLeft") step.current(base - 1);
@@ -98,8 +112,10 @@ export function PhotoViewer({
               if (element.clientWidth === 0) return;
               const shown = Math.round(element.scrollLeft / element.clientWidth);
               // While a button or key animates the scroll, the passing positions are not the photo being shown.
-              if (pending.current === null) setCurrent(shown);
-              else if (shown === pending.current) pending.current = null;
+              if (pending.current === null && shown !== currentRef.current) {
+                setCurrent(shown);
+                setActual(false);
+              } else if (shown === pending.current) pending.current = null;
             }}
             onScrollEnd={() => {
               pending.current = null;

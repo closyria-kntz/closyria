@@ -71,12 +71,15 @@
   "Media": {
     "viewer": {
       "open": "Agrandir la photo {n}",
+      "openMine": "Agrandir ta photo {n}",
+      "openShop": "Agrandir la photo {n} de la boutique",
+      "openOf": "Agrandir la photo de {name}",
       "close": "Fermer",
       "previous": "Photo précédente",
       "next": "Photo suivante",
       "counter": "{current} / {total}",
       "actualSize": "Voir en taille réelle",
-      "fit": "Ajuster à l'écran"
+      "fit": "Ajuster à l’écran"
     },
     "errors": {
       "unsupported_image": "Format non pris en charge",
@@ -669,6 +672,7 @@
       "count": "{count} sur {max}",
       "uploading": "Envoi de la photo…",
       "adding": "Ajout…",
+      "arriving": "La photo arrive : elle apparaîtra sur la fiche dans un instant.",
       "addTitle": "Ajouter une photo",
       "close": "Fermer",
       "dropZone": "Colle une image (Ctrl+V ou Cmd+V), glisse-la ici ou choisis un fichier.",

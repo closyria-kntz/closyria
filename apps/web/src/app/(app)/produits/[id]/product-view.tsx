@@ -185,9 +185,9 @@ export function ProductView({ productId, captureId }: { productId: string; captu
         </h2>
         {product.sizes.length > 0 && (
           <section aria-labelledby="sizes-title" className="flex flex-col gap-space-2">
-            <h2 id="sizes-title" className="text-sm font-strong">
+            <h3 id="sizes-title" className="text-sm font-strong">
               {t("product.sizes")}
-            </h2>
+            </h3>
             <ul className="flex flex-wrap gap-space-2">
               {product.sizes.map((size) => (
                 <li

@@ -109,3 +109,32 @@ test("l'accueil rappelle les derniers liens collés, ✕ en retire un, et une fi
   await expect(page.getByRole("textbox", { name: "Coller un lien" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Derniers liens" })).toHaveCount(0);
 });
+
+test("après ✕ dans « Derniers liens », le focus va au ✕ suivant, sinon au précédent, puis au champ", async ({
+  page,
+}) => {
+  for (let n = 0; n < 3; n++) {
+    await page.goto("/");
+    await paste(page, autoProductUrl());
+    await expect(page.getByRole("article").getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({
+      timeout: 10_000,
+    });
+  }
+  await page.goto("/");
+  const recents = page.getByRole("region", { name: "Derniers liens" });
+  const forget = recents.getByRole("button", { name: `Retirer ${PRODUCT.name} de la liste` });
+  await expect(forget).toHaveCount(3);
+
+  // The middle one: focus on the next (now second) card's ✕.
+  await forget.nth(1).click();
+  await expect(forget).toHaveCount(2);
+  await expect(forget.nth(1)).toBeFocused();
+  // The last one: focus on the previous card's ✕.
+  await forget.nth(1).click();
+  await expect(forget).toHaveCount(1);
+  await expect(forget.nth(0)).toBeFocused();
+  // The only one: the section goes, the focus goes to the paste field.
+  await forget.nth(0).click();
+  await expect(recents).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Coller un lien" })).toBeFocused();
+});

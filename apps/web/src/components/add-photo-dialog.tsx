@@ -48,7 +48,10 @@ export function AddPhotoDialog({
   );
 }
 
-/** Mounted only while the window is open: its state starts afresh each time, and leaving stops an import's polling. */
+/**
+ * Mounted only while the window is open: its state starts afresh each time, and leaving stops an import's polling
+ * (silently: the import goes on, and the next read of the item attaches its photo).
+ */
 function AddPhotoBody({
   itemId,
   onChange,
@@ -61,6 +64,8 @@ function AddPhotoBody({
   const t = useTranslations("Item");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The poll gave up but the worker may still finish: the next read of the item attaches the photo.
+  const [arriving, setArriving] = useState(false);
   const [link, setLink] = useState("");
   const [dragging, setDragging] = useState(false);
   const [coarse, setCoarse] = useState(false);
@@ -75,6 +80,7 @@ function AddPhotoBody({
   }, []);
 
   const fail = (code: string) => {
+    setArriving(false);
     setError(t(`errors.${errorKey(code)}` as "errors.failed"));
     setBusy(false);
   };
@@ -87,6 +93,7 @@ function AddPhotoBody({
 
   async function addFile(file: File) {
     setError(null);
+    setArriving(false);
     const refused = checkPhoto(file);
     if (refused) return fail(refused);
     setBusy(true);
@@ -97,6 +104,7 @@ function AddPhotoBody({
 
   async function addLink(url: string) {
     setError(null);
+    setArriving(false);
     setBusy(true);
     const started = await importPhoto(itemId, url);
     if (!started.ok) return fail(started.error);
@@ -108,7 +116,11 @@ function AddPhotoBody({
           if (view.status === "attached") done(view.item);
           else if (view.status === "failed") fail(view.error);
         },
-        onGiveUp: () => fail("failed"),
+        // Not a failure: the import may still finish, and reading the item then attaches it (server side).
+        onGiveUp: () => {
+          setBusy(false);
+          setArriving(true);
+        },
       },
     );
   }
@@ -238,9 +250,9 @@ function AddPhotoBody({
         </div>
       </form>
 
-      {busy && (
+      {(busy || arriving) && (
         <p role="status" className="text-sm text-ink-muted">
-          {t("photos.adding")}
+          {busy ? t("photos.adding") : t("photos.arriving")}
         </p>
       )}
       {error && (

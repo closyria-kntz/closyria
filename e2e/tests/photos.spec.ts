@@ -1,6 +1,10 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { deflateSync } from "node:zlib";
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
+import { setupValue } from "../fixtures/paths";
 import { autoProductUrl, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
@@ -60,7 +64,14 @@ const mine = (page: Page) => page.getByRole("list", { name: "Mes photos" });
 
 test("la visionneuse s'ouvre sur la photo cliquée, navigue, zoome et rend le focus", async ({ page }, testInfo) => {
   await keepWithPhotos(page, 3);
-  const opener = mine(page).getByRole("button", { name: "Agrandir la photo 2" });
+  // Her photos and the shop's are told apart by name.
+  await expect(page.getByRole("button", { name: "Agrandir ta photo 1", exact: true })).toHaveCount(1);
+  await expect(
+    page
+      .getByRole("list", { name: "Photos de la boutique" })
+      .getByRole("button", { name: "Agrandir la photo 1 de la boutique" }),
+  ).toBeVisible();
+  const opener = mine(page).getByRole("button", { name: "Agrandir ta photo 2" });
   await opener.click();
 
   const viewer = page.getByRole("dialog");
@@ -94,7 +105,23 @@ test("la visionneuse s'ouvre sur la photo cliquée, navigue, zoome et rend le fo
   await expect(viewer).toHaveAttribute("data-zoom", "actual");
   const slide = viewer.getByTestId("viewer-slide").nth(1);
   await expect.poll(() => slide.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  // In actual size the arrows pan the photo, they do not change it.
+  const scrollLeft = () => slide.evaluate((el) => el.scrollLeft);
+  const start = await scrollLeft();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(scrollLeft).toBeGreaterThan(start);
+  const panned = await scrollLeft();
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(scrollLeft).toBeLessThan(panned);
+  await expect(viewer.getByText("2 / 3")).toBeVisible();
+  await expect(viewer).toHaveAttribute("data-zoom", "actual");
   await track.getByRole("img").nth(1).click();
+  await expect(viewer).toHaveAttribute("data-zoom", "fit");
+  // Changing photo goes back to « fitted ».
+  await track.getByRole("img").nth(1).click();
+  await expect(viewer).toHaveAttribute("data-zoom", "actual");
+  await viewer.getByRole("button", { name: "Photo suivante" }).click();
+  await expect(viewer.getByText("3 / 3")).toBeVisible();
   await expect(viewer).toHaveAttribute("data-zoom", "fit");
 
   await page.keyboard.press("Escape");
@@ -104,7 +131,7 @@ test("la visionneuse s'ouvre sur la photo cliquée, navigue, zoome et rend le fo
 
 test("avec une seule photo, ni flèches ni compteur", async ({ page }) => {
   await keepWithPhotos(page, 1);
-  await mine(page).getByRole("button", { name: "Agrandir la photo 1" }).click();
+  await mine(page).getByRole("button", { name: "Agrandir ta photo 1" }).click();
   const viewer = page.getByRole("dialog");
   await expect(viewer).toBeVisible();
   await expect(viewer.getByRole("button", { name: "Photo suivante" })).toHaveCount(0);
@@ -166,6 +193,9 @@ async function transfer(
       { type, data },
     );
 }
+
+/** A 1×1 lossy WebP: what the photo-import worker stores. */
+const TINY_WEBP = Buffer.from("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA", "base64");
 
 const PIXEL_FILE = {
   name: "p.png",
@@ -268,6 +298,74 @@ test("une adresse collée lance l'import par lien, puis la photo apparaît", asy
   await expect(dialog(page)).toBeHidden();
   await expect(mine(page).getByRole("listitem")).toHaveCount(2);
   expect(polls).toBeGreaterThanOrEqual(2);
+});
+
+test("fermer la fenêtre pendant un import par lien ne perd pas la photo : elle est sur la fiche rechargée", async ({
+  page,
+  db,
+}) => {
+  await keepItem(page);
+  // Real API: the import is queued in pg-boss. The photo-import worker does not run in the suite (it refuses local
+  // addresses by design), so this test plays its part below: the object stored, the import `ready`.
+  const url = `https://photos.test/robe-${randomUUID()}.jpg`;
+  await addButton(page).click();
+  await dialog(page).getByLabel("Lien vers une image").fill(url);
+  await dialog(page).getByRole("button", { name: "Ajouter", exact: true }).click();
+  await expect(dialog(page).getByRole("status")).toHaveText("Ajout…");
+  await dialog(page).getByRole("button", { name: "Fermer" }).click();
+  await expect(dialog(page)).toBeHidden();
+  // Nothing misleading: no failure message anywhere, and no photo yet.
+  await expect(page.getByText("Ça n’a pas marché")).toHaveCount(0);
+  await expect(mine(page).getByRole("listitem")).toHaveCount(0);
+
+  const { rows } = await db.query<{ id: string; user_id: string }>(
+    "select id, user_id from photo_imports where url = $1 and status = 'queued'",
+    [url],
+  );
+  const row = rows[0];
+  if (!row) throw new Error("no queued import");
+  const key = `users/${row.user_id}/${randomUUID()}.webp`;
+  await mkdir(dirname(join(setupValue("E2E_STORAGE_DIR"), key)), { recursive: true });
+  await writeFile(join(setupValue("E2E_STORAGE_DIR"), key), TINY_WEBP);
+  await db.query(
+    `update photo_imports set status = 'ready', media_key = $2, content_type = 'image/webp', size_bytes = $3,
+       width = 1, height = 1, updated_at = now() where id = $1`,
+    [row.id, key, TINY_WEBP.length],
+  );
+
+  await page.reload();
+  await expect(mine(page).getByRole("listitem")).toHaveCount(1);
+  const { rows: after } = await db.query<{ status: string }>("select status from photo_imports where id = $1", [
+    row.id,
+  ]);
+  expect(after[0]?.status).toBe("attached");
+});
+
+test("quand l'import par lien tarde, la fenêtre dit que la photo arrive, sans erreur", async ({ page }) => {
+  await page.clock.install();
+  await keepItem(page);
+  const importId = "00000000-0000-4000-8000-0000000000aa";
+  let polls = 0;
+  await page.route("**/api/me/items/*/media/imports", (route) =>
+    route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ importId }) }),
+  );
+  await page.route(`**/api/me/items/*/media/imports/${importId}`, (route) => {
+    polls += 1;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "queued" }) });
+  });
+  await addButton(page).click();
+  await dialog(page).getByLabel("Lien vers une image").fill("https://photos.test/robe.jpg");
+  await dialog(page).getByRole("button", { name: "Ajouter", exact: true }).click();
+  await expect(dialog(page).getByRole("status")).toHaveText("Ajout…");
+  await expect.poll(() => polls).toBeGreaterThanOrEqual(1);
+  // Past the poll's soft timeout and its slow minute: it gives up.
+  await page.clock.fastForward("01:20");
+  await expect(dialog(page).getByRole("status")).toHaveText(
+    "La photo arrive : elle apparaîtra sur la fiche dans un instant.",
+  );
+  await expect(dialog(page).getByRole("alert")).toHaveCount(0);
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
 });
 
 test("un import refusé affiche son message", async ({ page }) => {

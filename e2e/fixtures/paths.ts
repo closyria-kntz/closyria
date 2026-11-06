@@ -9,7 +9,9 @@ export const SERVER_LOG = join(REPORTS_DIR, "servers.log");
 export const BROWSER_AUTH_BUNDLE = join(REPORTS_DIR, "browser-auth.js");
 
 /** A variable the global setup sets for the test workers. */
-export function setupValue(name: "E2E_BASE_URL" | "E2E_DATABASE_URL" | "E2E_FAKE_SHOP_URL"): string {
+export function setupValue(
+  name: "E2E_BASE_URL" | "E2E_DATABASE_URL" | "E2E_FAKE_SHOP_URL" | "E2E_STORAGE_DIR",
+): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is not set: run the suite with playwright test (global setup)`);
   return value;

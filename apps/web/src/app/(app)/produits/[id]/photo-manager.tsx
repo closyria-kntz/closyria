@@ -116,7 +116,7 @@ export function PhotoManager({
               <Frame
                 photo={photo}
                 alt={t("photos.alt", { n: index + 1, name })}
-                openLabel={tMedia("viewer.open", { n: index + 1 })}
+                openLabel={tMedia("viewer.openMine", { n: index + 1 })}
                 onOpen={() => setViewing({ group: "private", index })}
               />
               <div className="flex flex-wrap gap-space-1">
@@ -189,7 +189,7 @@ export function PhotoManager({
               <Frame
                 photo={photo}
                 alt={t("photos.alt", { n: index + 1, name })}
-                openLabel={tMedia("viewer.open", { n: index + 1 })}
+                openLabel={tMedia("viewer.openShop", { n: index + 1 })}
                 onOpen={() => setViewing({ group: "shop", index })}
               />
             </li>

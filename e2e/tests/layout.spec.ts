@@ -186,6 +186,9 @@ test.describe("structure de la fiche", () => {
     await expect(header.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible();
     const shop = page.getByRole("region", { name: "La fiche de la boutique" });
     await expect(shop.getByRole("region", { name: "Tailles" })).toBeVisible();
+    // Its parts (sizes, traits, description) are h3 under the part's own h2.
+    await expect(shop.getByRole("heading", { level: 3, name: "Tailles" })).toBeVisible();
+    await expect(shop.getByRole("heading", { level: 2 })).toHaveText(["La fiche de la boutique"]);
     await expect(shop.getByText(/Mis à jour le/)).toBeVisible();
     await expect(page.getByRole("link", { name: /Voir chez/ })).toHaveCount(1);
     const more = page.getByRole("region", { name: "Autres actions" });

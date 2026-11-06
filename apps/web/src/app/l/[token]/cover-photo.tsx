@@ -20,7 +20,7 @@ export function CoverPhoto({
     <>
       <button
         type="button"
-        aria-label={t("open", { n: 1 })}
+        aria-label={t("openOf", { name })}
         onClick={() => setViewing(0)}
         className="size-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring focus-visible:outline-solid"
       >
