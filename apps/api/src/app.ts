@@ -14,6 +14,7 @@ import { adminShopsRoutes } from "./routes/admin/shops";
 import { capturesRoutes } from "./routes/captures";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
 import { bulkRoutes } from "./routes/me/bulk";
+import { facetsRoutes } from "./routes/me/facets";
 import { itemMediaRoutes } from "./routes/me/item-media";
 import { itemsRoutes } from "./routes/me/items";
 import { profilesRoutes } from "./routes/me/profiles";
@@ -21,6 +22,7 @@ import { tagsRoutes } from "./routes/me/tags";
 import { wishlistsRoutes } from "./routes/me/wishlists";
 import { createMediaPipeline, type MediaDeps, mediaRoutes } from "./routes/media";
 import { productsRoutes } from "./routes/products";
+import { referenceRoutes } from "./routes/reference";
 import { sharedRoutes } from "./routes/shared";
 import { type TestMailDeps, testMailRoutes } from "./routes/test-mail";
 import type { WardrobeDeps } from "./wardrobe/deps";
@@ -112,6 +114,8 @@ export function createApp(deps: AppDeps) {
     .route("/", itemsRoutes(deps.wardrobe))
     .route("/", itemMediaRoutes({ ...deps.wardrobe, store: deps.media.store }, mediaPipeline))
     .route("/", tagsRoutes(deps.wardrobe))
+    .route("/", facetsRoutes(deps.wardrobe))
+    .route("/", referenceRoutes(deps.wardrobe))
     .route("/", wishlistsRoutes(deps.wardrobe))
     .route("/", sharedRoutes(deps.wardrobe))
     .route("/", overviewRoutes(deps.admin))

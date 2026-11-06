@@ -333,6 +333,19 @@ export const summaryViewSchema = z.object({
 });
 export type SummaryView = z.infer<typeof summaryViewSchema>;
 
+/** Categories and colours that the filters (and the item fields) offer; public, cacheable. */
+export const referenceViewSchema = z.object({
+  categories: z.array(
+    z.object({ id: z.uuid(), parentId: z.uuid().nullable(), name: z.string(), position: z.number().int() }),
+  ),
+  colors: z.array(z.object({ id: z.uuid(), name: z.string(), hex: z.string() })),
+});
+export type ReferenceView = z.infer<typeof referenceViewSchema>;
+
+/** What the « Boutique » filter offers: the shops of her own (non-deleted) items. */
+export const facetsViewSchema = z.object({ shops: z.array(z.object({ id: z.uuid(), name: z.string() })) });
+export type FacetsView = z.infer<typeof facetsViewSchema>;
+
 /** Stable error codes of the `/api/me/profiles`, `/api/me/items`, `/api/me/tags` and `/api/me/summary` routes. */
 export const wardrobeErrorCodes = [
   "invalid_request",

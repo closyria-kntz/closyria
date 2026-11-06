@@ -34,15 +34,25 @@ export function profileHref(path: string, profileId: string | null, isDefault: b
 
 export type ProfilesState = {
   profiles: readonly ProfileView[];
+  /** False until the first read of the profiles ended (a view waits for it to know which profile to ask). */
+  ready: boolean;
   /** Re-reads the profiles; the settings pages call it after creating, renaming or deleting one. */
   refreshProfiles: () => Promise<void>;
 };
 
 /** The profiles of the signed-in (or anonymous) account; filled by the app shell. */
-export const ProfilesContext = createContext<ProfilesState>({ profiles: [], refreshProfiles: async () => {} });
+export const ProfilesContext = createContext<ProfilesState>({
+  profiles: [],
+  ready: true,
+  refreshProfiles: async () => {},
+});
 
 export function useProfiles(): readonly ProfileView[] {
   return useContext(ProfilesContext).profiles;
+}
+
+export function useProfilesReady(): boolean {
+  return useContext(ProfilesContext).ready;
 }
 
 export function useRefreshProfiles(): () => Promise<void> {

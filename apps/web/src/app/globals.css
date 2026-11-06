@@ -56,3 +56,29 @@ body {
     animation: none;
   }
 }
+
+/* Item cards: the photo grows very slightly inside its frame under a mouse only (visual direction §6.1). */
+.card-photo {
+  transition: transform var(--motion-duration-slow) var(--ease-standard);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card:hover .card-photo {
+    transform: scale(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card:hover .card-photo {
+    transform: none;
+  }
+}
+
+/* The selection bar sticks above the phone tab bar and the undo toast. */
+@utility selection-bar-offset {
+  bottom: calc(var(--spacing-space-8) + var(--spacing-space-7) + env(safe-area-inset-bottom));
+
+  @variant md {
+    bottom: var(--spacing-space-8);
+  }
+}

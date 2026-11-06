@@ -495,5 +495,128 @@
       "itemLoad": "Ton article ne s’affiche pas. Réessaie dans un instant.",
       "extrasLoad": "Tes listes et étiquettes ne s’affichent pas."
     }
+  },
+  "Account": {
+    "title": "Garde tes articles",
+    "body": "Garde tes articles : crée ton compte avec ton e-mail.",
+    "action": "Créer mon compte",
+    "dismiss": "Plus tard",
+    "label": "Proposition de compte"
+  },
+  "Views": {
+    "title": {
+      "envies": "Envies",
+      "commande": "Commandé",
+      "dressing": "Dressing",
+      "a-vendre": "À vendre"
+    },
+    "metadata": {
+      "envies": "Mes envies",
+      "commande": "Mes commandes",
+      "dressing": "Mon dressing",
+      "a-vendre": "Mes articles à vendre"
+    },
+    "loading": "Chargement de tes articles…",
+    "loadError": "Tes articles ne s’affichent pas. Réessaie dans un instant.",
+    "retry": "Réessayer",
+    "loadingMore": "Chargement de la suite…",
+    "loadMore": "Voir la suite",
+    "end": "C’est tout pour l’instant.",
+    "empty": {
+      "envies": {
+        "title": "Aucune envie pour l’instant",
+        "body": "Colle le lien d’un article pour le retrouver ici."
+      },
+      "commande": {
+        "title": "Aucune commande en cours",
+        "body": "Colle le lien d’un article, puis marque-le comme commandé."
+      },
+      "dressing": {
+        "title": "Ton dressing est vide",
+        "body": "Colle le lien d’un article reçu pour le ranger ici."
+      },
+      "a-vendre": {
+        "title": "Rien à vendre pour l’instant",
+        "body": "Passe un article de ton dressing à « À vendre » pour le retrouver ici."
+      },
+      "filtered": {
+        "title": "Aucun article ne correspond",
+        "body": "Essaie avec moins de filtres.",
+        "reset": "Effacer les filtres"
+      },
+      "action": "Coller un lien"
+    },
+    "card": {
+      "noPrice": "Prix non renseigné",
+      "noName": "Article sans nom",
+      "noPhoto": "Pas de photo",
+      "favorite": "Favori",
+      "select": "Sélectionner {name}",
+      "open": "Ouvrir {name}"
+    },
+    "filters": {
+      "title": "Filtres",
+      "show": "Filtrer et trier",
+      "hide": "Masquer les filtres",
+      "active": "{count, plural, =0 {Filtres} one {Filtres (#)} other {Filtres (#)}}",
+      "favorite": "Favoris seulement",
+      "shop": "Boutique",
+      "category": "Type",
+      "color": "Couleur",
+      "audience": "Public",
+      "tag": "Étiquette",
+      "stage": "Étape",
+      "sort": "Trier par",
+      "any": "Tous",
+      "anyF": "Toutes",
+      "stageView": "Cette vue",
+      "reset": "Effacer les filtres",
+      "audienceOptions": {
+        "women": "Femme",
+        "men": "Homme",
+        "child": "Enfant",
+        "mixed": "Mixte"
+      },
+      "sortOptions": {
+        "recent": "Plus récents",
+        "oldest": "Plus anciens",
+        "name": "Nom",
+        "price_asc": "Prix croissant",
+        "price_desc": "Prix décroissant"
+      },
+      "reference": "Les filtres Type et Couleur ne se chargent pas.",
+      "stageOptions": {
+        "sold": "Vendu",
+        "returned": "Renvoyé"
+      }
+    },
+    "selection": {
+      "count": "{count, plural, one {# article choisi} other {# articles choisis}}",
+      "all": "Tout choisir",
+      "none": "Tout désélectionner",
+      "stage": "Étape",
+      "list": "Liste",
+      "profile": "Profil",
+      "tag": "Étiquette",
+      "delete": "Supprimer",
+      "bar": "Actions sur la sélection",
+      "stageTitle": "Changer d’étape",
+      "listTitle": "Ajouter à une liste",
+      "profileTitle": "Déplacer vers un profil",
+      "tagTitle": "Poser une étiquette",
+      "close": "Fermer",
+      "noLists": "Aucune liste pour l’instant.",
+      "noTags": "Aucune étiquette pour l’instant.",
+      "choiceFailed": "Tes listes ou étiquettes ne s’affichent pas.",
+      "tooMany": "Tu peux agir sur 200 articles à la fois.",
+      "toast": {
+        "stage": "{count, plural, one {# article passé} other {# articles passés}} à « {stage} »",
+        "list": "{count, plural, one {# article ajouté} other {# articles ajoutés}} à {name}",
+        "profile": "{count, plural, one {# article déplacé} other {# articles déplacés}} vers {name}",
+        "tag": "Étiquette {name} posée sur {count, plural, one {# article} other {# articles}}",
+        "delete": "{count, plural, one {# article supprimé} other {# articles supprimés}}"
+      },
+      "loading": "Un instant…"
+    }
   }
 }

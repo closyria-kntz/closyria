@@ -235,7 +235,12 @@ export async function listItems(db: Database, userId: string, query: ItemListQue
       sql`exists (select 1 from ${schema.itemTags} where ${schema.itemTags.itemId} = ${schema.items.id} and ${schema.itemTags.tagId} = ${query.tag})`,
     );
   }
-  if (query.shop) conditions.push(eq(schema.shops.slug, query.shop));
+  if (query.shop) {
+    // The filter menu sends the shop's id; a slug is still accepted.
+    conditions.push(
+      z.uuid().safeParse(query.shop).success ? eq(schema.shops.id, query.shop) : eq(schema.shops.slug, query.shop),
+    );
+  }
   if (query.category) {
     conditions.push(sql`coalesce(${schema.items.categoryId}, ${schema.products.categoryId}) = ${query.category}`);
   }

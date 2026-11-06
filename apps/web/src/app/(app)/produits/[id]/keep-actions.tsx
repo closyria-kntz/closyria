@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Dialog } from "@/components/dialog";
 import { buttonClass, inputClass, primaryButtonClass } from "@/components/ui";
+import { requestAccountPrompt } from "@/lib/account-prompt-request";
 import { pushUndo } from "@/lib/undo";
 import {
   bulkItems,
@@ -76,6 +77,7 @@ export function KeepActions({ product, profileId, onKept, reload }: Props) {
     }
     onKept(item);
     pushUndo(t("toast.favorite"), undoWith(undo, reload));
+    void requestAccountPrompt("save");
     setBusy(false);
   }
 
@@ -103,6 +105,7 @@ export function KeepActions({ product, profileId, onKept, reload }: Props) {
     }
     onKept(item);
     pushUndo(t("toast.ordered"), undoWith(undo, reload));
+    void requestAccountPrompt("save");
     setBusy(false);
   }
 
@@ -130,6 +133,7 @@ export function KeepActions({ product, profileId, onKept, reload }: Props) {
     setListsOpen(false);
     onKept(item);
     pushUndo(t("toast.list", { name: list.name }), undoWith(undo, reload));
+    void requestAccountPrompt("save");
     setBusy(false);
   }
 

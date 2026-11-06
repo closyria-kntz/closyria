@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { changeStage, createItem, fetchItemForProduct, undoMutation } from "./wardrobe-client";
+import {
+  changeStage,
+  createItem,
+  fetchFacets,
+  fetchItemForProduct,
+  fetchItemsPage,
+  fetchReference,
+  undoMutation,
+} from "./wardrobe-client";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const json = (body: unknown, status = 200) =>
@@ -100,5 +108,26 @@ describe("fetchItemForProduct", () => {
 
   it("rejects a malformed page", async () => {
     await expect(fetchItemForProduct(id, deps(json({ items: [{}] })))).rejects.toThrow();
+  });
+});
+
+describe("view reads", () => {
+  it("asks a page with the filters and the cursor", async () => {
+    const d = deps(json({ items: [], nextCursor: "abc" }));
+    const page = await fetchItemsPage({ stage: "owned", favorite: "true" }, "cur", d);
+    expect(page.nextCursor).toBe("abc");
+    expect(d.fetch).toHaveBeenCalledWith("/api/me/items?stage=owned&favorite=true&cursor=cur", expect.anything());
+  });
+
+  it("shows nothing without a session, and throws on a server error", async () => {
+    expect(await fetchItemsPage({}, null, deps(json({}, 401)))).toEqual({ items: [], nextCursor: null });
+    await expect(fetchItemsPage({}, null, deps(json({}, 500)))).rejects.toThrow();
+    expect(await fetchFacets(deps(json({}, 401)))).toEqual({ shops: [] });
+  });
+
+  it("validates the reference lists", async () => {
+    const ok = { categories: [{ id, parentId: null, name: "Robes", position: 0 }], colors: [] };
+    expect((await fetchReference(deps(json(ok)))).categories).toHaveLength(1);
+    await expect(fetchReference(deps(json({ categories: 3 })))).rejects.toThrow();
   });
 });

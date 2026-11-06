@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 import { Dialog } from "@/components/dialog";
 import { buttonClass, primaryButtonClass } from "@/components/ui";
+import { requestAccountPrompt } from "@/lib/account-prompt-request";
 import { checkPhoto } from "@/lib/photo-check";
 import { pushUndo } from "@/lib/undo";
 import { patchItem, removePhoto, undoWith, uploadPhoto } from "@/lib/wardrobe-client";
@@ -70,6 +71,7 @@ export function PhotoManager({
     if (result.ok) {
       onChange(result.item);
       pushUndo(t("toast.photoAdded"), null);
+      void requestAccountPrompt("photo");
     } else fail(result.error);
     setBusy(false);
   }

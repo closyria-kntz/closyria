@@ -1,7 +1,10 @@
 import { createAuthClient, ensureSession } from "@closyria/auth/client";
 import {
+  type FacetsView,
+  facetsViewSchema,
   type ItemBulk,
   type ItemCreate,
+  type ItemPage,
   type ItemPatch,
   type ItemStageInput,
   type ItemView,
@@ -9,6 +12,8 @@ import {
   itemPageSchema,
   mediaErrorCodes,
   mutationResultSchema,
+  type ReferenceView,
+  referenceViewSchema,
   type TagView,
   tagListSchema,
   tagViewSchema,
@@ -157,4 +162,34 @@ export function undoWith(
     await after();
     return result.ok;
   };
+}
+
+/** One page of a view (48 items). `query` is the filters; `cursor` comes from the previous page. Throws on failure. */
+export async function fetchItemsPage(
+  query: Record<string, string>,
+  cursor: string | null,
+  deps: ClientDeps = defaultDeps,
+  signal?: AbortSignal,
+): Promise<ItemPage> {
+  const params = new URLSearchParams(query);
+  if (cursor) params.set("cursor", cursor);
+  const response = await deps.fetch(`/api/me/items?${params}`, { cache: "no-store", signal: signal ?? null });
+  // No session yet: nothing kept, nothing to show.
+  if (response.status === 401) return { items: [], nextCursor: null };
+  if (!response.ok) throw new Error(`items ${response.status}`);
+  return itemPageSchema.parse(await response.json());
+}
+
+/** Categories and colours of the filters (public, cached by the browser for an hour). */
+export async function fetchReference(deps: ClientDeps = defaultDeps): Promise<ReferenceView> {
+  const response = await deps.fetch("/api/reference");
+  if (!response.ok) throw new Error(`reference ${response.status}`);
+  return referenceViewSchema.parse(await response.json());
+}
+
+export async function fetchFacets(deps: ClientDeps = defaultDeps): Promise<FacetsView> {
+  const response = await deps.fetch("/api/me/facets", { cache: "no-store" });
+  if (response.status === 401) return { shops: [] };
+  if (!response.ok) throw new Error(`facets ${response.status}`);
+  return facetsViewSchema.parse(await response.json());
 }

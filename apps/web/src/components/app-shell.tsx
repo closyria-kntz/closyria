@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
 import { fetchSummary } from "@/lib/catalog-client";
 import { ProfilesContext, profileHref, useCurrentProfile } from "@/lib/profile-context";
+import { AccountPrompt } from "./account-prompt";
 import { type AppNavItem, desktopNav, isCurrent, moreNav, phoneTabs, tabletTabs } from "./app-nav";
 import { CaptureForm } from "./capture-form";
 import { ProfileSwitcher } from "./profile-switcher";
@@ -143,12 +144,14 @@ function AddLink() {
 export function AppShell({ children }: { children: ReactNode }) {
   const t = useTranslations("Shell");
   const [profiles, setProfiles] = useState<readonly ProfileView[]>([]);
+  const [ready, setReady] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const alive = useRef(true);
 
   const refreshProfiles = useCallback(async () => {
     const summary = await fetchSummary();
     if (summary && alive.current) setProfiles(summary.profiles);
+    if (alive.current) setReady(true);
   }, []);
 
   // Read on arrival, and again whenever the window regains focus (profiles may have changed in another tab).
@@ -163,7 +166,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [refreshProfiles]);
 
   return (
-    <ProfilesContext.Provider value={{ profiles, refreshProfiles }}>
+    <ProfilesContext.Provider value={{ profiles, ready, refreshProfiles }}>
       <a
         href="#app-content"
         className={`sr-only rounded-button bg-surface-raised px-space-3 py-space-2 focus:not-sr-only focus:absolute focus:top-space-2 focus:left-space-2 focus:z-30 ${focusRing}`}
@@ -223,7 +226,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             tabIndex={-1}
             className={`flex-1 px-space-4 pt-space-5 focus:outline-none md:px-space-5 lg:px-space-6 ${moreOpen ? "tabbar-clearance-open" : "tabbar-clearance"}`}
           >
-            <div className="mx-auto w-full max-w-app">{children}</div>
+            <div className="mx-auto flex w-full max-w-app flex-col gap-space-4">
+              <Suspense>
+                <AccountPrompt />
+              </Suspense>
+              {children}
+            </div>
           </main>
         </div>
       </div>
