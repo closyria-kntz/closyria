@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# closyria-backup-alert <unit>: e-mails BACKUP_ALERT_TO (through Brevo) that the unit failed, with the end of its
+# journal. Without BREVO_API_KEY (tests) it prints the message instead.
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+unit=${1:-}
+[ -n "$unit" ] || die "usage: $(basename "$0") <unit>"
+subject="Closyria : $unit a échoué"
+journal=$(journalctl -u "$unit" -n 30 --no-pager -o short-iso 2>/dev/null || true)
+body="La tâche $unit a échoué sur $(hostname) le $(date -u '+%Y-%m-%d à %H:%M UTC').
+
+Pour voir le détail : sudo journalctl -u $unit -n 100 --no-pager
+
+$journal"
+
+if [ -z "${BREVO_API_KEY:-}" ]; then
+  printf '%s\n\n%s\n' "$subject" "$body"
+  exit 0
+fi
+need BACKUP_ALERT_TO
+from=${MAIL_FROM:-Closyria <bonjour@closyria.com>}
+from_email=$(sed -E 's/.*<([^>]+)>.*/\1/' <<<"$from")
+from_name=$(sed -E 's/[[:space:]]*<.*//' <<<"$from")
+# The key goes through a private file, never on the command line (visible to every account in « ps »).
+headers=$(mktemp)
+trap 'rm -f "$headers"' EXIT
+printf 'api-key: %s\ncontent-type: application/json\n' "$BREVO_API_KEY" >"$headers"
+jq -n --arg name "$from_name" --arg email "$from_email" --arg to "$BACKUP_ALERT_TO" --arg subject "$subject" \
+  --arg body "$body" \
+  '{sender: {name: $name, email: $email}, to: [{email: $to}], subject: $subject, textContent: $body}' |
+  curl --fail --silent --show-error --max-time 30 -X POST https://api.brevo.com/v3/smtp/email \
+    -H @"$headers" --data @- >/dev/null

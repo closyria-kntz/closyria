@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "@closyria/config": "workspace:*",
+    "@closyria/testing": "workspace:*",
     "vitest": "^5.0.5"
   }
 }

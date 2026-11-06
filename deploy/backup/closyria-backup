@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# closyria-backup <dev|prod>: dumps the database (pg_dump -Fc), encrypts it for BACKUP_AGE_RECIPIENT and stores it
+# as « <env>/closyria-<env>-<UTC time>.dump.age ». Prints the key. Exits non-zero, storing nothing, on any failure.
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+env=$(env_arg "${1:-}")
+need DATABASE_URL BACKUP_STORE BACKUP_AGE_RECIPIENT
+is_s3 && need S3_ENDPOINT
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+key="$env/closyria-$env-$(date -u +%Y%m%dT%H%M%SZ).dump.age"
+# pipefail: a pg_dump failing halfway fails the whole pipe, so a truncated dump is never stored.
+pg_dump --format=custom --dbname="$DATABASE_URL" | age --encrypt --recipient "$BACKUP_AGE_RECIPIENT" >"$work/dump.age"
+[ -s "$work/dump.age" ] || die "empty dump"
+
+store_put "$key" "$work/dump.age"
+[ "$(store_size "$key")" = "$(stat -c %s "$work/dump.age")" ] || die "stored copy has the wrong size: $key"
+echo "$key"

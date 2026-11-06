@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# closyria-backup-check <dev|prod>: proves the newest copy can be used. Downloads it, decrypts it, restores it into a
+# throwaway database (BACKUP_SCRATCH_DB) and compares it with the live database (read only): same tables, same
+# migrations, and at least 90 % of the live rows of "user", items and products. Fails when the newest copy is older
+# than BACKUP_MAX_AGE_HOURS (26 by default), so a night without backup is noticed too.
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+env=$(env_arg "${1:-}")
+need DATABASE_URL BACKUP_STORE BACKUP_AGE_IDENTITY BACKUP_ADMIN_URL
+is_s3 && need S3_ENDPOINT
+max_hours=${BACKUP_MAX_AGE_HOURS:-26}
+scratch=${BACKUP_SCRATCH_DB:-closyria_restore_check}
+[[ "$scratch" =~ ^[a-z_][a-z0-9_]*$ ]] || die "invalid BACKUP_SCRATCH_DB"
+
+# The admin URL with another database name (works for socket URLs with an empty host too).
+scratch_url=$(sed -E "s#^(postgresql://[^/]*/)[^?]*#\1$scratch#" <<<"$BACKUP_ADMIN_URL")
+sql() { psql -X -At -v ON_ERROR_STOP=1 -d "$1" -c "$2"; }
+
+work=$(mktemp -d)
+cleanup() {
+  sql "$BACKUP_ADMIN_URL" "drop database if exists $scratch with (force)" >/dev/null 2>&1 || true
+  rm -rf "$work"
+}
+trap cleanup EXIT
+
+latest=$(store_latest "$env")
+[ -n "$latest" ] || die "no backup for $env"
+key=${latest% *}
+age_hours=$((($(date +%s) - ${latest#* }) / 3600))
+[ "$age_hours" -lt "$max_hours" ] || die "newest backup $key is older than $max_hours h ($age_hours h)"
+
+store_get "$key" "$work/dump.age"
+age --decrypt --identity "$BACKUP_AGE_IDENTITY" --output "$work/dump" "$work/dump.age" || die "cannot decrypt $key"
+
+sql "$BACKUP_ADMIN_URL" "drop database if exists $scratch with (force)" >/dev/null
+sql "$BACKUP_ADMIN_URL" "create database $scratch" >/dev/null
+pg_restore --exit-on-error --no-owner --no-acl --dbname="$scratch_url" "$work/dump" || die "cannot restore $key"
+
+tables="select table_schema || '.' || table_name from information_schema.tables
+  where table_schema in ('public', 'drizzle', 'pgboss') and table_type = 'BASE TABLE' order by 1"
+live_tables=$(sql "$DATABASE_URL" "$tables")
+copy_tables=$(sql "$scratch_url" "$tables")
+missing=$(comm -23 <(sort <<<"$live_tables") <(sort <<<"$copy_tables") | tr '\n' ' ')
+[ -z "${missing// /}" ] || die "tables missing from $key: $missing"
+
+migrations="select count(*) from drizzle.__drizzle_migrations"
+[ "$(sql "$scratch_url" "$migrations")" = "$(sql "$DATABASE_URL" "$migrations")" ] ||
+  die "migrations differ between $key and the live database"
+
+for table in '"user"' items products; do
+  live=$(sql "$DATABASE_URL" "select count(*) from public.$table")
+  copy=$(sql "$scratch_url" "select count(*) from public.$table")
+  [ $((copy * 10)) -ge $((live * 9)) ] || die "$table: $copy rows in $key, $live live"
+done
+
+echo "ok: $key restored, $(grep -c . <<<"$copy_tables") tables"
