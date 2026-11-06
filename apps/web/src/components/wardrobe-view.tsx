@@ -11,7 +11,9 @@ import {
   activeFilterCount,
   filtersFromParams,
   filtersToParams,
+  toggleSelection,
   toItemQuery,
+  VIEWS,
   type ViewFilters,
   type ViewKey,
 } from "@/lib/wardrobe-view";
@@ -40,6 +42,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   const [data, setData] = useState<Loaded>({ items: [], nextCursor: null, status: "loading" });
   const [moreFailed, setMoreFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [tooMany, setTooMany] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [shops, setShops] = useState<{ id: string; name: string }[]>([]);
   const [tags, setTags] = useState<TagView[]>([]);
@@ -47,6 +50,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   // Bumped to read the first page again (retry, undo): the effect depends on it.
   const [reloadToken, setReloadToken] = useState(0);
   const generation = useRef(0);
+  const moreController = useRef<AbortController | null>(null);
   const sentinel = useRef<HTMLDivElement>(null);
 
   // Filter choices: read once.
@@ -68,21 +72,27 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     setData((previous) => ({ ...previous, status: "loading" }));
     setMoreFailed(false);
     setSelected(new Set());
+    setTooMany(false);
     fetchItemsPage(query, null, undefined, controller.signal).then(
       (page) =>
         mine === generation.current && setData({ items: page.items, nextCursor: page.nextCursor, status: "ready" }),
       () => mine === generation.current && setData({ items: [], nextCursor: null, status: "error" }),
     );
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      moreController.current?.abort();
+    };
   }, [queryKey, ready, reloadToken]);
 
   const loadMore = useCallback(async () => {
     if (!data.nextCursor || loadingMore || data.status !== "ready") return;
     const mine = generation.current;
+    const controller = new AbortController();
+    moreController.current = controller;
     setLoadingMore(true);
     setMoreFailed(false);
     try {
-      const page = await fetchItemsPage(query, data.nextCursor);
+      const page = await fetchItemsPage(query, data.nextCursor, undefined, controller.signal);
       if (mine !== generation.current) return;
       setData((previous) => {
         const known = new Set(previous.items.map((item) => item.id));
@@ -95,7 +105,8 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     } catch {
       if (mine === generation.current) setMoreFailed(true);
     } finally {
-      setLoadingMore(false);
+      if (moreController.current === controller) moreController.current = null;
+      if (mine === generation.current) setLoadingMore(false);
     }
   }, [data.nextCursor, data.status, loadingMore, query]);
 
@@ -114,13 +125,11 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     router.push(text ? `${pathname}?${text}` : pathname, { scroll: false });
   };
 
-  const toggle = (id: string) =>
-    setSelected((previous) => {
-      const next = new Set(previous);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const toggle = (id: string) => {
+    const { next, refused } = toggleSelection(selected, id);
+    setSelected(next);
+    setTooMany(refused);
+  };
 
   const reload = useCallback(async () => setReloadToken((value) => value + 1), []);
   const gone = useCallback((ids: readonly string[]) => {
@@ -128,6 +137,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     setData((previous) => ({ ...previous, items: previous.items.filter((item) => !away.has(item.id)) }));
   }, []);
 
+  useEffect(() => () => moreController.current?.abort(), []);
   const count = activeFilterCount(filters);
   const label = t(`title.${view}`);
   const isEmpty = data.status === "ready" && data.items.length === 0;
@@ -215,10 +225,19 @@ export function WardrobeView({ view }: { view: ViewKey }) {
         </ItemGrid>
       )}
 
+      {tooMany && (
+        <p role="alert" className="text-sm text-danger">
+          {t("selection.tooMany")}
+        </p>
+      )}
       {selected.size > 0 && (
         <SelectionBar
+          currentStage={filters.stage ?? VIEWS[view].stage}
           ids={[...selected]}
-          onClear={() => setSelected(new Set())}
+          onClear={() => {
+            setSelected(new Set());
+            setTooMany(false);
+          }}
           onSelectAll={() => setSelected(new Set(data.items.slice(0, 200).map((item) => item.id)))}
           onGone={gone}
           reload={reload}

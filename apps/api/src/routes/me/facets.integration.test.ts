@@ -87,4 +87,18 @@ describe("GET /api/me/facets", () => {
     const body = (await res.json()) as { items: { product: { id: string } }[] };
     expect(body.items.map((i) => i.product.id)).toEqual([a.product.id]);
   });
+
+  it("still finds a shop whose slug looks like a UUID", async () => {
+    const { cookie } = await t.signIn();
+    const slug = "0b1f6a52-3a0b-4a4c-8f0e-5b1c2d3e4f51";
+    const [shop] = await t.db.insert(t.schema.shops).values({ name: "Slug UUID", slug }).returning();
+    if (!shop) throw new Error("no shop");
+    const other = await productOf("Autre");
+    const mine = await productOf("Slug UUID", shop.id);
+    await keep(cookie, mine.product.id);
+    await keep(cookie, other.product.id);
+    const res = await call("GET", `/api/me/items?shop=${slug}`, cookie);
+    const body = (await res.json()) as { items: { product: { id: string } }[] };
+    expect(body.items.map((i) => i.product.id)).toEqual([mine.product.id]);
+  });
 });

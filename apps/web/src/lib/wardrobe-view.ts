@@ -5,6 +5,7 @@ import {
   type ItemSort,
   type ItemStage,
   itemSortSchema,
+  MAX_BULK_ITEMS,
 } from "@closyria/shared";
 import { z } from "zod";
 
@@ -16,6 +17,19 @@ export const VIEWS = {
   "a-vendre": { stage: "for_sale", path: "/a-vendre" },
 } as const satisfies Record<string, { stage: ItemStage; path: string }>;
 export type ViewKey = keyof typeof VIEWS;
+
+/** Toggles `id` in a selection capped at `max`: `refused` when adding would go beyond it. */
+export function toggleSelection(
+  selected: ReadonlySet<string>,
+  id: string,
+  max: number = MAX_BULK_ITEMS,
+): { next: ReadonlySet<string>; refused: boolean } {
+  const next = new Set(selected);
+  if (next.delete(id)) return { next, refused: false };
+  if (next.size >= max) return { next: selected, refused: true };
+  next.add(id);
+  return { next, refused: false };
+}
 
 export const STAGE_FILTER_OPTIONS = ["sold", "returned"] as const satisfies readonly ItemStage[];
 export const DEFAULT_SORT: ItemSort = "recent";

@@ -75,13 +75,6 @@ export function takePromptFollowed(store: KeyValueStore | undefined = browserSto
   }
 }
 
-/** Forgets that she followed the banner (e.g. she is still anonymous after coming back). */
-export function clearAccountPromptRequest(store: KeyValueStore | undefined = browserStore()): void {
-  try {
-    store?.removeItem(FOLLOWED_KEY);
-  } catch {}
-}
-
 // --- the banner's state, shared between the triggers (product page, lists) and the shell ---
 
 let visible = false;

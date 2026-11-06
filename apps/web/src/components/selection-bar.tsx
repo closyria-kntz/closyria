@@ -7,12 +7,14 @@ import { useProfiles } from "@/lib/profile-context";
 import { pushUndo } from "@/lib/undo";
 import { bulkItems, fetchTags, fetchWishlists, undoWith } from "@/lib/wardrobe-client";
 import { Dialog } from "./dialog";
-import { buttonClass, primaryButtonClass } from "./ui";
+import { buttonClass } from "./ui";
 
 type Choice = "stage" | "list" | "profile" | "tag";
 const touch = "min-h-touch-target";
 
 type Props = {
+  /** The stage this view shows: moving to it would change nothing. */
+  currentStage: ItemStage;
   ids: readonly string[];
   onClear: () => void;
   onSelectAll: () => void;
@@ -23,7 +25,7 @@ type Props = {
 };
 
 /** Actions on the selected items: stage, list, profile, tag, delete: all through `/items/bulk`, each with « Annuler ». */
-export function SelectionBar({ ids, onClear, onSelectAll, onGone, reload }: Props) {
+export function SelectionBar({ currentStage, ids, onClear, onSelectAll, onGone, reload }: Props) {
   const t = useTranslations("Views.selection");
   const tStage = useTranslations("Item.stage");
   const tErrors = useTranslations("Item.errors");
@@ -114,7 +116,7 @@ export function SelectionBar({ ids, onClear, onSelectAll, onGone, reload }: Prop
               <li key={target} className="flex flex-col">
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || target === currentStage}
                   className={`${buttonClass} ${touch} justify-start`}
                   onClick={() => stage(target)}
                 >
@@ -189,7 +191,7 @@ export function SelectionBar({ ids, onClear, onSelectAll, onGone, reload }: Prop
                   <button
                     type="button"
                     disabled={busy}
-                    className={`${primaryButtonClass} ${touch} justify-start`}
+                    className={`${buttonClass} ${touch} justify-start`}
                     onClick={() =>
                       run(
                         { op: "addTag", ids: list, tagId: tag.id },

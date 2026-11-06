@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  clearAccountPromptRequest,
   DISMISS_KEY,
+  markPromptFollowed,
   readDismissedAt,
   shouldPromptAccount,
+  takePromptFollowed,
   writeDismissedAt,
 } from "./account-prompt";
 
@@ -81,7 +82,17 @@ describe("dismissal date in localStorage", () => {
   it("does not crash when localStorage throws", () => {
     expect(readDismissedAt(broken)).toBeUndefined();
     expect(() => writeDismissedAt(NOW, broken)).not.toThrow();
-    expect(() => clearAccountPromptRequest(broken)).not.toThrow();
+    expect(takePromptFollowed(broken)).toBe(false);
+    expect(() => markPromptFollowed(broken)).not.toThrow();
     expect(readDismissedAt(undefined)).toBeUndefined();
+  });
+});
+
+describe("followed flag", () => {
+  it("is taken once", () => {
+    const store = storage();
+    markPromptFollowed(store);
+    expect(takePromptFollowed(store)).toBe(true);
+    expect(takePromptFollowed(store)).toBe(false);
   });
 });

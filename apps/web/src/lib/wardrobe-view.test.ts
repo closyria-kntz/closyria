@@ -4,6 +4,7 @@ import {
   filtersFromParams,
   filtersToParams,
   STAGE_FILTER_OPTIONS,
+  toggleSelection,
   toItemQuery,
   VIEWS,
   viewForPath,
@@ -68,4 +69,17 @@ describe("filters in the address", () => {
 it("counts filters but not the sort", () => {
   expect(activeFilterCount({ sort: "name" })).toBe(0);
   expect(activeFilterCount({ sort: "name", favorite: true, stage: "sold" })).toBe(2);
+});
+
+describe("toggleSelection", () => {
+  it("adds, removes, and refuses beyond the cap", () => {
+    const full = new Set(Array.from({ length: 200 }, (_, i) => `id-${i}`));
+    expect(toggleSelection(new Set(), "a")).toEqual({ next: new Set(["a"]), refused: false });
+    expect(toggleSelection(new Set(["a"]), "a")).toEqual({ next: new Set(), refused: false });
+    const refused = toggleSelection(full, "new");
+    expect(refused.refused).toBe(true);
+    expect(refused.next.size).toBe(200);
+    expect(toggleSelection(full, "id-3").next.size).toBe(199);
+    expect(toggleSelection(new Set(["a", "b"]), "c", 2).refused).toBe(true);
+  });
 });

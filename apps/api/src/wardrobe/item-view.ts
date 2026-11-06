@@ -1,4 +1,4 @@
-import { and, asc, type Database, eq, inArray, isNotNull, isNull, type SQL, schema, sql } from "@closyria/db";
+import { and, asc, type Database, eq, inArray, isNotNull, isNull, or, type SQL, schema, sql } from "@closyria/db";
 import {
   ITEMS_PAGE_SIZE,
   type ItemListQuery,
@@ -236,9 +236,12 @@ export async function listItems(db: Database, userId: string, query: ItemListQue
     );
   }
   if (query.shop) {
-    // The filter menu sends the shop's id; a slug is still accepted.
+    // The filter menu sends the shop's id; a slug is still accepted (and a slug may look like a UUID).
+    const byId = z.uuid().safeParse(query.shop).success;
     conditions.push(
-      z.uuid().safeParse(query.shop).success ? eq(schema.shops.id, query.shop) : eq(schema.shops.slug, query.shop),
+      (byId
+        ? or(eq(schema.shops.id, query.shop), eq(schema.shops.slug, query.shop))
+        : eq(schema.shops.slug, query.shop)) as SQL,
     );
   }
   if (query.category) {

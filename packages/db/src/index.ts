@@ -42,6 +42,7 @@ export {
   lt,
   ne,
   notInArray,
+  or,
   type SQL,
   sql,
 } from "drizzle-orm";
