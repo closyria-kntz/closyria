@@ -110,10 +110,22 @@ chiffrées ») et §10 (« suppression réelle (sauvegardes expirées sous 30 jo
 
 ### Task 4: Restauration complète de la dev, puis la prod
 
-- [ ] **Step 1 :** suivre « Restaurer la prod » du README, **sur la dev** : `closyria-dev.target` arrêté, base remplacée par la copie de la nuit, redémarrée ; tes articles de test sont là sur https://dev.closyria.com. Corriger le README si une étape manque.
-- [ ] **Step 2 :** activer la prod : `systemctl start closyria-backup@prod.service`, puis `closyria-backup-check@prod.service` → `ok:` ; `enable --now` des deux minuteries prod.
-- [ ] **Step 3 :** cocher le prérequis dans `docs/plans/2026-11-05-mise-en-service-chantier-1.md` ; bilan dans ce plan ; commit `docs: sauvegardes de la prod en place`.
+- [x] **Step 1 :** suivre « Restaurer la prod » du README, **sur la dev** : `closyria-dev.target` arrêté, base remplacée par la copie de la nuit, redémarrée ; tes articles de test sont là sur https://dev.closyria.com. Corriger le README si une étape manque.
+- [x] **Step 2 :** activer la prod : `systemctl start closyria-backup@prod.service`, puis `closyria-backup-check@prod.service` → `ok:` ; `enable --now` des deux minuteries prod.
+- [x] **Step 3 :** cocher le prérequis dans `docs/plans/2026-11-05-mise-en-service-chantier-1.md` ; bilan dans ce plan ; commit `docs: sauvegardes de la prod en place`.
 
 ## Bilan
 
-(à remplir à la fin)
+Fait le 2026-11-06.
+
+- Code : scripts `deploy/backup/` (sauvegarde chiffrée `age`, vérification par restauration, alerte Brevo), unités
+  systemd, sauvegarde obligatoire avant `closyria-deploy prod` ; 11 tests (`scripts/backup.test.ts`).
+- Revue finale : 4 points importants corrigés (échec si `lib.sh` manque, base jetable par environnement, âge maximal
+  6 h au lieu de 26 h, sommes de contrôle aws-cli refusées par OVH) ; 8 points mineurs notés, non traités.
+- Installation : bucket `closyria-backups` (Strasbourg, verrou compliance 30 jours, expiration 31 jours), clé privée
+  dans `/etc/closyria/backup.key` et dans le gestionnaire de mots de passe, minuteries dev et prod allumées.
+- Constaté : OVH accepte un effacement simple (étiquette « supprimé ») malgré la politique, mais refuse la destruction
+  d'une copie ; table de test `_restore_test` (2026-10-03) supprimée de la prod, elle bloquait `pg_dump`.
+- Restauration complète de la dev réussie (3 utilisatrices, 10 articles, 14 fiches, 14 migrations retrouvés) ;
+  commandes du README complétées (réglage aws-cli pour OVH).
+- Reste : constater les copies et les `ok:` de la première nuit (2026-11-07).

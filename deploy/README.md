@@ -313,9 +313,9 @@ Exemple pour la prod ; pour la dev, remplacer `prod` par `dev`, la base `closyri
 
 ```bash
 # 1. Choisir la copie (la plus récente, ou celle d'avant l'erreur)
-sudo bash -c 'set -a; . /etc/closyria/backup.env; aws --endpoint-url "$S3_ENDPOINT" s3 ls s3://closyria-backups/prod/'
+sudo bash -c 'set -a; . /etc/closyria/backup.env; AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required aws --endpoint-url "$S3_ENDPOINT" s3 ls s3://closyria-backups/prod/'
 # 2. La télécharger et la déchiffrer
-sudo bash -c 'set -a; . /etc/closyria/backup.env; aws --endpoint-url "$S3_ENDPOINT" s3 cp \
+sudo bash -c 'set -a; . /etc/closyria/backup.env; AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required aws --endpoint-url "$S3_ENDPOINT" s3 cp \
   s3://closyria-backups/prod/closyria-prod-AAAAMMJJTHHMMSSZ.dump.age /root/restore.dump.age'
 sudo age --decrypt --identity /etc/closyria/backup.key --output /root/restore.dump /root/restore.dump.age
 # 3. Arrêter l'appli, mettre l'ancienne base de côté, recréer la base
