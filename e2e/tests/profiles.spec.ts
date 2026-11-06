@@ -65,6 +65,8 @@ test("créer « Léa », y déplacer deux articles en lot, filtrer par profil, s
 
   // Léa holds articles: deleting her is refused.
   await page.goto("/reglages/profils");
+  const settings = await new AxeBuilder({ page }).analyze();
+  expect(settings.violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
   await page.getByRole("button", { name: "Supprimer Léa" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Supprimer le profil" }).click();
   await expect(page.getByText("Déplace d’abord ses articles.")).toBeVisible();

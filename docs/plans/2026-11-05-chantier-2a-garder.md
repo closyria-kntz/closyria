@@ -1,7 +1,7 @@
 # Chantier 2a — Garder : plan d'implémentation
 
 > **Pour les agents :** sous-skill requis : `superpowers:subagent-driven-development` (recommandé) ou
-> `superpowers:executing-plans`, tâche par tâche. Les étapes utilisent des cases à cocher (`- [ ]`).
+> `superpowers:executing-plans`, tâche par tâche. Les étapes utilisent des cases à cocher.
 
 **But :** une utilisatrice garde un article en un geste depuis la fiche, le retrouve dans ses vues, le fait avancer
 d'étape en étape (dates et montants), le range par profils, étiquettes et listes partageables, avec ses photos
@@ -518,7 +518,7 @@ Tailwind 4.3 par tokens, Drizzle 0.45, PostgreSQL 18, pg-boss 12, Vitest 5, Play
 
 ## Bilan de l'exécution
 
-Le plan a été exécuté en entier (tâches 1 à 18) sur la branche `chantier-2a`, livré en dev, pas encore en prod. Écarts
+Le plan a été exécuté en entier (tâches 1 à 18) sur la branche `chantier-2a`. Statut : terminé sur la branche `chantier-2a`, pas encore fusionné dans `dev` ni déployé ; 2b reste à faire. Écarts
 et décisions prises en route :
 
 - **Annuler** : chaque action renvoie une « annulation » exacte (les opérations inverses, regroupées par valeur

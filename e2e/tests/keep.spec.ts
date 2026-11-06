@@ -118,7 +118,7 @@ test("un article gardé dans un autre profil : bandeau « Déjà dans le profil 
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
 });
 
-test("avancer jusqu'à « Dans mon dressing » avec le prix payé, puis Annuler", async ({ page }) => {
+test("passer à « Reçu » avec le prix payé : l'article est dans Dressing, puis Annuler", async ({ page }) => {
   await openSheet(page);
   await page.getByRole("button", { name: "Favori" }).click();
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
@@ -130,7 +130,11 @@ test("avancer jusqu'à « Dans mon dressing » avec le prix payé, puis Annuler"
   await expect(page.getByText("Payé : 19,90")).toBeVisible();
   const toast = page.getByRole("status", { name: "Notifications" });
   await expect(toast).toContainText("Étape : Reçu");
-
+  // The Dressing view (another page in the same context) lists it while the undo is still on offer.
+  const dressing = await page.context().newPage();
+  await dressing.goto("/dressing");
+  await expect(dressing.getByTestId("item-card")).toHaveCount(1);
+  await dressing.close();
   await toast.getByRole("button", { name: "Annuler" }).click();
   await expect(page.getByText("Payé : 19,90")).toHaveCount(0);
   await page.goto("/dressing");

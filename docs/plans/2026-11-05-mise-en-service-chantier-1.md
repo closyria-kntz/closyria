@@ -80,21 +80,26 @@ Mêmes étapes, avec les noms de prod :
 
 ### Ce qui change
 
-- **Migrations 0007 à 0012** appliquées par le déploiement avant le redémarrage (elles n'ajoutent que des tables et
-  des colonnes) : 0007 `catalog` · 0008 `capture_url` · 0009 `product_nullable_fields` · 0010
+- **Migrations 0007 à 0012** appliquées par le déploiement avant le redémarrage. Ce ne sont pas que des ajouts : 0008
+  ajoute `captures.url` NOT NULL sans valeur par défaut (sans risque seulement parce que `captures` est vide avant le
+  premier déploiement du chantier 1), 0009 retire NOT NULL de `products.name`, `currency` et `price_cents`, 0010
+  recrée une contrainte CHECK. Liste : 0007 `catalog` · 0008 `capture_url` · 0009 `product_nullable_fields` · 0010
   `capture_queue_unavailable` (chantier 1) ; 0011 `reference_and_product_fields` (catégories, couleurs, champs de la
   fiche) · 0012 `wardrobe` (articles, profils, listes, étiquettes, événements d'étape).
 - **Listes de référence** (catégories, couleurs…) créées par le worker à son démarrage, en plus des boutiques de
-  départ. Elles sont journalisées au niveau « info » : `sudo journalctl -u closyria-<env>-worker --no-pager | grep 'seed:'`
-  ne doit montrer aucun avertissement (par exemple `seed: parent … is missing, skipped`).
+  départ. Ligne « info » attendue au premier démarrage : `sudo journalctl -u closyria-<env>-worker --no-pager | grep 'starting reference lists'`
+  (`starting reference lists: N added`). Les lignes `seed:` sont des avertissements (par exemple
+  `seed: parent … is missing, skipped`) et doivent être absentes : `… | grep 'seed:'` vide.
 - **Nouvelle file `wardrobe-purge`** : vide la corbeille (articles supprimés depuis plus de 30 jours) chaque nuit à
   03:30 UTC. Le worker la crée et la planifie seul ; ligne de journal `trash purge: N item(s) permanently deleted`
   seulement quand il y a eu des suppressions.
 
 ### Dev
 
+0. [ ] Avant le premier déploiement : `captures` est vide (`select count(*) from captures;` dans la base de l'environnement
+   → 0), sinon 0008 échoue (`url` NOT NULL sans défaut)
 1. [ ] `sudo closyria-deploy dev <id>` : migrations 0011 et 0012 appliquées, worker `active`, `network barrier: active`
-2. [ ] `grep 'seed:'` du journal du worker dev : aucun avertissement ; les filtres Type et Couleur se chargent
+2. [ ] Journal du worker dev : `grep 'starting reference lists'` montre la ligne, `grep 'seed:'` est vide ; les filtres Type et Couleur se chargent
 3. [ ] Coller un lien d'article, appuyer sur ♡ : l'article est dans « Envies » ; « Annuler » le retire
 4. [ ] Changer l'étape (« Reçu » avec un prix payé) : il passe dans « Dressing » ; « Annuler » le remet
 5. [ ] Créer une liste, y mettre un article, la partager, ouvrir le lien dans une fenêtre privée : ni notes ni taille
@@ -110,8 +115,9 @@ Mêmes étapes, avec les noms de prod :
 - [ ] **Prérequis : « Sauvegardes automatiques de la prod »** livrées et la restauration essayée (copie chiffrée de la
   base chaque nuit sur OVH, gardée 30 jours ; spec 2a §9). Sans elles, pas de prod : les articles des utilisatrices
   seront des données à ne pas perdre.
+- [ ] `select count(*) from captures;` en prod → 0 si le chantier 1 n'y a jamais été déployé (migration 0008)
 - [ ] Les étapes « Prod » ci-dessus (variables comparées, barrière, déploiement), avec migrations 0007 à 0012
-- [ ] `grep 'seed:'` vide ; filtres Type et Couleur chargés sur https://closyria.com
+- [ ] `grep 'starting reference lists'` présent au premier démarrage, `grep 'seed:'` vide ; filtres Type et Couleur chargés sur https://closyria.com
 - [ ] Parcours ♡, étape, liste partagée (fenêtre privée), profil, comme en dev
 - [ ] Le lendemain : pas d'erreur de `wardrobe-purge` dans le journal du worker prod
 
@@ -119,6 +125,7 @@ Mêmes étapes, avec les noms de prod :
 
 - **Quand** : santé en échec (API ou web), worker qui ne démarre pas ou redémarre en boucle, `network barrier: ABSENT` après recopie de l'unité, captures toutes en erreur
   (typiquement : DNS bloqué par la barrière), erreurs répétées dans le journal.
-- **Comment** : `sudo closyria-deploy <env> rollback`. Les migrations ne sont pas annulées (elles n'ajoutent que
-  des tables et des colonnes). Si c'est la barrière seule qui gêne, ne pas la retirer à la légère : corriger d'abord
+- **Comment** : `sudo closyria-deploy <env> rollback`. Les migrations ne sont pas annulées : le retour arrière du
+  code reste sans danger avec ces changements de schéma en place (colonnes devenues facultatives, nouvelles tables et
+  colonnes, contrainte recréée). Si c'est la barrière seule qui gêne, ne pas la retirer à la légère : corriger d'abord
   la cause (`/etc/resolv.conf`), car elle protège le serveur des adresses privées.
