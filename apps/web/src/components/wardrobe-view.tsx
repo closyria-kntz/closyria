@@ -4,13 +4,15 @@ import type { ItemView, ReferenceView, TagView } from "@closyria/shared";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useCurrentProfile, useProfilesReady } from "@/lib/profile-context";
 import { fetchFacets, fetchItemsPage, fetchReference, fetchTags } from "@/lib/wardrobe-client";
 import {
   activeFilterCount,
   filtersFromParams,
   filtersToParams,
+  initialMoreState,
+  moreReducer,
   toggleSelection,
   toItemQuery,
   VIEWS,
@@ -40,8 +42,8 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   const queryKey = JSON.stringify(query);
 
   const [data, setData] = useState<Loaded>({ items: [], nextCursor: null, status: "loading" });
-  const [moreFailed, setMoreFailed] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [more, dispatchMore] = useReducer(moreReducer, initialMoreState);
+  const { loading: loadingMore, failed: moreFailed } = more;
   const [tooMany, setTooMany] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [shops, setShops] = useState<{ id: string; name: string }[]>([]);
@@ -70,7 +72,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     const mine = ++generation.current;
     const controller = new AbortController();
     setData((previous) => ({ ...previous, status: "loading" }));
-    setMoreFailed(false);
+    dispatchMore({ type: "reset", generation: mine });
     setSelected(new Set());
     setTooMany(false);
     fetchItemsPage(query, null, undefined, controller.signal).then(
@@ -89,8 +91,8 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     const mine = generation.current;
     const controller = new AbortController();
     moreController.current = controller;
-    setLoadingMore(true);
-    setMoreFailed(false);
+    dispatchMore({ type: "start", generation: mine });
+    let failed = false;
     try {
       const page = await fetchItemsPage(query, data.nextCursor, undefined, controller.signal);
       if (mine !== generation.current) return;
@@ -103,10 +105,10 @@ export function WardrobeView({ view }: { view: ViewKey }) {
         };
       });
     } catch {
-      if (mine === generation.current) setMoreFailed(true);
+      failed = true;
     } finally {
       if (moreController.current === controller) moreController.current = null;
-      if (mine === generation.current) setLoadingMore(false);
+      dispatchMore({ type: "end", generation: mine, failed });
     }
   }, [data.nextCursor, data.status, loadingMore, query]);
 

@@ -3,6 +3,8 @@ import {
   activeFilterCount,
   filtersFromParams,
   filtersToParams,
+  initialMoreState,
+  moreReducer,
   STAGE_FILTER_OPTIONS,
   toggleSelection,
   toItemQuery,
@@ -81,5 +83,31 @@ describe("toggleSelection", () => {
     expect(refused.next.size).toBe(200);
     expect(toggleSelection(full, "id-3").next.size).toBe(199);
     expect(toggleSelection(new Set(["a", "b"]), "c", 2).refused).toBe(true);
+  });
+});
+
+describe("moreReducer", () => {
+  it("survives a filter change while a page is in flight", () => {
+    let state = moreReducer(initialMoreState, { type: "reset", generation: 1 });
+    state = moreReducer(state, { type: "start", generation: 1 });
+    expect(state.loading).toBe(true);
+    // Filters change: the new first page resets, the old request (aborted) ends late and is ignored.
+    state = moreReducer(state, { type: "reset", generation: 2 });
+    expect(state).toEqual({ generation: 2, loading: false, failed: false });
+    expect(moreReducer(state, { type: "end", generation: 1, failed: true })).toBe(state);
+    // A new load-more runs and ends normally.
+    state = moreReducer(state, { type: "start", generation: 2 });
+    expect(state.loading).toBe(true);
+    state = moreReducer(state, { type: "end", generation: 2, failed: false });
+    expect(state).toEqual({ generation: 2, loading: false, failed: false });
+    expect(moreReducer(state, { type: "start", generation: 1 })).toBe(state);
+  });
+
+  it("keeps a failure until the next attempt", () => {
+    let state = moreReducer(initialMoreState, { type: "reset", generation: 1 });
+    state = moreReducer(state, { type: "start", generation: 1 });
+    state = moreReducer(state, { type: "end", generation: 1, failed: true });
+    expect(state).toMatchObject({ loading: false, failed: true });
+    expect(moreReducer(state, { type: "start", generation: 1 }).failed).toBe(false);
   });
 });

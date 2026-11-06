@@ -119,3 +119,19 @@ export function toItemQuery(view: ViewKey, filters: ViewFilters, profileId: stri
   if (filters.sort) query.sort = filters.sort;
   return query satisfies Partial<Record<keyof ItemListQuery, string>>;
 }
+
+/** « Load more » progress of the current first page (a generation); answers of an older generation are ignored. */
+export type MoreState = { generation: number; loading: boolean; failed: boolean };
+export type MoreAction =
+  | { type: "reset"; generation: number }
+  | { type: "start"; generation: number }
+  | { type: "end"; generation: number; failed: boolean };
+
+export const initialMoreState: MoreState = { generation: 0, loading: false, failed: false };
+
+export function moreReducer(state: MoreState, action: MoreAction): MoreState {
+  if (action.type === "reset") return { generation: action.generation, loading: false, failed: false };
+  if (action.generation !== state.generation) return state;
+  if (action.type === "start") return { ...state, loading: true, failed: false };
+  return { ...state, loading: false, failed: action.failed };
+}
