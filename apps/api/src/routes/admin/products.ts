@@ -92,6 +92,23 @@ const recaptureRoute = defineAccess(
   "admin",
 );
 
+const deleteRoute = defineAccess(
+  createRoute({
+    method: "delete",
+    path: "/admin/products/{id}",
+    summary: "Delete a sheet nobody keeps, with its photos",
+    description:
+      "Refused while an item points to it (active or in a trash) or a capture is queued or running. Sizes, history and recent links go with it; captures stay, without the sheet.",
+    request: { params: idParam },
+    responses: {
+      204: { description: "Deleted" },
+      404: errorContent("Unknown sheet"),
+      409: errorContent("kept: an item points to the sheet; capture_active: a capture is queued or running"),
+    },
+  }),
+  "admin",
+);
+
 function pgCode(error: unknown): string | undefined {
   const e = error as { code?: string; cause?: { code?: string } };
   return e?.cause?.code ?? e?.code;
@@ -289,5 +306,47 @@ export function adminProductsRoutes(deps: CatalogDeps) {
       if (outcome === "capture_active") return c.json({ error: "capture_active" } as const, 409);
       await enqueueCapture(db, queue, "capture-admin", outcome, now());
       return c.json({ captureId: outcome }, 202);
+    })
+    .openapi(deleteRoute, async (c) => {
+      const { id } = c.req.valid("param");
+      noteAudit(c, { action: "product.delete", target: `product:${id}` });
+      let outcome: "not_found" | "kept" | "capture_active" | string[];
+      try {
+        outcome = await db.transaction(async (tx) => {
+          const [product] = await tx.select({ id: p.id }).from(p).where(eq(p.id, id)).for("update");
+          if (!product) return "not_found" as const;
+          const [item] = await tx
+            .select({ id: schema.items.id })
+            .from(schema.items)
+            .where(eq(schema.items.productId, id))
+            .limit(1);
+          if (item) return "kept" as const;
+          const [active] = await tx
+            .select({ id: schema.captures.id })
+            .from(schema.captures)
+            .where(and(eq(schema.captures.productId, id), inArray(schema.captures.status, ["queued", "running"])))
+            .limit(1);
+          if (active) return "capture_active" as const;
+          const images = await tx
+            .select({ key: schema.productImages.key })
+            .from(schema.productImages)
+            .where(eq(schema.productImages.productId, id));
+          await tx.delete(p).where(eq(p.id, id));
+          return images.map((i) => i.key);
+        });
+      } catch (error) {
+        // An item created in the meantime points to the sheet: the delete is refused by the foreign key.
+        if (pgCode(error) === "23503") return c.json({ error: "kept" } as const, 409);
+        throw error;
+      }
+      if (outcome === "not_found") return c.json(notFound, 404);
+      if (outcome === "kept" || outcome === "capture_active") return c.json({ error: outcome }, 409);
+      // The rows are gone; a photo that fails to delete is only an orphan file, logged and left behind.
+      for (const key of outcome) {
+        await deps.store
+          .delete(key)
+          .catch((error: unknown) => console.error(`product photo ${key} not deleted`, error));
+      }
+      return c.body(null, 204);
     });
 }

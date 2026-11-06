@@ -76,6 +76,7 @@ describe("admin products", () => {
       ["GET", `/products/${id}`],
       ["PATCH", `/products/${id}`, { name: "x" }],
       ["POST", `/products/${id}/recapture`],
+      ["DELETE", `/products/${id}`],
     ];
     for (const [method, path, body] of routes) {
       expect((await call(method, path, body, userCookie)).status, `${method} ${path}`).toBe(403);
@@ -270,5 +271,66 @@ describe("admin products", () => {
     await t.db.update(schema.captures).set({ status: "failed" }).where(eq(schema.captures.id, captureId));
     expect((await call("POST", `/products/${product.id}/recapture`)).status).toBe(202);
     expect((await call("POST", "/products/00000000-0000-4000-8000-0000000000ff/recapture")).status).toBe(404);
+  });
+
+  it("delete removes a sheet nobody keeps, with its photos, sizes and recent links; captures stay", async () => {
+    const shop = await newShop();
+    const product = await newProduct(shop.id);
+    const key = `products/${product.id}/a.webp`;
+    await t.store.put(key, Buffer.from("x"), "image/webp");
+    await t.db
+      .insert(schema.productImages)
+      .values({ productId: product.id, position: 0, key, width: 1, height: 1, sourceHash: "h" });
+    await t.db.insert(schema.productSizes).values({ productId: product.id, label: "M", position: 0, available: true });
+    const visitor = await t.signIn();
+    await t.db
+      .insert(schema.recentProducts)
+      .values({ userId: visitor.userId, productId: product.id, visitedAt: new Date() });
+    const [capture] = await t.db
+      .insert(schema.captures)
+      .values({ shopId: shop.id, productId: product.id, url: product.canonicalUrl, trigger: "user", status: "failed" })
+      .returning();
+    await t.db.delete(schema.adminAuditLog);
+
+    const res = await call("DELETE", `/products/${product.id}`);
+    expect(res.status).toBe(204);
+    expect(await t.db.select().from(schema.products).where(eq(schema.products.id, product.id))).toEqual([]);
+    expect(
+      await t.db.select().from(schema.productImages).where(eq(schema.productImages.productId, product.id)),
+    ).toEqual([]);
+    expect(
+      await t.db.select().from(schema.recentProducts).where(eq(schema.recentProducts.userId, visitor.userId)),
+    ).toEqual([]);
+    const [kept] = await t.db
+      .select()
+      .from(schema.captures)
+      .where(eq(schema.captures.id, capture?.id ?? ""));
+    expect(kept?.productId).toBeNull();
+    await expect(t.store.get(key)).rejects.toThrow();
+    expect((await t.db.select().from(schema.adminAuditLog)).map((a) => a.action)).toEqual(["product.delete"]);
+    expect((await call("DELETE", `/products/${product.id}`)).status).toBe(404);
+  });
+
+  it("delete refuses a sheet kept by someone, also from her trash, and while a capture is active", async () => {
+    const shop = await newShop();
+    const owner = await t.signIn();
+    const kept = await newProduct(shop.id);
+    await keep(owner.userId, kept.id);
+    const res = await call("DELETE", `/products/${kept.id}`);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "kept" });
+
+    const trashed = await newProduct(shop.id);
+    await keep(owner.userId, trashed.id, new Date());
+    expect(await json(await call("DELETE", `/products/${trashed.id}`))).toEqual({ error: "kept" });
+
+    const busy = await newProduct(shop.id);
+    await t.db
+      .insert(schema.captures)
+      .values({ shopId: shop.id, productId: busy.id, url: busy.canonicalUrl, trigger: "user", status: "running" });
+    const refused = await call("DELETE", `/products/${busy.id}`);
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({ error: "capture_active" });
+    expect(await t.db.select().from(schema.products).where(eq(schema.products.id, busy.id))).toHaveLength(1);
   });
 });

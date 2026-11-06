@@ -16,6 +16,7 @@ import {
   referenceBody,
   slugify,
 } from "@/lib/admin-reference";
+import { trapTab } from "../../keyboard";
 import { buttonClass, inputClass, primaryButtonClass } from "../../ui";
 
 type Draft = ReferenceDraft;
@@ -105,22 +106,6 @@ function EntryForm({
       </label>
     </div>
   );
-}
-
-/** Keeps Tab and Shift+Tab on the enabled buttons of an aria-modal dialog. */
-function trapTab(e: React.KeyboardEvent<HTMLElement>) {
-  if (e.key !== "Tab") return;
-  const buttons = [...e.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
-  const first = buttons[0];
-  const last = buttons[buttons.length - 1];
-  if (!first || !last) return e.preventDefault();
-  if (e.shiftKey && document.activeElement === first) {
-    e.preventDefault();
-    last.focus();
-  } else if (!e.shiftKey && document.activeElement === last) {
-    e.preventDefault();
-    first.focus();
-  }
 }
 
 function EntryRow({

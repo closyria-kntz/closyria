@@ -1,4 +1,4 @@
-import type { ReferenceKind } from "@closyria/shared";
+import { type ReferenceKind, shopDataSchema } from "@closyria/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
@@ -9,6 +9,7 @@ import { adminCall, adminCallOrThrow, requireAdminPage } from "../../../server";
 import { buttonClass } from "../../../ui";
 import { CorrectedPill } from "../corrected-pill";
 import { CorrectForm } from "./correct-form";
+import { DeleteButton } from "./delete-button";
 import { RecaptureButton } from "./recapture-button";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -43,6 +44,8 @@ export default async function AdminProductPage({ params }: Props) {
   const categoryLabels = categoryChoices(categories.entries, " › ");
   const when = (iso: string | null) =>
     iso ? format.dateTime(new Date(iso), { dateStyle: "short", timeStyle: "medium", timeZone: "UTC" }) : common("none");
+  const details = shopDataSchema.shape.details.safeParse(product.shopData.details);
+  const shopDetails = details.success ? (details.data ?? []) : [];
   const plain = (list: typeof colors) => list.entries.map((e) => ({ id: e.id, label: e.name }));
 
   const section = "flex flex-col gap-space-3 rounded-card border border-card-border bg-card-bg p-space-4";
@@ -118,8 +121,26 @@ export default async function AdminProductPage({ params }: Props) {
           [t("source"), product.source],
           [t("gtin"), product.gtin ?? t("notSet")],
           [t("sku"), product.sku ?? t("notSet")],
-          [t("description"), product.description ?? t("notSet")],
+          [
+            t("description"),
+            <span key="d" className="whitespace-pre-line">
+              {product.description ?? t("notSet")}
+            </span>,
+          ],
         ])}
+        {shopDetails.length > 0 && (
+          <>
+            <h3 className="font-strong">{t("shopDetails")}</h3>
+            <dl className="flex flex-col gap-space-2 text-sm">
+              {shopDetails.map((row) => (
+                <div key={`${row.label} · ${row.value}`} className="flex flex-col sm:flex-row sm:gap-space-4">
+                  <dt className="text-ink-muted sm:w-space-8 sm:shrink-0">{row.label}</dt>
+                  <dd className="whitespace-pre-line break-words">{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </>
+        )}
         <h3 className="font-strong">{t("sizes")}</h3>
         {product.sizes.length === 0 ? (
           <p>{t("noSizes")}</p>
@@ -184,6 +205,7 @@ export default async function AdminProductPage({ params }: Props) {
             }}
           />
           <RecaptureButton productId={product.id} />
+          <DeleteButton productId={product.id} keptBy={product.keptBy} />
         </div>
       </section>
 

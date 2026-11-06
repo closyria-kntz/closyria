@@ -90,6 +90,7 @@ describe("shopPatchErrorKey", () => {
   it("maps the product refusals", () => {
     expect(productErrorKey(400, { error: "invalid_request" })).toBe("invalidProduct");
     expect(productErrorKey(409, { error: "capture_active" })).toBe("captureActive");
+    expect(productErrorKey(409, { error: "kept" })).toBe("kept");
   });
 
   it("sends a DELETE without a body", async () => {

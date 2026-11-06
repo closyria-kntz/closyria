@@ -119,3 +119,36 @@ test("un type ne peut pas être déplacé sous lui-même : la liste l'exclut et 
     await db.query("delete from categories where slug = $1", [parentSlug]);
   }
 });
+
+test("une admin supprime une fiche que personne ne garde ; une fiche gardée ne peut pas l’être", async ({
+  page,
+  request,
+  db,
+  userAgentTag,
+}) => {
+  const open = async () => {
+    await page.goto("/");
+    await page.getByLabel("Coller un lien").fill(autoProductUrl());
+    await page.getByRole("button", { name: "Ajouter" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
+    return /\/produits\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? "";
+  };
+  const kept = await open();
+  await page.getByRole("button", { name: "Favori" }).click();
+  await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+  const loose = await open();
+
+  await signInAsAdmin(page, request, db, userAgentTag);
+  await page.goto(`/admin/fiches/${kept}`);
+  await expect(page.getByText("Impossible de la supprimer")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Supprimer la fiche" })).toHaveCount(0);
+
+  await page.goto(`/admin/fiches/${loose}`);
+  await page.getByRole("button", { name: "Supprimer la fiche" }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText("Supprimer définitivement cette fiche");
+  await dialog.getByRole("button", { name: "Supprimer la fiche" }).click();
+  await expect(page).toHaveURL(/\/admin\/fiches$/);
+  const { rows } = await db.query("select id from products where id = $1", [loose]);
+  expect(rows).toEqual([]);
+});

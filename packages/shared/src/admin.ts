@@ -85,6 +85,7 @@ export const adminCatalogErrorSchema = z.object({
     "slug_taken",
     "invalid_merge",
     "capture_active",
+    "kept",
     "cycle",
     "has_children",
   ]),

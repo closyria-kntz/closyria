@@ -60,6 +60,12 @@ Remarques de la fondatrice après les tests en dev, avec la réponse proposée. 
   « Entretien » et « Couleur » complètent aussi la matière, l'entretien et la couleur lus par ailleurs. Rangé dans
   `shop_data.details` (pas de migration). Fiches déjà enregistrées : à leur prochaine relecture.
 
+- **Admin : caractéristiques invisibles, pas de suppression de fiche** [fait en dev] : la fiche de l'admin affiche
+  maintenant « Détails de la boutique » (le tableau WooCommerce) et la description avec ses retours à la ligne. Nouveau
+  bouton « Supprimer la fiche », avec confirmation : seulement si personne ne garde l'article (même dans sa corbeille)
+  et sans lecture en cours ; photos effacées du stockage, tailles, historique et « Derniers liens » supprimés, les
+  captures restent sans fiche ; noté dans le journal de l'admin (`product.delete`).
+
 ## Passe design (avant l'ouverture au public)
 
 - **Menu à revoir** (onglets téléphone, menu latéral ordinateur). L'accueil y est depuis le 2026-11-06.
