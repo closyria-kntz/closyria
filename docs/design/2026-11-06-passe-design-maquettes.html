@@ -191,7 +191,7 @@ a { color: var(--accent); }
     <ul>
       <li>Cadre fixe : menu, en-tête, pied et onglets ne bougent pas ; seul le contenu défile.</li>
       <li>Ordre de la fiche : l’essentiel avec ton étape et ta taille en résumé, puis <strong>La boutique</strong> (tailles, caractéristiques, détails, description), puis <strong>Mon article</strong> pour modifier.</li>
-      <li>« Autres actions » (changer de profil, supprimer) passe dans un menu <strong>⋯</strong> à côté du nom.</li>
+      <li>« Autres actions » (changer de profil, supprimer) passe dans un menu <strong>…</strong> à côté du nom.</li>
       <li>Les étapes deviennent une frise : Repéré, Commandé, Reçu, À vendre, d’un coup d’œil.</li>
       <li>« Coller un lien » est dans l’en-tête sur ordinateur, partout ; sur téléphone il reste sur l’Accueil.</li>
       <li>Le profil actif est en haut à droite, toujours visible.</li>
@@ -500,6 +500,76 @@ a { color: var(--accent); }
     </div>
   </section>
 
+  <!-- ===================== D bis ===================== -->
+  <section class="proposal" aria-labelledby="d2-title">
+    <div class="proposal-head">
+      <h2 id="d2-title">D bis. Mon article au centre, la boutique à droite</h2><span class="tag">variante de D</span>
+      <p>Même cadre que D, côtés inversés : au centre les photos puis « Mon article » ; à droite, un panneau fixe « La boutique » qui défile seul. « Autres actions » passe dans le menu … à côté du nom. Sur téléphone, rien ne change par rapport à D.</p>
+    </div>
+    <div class="frames">
+      <div>
+        <p class="caption">Ordinateur, 1440 px de large</p>
+        <div class="scroll-x">
+          <div class="desk" style="grid-template-columns: 200px minmax(0,1fr) 300px; grid-template-rows: auto minmax(0,1fr);">
+            <aside class="side" style="grid-row: 1 / 3;">
+              <span class="brand">Closyria</span>
+              <nav aria-label="Menu, proposition D bis">
+                <a class="navlink" href="#d2-title"><svg><use href="#i-home"/></svg>Accueil</a>
+                <a class="navlink on" href="#d2-title"><svg><use href="#i-heart"/></svg>Envies<span class="count">12</span></a>
+                <a class="navlink" href="#d2-title"><svg><use href="#i-bag"/></svg>Commandé<span class="count">3</span></a>
+                <a class="navlink" href="#d2-title"><svg><use href="#i-hanger"/></svg>Dressing<span class="count">48</span></a>
+                <a class="navlink" href="#d2-title"><svg><use href="#i-tag"/></svg>À vendre<span class="count">2</span></a>
+                <span class="group">Rangement</span>
+                <a class="navlink" href="#d2-title"><svg><use href="#i-list"/></svg>Listes</a>
+                <a class="navlink" href="#d2-title"><svg><use href="#i-gear"/></svg>Réglages</a>
+              </nav>
+              <div class="note" style="margin-top:auto; display:flex; flex-wrap:wrap; gap:4px 10px; padding: 0 10px;"><span>Aide</span><span>Confidentialité</span><span>Conditions</span></div>
+            </aside>
+            <div class="topbar" style="grid-column: 2 / 4;">
+              <span class="paste">Coller le lien d’un article<b>Ajouter</b></span>
+              <span class="profile" style="margin-left:auto;"><span class="avatar">M</span>Moi</span>
+            </div>
+            <div class="scroller" style="padding: 18px 22px; display:flex; flex-direction:column; gap:16px;">
+              <div class="row" style="justify-content: space-between; align-items: start; flex-wrap: nowrap;">
+                <div style="flex:1; min-width:0;">
+                  <div class="shopline">Sahoma</div><div class="pname">Pull Lioran rose</div><div class="price">49,90 €</div>
+                </div>
+                <div class="row" style="flex-wrap: nowrap;"><span class="btn primary">Voir chez Sahoma</span><span class="btn">♥</span><span class="icon-btn" aria-label="Autres actions"><svg><use href="#i-dots"/></svg></span></div>
+              </div>
+              <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px;">
+                <div class="photo" style="grid-column: span 2; grid-row: span 2; aspect-ratio: 3/4;"><div class="knit"></div></div>
+                <div class="photo alt" style="aspect-ratio: 3/4;"></div><div class="photo" style="aspect-ratio: 3/4;"></div>
+                <div class="photo" style="aspect-ratio: 3/4;"></div><div class="photo alt" style="aspect-ratio: 3/4;"></div>
+              </div>
+              <div class="card">
+                <div class="row" style="justify-content: space-between;"><h3>Mon article</h3><span class="label">Profil : Moi</span></div>
+                <div class="stepper"><span class="step done">Repéré</span><span class="step now">Commandé</span><span class="step">Reçu</span><span class="step">À vendre</span></div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                  <dl class="kv" style="grid-template-columns: 70px 1fr;"><dt>Ma taille</dt><dd>Taille unique</dd><dt>Payé</dt><dd>49,90 € le 6 nov.</dd></dl>
+                  <dl class="kv" style="grid-template-columns: 50px 1fr;"><dt>Note</dt><dd>À porter avec le jean brut.</dd></dl>
+                </div>
+                <div><div class="label" style="margin-bottom:4px;">Listes et étiquettes</div><div class="chips"><span class="chip">Hiver 2026</span><span class="chip">Mohair</span><span class="chip add">+ Ajouter</span></div></div>
+              </div>
+            </div>
+            <aside class="scroller" style="border-left: 1px solid var(--line); background: var(--raised); padding: 16px; display:flex; flex-direction:column; gap:12px;">
+              <h3 style="font-family: var(--display); font-size: 21px; margin:0;">La boutique</h3>
+              <div class="sizes"><span class="size">Taille unique</span></div>
+              <dl class="kv" style="grid-template-columns: 82px 1fr;"><dt>Type</dt><dd>Femme › Hauts › Pulls</dd><dt>Couleur</dt><dd>Rose</dd><dt>Matière</dt><dd>Mohair</dd></dl>
+              <div><div class="label" style="margin-bottom:4px;">Détails de la boutique</div>
+              <dl class="kv" style="grid-template-columns: 82px 1fr;"><dt>Composition</dt><dd>60% mohair 22% polyamide 18% acrylique</dd><dt>Dimensions</dt><dd>63 cm × 50 cm à plat</dd><dt>Entretien</dt><dd>Lavage à la main conseillé</dd></dl></div>
+              <p class="desc">Un pull rose en maille douce contenant du mohair, aux manches longues évasées. Fabriqué en Italie, col rond. Le mannequin mesure 1m73 et porte habituellement une taille S.</p>
+              <p class="note" style="margin:0;">Mise à jour le 6 novembre 2026</p>
+            </aside>
+          </div>
+        </div>
+      </div>
+      <div class="tradeoffs" style="grid-template-columns: minmax(0,1fr); align-self: start;">
+        <div><h3>Pour</h3><ul><li>Ce qui t’appartient (étape, taille, notes) est au centre, en grand.</li><li>La fiche de la boutique reste à côté, comme une notice qu’on consulte.</li></ul></div>
+        <div><h3>Contre</h3><ul><li>Sur téléphone, l’ordre ne peut pas suivre : la boutique reste avant « Mon article », comme dans D.</li><li>Texte de la boutique (description longue) dans une colonne étroite.</li></ul></div>
+      </div>
+    </div>
+  </section>
+
   <!-- ===================== C ===================== -->
   <section class="proposal" aria-labelledby="c-title">
     <div class="proposal-head">
@@ -622,7 +692,7 @@ a { color: var(--accent); }
   <section class="questions" aria-labelledby="q-title">
     <h2 id="q-title">Ce qu’il me faut de toi</h2>
     <ol>
-      <li>Le mélange D te convient-il pour la fiche et le cadre ?</li>
+      <li>Pour la fiche sur ordinateur : D (boutique au centre, Mon article à droite) ou D bis (Mon article au centre, boutique à droite) ?</li>
       <li>Accueil : l’option 3 (action, puis résumé du dressing) ?</li>
       <li>Pied de page retiré, liens en bas du menu : d’accord ?</li>
     </ol>
