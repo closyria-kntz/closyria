@@ -105,6 +105,18 @@ describe("closyria-backup et closyria-backup-check", () => {
     expect(checked.out).toContain("older than 6 h");
   }, 60_000);
 
+  it("une table comptée absente de la vraie base (prod du chantier 0) est sautée", async () => {
+    await psql("alter table public.products rename to products_hidden");
+    try {
+      expect((await script("closyria-backup", ["dev"])).code).toBe(0);
+      const checked = await script("closyria-backup-check", ["dev"]);
+      expect(checked.code, checked.out).toBe(0);
+      expect(checked.out).toMatch(/^ok: /m);
+    } finally {
+      await psql("alter table public.products_hidden rename to products");
+    }
+  }, 60_000);
+
   it("lib.sh absent : les scripts échouent au lieu de passer", async () => {
     const bin = await mkdtemp(join(work, "bin-"));
     for (const name of ["closyria-backup", "closyria-backup-check"]) await copyFile(join(BIN, name), join(bin, name));

@@ -259,7 +259,7 @@ Plan et décisions : `docs/plans/2026-11-06-sauvegardes-prod.md`.
 | Quand | Quoi |
 |---|---|
 | Chaque nuit, 03:30 UTC | `closyria-backup@<env>` : `pg_dump`, chiffré avec `age`, envoyé dans le bucket `closyria-backups` (OVH Strasbourg) sous `<env>/closyria-<env>-<AAAAMMJJTHHMMSSZ>.dump.age`. |
-| Chaque matin, 05:00 UTC | `closyria-backup-check@<env>` : la dernière copie est téléchargée, déchiffrée, restaurée dans la base jetable `closyria_restore_check_<env>`, comparée à la vraie base (mêmes tables, mêmes migrations, au moins 90 % des lignes de `user`, `items`, `products`), puis effacée. Échoue aussi si la dernière copie a plus de 6 h (une nuit manquée est donc signalée dès le matin ; lancée à la main l’après-midi, la vérification échoue pour cette raison). |
+| Chaque matin, 05:00 UTC | `closyria-backup-check@<env>` : la dernière copie est téléchargée, déchiffrée, restaurée dans la base jetable `closyria_restore_check_<env>`, comparée à la vraie base (mêmes tables, mêmes migrations, au moins 90 % des lignes de `user`, `items`, `products`, pour celles que la vraie base a déjà), puis effacée. Échoue aussi si la dernière copie a plus de 6 h (une nuit manquée est donc signalée dès le matin ; lancée à la main l’après-midi, la vérification échoue pour cette raison). |
 | Avant chaque `closyria-deploy prod` | Une sauvegarde ; si elle échoue, rien n'est déployé. |
 | En cas d'échec | `closyria-backup-alert@…` envoie un e-mail (Brevo) à `BACKUP_ALERT_TO`. |
 
