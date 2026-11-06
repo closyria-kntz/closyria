@@ -32,9 +32,22 @@ Remarques de la fondatrice après les tests en dev, avec la réponse proposée. 
    étiquettes, profil) dans un encadré à part, et « La fiche de la boutique » (tailles, caractéristiques,
    description). Actions rares (déplacer, supprimer) regroupées en bas.
 
+## Retours des tests des finitions (dev, 2026-11-06)
+
+- ♡ retiré, ajout de photo : OK.
+- **Visionneuse** [corrigé] : la barre du haut (compteur, « Taille réelle », « Fermer ») tombait sous la photo, hors
+  de l'écran, avec une barre de défilement verticale (`top-0`/`inset-x-0` n'existent pas dans l'échelle d'espacement).
+  Elle est maintenant en haut, « Fermer » en haut à droite, sans défilement.
+- **Pas d'accueil dans le menu** [corrigé] : l'accueil (coller un lien, Derniers liens) était une page à part, sans
+  menu, et le menu n'avait pas d'« Accueil ». L'accueil est maintenant dans le même cadre : « Accueil » en tête du
+  menu, 5 onglets sur téléphone (Accueil, Envies, Commandé, Dressing, Plus) ; « + Ajouter » est masqué sur l'accueil.
+- Structure de la fiche : mieux, design à revoir (Passe design).
+
 ## Passe design (avant l'ouverture au public)
 
-- **Menu à revoir** (onglets téléphone, menu latéral ordinateur).
+- **Menu à revoir** (onglets téléphone, menu latéral ordinateur). L'accueil y est depuis le 2026-11-06.
+- Design de la fiche (trois parties en place, à embellir) ; accueil : titre « Closyria » en double et phrase
+  « arrive bientôt » à revoir.
 - Mise en page générale de la fiche et des vues, couleurs des profils et des étiquettes (décision déjà en attente).
 - Les remarques de design notées pendant les tests s'ajoutent ici.
 

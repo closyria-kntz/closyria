@@ -14,7 +14,10 @@ import { ProfileSwitcher } from "./profile-switcher";
 import { buttonClass, focusRing } from "./ui";
 import { UndoToast } from "./undo-toast";
 
-const linkBase = `flex min-h-touch-target items-center justify-center rounded-button px-space-3 text-sm hover:bg-surface-strong aria-[current=page]:bg-surface-strong aria-[current=page]:font-strong aria-[current=page]:text-accent ${focusRing}`;
+const linkShape = `flex min-h-touch-target items-center justify-center rounded-button text-sm hover:bg-surface-strong aria-[current=page]:bg-surface-strong aria-[current=page]:font-strong aria-[current=page]:text-accent ${focusRing}`;
+const linkBase = `${linkShape} px-space-3`;
+/** Phone tabs: five across the narrowest screens, so almost no side padding. */
+const tabBase = `${linkShape} min-w-space-0 px-space-1`;
 
 function NavLink({ item, className }: { item: AppNavItem; className: string }) {
   const t = useTranslations("Shell.nav");
@@ -61,7 +64,7 @@ function BottomTabs({
       )}
       <ul className="flex">
         {phoneTabs.map((tab) => (
-          <li key={tab.key} className="flex flex-1 flex-col p-space-1">
+          <li key={tab.key} className="flex min-w-space-0 flex-1 flex-col py-space-1">
             {tab.href === null ? (
               <button
                 type="button"
@@ -69,12 +72,12 @@ function BottomTabs({
                 aria-controls={panel}
                 aria-current={moreCurrent ? "true" : undefined}
                 onClick={() => setOpen((value) => !value)}
-                className={`${linkBase} flex-1`}
+                className={`${tabBase} flex-1`}
               >
                 {t("more")}
               </button>
             ) : (
-              <NavLink item={tab} className={`${linkBase} flex-1`} />
+              <NavLink item={tab} className={`${tabBase} flex-1`} />
             )}
           </li>
         ))}
@@ -143,6 +146,7 @@ function AddLink() {
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const t = useTranslations("Shell");
+  const onHome = usePathname() === "/";
   const [profiles, setProfiles] = useState<readonly ProfileView[]>([]);
   const [ready, setReady] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -201,7 +205,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Suspense>
                   <ProfileSwitcher />
                 </Suspense>
-                <AddLink />
+                {!onHome && <AddLink />}
               </div>
             </div>
             <nav

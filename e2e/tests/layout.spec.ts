@@ -29,6 +29,7 @@ test.describe("1440 px", () => {
     const side = page.getByRole("navigation", { name: "Menu principal" });
     await expect(side).toBeVisible();
     await expect(side.getByRole("link")).toHaveText([
+      "Accueil",
       "Envies",
       "Commandé",
       "Dressing",
@@ -36,7 +37,7 @@ test.describe("1440 px", () => {
       "Listes",
       "Réglages",
     ]);
-    // The product sheet is not one of the six places: no entry claims to be the current page.
+    // The product sheet is not one of the menu's places: no entry claims to be the current page.
     await expect(side.locator("[aria-current=page]")).toHaveCount(0);
     await expect(page.getByTestId("app-nav-bottom")).toBeHidden();
 
@@ -64,6 +65,8 @@ test.describe("1440 px", () => {
 
   test("« Aller au contenu » est le premier arrêt au clavier et mène au contenu", async ({ page }) => {
     await openSheet(page);
+    // On arrival on a page: the home page now shares the shell, so the sheet is loaded afresh.
+    await page.reload();
     await page.locator("body").press("Tab");
     const skip = page.getByRole("link", { name: "Aller au contenu" });
     await expect(skip).toBeFocused();
@@ -89,6 +92,20 @@ test.describe("1440 px", () => {
     await expect(switcher).toHaveValue(first ?? "");
   });
 
+  test("l'accueil a le menu, « Accueil » y est la page courante et y ramène depuis une autre page", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const side = page.getByRole("navigation", { name: "Menu principal" });
+    await expect(side.getByRole("link", { name: "Accueil" })).toHaveAttribute("aria-current", "page");
+    // The paste field is on the page itself: no « + Ajouter » in the header.
+    await expect(page.getByRole("button", { name: "+ Ajouter" })).toHaveCount(0);
+    await side.getByRole("link", { name: "Envies" }).click();
+    await expect(page).toHaveURL(/\/envies$/);
+    await side.getByRole("link", { name: "Accueil" }).click();
+    await expect(page.getByLabel("Coller un lien")).toBeVisible();
+  });
+
   test("la page d'accueil donne un champ confortable sur ordinateur", async ({ page }) => {
     await page.goto("/");
     const field = await page.getByLabel("Coller un lien").boundingBox();
@@ -104,7 +121,7 @@ test.describe("390 px", () => {
 
     const bar = page.getByRole("navigation", { name: "Onglets" });
     await expect(bar).toBeVisible();
-    await expect(bar.getByRole("link")).toHaveText(["Envies", "Commandé", "Dressing"]);
+    await expect(bar.getByRole("link")).toHaveText(["Accueil", "Envies", "Commandé", "Dressing"]);
     await expect(bar.getByRole("button", { name: "Plus" })).toBeVisible();
     await expect(bar.locator("[aria-current=page]")).toHaveCount(0);
     const barBox = await box(page, "[data-testid=app-nav-bottom]");
@@ -112,6 +129,14 @@ test.describe("390 px", () => {
     for (const target of await bar.locator("a, button").all()) {
       expect((await target.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
     }
+    // The five tabs fit side by side, even on a narrow phone (360 px).
+    await page.setViewportSize({ width: 360, height: 844 });
+    for (const target of await bar.locator("a, button").all()) {
+      const tab = await target.boundingBox();
+      expect(tab ? tab.x + tab.width : Number.POSITIVE_INFINITY).toBeLessThanOrEqual(360);
+      expect(await target.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
 
     const gallery = await box(page, "[data-testid=product-gallery]");
     const info = await box(page, "[data-testid=product-info]");
@@ -155,7 +180,7 @@ test.describe("820 px", () => {
 
     const tabs = page.getByRole("navigation", { name: "Onglets" });
     await expect(tabs).toBeVisible();
-    await expect(tabs.getByRole("link")).toHaveCount(6);
+    await expect(tabs.getByRole("link")).toHaveCount(7);
     expect((await box(page, "[data-testid=app-nav-top]")).y).toBeLessThan(6 * REM);
     await expect(page.getByTestId("app-nav-bottom")).toBeHidden();
     await expect(page.getByRole("navigation", { name: "Menu principal" })).toBeHidden();
