@@ -599,8 +599,12 @@
       "tagRemoved": "Étiquette {name} retirée",
       "failed": "Impossible d’annuler."
     },
+    "sections": {
+      "mine": "Mon article",
+      "shop": "La fiche de la boutique",
+      "more": "Autres actions"
+    },
     "panel": {
-      "title": "Mon article",
       "favorite": "Favori",
       "stages": "Étapes",
       "stagesHint": "Où en est cet article ?",
@@ -610,7 +614,7 @@
       "salePrice": "Prix demandé : {amount}",
       "soldFor": "Vendu : {amount}",
       "channel": "Où : {channel}",
-      "details": "Mes infos",
+      "sizeAndAmounts": "Taille et montants",
       "size": "Taille",
       "sizeNote": "Note de taille",
       "notes": "Notes",

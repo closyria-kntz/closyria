@@ -30,6 +30,8 @@ const FAILURE_KEYS = {
 /** One column on a phone and in portrait; photos left, details right from 48rem in landscape and on desktop. */
 const TWO_COLUMNS = "grid grid-cols-1 md:landscape:grid-cols-2 md:landscape:gap-space-6 lg:grid-cols-2 lg:gap-space-6";
 
+const touch = "min-h-touch-target";
+
 const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
 
 function Skeleton({ className }: { className: string }) {
@@ -175,6 +177,44 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   const currency = product.currency ?? "EUR";
   const noPhotoYet = product.images.length === 0 && (capturing || reloadedPending);
 
+  const shopSheet =
+    hasName || product.sizes.length > 0 ? (
+      <section aria-labelledby="shop-title" className="flex flex-col gap-space-4">
+        <h2 id="shop-title" className="font-display text-lead font-strong">
+          {tItem("sections.shop")}
+        </h2>
+        {product.sizes.length > 0 && (
+          <section aria-labelledby="sizes-title" className="flex flex-col gap-space-2">
+            <h2 id="sizes-title" className="text-sm font-strong">
+              {t("product.sizes")}
+            </h2>
+            <ul className="flex flex-wrap gap-space-2">
+              {product.sizes.map((size) => (
+                <li
+                  key={size.label}
+                  className={`rounded-button border border-line px-space-3 py-space-1 text-sm ${size.available ? "bg-surface-raised" : "text-ink-muted line-through"}`}
+                >
+                  {size.label}
+                  {!size.available && <span className="sr-only"> ({t("product.unavailable")})</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {hasName && <ProductTraits traits={product.traits} />}
+        {hasName && product.description && <ProductDescription text={product.description} />}
+        {product.lastCapturedAt && (
+          <p className="text-sm text-ink-muted">
+            <time dateTime={product.lastCapturedAt}>
+              {t("product.updatedAt", {
+                date: format.dateTime(new Date(product.lastCapturedAt), { dateStyle: "long" }),
+              })}
+            </time>
+          </p>
+        )}
+      </section>
+    ) : null;
+
   return (
     <article className={`${TWO_COLUMNS} gap-space-5`} aria-busy={capturing || reloadedPending || undefined}>
       <div data-testid="product-gallery" className={item ? "lg:self-start" : "lg:sticky lg:top-space-8 lg:self-start"}>
@@ -217,7 +257,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
       </div>
 
       <div data-testid="product-info" className="flex flex-col gap-space-5">
-        <header className="flex flex-col gap-space-2">
+        <header data-testid="product-header" className="flex flex-col gap-space-2">
           <p className="text-sm text-ink-muted">
             {waiting ? <span role="status">{t("product.loading", { shop })}</span> : shop}
           </p>
@@ -230,46 +270,33 @@ export function ProductView({ productId, captureId }: { productId: string; captu
             {product.name ?? shop}
           </h1>
           {waiting && <Skeleton className="h-space-6 w-3/4" />}
+          {hasName && product.priceCents === null && (
+            <p className="text-ink-muted">{formatOptionalPrice(locale, null, currency, t("product.priceMissing"))}</p>
+          )}
+          {hasName && product.priceCents !== null && (
+            <p className="flex items-baseline gap-space-3 tabular-nums">
+              <span className="text-lead font-strong">{formatPrice(locale, product.priceCents, currency)}</span>
+              {product.compareAtCents !== null && product.compareAtCents > product.priceCents && (
+                <s className="text-ink-muted">
+                  <span className="sr-only">{t("product.comparePrice")} </span>
+                  {formatPrice(locale, product.compareAtCents, currency)}
+                </s>
+              )}
+            </p>
+          )}
+          {waiting && <Skeleton className="h-space-5 w-1/3" />}
+          {isHttpUrl(product.canonicalUrl) && (
+            <a
+              href={product.canonicalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${primaryButtonClass} ${touch} mt-space-2 self-start`}
+            >
+              {t("product.viewAt", { shop })}
+            </a>
+          )}
         </header>
-
-        {hasName && product.priceCents === null && (
-          <p className="text-ink-muted">{formatOptionalPrice(locale, null, currency, t("product.priceMissing"))}</p>
-        )}
-        {hasName && product.priceCents !== null && (
-          <p className="flex items-baseline gap-space-3 tabular-nums">
-            <span className="text-lead font-strong">{formatPrice(locale, product.priceCents, currency)}</span>
-            {product.compareAtCents !== null && product.compareAtCents > product.priceCents && (
-              <s className="text-ink-muted">
-                <span className="sr-only">{t("product.comparePrice")} </span>
-                {formatPrice(locale, product.compareAtCents, currency)}
-              </s>
-            )}
-          </p>
-        )}
-        {waiting && <Skeleton className="h-space-5 w-1/3" />}
-
-        {product.sizes.length > 0 && (
-          <section aria-labelledby="sizes-title" className="flex flex-col gap-space-2">
-            <h2 id="sizes-title" className="text-sm font-strong">
-              {t("product.sizes")}
-            </h2>
-            <ul className="flex flex-wrap gap-space-2">
-              {product.sizes.map((size) => (
-                <li
-                  key={size.label}
-                  className={`rounded-button border border-line px-space-3 py-space-1 text-sm ${size.available ? "bg-surface-raised" : "text-ink-muted line-through"}`}
-                >
-                  {size.label}
-                  {!size.available && <span className="sr-only"> ({t("product.unavailable")})</span>}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
         {waiting && <Skeleton className="h-space-6 w-1/2" />}
-
-        {hasName && <ProductTraits traits={product.traits} />}
-        {hasName && product.description && <ProductDescription text={product.description} />}
 
         {hasName && item && current.id && item.profileId !== current.id && (
           <p role="status" className="rounded-card border border-line bg-hint px-space-3 py-space-2 text-sm">
@@ -287,7 +314,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
           </div>
         )}
         {hasName && itemLoad !== "error" && item && (
-          <ItemPanel item={item} onChange={setItem} onGone={() => setItem(null)} reload={reloadItem} />
+          <ItemPanel item={item} onChange={setItem} onGone={() => setItem(null)} reload={reloadItem} shop={shopSheet} />
         )}
         {hasName && itemLoad === "loading" && !item && (
           <p role="status" className="text-sm text-ink-muted">
@@ -297,6 +324,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
         {hasName && itemLoad === "ready" && !item && (
           <KeepActions product={product} profileId={current.id} onKept={setItem} reload={reloadItem} />
         )}
+        {!(hasName && itemLoad !== "error" && item) && shopSheet}
 
         {!hasName && (failed || manualShop) && (
           <p role="status" className="text-ink-muted">
@@ -319,23 +347,6 @@ export function ProductView({ productId, captureId }: { productId: string; captu
             }}
           />
         )}
-
-        <footer className="flex flex-col items-start gap-space-3">
-          {isHttpUrl(product.canonicalUrl) && (
-            <a href={product.canonicalUrl} target="_blank" rel="noopener noreferrer" className={primaryButtonClass}>
-              {t("product.viewAt", { shop })}
-            </a>
-          )}
-          {product.lastCapturedAt && (
-            <p className="text-sm text-ink-muted">
-              <time dateTime={product.lastCapturedAt}>
-                {t("product.updatedAt", {
-                  date: format.dateTime(new Date(product.lastCapturedAt), { dateStyle: "long" }),
-                })}
-              </time>
-            </p>
-          )}
-        </footer>
       </div>
     </article>
   );
