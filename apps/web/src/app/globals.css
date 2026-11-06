@@ -57,9 +57,12 @@ body {
   }
 }
 
-/* The selection bar sticks above the phone tab bar and the undo toast. */
+/* The selection bar sticks above the undo toast. It sticks in the app content, which already ends above the phone
+   tab bar (fixed frame, Passe design §1), and the offset counts from the end of its bottom padding (space-6): what
+   is left of the toast's room (it sits space-8 above the window's bottom, about space-7 high) once the tabs are
+   deducted. */
 @utility selection-bar-offset {
-  bottom: calc(var(--spacing-space-8) + var(--spacing-space-7) + env(safe-area-inset-bottom));
+  bottom: var(--spacing-space-6);
 
   @variant md {
     bottom: var(--spacing-space-8);

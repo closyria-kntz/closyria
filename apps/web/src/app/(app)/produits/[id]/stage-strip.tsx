@@ -6,7 +6,7 @@ const MAIN: readonly ItemStage[] = ["spotted", "ordered", "owned", "for_sale"];
 const ENDS: readonly ItemStage[] = ["sold", "returned"];
 
 /**
- * The stages as a strip: the current one filled, the ones already passed in pale green, the next ones muted.
+ * The stages as a strip: the current one filled, the ones already passed in pale green with a ✓, the next ones muted.
  * Each other stage is a button (« Passer à … »); the current one is disabled and says so.
  */
 export function StageStrip({ current, onPick }: { current: ItemStage; onPick: (stage: ItemStage) => void }) {
@@ -28,11 +28,15 @@ export function StageStrip({ current, onPick }: { current: ItemStage; onPick: (s
         aria-label={
           isCurrent
             ? `${t(`stage.${value}`)} (${t("panel.currentStage")})`
-            : t("panel.changeStage", { stage: t(`stage.${value}`) })
+            : passed
+              ? `${t("panel.changeStage", { stage: t(`stage.${value}`) })} (${t("panel.passedStage")})`
+              : t("panel.changeStage", { stage: t(`stage.${value}`) })
         }
         onClick={() => onPick(value)}
         className={`${shape} ${tone} w-full rounded-button px-space-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring focus-visible:outline-solid`}
       >
+        {/* Passed stages are told apart by a mark too, not only by their colour. */}
+        {passed && <span aria-hidden="true">✓ </span>}
         {t(`stage.${value}`)}
       </button>
     );

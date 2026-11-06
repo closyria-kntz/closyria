@@ -220,18 +220,19 @@ export function ProductView({ productId, captureId }: { productId: string; captu
 
   // Passe design §3. From 1280 px: the main column (header, photos, the shop's sheet) and a side panel that scrolls
   // on its own (« Mon article » and « Autres actions », or the keep buttons). Below: one column, photos first; the
-  // keep buttons right after the header, her item after the shop's sheet.
+  // keep buttons right after the header, her item after the shop's sheet. Only photos and header swap from 1280 px.
   const kept = Boolean(hasName && itemLoad !== "error" && item);
+  // The side panel only when it has something to show: her item, its loading, or the keep buttons.
+  const withPanel = hasName && itemLoad !== "error";
+  // In the DOM in the one-column order (keyboard and screen readers follow it); from 1280 px the grid places it.
+  const shopPart = shopSheet && <div className="min-w-space-0 xl:col-start-1 xl:row-start-2">{shopSheet}</div>;
   return (
     <article
-      className="flex flex-col gap-space-5 xl:sheet-grid xl:grid xl:items-start"
+      className={`flex flex-col gap-space-5 ${withPanel ? "xl:sheet-grid xl:grid xl:items-start" : ""}`}
       aria-busy={capturing || reloadedPending || undefined}
     >
-      <div
-        data-testid="product-main"
-        className="order-1 flex min-w-space-0 flex-col gap-space-5 xl:col-start-1 xl:row-start-1"
-      >
-        <div data-testid="product-gallery" className="order-1 xl:order-2">
+      <div data-testid="product-main" className="flex min-w-space-0 flex-col gap-space-5 xl:col-start-1 xl:row-start-1">
+        <div data-testid="product-gallery" className="xl:order-2">
           {item && itemLoad !== "error" ? (
             <PhotoManager item={item} onChange={setItem} reload={reloadItem} />
           ) : product.images.length > 0 ? (
@@ -270,7 +271,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
           ) : null}
         </div>
 
-        <header data-testid="product-header" className="order-2 flex flex-col gap-space-2 xl:order-1">
+        <header data-testid="product-header" className="flex flex-col gap-space-2 xl:order-1">
           <p className="text-sm text-ink-muted">
             {waiting ? <span role="status">{t("product.loading", { shop })}</span> : shop}
           </p>
@@ -310,64 +311,66 @@ export function ProductView({ productId, captureId }: { productId: string; captu
             </a>
           )}
         </header>
-        {waiting && <Skeleton className="h-space-6 w-1/2" />}
-        {hasName && item && current.id && item.profileId !== current.id && (
-          <p role="status" className="rounded-card border border-line bg-hint px-space-3 py-space-2 text-sm">
-            {tItem("keep.alreadyIn", { name: profiles.find((p) => p.id === item.profileId)?.name ?? "" })}
-          </p>
-        )}
-        {hasName && itemLoad === "error" && (
-          <div className="flex flex-col items-start gap-space-2">
-            <p role="alert" className="text-sm text-danger">
-              {tItem("errors.itemLoad")}
+        {/* Notices and the manual form: under the header at every width. */}
+        <div className="flex flex-col gap-space-5 empty:hidden xl:order-3">
+          {waiting && <Skeleton className="h-space-6 w-1/2" />}
+          {hasName && item && current.id && item.profileId !== current.id && (
+            <p role="status" className="rounded-card border border-line bg-hint px-space-3 py-space-2 text-sm">
+              {tItem("keep.alreadyIn", { name: profiles.find((p) => p.id === item.profileId)?.name ?? "" })}
             </p>
-            <button type="button" className={`${buttonClass} min-h-touch-target`} onClick={() => void reloadItem()}>
-              {t("product.retry")}
-            </button>
-          </div>
-        )}
+          )}
+          {hasName && itemLoad === "error" && (
+            <div className="flex flex-col items-start gap-space-2">
+              <p role="alert" className="text-sm text-danger">
+                {tItem("errors.itemLoad")}
+              </p>
+              <button type="button" className={`${buttonClass} min-h-touch-target`} onClick={() => void reloadItem()}>
+                {t("product.retry")}
+              </button>
+            </div>
+          )}
 
-        {!hasName && (failed || manualShop) && (
-          <p role="status" className="text-ink-muted">
-            {manualShop ? t("product.manualShop", { shop }) : t(`product.failure.${failureKey}`)}
-          </p>
-        )}
-        {!hasName && slow && (capturing || reloadedPending) && (
-          <p role="status" className="text-ink-muted">
-            {t("product.slow")}
-          </p>
-        )}
-        {showForm && (
-          <ManualForm
-            productId={product.id}
-            canonicalUrl={product.canonicalUrl}
-            onSaved={(saved) => {
-              setProduct(saved);
-              setLoad("ready");
-              setFocusHeading(true);
-            }}
-          />
-        )}
+          {!hasName && (failed || manualShop) && (
+            <p role="status" className="text-ink-muted">
+              {manualShop ? t("product.manualShop", { shop }) : t(`product.failure.${failureKey}`)}
+            </p>
+          )}
+          {!hasName && slow && (capturing || reloadedPending) && (
+            <p role="status" className="text-ink-muted">
+              {t("product.slow")}
+            </p>
+          )}
+          {showForm && (
+            <ManualForm
+              productId={product.id}
+              canonicalUrl={product.canonicalUrl}
+              onSaved={(saved) => {
+                setProduct(saved);
+                setLoad("ready");
+                setFocusHeading(true);
+              }}
+            />
+          )}
+        </div>
       </div>
-      <div
-        data-testid="product-side"
-        className={`flex flex-col gap-space-5 xl:sticky xl:top-space-0 xl:col-start-2 xl:row-span-2 xl:row-start-1 xl:max-h-panel-max xl:overflow-y-auto ${kept ? "order-3" : "order-2"}`}
-      >
-        {hasName && itemLoad !== "error" && item && (
-          <ItemPanel item={item} onChange={setItem} onGone={() => setItem(null)} reload={reloadItem} />
-        )}
-        {hasName && itemLoad === "loading" && !item && (
-          <p role="status" className="text-sm text-ink-muted">
-            {tItem("keep.working")}
-          </p>
-        )}
-        {hasName && itemLoad === "ready" && !item && (
-          <KeepActions product={product} profileId={current.id} onKept={setItem} reload={reloadItem} />
-        )}
-      </div>
-      {shopSheet && (
-        <div className={`min-w-space-0 xl:col-start-1 xl:row-start-2 ${kept ? "order-2" : "order-3"}`}>{shopSheet}</div>
+      {kept ? shopPart : null}
+      {withPanel && (
+        <div
+          data-testid="product-side"
+          className="flex flex-col gap-space-5 xl:sticky xl:top-space-0 xl:col-start-2 xl:row-span-2 xl:row-start-1 xl:max-h-panel-max xl:overflow-y-auto"
+        >
+          {item && <ItemPanel item={item} onChange={setItem} onGone={() => setItem(null)} reload={reloadItem} />}
+          {hasName && itemLoad === "loading" && !item && (
+            <p role="status" className="text-sm text-ink-muted">
+              {tItem("keep.working")}
+            </p>
+          )}
+          {hasName && itemLoad === "ready" && !item && (
+            <KeepActions product={product} profileId={current.id} onKept={setItem} reload={reloadItem} />
+          )}
+        </div>
       )}
+      {kept ? null : shopPart}
     </article>
   );
 }

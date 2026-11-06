@@ -217,7 +217,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link href="/" className={`font-display text-title font-strong ${focusRing}`}>
             {t("brand")}
           </Link>
-          <nav aria-label={t("nav.desktop")}>
+          <nav aria-label={t("nav.desktop")} className="flex flex-1 flex-col justify-between gap-space-5">
             <ul className="flex flex-col gap-space-1">
               <Suspense>
                 {desktopNav.map((item) => (
@@ -227,10 +227,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                 ))}
               </Suspense>
             </ul>
+            {/* « Aide » at the bottom, still inside the menu's landmark. */}
+            <ul className="flex flex-col">
+              <li className="flex flex-col">
+                <Suspense>
+                  <NavLink item={helpNav} className={`${linkBase} justify-start text-ink-muted`} />
+                </Suspense>
+              </li>
+            </ul>
           </nav>
-          <Suspense>
-            <NavLink item={helpNav} className={`${linkBase} mt-auto justify-start text-ink-muted`} />
-          </Suspense>
         </aside>
 
         <div className="flex min-h-space-0 min-w-space-0 flex-1 flex-col">
@@ -241,7 +246,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
               {!onHome && (
                 <div className="hidden w-full max-w-paste lg:block">
-                  <CaptureForm compact />
+                  {/* Keyed by page: the shell stays mounted, the field starts afresh after each navigation. */}
+                  <CaptureForm key={pathname} compact />
                 </div>
               )}
               <div className="flex items-center gap-space-2">

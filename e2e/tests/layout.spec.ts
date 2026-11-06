@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { autoProductUrl, PRODUCT } from "../fixtures/shops";
+import { autoProductUrl, manualProductUrl, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Chantier 2a, task 13: the shell and the pages adapt to the screen (spec §4, « Adaptation aux écrans »).
@@ -54,6 +54,7 @@ test.describe("1440 px", () => {
       "À vendre",
       "Listes",
       "Réglages",
+      "Aide",
     ]);
     // The product sheet is not one of the menu's places: no entry claims to be the current page.
     await expect(side.locator("[aria-current=page]")).toHaveCount(0);
@@ -172,6 +173,8 @@ test.describe("menu et en-tête, ordinateur", () => {
     await expect(side.getByRole("link", { name: "Envies 1 article", exact: true })).toBeVisible();
     await expect(side.getByRole("link", { name: "Commandé 0 article", exact: true })).toBeVisible();
     await expect(page.locator("aside a").last()).toHaveText("Aide");
+    // Inside the « Menu principal » landmark, for those who move by landmarks.
+    await expect(side.getByRole("link", { name: "Aide", exact: true })).toBeVisible();
   });
 
   test("changer de profil met à jour les compteurs, sans recharger", async ({ page }) => {
@@ -187,6 +190,25 @@ test.describe("menu et en-tête, ordinateur", () => {
     await expect(side.getByRole("link", { name: "Envies 1 article", exact: true })).toBeVisible();
     await page.getByRole("combobox", { name: "Profil" }).selectOption(id);
     await expect(side.getByRole("link", { name: "Envies 0 article", exact: true })).toBeVisible();
+  });
+
+  test("le champ de l'en-tête ajoute un lien, puis un autre", async ({ page }) => {
+    await page.goto("/dressing");
+    for (let round = 0; round < 2; round++) {
+      const field = page.locator("header").getByLabel("Coller un lien");
+      await expect(field).toHaveValue("");
+      await field.fill(autoProductUrl());
+      await page.locator("header").getByRole("button", { name: "Ajouter" }).click();
+      await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible();
+      // A click in the menu: the shell (and its header field) stays mounted, as in real use.
+      if (round === 0) {
+        await page
+          .getByRole("navigation", { name: "Menu principal" })
+          .getByRole("link", { name: /^Envies/ })
+          .click();
+        await expect(page).toHaveURL(/\/envies$/);
+      }
+    }
   });
 
   test("l'en-tête a le champ Coller un lien hors de l'accueil", async ({ page }) => {
@@ -337,6 +359,71 @@ test.describe("structure de la fiche", () => {
       ]);
     });
   }
+
+  test("390 px, fiche gardée : la boutique précède Mon article aussi pour le clavier et les lecteurs d'écran", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openSheet(page);
+    await keep(page);
+    const shopFirst = await page.evaluate(() => {
+      const shop = document.querySelector("section[aria-labelledby=shop-title]");
+      const mine = document.querySelector("section[aria-labelledby=mine-title]");
+      return Boolean(shop && mine && shop.compareDocumentPosition(mine) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    expect(shopFirst).toBe(true);
+  });
+
+  test("1440 px : l'avis « déjà dans le profil » vient sous l'en-tête, pas au-dessus", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openSheet(page);
+    await keep(page);
+    const created = await page.request.post("/api/me/profiles", {
+      data: { name: "Léa", audience: "women", color: "rose" },
+    });
+    const { id } = (await created.json()) as { id: string };
+    await page.goto(`${page.url().split("?")[0]}?profil=${id}`);
+    const notice = page.getByRole("status").filter({ hasText: /Moi/ });
+    await expect(notice).toBeVisible();
+    const header = await box(page, "[data-testid=product-header]");
+    const noticeBox = await notice.boundingBox();
+    expect(noticeBox?.y ?? 0).toBeGreaterThan(header.y + header.height - 1);
+  });
+
+  test("1440 px, boutique à compléter à la main : pas de panneau vide, le formulaire prend la largeur", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+    await page.getByLabel("Coller un lien").fill(manualProductUrl());
+    await page.getByRole("button", { name: "Ajouter" }).click();
+    const name = page.getByLabel("Nom de l’article");
+    await expect(name).toBeVisible();
+    const main = await box(page, "[data-testid=product-main]");
+    const content = await box(page, "#app-content article");
+    expect(main.width).toBeGreaterThan(content.width - 1);
+  });
+
+  test("les étapes passées se reconnaissent sans la couleur : un ✓ et « étape passée » dans le nom", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openSheet(page);
+    await keep(page);
+    const productId = /\/produits\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? "";
+    const found = (await (await page.request.get(`/api/me/items?product=${productId}`)).json()) as {
+      items: { id: string }[];
+    };
+    const moved = await page.request.post(`/api/me/items/${found.items[0]?.id}/stage`, {
+      data: { stage: "ordered", at: new Date().toISOString() },
+    });
+    expect(moved.ok()).toBe(true);
+    await page.reload();
+    const passed = page.getByRole("button", { name: "Passer à « Repéré » (étape passée)", exact: true });
+    await expect(passed).toBeVisible();
+    await expect(passed).toContainText("✓");
+    await expect(page.getByRole("button", { name: "Passer à « Reçu »", exact: true })).toBeVisible();
+  });
 
   test("fiche non gardée, 1440 px : les boutons pour garder sont dans le panneau de droite", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });

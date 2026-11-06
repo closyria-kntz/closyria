@@ -633,6 +633,7 @@
       "stages": "Étapes",
       "stagesHint": "Où en est cet article ?",
       "currentStage": "étape actuelle",
+      "passedStage": "étape passée",
       "changeStage": "Passer à « {stage} »",
       "paid": "Payé : {amount}",
       "salePrice": "Prix demandé : {amount}",
