@@ -43,7 +43,7 @@ export const MAX_SALE_CHANNEL = 60;
 export const UNDO_DELAY_MS = 8000;
 export const TRASH_RETENTION_DAYS = 30;
 
-const centsSchema = z.number().int().nonnegative();
+const centsSchema = z.number().int().nonnegative().max(100_000_000);
 const dateTimeSchema = z.iso.datetime({ offset: true });
 const nameOf = (max: number) => z.string().trim().min(1).max(max);
 

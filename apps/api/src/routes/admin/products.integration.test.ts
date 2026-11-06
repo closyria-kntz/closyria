@@ -232,6 +232,10 @@ describe("admin products", () => {
     const adult = await json(await call("PATCH", `/products/${product.id}`, { audience: "women" }));
     expect(adult.childDetail).toBeNull();
     expect((await call("PATCH", `/products/${product.id}`, { childDetail: "boy" })).status).toBe(400);
+    // null clears the detail while the audience stays child.
+    await call("PATCH", `/products/${product.id}`, { audience: "child", childDetail: "girl" });
+    const cleared = await json(await call("PATCH", `/products/${product.id}`, { childDetail: null }));
+    expect(cleared).toMatchObject({ audience: "child", childDetail: null });
     expect((await call("PATCH", `/products/${product.id}`, {})).status).toBe(400);
     expect((await call("PATCH", `/products/${product.id}`, { season: "spring" })).status).toBe(400);
     expect(

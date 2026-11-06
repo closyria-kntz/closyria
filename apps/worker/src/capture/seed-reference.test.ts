@@ -45,26 +45,47 @@ describe("starting keywords", () => {
 });
 
 describe("seedReference", () => {
-  it("seeds once, adds nothing the second time, and leaves an admin edit intact", async () => {
-    const first = await seedReference(handle.db);
-    expect(first).toBeGreaterThan(0);
+  const total =
+    STARTING_REFERENCE.categories.length +
+    STARTING_REFERENCE.colors.length +
+    STARTING_REFERENCE.materials.length +
+    STARTING_REFERENCE.patterns.length;
+
+  it("creates the full starting set on an empty database, parents linked", async () => {
+    await handle.db.delete(schema.categories);
+    await handle.db.delete(schema.colors);
+    await handle.db.delete(schema.materials);
+    await handle.db.delete(schema.patterns);
+    expect(await seedReference(handle.db)).toBe(total);
     const [longDress] = await handle.db
       .select()
       .from(schema.categories)
       .where(eq(schema.categories.slug, "robe-longue"));
     const [dresses] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "robes"));
     expect(longDress?.parentId).toBe(dresses?.id);
+  });
 
+  it("adds nothing after an admin deleted a colour and renamed a category slug", async () => {
     await handle.db
       .update(schema.categories)
-      .set({ name: "Maxi robes", keywords: ["custom"] })
+      .set({ slug: "maxi-robes", name: "Maxi robes" })
       .where(eq(schema.categories.slug, "robe-longue"));
+    await handle.db.delete(schema.colors).where(eq(schema.colors.slug, "noir"));
     await handle.db.delete(schema.patterns).where(eq(schema.patterns.slug, "uni"));
-
-    expect(await seedReference(handle.db)).toBe(1); // only the deleted pattern comes back
     expect(await seedReference(handle.db)).toBe(0);
-    const [edited] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "robe-longue"));
-    expect(edited).toMatchObject({ name: "Maxi robes", keywords: ["custom"] });
+    expect(await handle.db.select().from(schema.colors).where(eq(schema.colors.slug, "noir"))).toHaveLength(0);
+    expect(
+      await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "robe-longue")),
+    ).toHaveLength(0);
+    const [renamed] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "maxi-robes"));
+    expect(renamed?.name).toBe("Maxi robes");
+  });
+
+  it("restores the standard set for classification tests", async () => {
+    await handle.db.delete(schema.categories);
+    await handle.db.delete(schema.colors);
+    await handle.db.delete(schema.patterns);
+    expect(await seedReference(handle.db)).toBeGreaterThan(0);
   });
 });
 

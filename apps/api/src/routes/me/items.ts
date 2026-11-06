@@ -75,7 +75,8 @@ const listRoute = defineAccess(
     summary: "Her items",
     description:
       "48 per page, newest first by default; `nextCursor` gives the next page. `deleted=true`: the trash. " +
-      "`category`/`color` match her correction, else the product's; `audience` and the price sorts use the product.",
+      "`category`/`color` match her correction, else the product's; `audience` and the price sorts use the product. " +
+      "`wishlist` keeps the items of one of her lists; `product` her item for one product.",
     request: { query: itemListQuerySchema },
     responses: {
       200: json("A page", itemPageSchema),

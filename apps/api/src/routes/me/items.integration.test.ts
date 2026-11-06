@@ -319,6 +319,18 @@ describe("GET /api/me/items/:id and PATCH", () => {
 });
 
 describe("POST /api/me/items/:id/stage", () => {
+  it("answers 400, never 500, for an amount above the cap", async () => {
+    const { cookie } = await t.signIn();
+    const product = await newProduct();
+    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const res = await call("POST", `/api/me/items/${item.id}/stage`, cookie, {
+      stage: "owned",
+      at: "2026-10-20T09:30:00.000Z",
+      amountCents: 100_000_001,
+    });
+    expect(res.status).toBe(400);
+  });
+
   it("writes the history row with its date and amount, and the paid price", async () => {
     const { cookie, userId } = await t.signIn();
     const product = await newProduct();

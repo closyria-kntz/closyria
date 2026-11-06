@@ -96,8 +96,8 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
         await tx
           .update(schema.products)
           .set({
-            name: product.name,
-            brand: product.brand ?? null,
+            // Admin corrections to the name and brand survive a re-capture; prices, sizes and photos always come from the shop.
+            ...(current?.classifiedBy === "admin" ? {} : { name: product.name, brand: product.brand ?? null }),
             description: product.description ?? null,
             currency: product.currency,
             priceCents: product.priceCents,

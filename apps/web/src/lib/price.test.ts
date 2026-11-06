@@ -12,6 +12,12 @@ describe("parsePriceCents", () => {
     expect(parsePriceCents(input)).toEqual({ ok: true, cents });
   });
 
+  it("accepts the cap and refuses anything above", () => {
+    expect(parsePriceCents("1000000")).toEqual({ ok: true, cents: 100_000_000 });
+    expect(parsePriceCents("1000000,01")).toEqual({ ok: false });
+    expect(parsePriceCents("99999999999999")).toEqual({ ok: false });
+  });
+
   it("treats an empty field as no price", () => {
     expect(parsePriceCents("  ")).toEqual({ ok: true, cents: undefined });
   });

@@ -88,7 +88,9 @@ Mêmes étapes, avec les noms de prod :
   fiche) · 0012 `wardrobe` (articles, profils, listes, étiquettes, événements d'étape).
 - **Listes de référence** (catégories, couleurs…) créées par le worker à son démarrage, en plus des boutiques de
   départ. Ligne « info » attendue au premier démarrage : `sudo journalctl -u closyria-<env>-worker --no-pager | grep 'starting reference lists'`
-  (`starting reference lists: N added`). Les lignes `seed:` sont des avertissements (par exemple
+  (`starting reference lists: N added`). Chaque table de référence n'est remplie que si elle est vide. Les filtres
+  Type et Couleur restent vides tant que le worker n'a pas démarré une fois (création des listes) ; `/api/reference`
+  est mis en cache 1 h, donc ils peuvent mettre jusqu'à une heure à apparaître après le premier démarrage. Les lignes `seed:` sont des avertissements (par exemple
   `seed: parent … is missing, skipped`) et doivent être absentes : `… | grep 'seed:'` vide.
 - **Nouvelle file `wardrobe-purge`** : vide la corbeille (articles supprimés depuis plus de 30 jours) chaque nuit à
   03:30 UTC. Le worker la crée et la planifie seul ; ligne de journal `trash purge: N item(s) permanently deleted`
@@ -96,8 +98,9 @@ Mêmes étapes, avec les noms de prod :
 
 ### Dev
 
-0. [ ] Avant le premier déploiement : `captures` est vide (`select count(*) from captures;` dans la base de l'environnement
-   → 0), sinon 0008 échoue (`url` NOT NULL sans défaut)
+> Le chantier 1 est déjà déployé sur dev (0007 à 0010 appliquées, captures présentes) : pour dev, seules 0011 et 0012
+> sont nouvelles.
+
 1. [ ] `sudo closyria-deploy dev <id>` : migrations 0011 et 0012 appliquées, worker `active`, `network barrier: active`
 2. [ ] Journal du worker dev : `grep 'starting reference lists'` montre la ligne, `grep 'seed:'` est vide ; les filtres Type et Couleur se chargent
 3. [ ] Coller un lien d'article, appuyer sur ♡ : l'article est dans « Envies » ; « Annuler » le retire
@@ -115,7 +118,7 @@ Mêmes étapes, avec les noms de prod :
 - [ ] **Prérequis : « Sauvegardes automatiques de la prod »** livrées et la restauration essayée (copie chiffrée de la
   base chaque nuit sur OVH, gardée 30 jours ; spec 2a §9). Sans elles, pas de prod : les articles des utilisatrices
   seront des données à ne pas perdre.
-- [ ] `select count(*) from captures;` en prod → 0 si le chantier 1 n'y a jamais été déployé (migration 0008)
+- [ ] Premier déploiement de 0007 à 0012 ensemble : `select count(*) from captures;` en prod → 0, sinon 0008 échoue (`url` NOT NULL sans défaut)
 - [ ] Les étapes « Prod » ci-dessus (variables comparées, barrière, déploiement), avec migrations 0007 à 0012
 - [ ] `grep 'starting reference lists'` présent au premier démarrage, `grep 'seed:'` vide ; filtres Type et Couleur chargés sur https://closyria.com
 - [ ] Parcours ♡, étape, liste partagée (fenêtre privée), profil, comme en dev
@@ -129,3 +132,8 @@ Mêmes étapes, avec les noms de prod :
   code reste sans danger avec ces changements de schéma en place (colonnes devenues facultatives, nouvelles tables et
   colonnes, contrainte recréée). Si c'est la barrière seule qui gêne, ne pas la retirer à la légère : corriger d'abord
   la cause (`/etc/resolv.conf`), car elle protège le serveur des adresses privées.
+- **Danger dès que des utilisatrices gardent des articles** : le code du chantier 1 ne déclare pas les tables du
+  dressing (articles, profils, listes) comme données du compte. Une utilisatrice anonyme qui se connecte pendant un
+  retour arrière perdrait ses articles, profils et listes (son utilisateur anonyme est supprimé et les lignes
+  disparaissent en cascade). Un retour arrière doit donc être **immédiat** (quelques minutes, avant tout usage réel) ;
+  sinon, corriger en avant (nouveau déploiement) plutôt que revenir au code du chantier 1.

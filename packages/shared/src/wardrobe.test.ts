@@ -88,6 +88,8 @@ describe("inputs", () => {
     expect(itemStageInputSchema.safeParse({ ...ok, at: "2026-13-45T10:00:00Z" }).success).toBe(false);
     expect(itemStageInputSchema.safeParse({ ...ok, stage: "lost" }).success).toBe(false);
     expect(itemStageInputSchema.safeParse({ ...ok, amountCents: -1 }).success).toBe(false);
+    expect(itemStageInputSchema.safeParse({ ...ok, amountCents: 100_000_000 }).success).toBe(true);
+    expect(itemStageInputSchema.safeParse({ ...ok, amountCents: 100_000_001 }).success).toBe(false);
     expect(itemStageInputSchema.safeParse({ ...ok, channel: "x".repeat(61) }).success).toBe(false);
   });
   it("move needs a profile id", () => {

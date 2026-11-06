@@ -252,7 +252,15 @@ describe("runCapture", () => {
     const [sacs] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "sacs"));
     const t = await setup("/products/produit-3679", {
       shop: { platform: "shopify" },
-      product: { classifiedBy: "admin", categoryId: sacs?.id ?? null, audience: "men", season: "all" },
+      product: {
+        classifiedBy: "admin",
+        name: "Nom corrigé",
+        brand: "Marque corrigée",
+        priceCents: 1,
+        categoryId: sacs?.id ?? null,
+        audience: "men",
+        season: "all",
+      },
     });
 
     await runCapture(t.capture.id, deps);
@@ -262,7 +270,9 @@ describe("runCapture", () => {
     expect(r.product?.audience).toBe("men");
     expect(r.product?.season).toBe("all");
     expect(r.product?.classifiedBy).toBe("admin");
-    expect(r.product?.name).toBe("PANTALON LEONIE");
+    expect(r.product?.name).toBe("Nom corrigé");
+    expect(r.product?.brand).toBe("Marque corrigée");
+    expect(r.product?.priceCents).toBeGreaterThan(1);
     expect(r.product?.publishedAt).toBeInstanceOf(Date);
     expect(Object.keys(r.product?.shopData ?? {}).length).toBeGreaterThan(0);
   });

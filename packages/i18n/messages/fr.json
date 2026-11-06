@@ -391,7 +391,7 @@
       "nameField": "Nom",
       "brandField": "Marque",
       "priceField": "Prix (en euros)",
-      "priceHint": "Laisser vide si le prix est inconnu.",
+      "priceHint": "Laisser vide si le prix est inconnu. Le prix est remis à jour à chaque lecture de la boutique.",
       "noneOption": "Aucun",
       "save": "Enregistrer la correction",
       "saved": "Fiche corrigée.",

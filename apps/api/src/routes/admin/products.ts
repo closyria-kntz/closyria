@@ -241,7 +241,8 @@ export function adminProductsRoutes(deps: CatalogDeps) {
           const audience = patch.audience === undefined ? current.audience : patch.audience;
           // A child detail only makes sense for the child audience.
           if (patch.childDetail && audience !== "child") return "invalid" as const;
-          const childDetail = audience === "child" ? (patch.childDetail ?? current.childDetail) : null;
+          const childDetail =
+            audience === "child" ? (patch.childDetail === undefined ? current.childDetail : patch.childDetail) : null;
           await tx
             .update(p)
             .set({ ...patch, childDetail, classifiedBy: "admin", updatedAt: now() })
