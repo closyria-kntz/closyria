@@ -7,7 +7,16 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/dist", "!**/.next", "!**/.turbo", "!**/migrations", "!docs/maquettes", "!docs/design", "!**/fixtures/real"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/.next",
+      "!**/.turbo",
+      "!**/migrations",
+      "!docs/maquettes",
+      "!docs/design",
+      "!**/fixtures/real"
+    ]
   },
   "formatter": {
     "enabled": true,
