@@ -229,7 +229,9 @@ export function itemMediaRoutes(
   /**
    * Attaches the photo of a `ready` import: `media` row, `item_media` row and the import `attached`, in one
    * transaction. The item then the import are locked (the purge locks the item before the imports go with it), and
-   * the import is re-read under its lock: a read that comes second finds it attached and changes nothing.
+   * the import is re-read under its lock: a read that comes second finds it attached and changes nothing. The object
+   * is never deleted on an error: the import stays `ready` and the next read tries again (the transient purge
+   * removes it after 24 h). On a refusal the import fails first, its key cleared, and only then is the object deleted.
    */
   async function attachImport(row: ImportRow): Promise<AttachOutcome | "superseded"> {
     const { id, userId, itemId, mediaKey, contentType, sizeBytes, width, height } = row;
@@ -250,29 +252,38 @@ export function itemMediaRoutes(
           .where(eq(schema.photoImports.id, id));
         return true;
       },
-      // Before the `media` row: a second read waits here, then finds the import attached and keeps the object.
-      async (tx) => {
-        await lockOwnItem(tx, userId, itemId);
-        const [locked] = await tx
-          .select({ status: schema.photoImports.status })
-          .from(schema.photoImports)
-          .where(eq(schema.photoImports.id, id))
-          .for("update");
-        if (locked?.status === "ready") return true;
-        result.outcome = "superseded";
-        return false;
+      {
+        keepObject: true,
+        // Before the `media` row: a second read waits here, then finds the import attached and keeps the object.
+        claim: async (tx) => {
+          await lockOwnItem(tx, userId, itemId);
+          const [locked] = await tx
+            .select({ status: schema.photoImports.status })
+            .from(schema.photoImports)
+            .where(eq(schema.photoImports.id, id))
+            .for("update");
+          if (locked?.status === "ready") return true;
+          result.outcome = "superseded";
+          return false;
+        },
       },
     );
     if (result.outcome === "item_deleted" || result.outcome === "too_many_photos") {
-      // The object is gone (recordStored deleted it): the import can only fail now. Its stored code is the
-      // generic one; this answer carries the reason.
-      await db
+      // Its stored code is the generic one (the column allows the worker's codes only); this answer carries the reason.
+      const failed = await db
         .update(schema.photoImports)
         .set({ status: "failed", errorCode: "failed", mediaKey: null, updatedAt: now() })
-        .where(and(eq(schema.photoImports.id, id), eq(schema.photoImports.status, "ready")));
+        .where(and(eq(schema.photoImports.id, id), eq(schema.photoImports.status, "ready")))
+        .returning({ id: schema.photoImports.id });
+      if (failed.length > 0) {
+        await store
+          .delete(mediaKey)
+          .catch((error) => console.error(`photo import ${id}: refused photo not deleted (${mediaKey})`, error));
+      }
     }
     return result.outcome;
   }
+
   const app = new OpenAPIHono<AccessEnv>({
     defaultHook: (result, c) => {
       if (result.success) return undefined;

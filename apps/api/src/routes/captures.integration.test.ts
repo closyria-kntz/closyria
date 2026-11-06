@@ -81,7 +81,7 @@ describe("POST /api/captures", () => {
     expect(res.status).toBe(202);
     const body = (await res.json()) as Accepted;
     expect(body.status).toBe("queued");
-    expect(t.calls.slice(before)).toEqual([{ queue: "capture-user", captureId: body.captureId }]);
+    expect(t.calls.slice(before)).toEqual([{ queue: "capture-user", id: body.captureId }]);
 
     const [capture] = await t.db.select().from(schema.captures).where(eq(schema.captures.id, body.captureId));
     expect(capture).toMatchObject({

@@ -11,10 +11,10 @@ export const BASE_URL = "http://localhost:3001";
 
 /** A queue that only records what was enqueued. */
 export function recordingQueue() {
-  const calls: { queue: string; captureId: string }[] = [];
+  const calls: { queue: string; id: string }[] = [];
   const queue: CaptureQueue = {
-    async enqueue(name, captureId) {
-      calls.push({ queue: name, captureId });
+    async enqueue(name, id) {
+      calls.push({ queue: name, id });
     },
   };
   return { queue, calls };

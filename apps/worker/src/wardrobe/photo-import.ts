@@ -98,7 +98,11 @@ export async function runPhotoImport(importId: string, deps: PhotoImportDeps): P
       .where(queued(importId))
       .returning({ id: schema.photoImports.id });
     // Deleted meanwhile (item purged, import expired): the object would belong to nothing.
-    if (updated.length === 0) await store.delete(key);
+    if (updated.length === 0) {
+      await store
+        .delete(key)
+        .catch((error) => console.error(`photo import ${importId}: gone, its object not deleted (${key})`, error));
+    }
   } catch (error) {
     // No orphan object, and no import left `queued` for her to wait on: it fails (a DB still down rethrows).
     console.error(`photo import ${importId}: could not store the photo`, error);

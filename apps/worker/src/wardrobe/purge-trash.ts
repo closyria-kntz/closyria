@@ -5,8 +5,8 @@ import type { ObjectStore } from "@closyria/storage";
 const BATCH_SIZE = 500;
 
 /**
- * Permanently deletes the items trashed more than 30 days ago, with their private photos (rows, then stored
- * objects). Works in batches of 500; each batch is one transaction, and the objects go after the commit so a
+ * Permanently deletes the items trashed more than 30 days ago, with their private photos and photo imports (rows,
+ * then stored objects). Works in batches of 500; each batch is one transaction, and the objects go after the commit so a
  * store failure (logged, never thrown) cannot undo the purge. Returns the number of items purged.
  */
 export async function purgeTrash(db: Database, now: Date, store: ObjectStore): Promise<number> {
@@ -41,6 +41,12 @@ export async function purgeTrash(db: Database, now: Date, store: ObjectStore): P
           .returning({ key: schema.media.key });
         keys.push(...removed.map((r) => r.key));
       }
+      // Imports go with the item (cascade); a `ready` one holds an object no row will point to after.
+      const imports = await tx
+        .delete(schema.photoImports)
+        .where(inArray(schema.photoImports.itemId, ids))
+        .returning({ status: schema.photoImports.status, key: schema.photoImports.mediaKey });
+      for (const { status, key } of imports) if (status === "ready" && key) keys.push(key);
       await tx
         .delete(schema.items)
         .where(

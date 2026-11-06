@@ -89,8 +89,8 @@ export type PurgeOutcome = "purged" | "not_found" | "item_not_deleted";
 
 /**
  * Deletes one of her items for good, from the trash only: the item (its history, tags and list places go with it by
- * cascade) and its private photos, rows first, in one transaction; the stored objects after the commit, so a store
- * failure (logged) cannot undo the purge. A photo still attached to another item (a merge) is kept.
+ * cascade), its private photos and its photo imports, rows first, in one transaction; the stored objects after the
+ * commit, so a store failure (logged) cannot undo the purge. A photo still attached to another item (a merge) is kept.
  */
 export async function purgeTrashedItem(
   db: Database,
@@ -120,6 +120,12 @@ export async function purgeTrashedItem(
         .returning({ key: schema.media.key });
       keys.push(...removed.map((r) => r.key));
     }
+    // Imports go with the item (cascade); a `ready` one holds an object no row will point to after.
+    const imports = await tx
+      .delete(schema.photoImports)
+      .where(eq(schema.photoImports.itemId, itemId))
+      .returning({ status: schema.photoImports.status, key: schema.photoImports.mediaKey });
+    for (const { status, key } of imports) if (status === "ready" && key) keys.push(key);
     await tx.delete(schema.items).where(eq(schema.items.id, itemId));
     return "purged";
   });

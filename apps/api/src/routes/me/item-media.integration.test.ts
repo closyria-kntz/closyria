@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { asc, eq, schema } from "@closyria/db";
+import { asc, eq, schema, sql } from "@closyria/db";
 import type { ItemView, MutationResult } from "@closyria/shared";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -309,13 +309,32 @@ describe("/api/me/items/:id/media/imports", () => {
     const item = await newItem(cookie);
     const before = t.calls.length;
     const importId = await startImport(item.id, cookie);
-    expect(t.calls.slice(before)).toEqual([{ queue: "photo-import", captureId: importId }]);
+    expect(t.calls.slice(before)).toEqual([{ queue: "photo-import", id: importId }]);
     const [row] = await t.db.select().from(schema.photoImports).where(eq(schema.photoImports.id, importId));
     expect(row).toMatchObject({ userId, itemId: item.id, url: "https://shop.example/robe.jpg", status: "queued" });
 
     const res = await call("GET", importPath(item.id, importId), cookie);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: "queued" });
+  });
+
+  it("marks the import failed and answers 500 when the queue is down", async () => {
+    const { cookie } = await t.signIn();
+    const item = await newItem(cookie);
+    const original = t.queue.enqueue;
+    t.queue.enqueue = async () => {
+      throw new Error("down");
+    };
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await call("POST", importPath(item.id), cookie, { url: "https://a.example/p.jpg" });
+      expect(res.status).toBe(500);
+    } finally {
+      t.queue.enqueue = original;
+      error.mockRestore();
+    }
+    const rows = await t.db.select().from(schema.photoImports).where(eq(schema.photoImports.itemId, item.id));
+    expect(rows).toMatchObject([{ status: "failed", errorCode: "failed" }]);
   });
 
   it("refuses an address that is not http(s) or over 2 048 characters with 400", async () => {
@@ -431,6 +450,48 @@ describe("/api/me/items/:id/media/imports", () => {
     const photos = await t.db.select().from(schema.itemMedia).where(eq(schema.itemMedia.itemId, item.id));
     expect(photos).toHaveLength(1);
     expect(await exists(key)).toBe(true);
+  });
+
+  it("a failure while attaching keeps the object and the import ready; the next read attaches it", async () => {
+    const { cookie, userId } = await t.signIn();
+    const item = await newItem(cookie);
+    const importId = await startImport(item.id, cookie);
+    const key = await simulateReady(importId, userId);
+    await t.db.execute(
+      sql`create function fail_item_media() returns trigger language plpgsql as $$ begin raise exception 'boom'; end $$`,
+    );
+    await t.db.execute(
+      sql`create trigger fail_item_media before insert on item_media for each row execute function fail_item_media()`,
+    );
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect((await call("GET", importPath(item.id, importId), cookie)).status).toBe(500);
+    } finally {
+      await t.db.execute(sql`drop trigger fail_item_media on item_media`);
+      await t.db.execute(sql`drop function fail_item_media()`);
+      error.mockRestore();
+    }
+    expect(await exists(key)).toBe(true);
+    const [row] = await t.db.select().from(schema.photoImports).where(eq(schema.photoImports.id, importId));
+    expect(row).toMatchObject({ status: "ready", mediaKey: key });
+    expect(await t.db.select().from(schema.media).where(eq(schema.media.key, key))).toEqual([]);
+
+    const res = await call("GET", importPath(item.id, importId), cookie);
+    const body = (await res.json()) as { status: string; item: ItemView };
+    expect(body.status).toBe("attached");
+    expect(body.item.photos).toHaveLength(1);
+    expect(await exists(key)).toBe(true);
+  });
+
+  it("purging the trashed item deletes the object of a ready import", async () => {
+    const { cookie, userId } = await t.signIn();
+    const item = await newItem(cookie);
+    const importId = await startImport(item.id, cookie);
+    const key = await simulateReady(importId, userId);
+    expect((await call("DELETE", `/api/me/items/${item.id}`, cookie)).status).toBe(200);
+    expect((await call("DELETE", `/api/me/items/${item.id}/purge`, cookie)).status).toBe(204);
+    expect(await exists(key)).toBe(false);
+    expect(await t.db.select().from(schema.photoImports).where(eq(schema.photoImports.id, importId))).toEqual([]);
   });
 
   it("refused on read (10 photos meanwhile, item in the trash): failed with the reason, object deleted", async () => {

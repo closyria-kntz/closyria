@@ -65,6 +65,7 @@ export type StoredObject = {
 };
 /** `attach` refused the photo: rolls the transaction back. */
 class Refused extends Error {}
+type RecordOptions = { claim?: (tx: Tx) => Promise<boolean>; keepObject?: boolean };
 /** `claim` declined: rolls the transaction back and keeps the object. */
 class Declined extends Error {}
 
@@ -86,13 +87,13 @@ export type MediaPipeline = {
    * The same for an object stored elsewhere (a photo imported by the worker): inserts its `media` row, then runs
    * `attach` in the same transaction; false from `attach`, or anything thrown, deletes the object. `claim`, when
    * given, runs first in the transaction (to take locks); false from it rolls back and keeps the object, which then
-   * belongs to someone else (returns false).
+   * belongs to someone else (returns false). With `keepObject`, the object is never deleted: the caller decides.
    */
   recordStored(
     userId: string,
     stored: StoredObject,
     attach?: (tx: Tx) => Promise<boolean>,
-    claim?: (tx: Tx) => Promise<boolean>,
+    options?: RecordOptions,
   ): Promise<boolean>;
 };
 
@@ -138,7 +139,7 @@ export function createMediaPipeline(deps: MediaDeps): MediaPipeline {
     userId: string,
     stored: StoredObject,
     attach?: (tx: Tx) => Promise<boolean>,
-    claim?: (tx: Tx) => Promise<boolean>,
+    { claim, keepObject = false }: RecordOptions = {},
   ) {
     try {
       await deps.db.transaction(async (tx) => {
@@ -150,7 +151,8 @@ export function createMediaPipeline(deps: MediaDeps): MediaPipeline {
       return true;
     } catch (error) {
       if (error instanceof Declined) return false;
-      await deps.store.delete(stored.key).catch(() => {}); // no orphan object; the insert error is the one that matters
+      // No orphan object; the insert error is the one that matters.
+      if (!keepObject) await deps.store.delete(stored.key).catch(() => {});
       if (error instanceof Refused) return false;
       throw error;
     }
