@@ -99,6 +99,34 @@ describe("purgeTrash", () => {
     expect(await purgeTrash(db, now, store)).toBe(0);
   });
 
+  it("deletes the objects of its ready photo imports, and those of no other item", async () => {
+    const { db } = handle;
+    const store = memoryStore();
+    const ctx = await setup();
+    const old = await itemWithPhotos(store, ctx, daysAgo(31), 1);
+    const readyKey = `users/${ctx.userId}/${crypto.randomUUID()}.webp`;
+    await store.put(readyKey, Buffer.from("x"), "image/webp");
+    const attachedKey = old.keys[0] as string;
+    await db.insert(schema.photoImports).values([
+      { userId: ctx.userId, itemId: old.id, url: "https://a.test/r.jpg", status: "ready", mediaKey: readyKey },
+      { userId: ctx.userId, itemId: old.id, url: "https://a.test/a.jpg", status: "attached", mediaKey: attachedKey },
+      { userId: ctx.userId, itemId: old.id, url: "https://a.test/q.jpg" },
+    ]);
+    const kept = await itemWithPhotos(store, ctx, null, 0);
+    const keptKey = `users/${ctx.userId}/${crypto.randomUUID()}.webp`;
+    await store.put(keptKey, Buffer.from("x"), "image/webp");
+    await db
+      .insert(schema.photoImports)
+      .values({ userId: ctx.userId, itemId: kept.id, url: "https://a.test/k.jpg", status: "ready", mediaKey: keptKey });
+
+    expect(await purgeTrash(db, now, store)).toBe(1);
+
+    expect(await stored(store, readyKey)).toBe(false);
+    expect(await stored(store, keptKey)).toBe(true);
+    expect(await db.select().from(schema.photoImports).where(eq(schema.photoImports.itemId, old.id))).toEqual([]);
+    expect(await db.select().from(schema.photoImports).where(eq(schema.photoImports.itemId, kept.id))).toHaveLength(1);
+  });
+
   it("keeps an item trashed exactly 30 days ago", async () => {
     const { db } = handle;
     const store = memoryStore();

@@ -26,9 +26,9 @@ export function ProductDescription({ text }: { text: string }) {
 
   return (
     <section aria-labelledby={`${id}-title`} data-testid="product-description" className="flex flex-col gap-space-2">
-      <h2 id={`${id}-title`} className="text-sm font-strong">
+      <h3 id={`${id}-title`} className="text-sm font-strong">
         {t("title")}
-      </h2>
+      </h3>
       <p id={`${id}-body`} ref={body} className={`whitespace-pre-line text-sm ${open ? "" : "line-clamp-4"}`}>
         {text}
       </p>

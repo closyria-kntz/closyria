@@ -124,6 +124,19 @@ export function capturesRoutes(deps: CatalogDeps, limiter: MiddlewareHandler<Acc
       const { capture } = outcome;
       if (!capture) throw new Error("capture not created");
 
+      // « Derniers liens »: every outcome counts as a visit. A failure here never fails the capture.
+      try {
+        await db
+          .insert(schema.recentProducts)
+          .values({ userId, productId: product.id, visitedAt: now() })
+          .onConflictDoUpdate({
+            target: [schema.recentProducts.userId, schema.recentProducts.productId],
+            set: { visitedAt: now() },
+          });
+      } catch (error) {
+        console.error("recent product not recorded:", error);
+      }
+
       if (outcome.enqueue) {
         try {
           await queue.enqueue("capture-user", capture.id);

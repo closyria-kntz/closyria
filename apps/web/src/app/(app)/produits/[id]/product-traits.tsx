@@ -36,9 +36,9 @@ export function ProductTraits({ traits }: { traits: Traits }) {
 
   return (
     <section aria-labelledby="traits-title" data-testid="product-traits" className="flex flex-col gap-space-2">
-      <h2 id="traits-title" className="text-sm font-strong">
+      <h3 id="traits-title" className="text-sm font-strong">
         {t("title")}
-      </h2>
+      </h3>
       <dl className="flex flex-col gap-space-1 text-sm">
         {rows.map((row) => (
           <div key={row.key} className="flex items-baseline gap-space-3">

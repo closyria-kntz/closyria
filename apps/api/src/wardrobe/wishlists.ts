@@ -50,6 +50,8 @@ function toWishlistView(row: WishlistRow, itemIds: string[]): WishlistView {
   };
 }
 
+const imageUrlOf = (image: { id: string } | undefined) => (image ? catalogImageUrl(image.id) : null);
+
 /**
  * The public content of a shared list (G4 + brand and shop name): product data only, read from the catalog. The
  * image is the product's first shop photo, never one of her private photos or her cover. Items in the trash are
@@ -81,6 +83,8 @@ export async function loadSharedView(db: Database, list: { id: string; name: str
           .selectDistinctOn([schema.productImages.productId], {
             productId: schema.productImages.productId,
             id: schema.productImages.id,
+            width: schema.productImages.width,
+            height: schema.productImages.height,
           })
           .from(schema.productImages)
           .where(inArray(schema.productImages.productId, productIds))
@@ -89,7 +93,7 @@ export async function loadSharedView(db: Database, list: { id: string; name: str
             asc(schema.productImages.position),
             asc(schema.productImages.id),
           );
-  const imageOf = new Map(firstImages.map((i) => [i.productId, catalogImageUrl(i.id)]));
+  const imageOf = new Map(firstImages.map((i) => [i.productId, i]));
   return {
     name: list.name,
     items: members.map((m) => ({
@@ -97,7 +101,9 @@ export async function loadSharedView(db: Database, list: { id: string; name: str
       brand: m.brand,
       priceCents: m.priceCents,
       currency: m.currency,
-      imageUrl: imageOf.get(m.productId) ?? null,
+      imageUrl: imageUrlOf(imageOf.get(m.productId)),
+      imageWidth: imageOf.get(m.productId)?.width ?? null,
+      imageHeight: imageOf.get(m.productId)?.height ?? null,
       shopName: m.shopName,
       url: m.url,
     })),

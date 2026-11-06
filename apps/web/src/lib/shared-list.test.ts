@@ -12,6 +12,8 @@ const view = {
       priceCents: 2999,
       currency: "EUR",
       imageUrl: "/api/catalog-images/x",
+      imageWidth: 600,
+      imageHeight: 800,
       shopName: "Boutique",
       url: "https://shop.test/robe",
     },

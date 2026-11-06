@@ -33,6 +33,7 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   baseURL,
 }, testInfo) => {
   await keepFavorite(page, { size: "XL-secrète", notes: "Note-privée-42" });
+  await page.getByRole("button", { name: "Ajouter une photo" }).click();
   await page.getByTestId("photo-input").setInputFiles({
     name: "p.png",
     mimeType: "image/png",
@@ -86,6 +87,7 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   const items = other.getByRole("list", { name: "Articles" }).getByRole("listitem");
   await expect(items).toHaveCount(1);
   await expect(items.first()).toContainText(PRODUCT.name);
+  await expect(items.first().getByRole("button", { name: `Agrandir la photo de ${PRODUCT.name}` })).toBeVisible();
   await expect(items.first().getByRole("link", { name: /Voir chez Fausse boutique/ })).toHaveAttribute("href", /^http/);
   const body = await other.locator("body").innerText();
   expect(body).not.toContain("XL-secrète");

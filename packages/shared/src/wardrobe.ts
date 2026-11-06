@@ -43,6 +43,18 @@ export const MAX_SALE_CHANNEL = 60;
 export const UNDO_DELAY_MS = 8000;
 export const TRASH_RETENTION_DAYS = 30;
 
+/** « Derniers liens »: how many a user sees, and how long a visit is kept. */
+export const RECENT_PRODUCTS_LIMIT = 20;
+export const RECENT_RETENTION_DAYS = 90;
+
+/** A photo import that is still around this long after creation is purged (with its object unless attached). */
+export const PHOTO_IMPORT_RETENTION_HOURS = 24;
+export const MAX_PHOTO_IMPORT_URL = 2048;
+export const photoImportStatusSchema = z.enum(["queued", "ready", "failed", "attached"]);
+export type PhotoImportStatus = z.infer<typeof photoImportStatusSchema>;
+export const photoImportErrorSchema = z.enum(["blocked", "timeout", "too_large", "unsupported", "failed"]);
+export type PhotoImportError = z.infer<typeof photoImportErrorSchema>;
+
 const centsSchema = z.number().int().nonnegative().max(100_000_000);
 const dateTimeSchema = z.iso.datetime({ offset: true });
 const nameOf = (max: number) => z.string().trim().min(1).max(max);
@@ -244,6 +256,9 @@ export const sharedWishlistViewSchema = z.object({
       priceCents: centsSchema.nullable(),
       currency: currencySchema.nullable(),
       imageUrl: z.string().nullable(),
+      /** Natural size of `imageUrl` (for the viewer's « actual size »); null with it. */
+      imageWidth: z.number().int().positive().nullable(),
+      imageHeight: z.number().int().positive().nullable(),
       shopName: z.string(),
       url: z.string(),
     }),
@@ -285,6 +300,46 @@ export type MutationResult = z.infer<typeof mutationResultSchema>;
 export const itemMutationResultSchema = mutationResultSchema.extend({ item: itemViewSchema });
 export type ItemMutationResult = z.infer<typeof itemMutationResultSchema>;
 
+/** pg-boss queue of the photo imports (`POST /api/me/items/{id}/media/imports`), fed by the API, run by the worker. */
+export const PHOTO_IMPORT_QUEUE = "photo-import";
+/** Data of a `photo-import` job. */
+export const photoImportJobSchema = z.object({ importId: z.uuid() });
+export type PhotoImportJob = z.infer<typeof photoImportJobSchema>;
+
+/** Body of `POST /api/me/items/{id}/media/imports`: the address of a photo, http(s) only. */
+export const photoImportRequestSchema = z.object({
+  url: z
+    .string()
+    .trim()
+    .min(1)
+    .max(MAX_PHOTO_IMPORT_URL)
+    .refine((value) => {
+      try {
+        const { protocol } = new URL(value);
+        return protocol === "http:" || protocol === "https:";
+      } catch {
+        return false;
+      }
+    }),
+});
+export type PhotoImportRequest = z.infer<typeof photoImportRequestSchema>;
+export const photoImportAcceptedSchema = z.object({ importId: z.uuid() });
+
+/** Why an import gave no photo: the worker's codes, or the attachment refused (10 photos, item in the trash). */
+export const photoImportViewErrorSchema = z.enum([
+  ...photoImportErrorSchema.options,
+  "too_many_photos",
+  "item_deleted",
+]);
+export type PhotoImportViewError = z.infer<typeof photoImportViewErrorSchema>;
+/** `GET /api/me/items/{id}/media/imports/{importId}`. */
+export const photoImportViewSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("queued") }),
+  z.object({ status: z.literal("failed"), error: photoImportViewErrorSchema }),
+  z.object({ status: z.literal("attached"), item: itemViewSchema }),
+]);
+export type PhotoImportView = z.infer<typeof photoImportViewSchema>;
+
 export const profilePatchSchema = profileInputSchema.partial();
 export type ProfilePatch = z.infer<typeof profilePatchSchema>;
 
@@ -322,6 +377,12 @@ export type WishlistsOrder = z.infer<typeof wishlistsOrderSchema>;
 
 export const wishlistListSchema = z.object({ wishlists: z.array(wishlistViewSchema) });
 export type WishlistList = z.infer<typeof wishlistListSchema>;
+
+export const recentProductViewSchema = z.object({ product: productViewSchema, visitedAt: dateTimeSchema });
+export type RecentProductView = z.infer<typeof recentProductViewSchema>;
+
+export const recentListSchema = z.object({ recents: z.array(recentProductViewSchema) });
+export type RecentList = z.infer<typeof recentListSchema>;
 
 export const wishlistItemInputSchema = z.object({ itemId: z.uuid() });
 export type WishlistItemInput = z.infer<typeof wishlistItemInputSchema>;

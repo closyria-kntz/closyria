@@ -76,3 +76,65 @@ test("la fiche capturée n'a aucune violation d'accessibilité", async ({ page }
   });
   expect(violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.length }))).toEqual([]);
 });
+
+test("l'accueil rappelle les derniers liens collés, ✕ en retire un, et une fiche gardée n'y figure plus", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await paste(page, autoProductUrl());
+  await expectCapturedSheet(page, 10_000);
+
+  await page.goto("/");
+  const recents = page.getByRole("region", { name: "Derniers liens" });
+  const card = recents.getByRole("link", { name: new RegExp(PRODUCT.name) });
+  await expect(card).toBeVisible();
+  await expect(card).toContainText(/\S/);
+  const thumbnail = card.locator("img");
+  await expect
+    .poll(() => thumbnail.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+    .toBe(true);
+
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(violations.map((v) => v.id)).toEqual([]);
+
+  await recents.getByRole("button", { name: `Retirer ${PRODUCT.name} de la liste` }).click();
+  await expect(recents).toHaveCount(0);
+
+  // Pasted again then kept (♡): it is in her dressing, not in the recents.
+  await paste(page, autoProductUrl());
+  await expectCapturedSheet(page, 10_000);
+  await page.getByRole("button", { name: /Favori/ }).click();
+  await expect(page.getByRole("button", { name: /Favori/ })).toHaveAttribute("aria-pressed", "true");
+  await page.goto("/");
+  await expect(page.getByRole("textbox", { name: "Coller un lien" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Derniers liens" })).toHaveCount(0);
+});
+
+test("après ✕ dans « Derniers liens », le focus va au ✕ suivant, sinon au précédent, puis au champ", async ({
+  page,
+}) => {
+  for (let n = 0; n < 3; n++) {
+    await page.goto("/");
+    await paste(page, autoProductUrl());
+    await expect(page.getByRole("article").getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({
+      timeout: 10_000,
+    });
+  }
+  await page.goto("/");
+  const recents = page.getByRole("region", { name: "Derniers liens" });
+  const forget = recents.getByRole("button", { name: `Retirer ${PRODUCT.name} de la liste` });
+  await expect(forget).toHaveCount(3);
+
+  // The middle one: focus on the next (now second) card's ✕.
+  await forget.nth(1).click();
+  await expect(forget).toHaveCount(2);
+  await expect(forget.nth(1)).toBeFocused();
+  // The last one: focus on the previous card's ✕.
+  await forget.nth(1).click();
+  await expect(forget).toHaveCount(1);
+  await expect(forget.nth(0)).toBeFocused();
+  // The only one: the section goes, the focus goes to the paste field.
+  await forget.nth(0).click();
+  await expect(recents).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Coller un lien" })).toBeFocused();
+});

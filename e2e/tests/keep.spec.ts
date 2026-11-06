@@ -66,6 +66,8 @@ test("taille, notes, étiquette, photo personnelle et suppression", async ({ pag
   await page.getByRole("button", { name: "Créer et ajouter" }).last().click();
   await expect(page.getByRole("button", { name: "Été", pressed: true })).toBeVisible();
 
+  await page.getByRole("button", { name: "Ajouter une photo" }).click();
+
   await page.getByTestId("photo-input").setInputFiles({ name: "p.png", mimeType: "image/png", buffer: PIXEL });
   await expect(page.getByRole("list", { name: "Mes photos" }).getByRole("img")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("kept.png"), fullPage: true });

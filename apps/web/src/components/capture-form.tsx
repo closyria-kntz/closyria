@@ -21,10 +21,20 @@ const isHttpUrl = (value: string): boolean => {
  * « Coller un lien » → « Ajouter »: starts the capture, then opens the product page, which follows it.
  * With `autoSubmit` (the Android share target) the link it is given is added at once.
  */
-export function CaptureForm({ initialUrl = "", autoSubmit = false }: { initialUrl?: string; autoSubmit?: boolean }) {
+export function CaptureForm({
+  initialUrl = "",
+  autoSubmit = false,
+  fieldId,
+}: {
+  initialUrl?: string;
+  autoSubmit?: boolean;
+  /** A fixed id for the field, when something else on the page must find it (the recents send the focus back). */
+  fieldId?: string;
+}) {
   const t = useTranslations("Capture");
   const router = useRouter();
-  const ids = { field: useId(), hint: useId(), error: useId() };
+  const generatedFieldId = useId();
+  const ids = { field: fieldId ?? generatedFieldId, hint: useId(), error: useId() };
   const [url, setUrl] = useState(initialUrl);
   const [busy, setBusy] = useState(autoSubmit);
   const [error, setError] = useState<ErrorKey | null>(null);

@@ -14,6 +14,7 @@ import {
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { buttonClass, inputClass, primaryButtonClass } from "@/components/ui";
+import { isBareWish } from "@/lib/bare-wish";
 import { formatPrice } from "@/lib/price";
 import { useProfiles } from "@/lib/profile-context";
 import { pushUndo } from "@/lib/undo";
@@ -40,10 +41,12 @@ type Props = {
   onGone: () => void;
   /** Re-reads her item (after an undo). */
   reload: () => Promise<void>;
+  /** The shop's sheet, shown between « Mon article » and « Autres actions ». */
+  shop: React.ReactNode;
 };
 
-/** HER item: stage timeline, size and notes, lists, tags, profile, delete. Photos live in the gallery column. */
-export function ItemPanel({ item, onChange, onGone, reload }: Props) {
+/** HER item in three parts: « Mon article » (stage, size and amounts, notes, lists, tags), the shop sheet, « Autres actions » (profile, delete). Photos live in the gallery column. */
+export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
   const t = useTranslations("Item");
   const locale = useLocale();
   const profiles = useProfiles();
@@ -102,6 +105,13 @@ export function ItemPanel({ item, onChange, onGone, reload }: Props) {
 
   const toggleFavorite = () =>
     run(async () => {
+      if (item.favorite && isBareWish(item)) {
+        const trashed = await trashItem(item.id);
+        if (!trashed.ok) return fail(trashed.error);
+        onGone();
+        pushUndo(t("toast.wishRemoved"), undoWith(trashed.undo, reload));
+        return;
+      }
       const result = await patchItem(item.id, { favorite: !item.favorite });
       if (!result.ok) return fail(result.error);
       onChange(result.item);
@@ -209,224 +219,245 @@ export function ItemPanel({ item, onChange, onGone, reload }: Props) {
 
   return (
     <div className="flex flex-col gap-space-5" aria-busy={busy || undefined}>
-      <div className="flex items-center justify-between gap-space-3">
-        <h2 className="font-display text-lead font-strong">{t("panel.title")}</h2>
-        <button
-          type="button"
-          disabled={busy}
-          aria-pressed={item.favorite}
-          onClick={toggleFavorite}
-          className={`${buttonClass} ${touch} aria-pressed:bg-surface-strong aria-pressed:font-strong`}
-        >
-          <span aria-hidden="true">{item.favorite ? "♥" : "♡"}</span> {t("panel.favorite")}
-        </button>
-      </div>
-
-      {error && (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      )}
-
-      <section aria-labelledby="stages-title" className="flex flex-col gap-space-2">
-        <h3 id="stages-title" className="text-sm font-strong">
-          {t("panel.stages")}
-        </h3>
-        <ol className="flex flex-wrap gap-space-2">
-          {STAGES.map((value) => {
-            const current = value === item.stage;
-            return (
-              <li key={value}>
-                <button
-                  type="button"
-                  aria-current={current ? "step" : undefined}
-                  disabled={current}
-                  aria-label={
-                    current
-                      ? `${t(`stage.${value}`)} (${t("panel.currentStage")})`
-                      : t("panel.changeStage", { stage: t(`stage.${value}`) })
-                  }
-                  onClick={() => setStage(value)}
-                  className={`${current ? "rounded-button bg-button-bg px-space-3 text-sm font-strong text-button-ink" : buttonClass} ${touch} inline-flex items-center`}
-                >
-                  {t(`stage.${value}`)}
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-        {amounts.length > 0 && <p className="text-sm text-ink-muted tabular-nums">{amounts.join(" · ")}</p>}
-      </section>
-      <StageDialog item={item} stage={stage} onClose={() => setStage(null)} onDone={onChange} reload={reload} />
-
-      <form onSubmit={saveDetails} className="flex flex-col gap-space-3">
-        <h3 className="text-sm font-strong">{t("panel.details")}</h3>
-        <label htmlFor="item-size" className="text-sm">
-          {t("panel.size")}
-        </label>
-        <input
-          id="item-size"
-          value={sizeLabel}
-          maxLength={MAX_SIZE_LABEL}
-          onChange={(e) => setSizeLabel(e.target.value)}
-          className={`${inputClass} ${touch}`}
-        />
-        <label htmlFor="item-size-note" className="text-sm">
-          {t("panel.sizeNote")}
-        </label>
-        <input
-          id="item-size-note"
-          value={sizeNote}
-          maxLength={MAX_SIZE_NOTE}
-          onChange={(e) => setSizeNote(e.target.value)}
-          className={`${inputClass} ${touch}`}
-        />
-        <label htmlFor="item-notes" className="text-sm">
-          {t("panel.notes")}
-        </label>
-        <textarea
-          id="item-notes"
-          rows={4}
-          value={notes}
-          maxLength={MAX_NOTES}
-          onChange={(e) => setNotes(e.target.value)}
-          className={inputClass}
-        />
-        <button type="submit" disabled={busy} className={`${primaryButtonClass} ${touch} self-start`}>
-          {t("panel.save")}
-        </button>
-      </form>
-
-      {extrasFailed && (
-        <div className="flex flex-col items-start gap-space-2">
-          <p role="alert" className="text-sm text-danger">
-            {t("errors.extrasLoad")}
-          </p>
-          <button type="button" className={`${buttonClass} ${touch}`} onClick={() => setExtrasAttempt((n) => n + 1)}>
-            {t("panel.retry")}
+      <section
+        aria-labelledby="mine-title"
+        className="flex flex-col gap-space-5 rounded-card border border-line bg-surface-raised p-space-4"
+      >
+        <div className="flex items-center justify-between gap-space-3">
+          <h2 id="mine-title" className="font-display text-lead font-strong">
+            {t("sections.mine")}
+          </h2>
+          <button
+            type="button"
+            disabled={busy}
+            aria-pressed={item.favorite}
+            onClick={toggleFavorite}
+            className={`${buttonClass} ${touch} aria-pressed:bg-surface-strong aria-pressed:font-strong`}
+          >
+            <span aria-hidden="true">{item.favorite ? "♥" : "♡"}</span> {t("panel.favorite")}
           </button>
         </div>
-      )}
 
-      <section aria-labelledby="lists-title" className="flex flex-col gap-space-2">
-        <h3 id="lists-title" className="text-sm font-strong">
-          {t("panel.lists")}
-        </h3>
-        {lists === null ? null : lists.length === 0 ? (
-          <p className="text-sm text-ink-muted">{t("panel.noLists")}</p>
-        ) : (
-          <ul className="flex flex-wrap gap-space-2">
-            {lists.map((list) => (
-              <li key={list.id}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  aria-pressed={item.wishlistIds.includes(list.id)}
-                  onClick={() => toggleList(list)}
-                  className={`${buttonClass} ${touch} aria-pressed:bg-surface-strong aria-pressed:font-strong`}
-                >
-                  {list.name}
-                </button>
-              </li>
-            ))}
-          </ul>
+        {error && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
         )}
-        <form onSubmit={addNewList} className="flex flex-wrap items-end gap-space-2">
-          <label htmlFor="item-new-list" className="sr-only">
-            {t("panel.newList")}
-          </label>
-          <input
-            id="item-new-list"
-            placeholder={t("panel.newList")}
-            value={newList}
-            maxLength={80}
-            onChange={(e) => setNewList(e.target.value)}
-            className={`${inputClass} ${touch} w-auto flex-1`}
-          />
-          <button type="submit" disabled={busy || newList.trim() === ""} className={`${buttonClass} ${touch}`}>
-            {t("panel.newListAdd")}
-          </button>
-        </form>
-      </section>
 
-      <section aria-labelledby="tags-title" className="flex flex-col gap-space-2">
-        <h3 id="tags-title" className="text-sm font-strong">
-          {t("panel.tags")}
-        </h3>
-        {tags === null ? null : tags.length === 0 ? (
-          <p className="text-sm text-ink-muted">{t("panel.noTags")}</p>
-        ) : (
-          <ul className="flex flex-wrap gap-space-2">
-            {tags.map((tag) => (
-              <li key={tag.id}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  aria-pressed={item.tags.some((x) => x.id === tag.id)}
-                  onClick={() => toggleTag(tag)}
-                  className={`${buttonClass} ${touch} aria-pressed:bg-surface-strong aria-pressed:font-strong`}
-                >
-                  {tag.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <form onSubmit={addNewTag} className="flex flex-wrap items-end gap-space-2">
-          <label htmlFor="item-new-tag" className="sr-only">
-            {t("panel.newTag")}
-          </label>
-          <input
-            id="item-new-tag"
-            placeholder={t("panel.newTag")}
-            value={newTag}
-            maxLength={MAX_TAG_NAME}
-            onChange={(e) => setNewTag(e.target.value)}
-            className={`${inputClass} ${touch} w-auto flex-1`}
-          />
-          <button type="submit" disabled={busy || newTag.trim() === ""} className={`${buttonClass} ${touch}`}>
-            {t("panel.newTagAdd")}
-          </button>
-        </form>
-      </section>
-
-      {profiles.length > 1 && (
-        <section aria-labelledby="profile-title" className="flex flex-col gap-space-2">
-          <h3 id="profile-title" className="text-sm font-strong">
-            {t("panel.profile")}
+        <section aria-labelledby="stages-title" className="flex flex-col gap-space-2">
+          <h3 id="stages-title" className="text-sm font-strong">
+            {t("panel.stages")}
           </h3>
-          <p className="text-sm">{profiles.find((p) => p.id === item.profileId)?.name}</p>
-          <div className="flex flex-wrap items-center gap-space-2">
-            <label htmlFor="item-move" className="text-sm">
-              {t("panel.moveTo")}
-            </label>
-            <select
-              id="item-move"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              className={`${inputClass} ${touch} w-auto`}
-            >
-              {profiles
-                .filter((p) => p.id !== item.profileId)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-            </select>
-            <button type="button" disabled={busy || target === ""} onClick={move} className={`${buttonClass} ${touch}`}>
-              {t("panel.move")}
+          <ol className="flex flex-wrap gap-space-2">
+            {STAGES.map((value) => {
+              const current = value === item.stage;
+              return (
+                <li key={value}>
+                  <button
+                    type="button"
+                    aria-current={current ? "step" : undefined}
+                    disabled={current}
+                    aria-label={
+                      current
+                        ? `${t(`stage.${value}`)} (${t("panel.currentStage")})`
+                        : t("panel.changeStage", { stage: t(`stage.${value}`) })
+                    }
+                    onClick={() => setStage(value)}
+                    className={`${current ? "rounded-button bg-button-bg px-space-3 text-sm font-strong text-button-ink" : buttonClass} ${touch} inline-flex items-center`}
+                  >
+                    {t(`stage.${value}`)}
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+        <StageDialog item={item} stage={stage} onClose={() => setStage(null)} onDone={onChange} reload={reload} />
+
+        <form onSubmit={saveDetails} className="flex flex-col gap-space-3 border-t border-line pt-space-4">
+          <h3 className="text-sm font-strong">{t("panel.sizeAndAmounts")}</h3>
+          {amounts.length > 0 && <p className="text-sm text-ink-muted tabular-nums">{amounts.join(" · ")}</p>}
+          <label htmlFor="item-size" className="text-sm">
+            {t("panel.size")}
+          </label>
+          <input
+            id="item-size"
+            value={sizeLabel}
+            maxLength={MAX_SIZE_LABEL}
+            onChange={(e) => setSizeLabel(e.target.value)}
+            className={`${inputClass} ${touch}`}
+          />
+          <label htmlFor="item-size-note" className="text-sm">
+            {t("panel.sizeNote")}
+          </label>
+          <input
+            id="item-size-note"
+            value={sizeNote}
+            maxLength={MAX_SIZE_NOTE}
+            onChange={(e) => setSizeNote(e.target.value)}
+            className={`${inputClass} ${touch}`}
+          />
+          <label htmlFor="item-notes" className="text-sm">
+            {t("panel.notes")}
+          </label>
+          <textarea
+            id="item-notes"
+            rows={4}
+            value={notes}
+            maxLength={MAX_NOTES}
+            onChange={(e) => setNotes(e.target.value)}
+            className={inputClass}
+          />
+          <button type="submit" disabled={busy} className={`${primaryButtonClass} ${touch} self-start`}>
+            {t("panel.save")}
+          </button>
+        </form>
+
+        {extrasFailed && (
+          <div className="flex flex-col items-start gap-space-2">
+            <p role="alert" className="text-sm text-danger">
+              {t("errors.extrasLoad")}
+            </p>
+            <button type="button" className={`${buttonClass} ${touch}`} onClick={() => setExtrasAttempt((n) => n + 1)}>
+              {t("panel.retry")}
             </button>
           </div>
-        </section>
-      )}
+        )}
 
-      <div className="flex flex-col items-start gap-space-1">
-        <button type="button" disabled={busy} onClick={remove} className={`${buttonClass} ${touch} text-danger`}>
-          {t("panel.delete")}
-        </button>
-        <p className="text-sm text-ink-muted">{t("panel.deleteHint")}</p>
-      </div>
+        <div className="flex flex-col gap-space-5 border-t border-line pt-space-4">
+          <section aria-labelledby="lists-title" className="flex flex-col gap-space-2">
+            <h3 id="lists-title" className="text-sm font-strong">
+              {t("panel.lists")}
+            </h3>
+            {lists === null ? null : lists.length === 0 ? (
+              <p className="text-sm text-ink-muted">{t("panel.noLists")}</p>
+            ) : (
+              <ul className="flex flex-wrap gap-space-2">
+                {lists.map((list) => (
+                  <li key={list.id}>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      aria-pressed={item.wishlistIds.includes(list.id)}
+                      onClick={() => toggleList(list)}
+                      className={`${buttonClass} ${touch} aria-pressed:bg-surface-strong aria-pressed:font-strong`}
+                    >
+                      {list.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form onSubmit={addNewList} className="flex flex-wrap items-end gap-space-2">
+              <label htmlFor="item-new-list" className="sr-only">
+                {t("panel.newList")}
+              </label>
+              <input
+                id="item-new-list"
+                placeholder={t("panel.newList")}
+                value={newList}
+                maxLength={80}
+                onChange={(e) => setNewList(e.target.value)}
+                className={`${inputClass} ${touch} w-auto flex-1`}
+              />
+              <button type="submit" disabled={busy || newList.trim() === ""} className={`${buttonClass} ${touch}`}>
+                {t("panel.newListAdd")}
+              </button>
+            </form>
+          </section>
+
+          <section aria-labelledby="tags-title" className="flex flex-col gap-space-2">
+            <h3 id="tags-title" className="text-sm font-strong">
+              {t("panel.tags")}
+            </h3>
+            {tags === null ? null : tags.length === 0 ? (
+              <p className="text-sm text-ink-muted">{t("panel.noTags")}</p>
+            ) : (
+              <ul className="flex flex-wrap gap-space-2">
+                {tags.map((tag) => (
+                  <li key={tag.id}>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      aria-pressed={item.tags.some((x) => x.id === tag.id)}
+                      onClick={() => toggleTag(tag)}
+                      className={`${buttonClass} ${touch} aria-pressed:bg-surface-strong aria-pressed:font-strong`}
+                    >
+                      {tag.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form onSubmit={addNewTag} className="flex flex-wrap items-end gap-space-2">
+              <label htmlFor="item-new-tag" className="sr-only">
+                {t("panel.newTag")}
+              </label>
+              <input
+                id="item-new-tag"
+                placeholder={t("panel.newTag")}
+                value={newTag}
+                maxLength={MAX_TAG_NAME}
+                onChange={(e) => setNewTag(e.target.value)}
+                className={`${inputClass} ${touch} w-auto flex-1`}
+              />
+              <button type="submit" disabled={busy || newTag.trim() === ""} className={`${buttonClass} ${touch}`}>
+                {t("panel.newTagAdd")}
+              </button>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      {shop}
+
+      <section aria-labelledby="more-title" className="flex flex-col gap-space-4 border-t border-line pt-space-5">
+        <h2 id="more-title" className="text-sm font-strong">
+          {t("sections.more")}
+        </h2>
+        {profiles.length > 1 && (
+          <section aria-labelledby="profile-title" className="flex flex-col gap-space-2">
+            <h3 id="profile-title" className="text-sm font-strong">
+              {t("panel.profile")}
+            </h3>
+            <p className="text-sm">{profiles.find((p) => p.id === item.profileId)?.name}</p>
+            <div className="flex flex-wrap items-center gap-space-2">
+              <label htmlFor="item-move" className="text-sm">
+                {t("panel.moveTo")}
+              </label>
+              <select
+                id="item-move"
+                value={target}
+                onChange={(e) => setTarget(e.target.value)}
+                className={`${inputClass} ${touch} w-auto`}
+              >
+                {profiles
+                  .filter((p) => p.id !== item.profileId)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
+              <button
+                type="button"
+                disabled={busy || target === ""}
+                onClick={move}
+                className={`${buttonClass} ${touch}`}
+              >
+                {t("panel.move")}
+              </button>
+            </div>
+          </section>
+        )}
+
+        <div className="flex flex-col items-start gap-space-1">
+          <button type="button" disabled={busy} onClick={remove} className={`${buttonClass} ${touch} text-danger`}>
+            {t("panel.delete")}
+          </button>
+          <p className="text-sm text-ink-muted">{t("panel.deleteHint")}</p>
+        </div>
+      </section>
     </div>
   );
 }

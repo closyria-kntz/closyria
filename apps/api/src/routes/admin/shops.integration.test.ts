@@ -276,7 +276,7 @@ describe("POST /api/admin/shops", () => {
       status: "queued",
       url: "https://www.brand-new.test/products/a",
     });
-    expect(t.calls.slice(before)).toEqual([{ queue: "capture-admin", captureId }]);
+    expect(t.calls.slice(before)).toEqual([{ queue: "capture-admin", id: captureId }]);
   });
 
   it("answers 409 domain_taken with the owner's id, and 400 for a bad address", async () => {
@@ -344,7 +344,7 @@ describe("captures", () => {
     expect(shop?.status).toBe("pending");
     const [capture] = await t.db.select().from(schema.captures).where(eq(schema.captures.id, captureId));
     expect(capture).toMatchObject({ trigger: "admin_test", productId: null, url: "https://test-link-new.test/p/1" });
-    expect(t.calls.slice(before)).toEqual([{ queue: "capture-admin", captureId }]);
+    expect(t.calls.slice(before)).toEqual([{ queue: "capture-admin", id: captureId }]);
     expect((await call("POST", "/captures/test", { url: "ftp://x" })).status).toBe(400);
   });
 
@@ -416,8 +416,8 @@ describe("captures", () => {
     const r2 = await call("POST", `/captures/${monitor.id}/retry`, {});
     const id2 = ((await json(r2)) as { captureId: string }).captureId;
     expect(t.calls.slice(before)).toEqual([
-      { queue: "capture-user", captureId: id1 },
-      { queue: "capture-admin", captureId: id2 },
+      { queue: "capture-user", id: id1 },
+      { queue: "capture-admin", id: id2 },
     ]);
     const [n1] = await t.db.select().from(schema.captures).where(eq(schema.captures.id, id1));
     expect(n1).toMatchObject({

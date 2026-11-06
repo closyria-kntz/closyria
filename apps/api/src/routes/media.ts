@@ -54,8 +54,20 @@ const errorContent = (description: string) => ({
 
 type NormalizedImage = Awaited<ReturnType<typeof normalizeImage>>;
 type StoredImage = { id: string; key: string; image: NormalizedImage };
+/** An object already in the store, described by what was measured when it was re-encoded. */
+export type StoredObject = {
+  id: string;
+  key: string;
+  contentType: string;
+  sizeBytes: number;
+  width: number;
+  height: number;
+};
 /** `attach` refused the photo: rolls the transaction back. */
 class Refused extends Error {}
+type RecordOptions = { claim?: (tx: Tx) => Promise<boolean>; keepObject?: boolean };
+/** `claim` declined: rolls the transaction back and keeps the object. */
+class Declined extends Error {}
 
 /** What the upload routes share: rate limits, the re-encoding semaphore and the store-and-record step. */
 export type MediaPipeline = {
@@ -71,6 +83,18 @@ export type MediaPipeline = {
    * false nothing is kept and the object is deleted (returns false). The object is also deleted when anything throws.
    */
   record(userId: string, stored: StoredImage, attach?: (tx: Tx) => Promise<boolean>): Promise<boolean>;
+  /**
+   * The same for an object stored elsewhere (a photo imported by the worker): inserts its `media` row, then runs
+   * `attach` in the same transaction; false from `attach`, or anything thrown, deletes the object. `claim`, when
+   * given, runs first in the transaction (to take locks); false from it rolls back and keeps the object, which then
+   * belongs to someone else (returns false). With `keepObject`, the object is never deleted: the caller decides.
+   */
+  recordStored(
+    userId: string,
+    stored: StoredObject,
+    attach?: (tx: Tx) => Promise<boolean>,
+    options?: RecordOptions,
+  ): Promise<boolean>;
 };
 
 export function createMediaPipeline(deps: MediaDeps): MediaPipeline {
@@ -104,28 +128,35 @@ export function createMediaPipeline(deps: MediaDeps): MediaPipeline {
       await deps.store.put(key, image.data, image.contentType);
       return { ok: true, id, key, image };
     },
-    async record(userId, stored, attach) {
-      try {
-        await deps.db.transaction(async (tx) => {
-          await tx.insert(schema.media).values({
-            id: stored.id,
-            userId,
-            key: stored.key,
-            contentType: stored.image.contentType,
-            sizeBytes: stored.image.data.length,
-            width: stored.image.width,
-            height: stored.image.height,
-          });
-          if (attach && !(await attach(tx))) throw new Refused();
-        });
-        return true;
-      } catch (error) {
-        await deps.store.delete(stored.key).catch(() => {}); // no orphan object; the insert error is the one that matters
-        if (error instanceof Refused) return false;
-        throw error;
-      }
+    record(userId, { id, key, image }, attach) {
+      const { contentType, width, height } = image;
+      return recordStored(userId, { id, key, contentType, sizeBytes: image.data.length, width, height }, attach);
     },
+    recordStored,
   };
+
+  async function recordStored(
+    userId: string,
+    stored: StoredObject,
+    attach?: (tx: Tx) => Promise<boolean>,
+    { claim, keepObject = false }: RecordOptions = {},
+  ) {
+    try {
+      await deps.db.transaction(async (tx) => {
+        if (claim && !(await claim(tx))) throw new Declined();
+        const { id, key, contentType, sizeBytes, width, height } = stored;
+        await tx.insert(schema.media).values({ id, userId, key, contentType, sizeBytes, width, height });
+        if (attach && !(await attach(tx))) throw new Refused();
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof Declined) return false;
+      // No orphan object; the insert error is the one that matters.
+      if (!keepObject) await deps.store.delete(stored.key).catch(() => {});
+      if (error instanceof Refused) return false;
+      throw error;
+    }
+  }
 }
 
 const uploadRoute = (limits: MiddlewareHandler<AccessEnv>[]) =>

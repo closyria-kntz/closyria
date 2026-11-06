@@ -261,7 +261,7 @@ describe("admin products", () => {
       requestedBy: adminId,
       status: "queued",
     });
-    expect(t.calls).toEqual([{ queue: "capture-admin", captureId }]);
+    expect(t.calls).toEqual([{ queue: "capture-admin", id: captureId }]);
     expect((await t.db.select().from(schema.adminAuditLog)).map((a) => a.action)).toEqual(["product.recapture"]);
 
     const again = await call("POST", `/products/${product.id}/recapture`);

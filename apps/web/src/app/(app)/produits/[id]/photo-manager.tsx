@@ -2,13 +2,13 @@
 
 import { type ItemPhotoView, type ItemView, MAX_ITEM_PHOTOS } from "@closyria/shared";
 import { useTranslations } from "next-intl";
-import { useRef, useState } from "react";
+import { useState } from "react";
+import { AddPhotoDialog } from "@/components/add-photo-dialog";
 import { Dialog } from "@/components/dialog";
+import { PhotoViewer } from "@/components/photo-viewer";
 import { buttonClass, primaryButtonClass } from "@/components/ui";
-import { requestAccountPrompt } from "@/lib/account-prompt-request";
-import { checkPhoto } from "@/lib/photo-check";
 import { pushUndo } from "@/lib/undo";
-import { patchItem, removePhoto, undoWith, uploadPhoto } from "@/lib/wardrobe-client";
+import { patchItem, removePhoto, undoWith } from "@/lib/wardrobe-client";
 
 /** Stand-in for a sheet without photo (hand-entered, shop blocked): tokens only, same 3:4 frame. */
 export function PhotoPlaceholder({ label }: { label: string }) {
@@ -25,10 +25,25 @@ export function PhotoPlaceholder({ label }: { label: string }) {
 
 const touch = "min-h-touch-target";
 
-function Frame({ photo, alt }: { photo: ItemPhotoView; alt: string }) {
+function Frame({
+  photo,
+  alt,
+  openLabel,
+  onOpen,
+}: {
+  photo: ItemPhotoView;
+  alt: string;
+  openLabel: string;
+  onOpen: () => void;
+}) {
   return (
     // The whole photo in a 3:4 frame on the media backdrop, never cropped (visual direction §6).
-    <div className="aspect-3/4 overflow-hidden rounded-card bg-media-backdrop">
+    <button
+      type="button"
+      aria-label={openLabel}
+      onClick={onOpen}
+      className="aspect-3/4 w-full overflow-hidden rounded-card bg-media-backdrop focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring focus-visible:outline-solid"
+    >
       {/* biome-ignore lint/performance/noImgElement: photos come from our own API, sized by it. */}
       <img
         src={photo.url}
@@ -38,7 +53,7 @@ function Frame({ photo, alt }: { photo: ItemPhotoView; alt: string }) {
         loading="lazy"
         className="size-full object-contain"
       />
-    </div>
+    </button>
   );
 }
 
@@ -53,7 +68,9 @@ export function PhotoManager({
   reload: () => Promise<void>;
 }) {
   const t = useTranslations("Item");
-  const input = useRef<HTMLInputElement>(null);
+  const tMedia = useTranslations("Media");
+  const [viewing, setViewing] = useState<{ group: "private" | "shop"; index: number } | null>(null);
+  const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<ItemPhotoView | null>(null);
@@ -61,20 +78,6 @@ export function PhotoManager({
   const mine = item.photos.filter((photo) => photo.source === "private");
   const shop = item.photos.filter((photo) => photo.source === "shop");
   const fail = (code: string) => setError(t(`errors.${code}` as "errors.failed"));
-
-  async function add(file: File) {
-    setError(null);
-    const refused = checkPhoto(file);
-    if (refused) return fail(refused);
-    setBusy(true);
-    const result = await uploadPhoto(item.id, file);
-    if (result.ok) {
-      onChange(result.item);
-      pushUndo(t("toast.photoAdded"), null);
-      void requestAccountPrompt("photo");
-    } else fail(result.error);
-    setBusy(false);
-  }
 
   async function remove(photo: ItemPhotoView) {
     setBusy(true);
@@ -110,7 +113,12 @@ export function PhotoManager({
         <ul aria-label={t("photos.private")} className="grid grid-cols-2 gap-space-2">
           {mine.map((photo, index) => (
             <li key={photo.id} className="flex flex-col gap-space-2">
-              <Frame photo={photo} alt={t("photos.alt", { n: index + 1, name })} />
+              <Frame
+                photo={photo}
+                alt={t("photos.alt", { n: index + 1, name })}
+                openLabel={tMedia("viewer.openMine", { n: index + 1 })}
+                onOpen={() => setViewing({ group: "private", index })}
+              />
               <div className="flex flex-wrap gap-space-1">
                 <button
                   type="button"
@@ -137,27 +145,11 @@ export function PhotoManager({
       )}
 
       <div className="flex flex-col items-start gap-space-1">
-        <input
-          ref={input}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/avif"
-          className="hidden"
-          aria-label={t("photos.add")}
-          data-testid="photo-input"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (file) void add(file);
-          }}
-        />
-        <button
-          type="button"
-          disabled={busy || mine.length >= MAX_ITEM_PHOTOS}
-          onClick={() => input.current?.click()}
-          className={`${buttonClass} ${touch}`}
-        >
-          {t("photos.add")}
-        </button>
+        {mine.length < MAX_ITEM_PHOTOS && (
+          <button type="button" disabled={busy} onClick={() => setAdding(true)} className={`${buttonClass} ${touch}`}>
+            {t("photos.add")}
+          </button>
+        )}
         <p className="text-sm text-ink-muted">{t("photos.count", { count: mine.length, max: MAX_ITEM_PHOTOS })}</p>
         {busy && (
           <p role="status" className="text-sm text-ink-muted">
@@ -170,6 +162,8 @@ export function PhotoManager({
           </p>
         )}
       </div>
+
+      <AddPhotoDialog open={adding} onClose={() => setAdding(false)} itemId={item.id} onChange={onChange} />
 
       <Dialog
         open={confirming !== null}
@@ -192,11 +186,23 @@ export function PhotoManager({
         <ul aria-label={t("photos.shop")} className="grid grid-cols-2 gap-space-2">
           {shop.map((photo, index) => (
             <li key={photo.id}>
-              <Frame photo={photo} alt={t("photos.alt", { n: index + 1, name })} />
+              <Frame
+                photo={photo}
+                alt={t("photos.alt", { n: index + 1, name })}
+                openLabel={tMedia("viewer.openShop", { n: index + 1 })}
+                onOpen={() => setViewing({ group: "shop", index })}
+              />
             </li>
           ))}
         </ul>
       )}
+
+      <PhotoViewer
+        photos={viewing?.group === "shop" ? shop : mine}
+        index={viewing?.index ?? null}
+        alt={name}
+        onClose={() => setViewing(null)}
+      />
     </section>
   );
 }

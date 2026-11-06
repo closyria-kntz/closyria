@@ -48,7 +48,9 @@ describe("owned tables of the API process", () => {
       "events",
       "items",
       "media",
+      "photo_imports",
       "profiles",
+      "recent_products",
       "tags",
       "usage_counters",
       "user_plans",
@@ -61,8 +63,10 @@ describe("owned tables of the API process", () => {
     // Registration order is execution order (wardrobe/merge.ts relies on it).
     const order = listOwnedColumns()
       .map((o) => o.table)
-      .filter((t) => ["media", "profiles", "tags", "items", "wishlists"].includes(t));
-    expect(order).toEqual(["media", "profiles", "tags", "items", "wishlists"]);
+      .filter((t) =>
+        ["media", "profiles", "tags", "items", "photo_imports", "recent_products", "wishlists"].includes(t),
+      );
+    expect(order).toEqual(["media", "profiles", "tags", "items", "photo_imports", "recent_products", "wishlists"]);
   });
 
   it("leaves no foreign key to user(id) unregistered, except the explicit allowlist", async () => {

@@ -512,4 +512,30 @@ describe("anonymous -> account merge on sign-in", () => {
     const [movedItem] = await handle.db.select().from(schema.items).where(eq(schema.items.id, item.id));
     expect(movedItem).toMatchObject({ userId: accountId, profileId: anonMoi.id });
   });
+
+  it("folds recent products: union, latest visit wins on duplicates, nothing left on the anonymous side", async () => {
+    const email = `recents-${randomUUID()}@example.test`;
+    const accountId = await signInWithEmail(email);
+    const anonymous = await signInAnonymously();
+    const both = await newProduct();
+    const onlyAnonymous = await newProduct();
+    await handle.db.insert(schema.recentProducts).values([
+      { userId: accountId, productId: both.id, visitedAt: new Date("2026-10-01T10:00:00Z") },
+      { userId: anonymous.userId, productId: both.id, visitedAt: new Date("2026-10-05T10:00:00Z") },
+      { userId: anonymous.userId, productId: onlyAnonymous.id, visitedAt: new Date("2026-10-03T10:00:00Z") },
+    ]);
+
+    expect(await signInWithEmail(email, anonymous.cookie)).toBe(accountId);
+
+    const rows = await handle.db
+      .select()
+      .from(schema.recentProducts)
+      .where(eq(schema.recentProducts.userId, accountId));
+    expect(rows).toHaveLength(2);
+    expect(rows.find((r) => r.productId === both.id)?.visitedAt).toEqual(new Date("2026-10-05T10:00:00Z"));
+    expect(rows.find((r) => r.productId === onlyAnonymous.id)?.visitedAt).toEqual(new Date("2026-10-03T10:00:00Z"));
+    expect(
+      await handle.db.select().from(schema.recentProducts).where(eq(schema.recentProducts.userId, anonymous.userId)),
+    ).toHaveLength(0);
+  });
 });

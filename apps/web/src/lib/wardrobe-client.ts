@@ -14,9 +14,13 @@ import {
   mutationResultSchema,
   type ProfileInput,
   type ProfilePatch,
+  photoImportAcceptedSchema,
+  photoImportViewSchema,
   profileListSchema,
   profileViewSchema,
+  type RecentList,
   type ReferenceView,
+  recentListSchema,
   referenceViewSchema,
   shareResultSchema,
   type TagPatch,
@@ -113,6 +117,32 @@ export async function uploadPhoto(id: string, file: File, deps: ClientDeps = def
   const form = new FormData();
   form.set("file", file);
   return await mutation(deps, `/api/me/items/${id}/media`, { method: "POST", body: form });
+}
+
+/** Starts the import of a photo from its address; the answer is the id to follow with `fetchPhotoImport`. */
+export async function importPhoto(id: string, url: string, deps: ClientDeps = defaultDeps) {
+  return await call(
+    deps,
+    `/api/me/items/${id}/media/imports`,
+    jsonInit("POST", { url }),
+    photoImportAcceptedSchema,
+    [202],
+  );
+}
+
+/** Where an import stands. Throws on a network error or a malformed answer (the poller tries again). */
+export async function fetchPhotoImport(
+  id: string,
+  importId: string,
+  deps: ClientDeps = defaultDeps,
+  signal?: AbortSignal,
+) {
+  const response = await deps.fetch(`/api/me/items/${id}/media/imports/${importId}`, {
+    cache: "no-store",
+    signal: signal ?? null,
+  });
+  if (!response.ok) throw new Error(`photo import ${response.status}`);
+  return photoImportViewSchema.parse(await response.json());
 }
 
 export async function removePhoto(id: string, mediaId: string, deps: ClientDeps = defaultDeps) {
@@ -278,4 +308,16 @@ export async function restoreItem(id: string, deps: ClientDeps = defaultDeps) {
 /** Deletes a trashed item for good (photos included). No undo. */
 export async function purgeItem(id: string, deps: ClientDeps = defaultDeps) {
   return await callNoContent(deps, `/api/me/items/${id}/purge`, { method: "DELETE" });
+}
+
+/** The links she pasted lately and has not kept. Null without a session; throws on any other failure. */
+export async function fetchRecents(deps: ClientDeps = defaultDeps): Promise<RecentList | null> {
+  const response = await deps.fetch("/api/me/recents", { cache: "no-store" });
+  if (response.status === 401) return null;
+  if (!response.ok) throw new Error(`recents ${response.status}`);
+  return recentListSchema.parse(await response.json());
+}
+
+export async function forgetRecent(productId: string, deps: ClientDeps = defaultDeps) {
+  return await callNoContent(deps, `/api/me/recents/${productId}`, { method: "DELETE" });
 }

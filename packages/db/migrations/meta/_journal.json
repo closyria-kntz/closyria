@@ -92,6 +92,13 @@
       "when": 1793916494134,
       "tag": "0012_wardrobe",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793965267619,
+      "tag": "0013_regular_vindicator",
+      "breakpoints": true
     }
   ]
 }

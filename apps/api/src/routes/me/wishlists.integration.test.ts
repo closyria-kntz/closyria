@@ -389,7 +389,9 @@ describe("sharing", () => {
     expect(Object.keys(parsed.items[0] ?? {}).toSorted()).toEqual([
       "brand",
       "currency",
+      "imageHeight",
       "imageUrl",
+      "imageWidth",
       "name",
       "priceCents",
       "shopName",
@@ -401,6 +403,8 @@ describe("sharing", () => {
       priceCents: 4990,
       currency: "EUR",
       imageUrl: `/api/catalog-images/${made.images[0]?.id}`,
+      imageWidth: made.images[0]?.width,
+      imageHeight: made.images[0]?.height,
       shopName: made.shop.name,
       url: made.product.canonicalUrl,
     });
@@ -421,6 +425,13 @@ describe("sharing", () => {
     const token = await share(cookie, list.id);
     const shared = (await (await getShared(token)).json()) as SharedWishlistView;
     expect(shared.items.map((i) => i.name)).toEqual(["D", "B", "A"]);
-    expect(shared.items[0]).toMatchObject({ priceCents: null, currency: null, brand: null, imageUrl: null });
+    expect(shared.items[0]).toMatchObject({
+      priceCents: null,
+      currency: null,
+      brand: null,
+      imageUrl: null,
+      imageWidth: null,
+      imageHeight: null,
+    });
   });
 });

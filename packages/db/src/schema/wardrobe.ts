@@ -4,12 +4,15 @@ import {
   itemEventTypeSchema,
   itemStageSchema,
   MAX_NOTES,
+  MAX_PHOTO_IMPORT_URL,
   MAX_PROFILE_NAME,
   MAX_SALE_CHANNEL,
   MAX_SIZE_LABEL,
   MAX_SIZE_NOTE,
   MAX_TAG_NAME,
   MAX_WISHLIST_NAME,
+  photoImportErrorSchema,
+  photoImportStatusSchema,
   profileColorSchema,
 } from "@closyria/shared";
 import { sql } from "drizzle-orm";
@@ -219,4 +222,54 @@ export const itemTags = pgTable(
       .references(() => tags.id, { onDelete: "cascade" }),
   },
   (t) => [primaryKey({ columns: [t.itemId, t.tagId] }), index("item_tags_tag_id_idx").on(t.tagId)],
+);
+
+/** Products she opened lately (« Derniers liens »). One row per product, the latest visit wins. Owned by the user. */
+export const recentProducts = pgTable(
+  "recent_products",
+  {
+    userId: owner(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    visitedAt: timestamp("visited_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.productId] }),
+    index("recent_products_user_id_visited_at_idx").on(t.userId, t.visitedAt.desc()),
+  ],
+);
+
+/** A photo fetched from a URL for an item, until she attaches it; purged after 24 h. Owned by the user. */
+export const photoImports = pgTable(
+  "photo_imports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: owner(),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    status: text("status").notNull().default("queued"),
+    errorCode: text("error_code"),
+    /** Filled once `ready`: the stored object and what the worker measured. */
+    mediaKey: text("media_key"),
+    contentType: text("content_type"),
+    sizeBytes: integer("size_bytes"),
+    width: integer("width"),
+    height: integer("height"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("photo_imports_user_id_idx").on(t.userId),
+    index("photo_imports_item_id_idx").on(t.itemId),
+    index("photo_imports_created_at_idx").on(t.createdAt),
+    check("photo_imports_url_check", lengthBetween(t.url, MAX_PHOTO_IMPORT_URL)),
+    check("photo_imports_status_check", oneOf(t.status, photoImportStatusSchema.options)),
+    check(
+      "photo_imports_error_code_check",
+      sql`${t.errorCode} IS NULL OR ${oneOf(t.errorCode, photoImportErrorSchema.options)}`,
+    ),
+  ],
 );

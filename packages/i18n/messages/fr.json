@@ -5,7 +5,11 @@
   },
   "Home": {
     "title": "Closyria",
-    "tagline": "Ton dressing en ligne arrive bientôt."
+    "tagline": "Ton dressing en ligne arrive bientôt.",
+    "recents": {
+      "title": "Derniers liens",
+      "forget": "Retirer {name} de la liste"
+    }
   },
   "Shell": {
     "brand": "Closyria",
@@ -65,6 +69,18 @@
     }
   },
   "Media": {
+    "viewer": {
+      "open": "Agrandir la photo {n}",
+      "openMine": "Agrandir ta photo {n}",
+      "openShop": "Agrandir la photo {n} de la boutique",
+      "openOf": "Agrandir la photo de {name}",
+      "close": "Fermer",
+      "previous": "Photo précédente",
+      "next": "Photo suivante",
+      "counter": "{current} / {total}",
+      "actualSize": "Voir en taille réelle",
+      "fit": "Ajuster à l’écran"
+    },
     "errors": {
       "unsupported_image": "Format non pris en charge",
       "image_too_large": "Photo trop lourde, 20 Mo maximum",
@@ -579,14 +595,19 @@
       "coverDefault": "Vignette par défaut rétablie",
       "favoriteOn": "Ajouté aux favoris",
       "favoriteOff": "Retiré des favoris",
+      "wishRemoved": "Retiré de tes envies",
       "listAdded": "Ajouté à {name}",
       "listRemoved": "Retiré de {name}",
       "tagAdded": "Étiquette {name} ajoutée",
       "tagRemoved": "Étiquette {name} retirée",
       "failed": "Impossible d’annuler."
     },
+    "sections": {
+      "mine": "Mon article",
+      "shop": "La fiche de la boutique",
+      "more": "Autres actions"
+    },
     "panel": {
-      "title": "Mon article",
       "favorite": "Favori",
       "stages": "Étapes",
       "stagesHint": "Où en est cet article ?",
@@ -596,7 +617,7 @@
       "salePrice": "Prix demandé : {amount}",
       "soldFor": "Vendu : {amount}",
       "channel": "Où : {channel}",
-      "details": "Mes infos",
+      "sizeAndAmounts": "Taille et montants",
       "size": "Taille",
       "sizeNote": "Note de taille",
       "notes": "Notes",
@@ -650,6 +671,15 @@
       "alt": "Photo {n} de {name}",
       "count": "{count} sur {max}",
       "uploading": "Envoi de la photo…",
+      "adding": "Ajout…",
+      "arriving": "La photo arrive : elle apparaîtra sur la fiche dans un instant.",
+      "addTitle": "Ajouter une photo",
+      "close": "Fermer",
+      "dropZone": "Colle une image (Ctrl+V ou Cmd+V), glisse-la ici ou choisis un fichier.",
+      "chooseFile": "Choisir un fichier",
+      "takePhoto": "Prendre une photo",
+      "linkLabel": "Lien vers une image",
+      "linkSubmit": "Ajouter",
       "empty": "Pas encore de photo",
       "confirmTitle": "Supprimer cette photo ?",
       "confirmBody": "Elle sera effacée définitivement.",
@@ -677,6 +707,10 @@
       "image_too_large": "Cette image est trop lourde.",
       "invalid_upload": "Aucune photo reçue.",
       "busy": "Le traitement des photos est occupé. Réessaie dans un instant.",
+      "not_a_photo": "Colle une image ou un lien vers une image.",
+      "import_blocked": "Ce site ne laisse pas récupérer l’image. Enregistre-la puis ajoute le fichier.",
+      "import_timeout": "Le site n’a pas répondu à temps.",
+      "import_unsupported": "Ce lien ne mène pas à une image.",
       "itemLoad": "Ton article ne s’affiche pas. Réessaie dans un instant.",
       "extrasLoad": "Tes listes et étiquettes ne s’affichent pas."
     }

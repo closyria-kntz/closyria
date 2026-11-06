@@ -146,3 +146,13 @@ export async function mergeWishlists(fromUserId: string, toUserId: string, tx: D
     (select coalesce(max(position), -1) as max from ${schema.wishlists} where user_id = ${toUserId}) as base
     where w.id = moved.id`);
 }
+
+/** « Derniers liens »: folded into the account's by product, the latest visit wins; the anonymous rows are removed. */
+export async function mergeRecentProducts(fromUserId: string, toUserId: string, tx: DbTransaction): Promise<void> {
+  await tx.execute(sql`
+    insert into ${schema.recentProducts} (user_id, product_id, visited_at)
+    select ${toUserId}, product_id, visited_at from ${schema.recentProducts} where user_id = ${fromUserId}
+    on conflict (user_id, product_id)
+    do update set visited_at = greatest(${schema.recentProducts.visitedAt}, excluded.visited_at)`);
+  await tx.delete(schema.recentProducts).where(eq(schema.recentProducts.userId, fromUserId));
+}

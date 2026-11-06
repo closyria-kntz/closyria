@@ -45,6 +45,17 @@ describe("POST /api/captures", () => {
     expect((await post("https://a.test/p/1")).status).toBe(401);
   });
 
+  it("records the visit in her recent links, also for a manual shop", async () => {
+    const { cookie, userId } = await t.signIn();
+    const domain = host();
+    await newShop(domain, { captureMode: "manual" });
+    const res = await post(`https://${domain}/p/manual`, cookie);
+    expect(res.status).toBe(202);
+    const { productId } = (await res.json()) as Accepted;
+    const rows = await t.db.select().from(schema.recentProducts).where(eq(schema.recentProducts.userId, userId));
+    expect(rows).toEqual([{ userId, productId, visitedAt: NOW }]);
+  });
+
   it("answers 400 invalid_url for an address that is not http(s)", async () => {
     const { cookie } = await t.signIn();
     for (const url of ["javascript:alert(1)", "not a url", "https://user:pw@a.test/p"]) {
@@ -70,7 +81,7 @@ describe("POST /api/captures", () => {
     expect(res.status).toBe(202);
     const body = (await res.json()) as Accepted;
     expect(body.status).toBe("queued");
-    expect(t.calls.slice(before)).toEqual([{ queue: "capture-user", captureId: body.captureId }]);
+    expect(t.calls.slice(before)).toEqual([{ queue: "capture-user", id: body.captureId }]);
 
     const [capture] = await t.db.select().from(schema.captures).where(eq(schema.captures.id, body.captureId));
     expect(capture).toMatchObject({

@@ -44,6 +44,8 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   process.env.E2E_BASE_URL = stack.baseUrl;
   process.env.E2E_DATABASE_URL = stack.databaseUrl;
   process.env.E2E_FAKE_SHOP_URL = worker.shop.origin;
+  // Where the API keeps photos: a test plays the photo-import worker there (it does not run in the suite).
+  process.env.E2E_STORAGE_DIR = stack.storageDir;
 
   return async () => {
     await worker.stop();

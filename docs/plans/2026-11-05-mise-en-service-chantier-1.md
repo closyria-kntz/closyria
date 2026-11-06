@@ -94,12 +94,18 @@ Mêmes étapes, avec les noms de prod :
   `seed: parent … is missing, skipped`) et doivent être absentes : `… | grep 'seed:'` vide.
 - **Nouvelle file `wardrobe-purge`** : vide la corbeille (articles supprimés depuis plus de 30 jours) chaque nuit à
   03:30 UTC. Le worker la crée et la planifie seul ; ligne de journal `trash purge: N item(s) permanently deleted`
-  seulement quand il y a eu des suppressions.
+  seulement quand il y a eu des suppressions. Elle purge aussi les « derniers liens » de plus de 90 jours et les
+  imports de photo de plus de 24 h.
+- **Migration 0013** `recent_products` et `photo_imports` (finitions du 2a, plan `docs/plans/2026-11-06-finitions-2a.md`) :
+  uniquement des `CREATE`, sans risque pour les données existantes.
+- **Nouvelle file `photo-import`** : le worker lit les images données par lien (« Ajouter une photo »). Contrôle après
+  déploiement : `sudo journalctl -u closyria-<env>-worker --no-pager | grep -E 'photo-import|transient'` ne montre
+  aucune ligne d’erreur (la ligne d’information `transient purge:` est normale).
 
 ### Dev
 
-> Le chantier 1 est déjà déployé sur dev (0007 à 0010 appliquées, captures présentes) : pour dev, seules 0011 et 0012
-> sont nouvelles. **Déployé en dev le 2026-11-06** (version `20261106-011252-19443a1ab679`, fusion `19443a1`) ; tests
+> Le chantier 1 est déjà déployé sur dev (0007 à 0010 appliquées, captures présentes) : pour dev, 0011 et 0012
+> sont déjà là ; **0013 est nouvelle** (finitions du 2a, pas encore déployées). **Déployé en dev le 2026-11-06** (version `20261106-011252-19443a1ab679`, fusion `19443a1`) ; tests
 > de la fondatrice au vert le même jour.
 
 1. [x] `sudo closyria-deploy dev <id>` : migrations 0011 et 0012 appliquées, worker `active`, `network barrier: active`
@@ -115,16 +121,28 @@ Mêmes étapes, avec les noms de prod :
 8. [ ] Sur iPhone : l'aide « Ajouter Closyria au menu Partager » (Réglages) et le Raccourci fonctionnent
 9. [ ] Purge : rien à vérifier à la main (aucun article n'a 30 jours) ; le lendemain, pas d'erreur de `wardrobe-purge`
    dans `sudo journalctl -u closyria-dev-worker --no-pager | grep 'wardrobe-purge'`
+10. [ ] Finitions du 2a, après déploiement de 0013 : migration 0013 appliquée, worker `active`, et
+    `sudo journalctl -u closyria-dev-worker --no-pager | grep -E 'photo-import|transient'` : aucune ligne d’erreur
+    (la ligne d’information `transient purge:` est normale)
+11. [ ] « Derniers liens » sur l'accueil : coller un lien sans rien garder, revenir à l'accueil, la fiche y est ; ✕ la retire
+12. [ ] Retirer le ♡ d'une simple envie (rien d'autre sur l'article) : l'article quitte Envies, « Annuler » le remet ;
+    avec une note ou une liste, seul le ♡ est retiré
+13. [ ] Visionneuse : clic sur une photo (fiche boutique, article gardé, liste partagée), glisser ou flèches, second
+    clic en taille réelle, Échap ferme
+14. [ ] « Ajouter une photo » : coller (Ctrl/Cmd+V), glisser-déposer, choisir un fichier, donner un lien vers une image
+15. [ ] Fiche en trois parties : l'essentiel en haut, « Mon article », « La fiche de la boutique »
 
 ### Prod
 
 - [ ] **Prérequis : « Sauvegardes automatiques de la prod »** livrées et la restauration essayée (copie chiffrée de la
   base chaque nuit sur OVH, gardée 30 jours ; spec 2a §9). Sans elles, pas de prod : les articles des utilisatrices
   seront des données à ne pas perdre.
-- [ ] Premier déploiement de 0007 à 0012 ensemble : `select count(*) from captures;` en prod → 0, sinon 0008 échoue (`url` NOT NULL sans défaut)
-- [ ] Les étapes « Prod » ci-dessus (variables comparées, barrière, déploiement), avec migrations 0007 à 0012
+- [ ] Premier déploiement de 0007 à 0013 ensemble : `select count(*) from captures;` en prod → 0, sinon 0008 échoue (`url` NOT NULL sans défaut)
+- [ ] Les étapes « Prod » ci-dessus (variables comparées, barrière, déploiement), avec migrations 0007 à 0013
 - [ ] `grep 'starting reference lists'` présent au premier démarrage, `grep 'seed:'` vide ; filtres Type et Couleur chargés sur https://closyria.com
 - [ ] Parcours ♡, étape, liste partagée (fenêtre privée), profil, comme en dev
+- [ ] `grep -E 'photo-import|transient'` sur le journal du worker prod : aucune ligne d’erreur (la ligne d’information
+  `transient purge:` est normale) ; « Ajouter une photo » (lien) et « Derniers liens » essayés
 - [ ] Le lendemain : pas d'erreur de `wardrobe-purge` dans le journal du worker prod
 
 ## Retour arrière
