@@ -42,13 +42,20 @@ function put(id: string, body: unknown, cookie?: string) {
 
 describe("GET /api/products/:id", () => {
   it("answers without a session", async () => {
-    const product = await newProduct({ name: "Robe", currency: "EUR", priceCents: 2999, brand: "Marque" });
+    const product = await newProduct({
+      name: "Robe",
+      currency: "EUR",
+      priceCents: 2999,
+      brand: "Marque",
+      description: "Robe longue.\nCoton.",
+    });
     const res = await t.app.request(`/api/products/${product.id}`);
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       id: product.id,
       name: "Robe",
       brand: "Marque",
+      description: "Robe longue.\nCoton.",
       currency: "EUR",
       priceCents: 2999,
       compareAtCents: null,

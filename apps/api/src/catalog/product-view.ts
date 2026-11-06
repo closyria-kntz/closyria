@@ -41,6 +41,7 @@ export async function loadProductViews(db: Database, productIds: string[]): Prom
       canonicalUrl: product.canonicalUrl,
       name: product.name,
       brand: product.brand,
+      description: product.description,
       currency: product.currency,
       priceCents: product.priceCents,
       compareAtCents: product.compareAtCents,

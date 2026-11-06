@@ -529,6 +529,11 @@
           "mid": "Mi-saison",
           "all": "Toutes saisons"
         }
+      },
+      "description": {
+        "title": "Description",
+        "more": "Lire la suite",
+        "less": "Réduire"
       }
     },
     "manual": {

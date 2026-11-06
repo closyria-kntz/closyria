@@ -30,6 +30,7 @@ const product = {
   sizes: [],
   images: [],
   source: "captured",
+  description: null,
   captureStatus: "ok",
   lastCapturedAt: null,
   traits: { category: [], color: null, material: null, pattern: null, season: null, audience: null, childDetail: null },

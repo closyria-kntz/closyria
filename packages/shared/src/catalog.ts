@@ -105,6 +105,8 @@ export const productViewSchema = z.object({
   canonicalUrl: z.string(),
   name: z.string().nullable(),
   brand: z.string().nullable(),
+  /** Plain text from the shop, line breaks kept. */
+  description: z.string().nullable(),
   currency: currencySchema.nullable(),
   priceCents: priceSchema.nullable(),
   compareAtCents: priceSchema.nullable(),
