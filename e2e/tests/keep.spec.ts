@@ -117,3 +117,22 @@ test("un article gardé dans un autre profil : bandeau « Déjà dans le profil 
   await expect(page.getByText("Déjà dans le profil Moi")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
 });
+
+test("avancer jusqu'à « Dans mon dressing » avec le prix payé, puis Annuler", async ({ page }) => {
+  await openSheet(page);
+  await page.getByRole("button", { name: "Favori" }).click();
+  await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Passer à « Reçu »" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Montant payé (facultatif)").fill("19,90");
+  await dialog.getByRole("button", { name: "Valider" }).click();
+  await expect(page.getByText("Payé : 19,90")).toBeVisible();
+  const toast = page.getByRole("status", { name: "Notifications" });
+  await expect(toast).toContainText("Étape : Reçu");
+
+  await toast.getByRole("button", { name: "Annuler" }).click();
+  await expect(page.getByText("Payé : 19,90")).toHaveCount(0);
+  await page.goto("/dressing");
+  await expect(page.getByRole("heading", { name: "Ton dressing est vide" })).toBeVisible();
+});
