@@ -53,14 +53,14 @@ Remarques de la fondatrice après les tests en dev, avec la réponse proposée. 
 
 ## Retours après la mise en prod (2026-11-06)
 
-- **Sahoma (WooCommerce) : une seule photo, « Caractéristiques » absentes** [corrigé en dev] : la boutique n'annonce
+- **Sahoma (WooCommerce) : une seule photo, « Caractéristiques » absentes** [en prod le 2026-11-06] : la boutique n'annonce
   qu'une photo dans ses données structurées, mais montre toute sa galerie et un tableau de caractéristiques standard de
   WooCommerce. Closyria lit maintenant, sur toute page WooCommerce, toutes les photos de la galerie (dans l'ordre, 8
   au plus) et ce tableau, affiché tel quel sous la description (« Détails de la boutique »). « Composition »/« Matière »,
   « Entretien » et « Couleur » complètent aussi la matière, l'entretien et la couleur lus par ailleurs. Rangé dans
   `shop_data.details` (pas de migration). Fiches déjà enregistrées : à leur prochaine relecture.
 
-- **Admin : caractéristiques invisibles, pas de suppression de fiche** [fait en dev] : la fiche de l'admin affiche
+- **Admin : caractéristiques invisibles, pas de suppression de fiche** [en prod le 2026-11-06] : la fiche de l'admin affiche
   maintenant « Détails de la boutique » (le tableau WooCommerce) et la description avec ses retours à la ligne. Nouveau
   bouton « Supprimer la fiche », avec confirmation : seulement si personne ne garde l'article (même dans sa corbeille)
   et sans lecture en cours ; photos effacées du stockage, tailles, historique et « Derniers liens » supprimés, les
