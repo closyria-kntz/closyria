@@ -172,6 +172,7 @@ const product = {
   captureStatus: "ok",
   lastCapturedAt: null,
   traits: { category: [], color: null, material: null, pattern: null, season: null, audience: null, childDetail: null },
+  details: [],
 };
 const itemView = {
   id,

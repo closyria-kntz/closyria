@@ -51,6 +51,15 @@ Remarques de la fondatrice après les tests en dev, avec la réponse proposée. 
   bizarre, « Mon article » et « Autres actions » sont à redessiner, et sur grand écran le contenu reste au centre au
   lieu d'utiliser la largeur. À traiter ensemble dans la Passe design (maquettes à valider d'abord).
 
+## Retours après la mise en prod (2026-11-06)
+
+- **Sahoma (WooCommerce) : une seule photo, « Caractéristiques » absentes** [corrigé en dev] : la boutique n'annonce
+  qu'une photo dans ses données structurées, mais montre toute sa galerie et un tableau de caractéristiques standard de
+  WooCommerce. Closyria lit maintenant, sur toute page WooCommerce, toutes les photos de la galerie (dans l'ordre, 8
+  au plus) et ce tableau, affiché tel quel sous la description (« Détails de la boutique »). « Composition »/« Matière »,
+  « Entretien » et « Couleur » complètent aussi la matière, l'entretien et la couleur lus par ailleurs. Rangé dans
+  `shop_data.details` (pas de migration). Fiches déjà enregistrées : à leur prochaine relecture.
+
 ## Passe design (avant l'ouverture au public)
 
 - **Menu à revoir** (onglets téléphone, menu latéral ordinateur). L'accueil y est depuis le 2026-11-06.

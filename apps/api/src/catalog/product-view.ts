@@ -1,5 +1,5 @@
 import { asc, type Database, eq, inArray, schema } from "@closyria/db";
-import type { ProductTraits, ProductView } from "@closyria/shared";
+import { type ProductTraits, type ProductView, shopDataSchema } from "@closyria/shared";
 
 export const catalogImageUrl = (imageId: string) => `/api/catalog-images/${imageId}`;
 
@@ -67,9 +67,18 @@ export async function loadProductViews(db: Database, productIds: string[]): Prom
         audience: product.audience as ProductTraits["audience"],
         childDetail: product.childDetail as ProductTraits["childDetail"],
       },
+      details: shopDetails(product.shopData),
     });
   }
   return views;
+}
+
+const detailsSchema = shopDataSchema.shape.details;
+
+/** The stored attributes table, or none when the shop data does not hold a valid one. */
+function shopDetails(shopData: Record<string, unknown>): ProductView["details"] {
+  const parsed = detailsSchema.safeParse(shopData.details);
+  return parsed.success ? (parsed.data ?? []) : [];
 }
 
 type CategoryRow = { id: string; parentId: string | null; name: string };

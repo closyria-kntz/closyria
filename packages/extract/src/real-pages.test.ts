@@ -16,6 +16,7 @@ const PAGES: { name: string; url: string; shopify: boolean; sizes: boolean }[] =
     shopify: false,
     sizes: false,
   },
+  { name: "sahoma", url: "https://sahomashop.com/produit/pull-lioran-rose", shopify: false, sizes: false },
   {
     name: "zalando",
     url: "https://www.zalando.fr/adidas-sportswear-essentials-3-stripes-leggings-leggings-blackwhite-adq41e03i-q12.html",
@@ -79,14 +80,33 @@ describe("new fields on real pages", () => {
     expect(p.shopData?.gtins).toContain("60788097"); // per-size barcode (8 digits, a valid GTIN-8)
   });
   it("zalando: sku, colour and breadcrumb (no gtin in the recorded JSON-LD)", () => {
-    const p = product("zalando", PAGES[7]?.url ?? "", false);
+    const p = product("zalando", PAGES.find((p) => p.name === "zalando")?.url ?? "", false);
     expect(p.sku).toBe("ADQ41E03I-Q12");
     expect(p.shopData?.colors).toEqual(["black/white/noir"]);
     expect(p.shopData?.breadcrumb).toEqual(["Femme", "Sport", "Vêtements", "Pantalons", "Collants & leggings"]);
   });
   it("promod: still valid without new fields", () => {
-    const p = product("promod", PAGES[6]?.url ?? "", false);
+    const p = product("promod", PAGES.find((p) => p.name === "promod")?.url ?? "", false);
     expect(p.publishedAt).toBeUndefined();
     expect(p.gtin).toBeUndefined();
+  });
+  it("sahoma (WooCommerce): every gallery photo and the attributes table", () => {
+    const p = product("sahoma", "https://sahomashop.com/produit/pull-lioran-rose", false);
+    const base = "https://sahomashop.com/wp-content/uploads/2026/10/pull-lioran-rose-sahoma-";
+    expect(p.images).toEqual(["3", "02", "1", "2", "4", "5", "6", "7"].map((n) => `${base}${n}-scaled.jpg`));
+    expect(p.shopData?.details).toEqual([
+      { label: "Taille", value: "Taille unique" },
+      { label: "Couleur", value: "Rose" },
+      {
+        label: "Dimensions",
+        value:
+          "Les mesures sont prises vêtement à plat, afin que vous puissiez facilement les comparer avec l’un de vos vêtements.\n\nLargeur aisselle à aisselle : 63 cm Longueur depuis l'épaule : 50 cm",
+      },
+      { label: "Composition", value: "60% mohair 22% polyamide 18% acrylique" },
+      { label: "Entretien", value: "Lavage à la main conseillé" },
+    ]);
+    expect(p.shopData?.material).toBe("60% mohair 22% polyamide 18% acrylique");
+    expect(p.shopData?.care).toBe("Lavage à la main conseillé");
+    expect(p.shopData?.colors).toEqual(["Rose"]);
   });
 });

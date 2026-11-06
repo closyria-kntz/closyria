@@ -57,6 +57,11 @@ export const shopDataSchema = z.object({
   material: shopText.optional(),
   care: shopText.optional(),
   collection: shopText.optional(),
+  /** The shop's own attributes table (WooCommerce « Caractéristiques »), as shown there: ≤ 20 rows. */
+  details: z
+    .array(z.object({ label: z.string().min(1).max(80), value: z.string().min(1).max(500) }))
+    .max(20)
+    .optional(),
 });
 export type ShopData = z.infer<typeof shopDataSchema>;
 
@@ -123,6 +128,8 @@ export const productViewSchema = z.object({
   captureStatus: productCaptureStatusSchema,
   lastCapturedAt: z.string().nullable(),
   traits: productTraitsSchema,
+  /** The shop's own attributes table (« Taille », « Composition »…), empty when the page has none. */
+  details: z.array(z.object({ label: z.string(), value: z.string() })),
 });
 export type ProductView = z.infer<typeof productViewSchema>;
 

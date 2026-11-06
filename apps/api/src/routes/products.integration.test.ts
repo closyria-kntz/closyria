@@ -68,6 +68,22 @@ describe("GET /api/products/:id", () => {
     });
   });
 
+  it("shows the shop's attributes table, and nothing when the stored data is not a valid one", async () => {
+    const details = [
+      { label: "Composition", value: "60% mohair" },
+      { label: "Dimensions", value: "Largeur : 63 cm\n\nLongueur : 50 cm" },
+    ];
+    const product = await newProduct({ name: "Pull", shopData: { details, material: "60% mohair" } });
+    const res = await t.app.request(`/api/products/${product.id}`);
+    expect(((await res.json()) as { details: unknown }).details).toEqual(details);
+    const broken = await newProduct({ name: "Pull", shopData: { details: [{ label: "", value: 3 }] } });
+    const res2 = await t.app.request(`/api/products/${broken.id}`);
+    expect(((await res2.json()) as { details: unknown }).details).toEqual([]);
+    const plain = await newProduct({ name: "Pull" });
+    const res3 = await t.app.request(`/api/products/${plain.id}`);
+    expect(((await res3.json()) as { details: unknown }).details).toEqual([]);
+  });
+
   it("shows what the sheet says the product is, with the labels resolved", async () => {
     const n = ++counter;
     const [women] = await t.db

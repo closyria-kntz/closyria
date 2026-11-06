@@ -551,6 +551,9 @@
         "title": "Description",
         "more": "Lire la suite",
         "less": "Réduire"
+      },
+      "details": {
+        "title": "Détails de la boutique"
       }
     },
     "manual": {

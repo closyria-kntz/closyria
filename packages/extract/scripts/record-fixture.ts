@@ -1,6 +1,7 @@
 // Manual script, never run by tests: node scripts/record-fixture.ts <url> <name>
 // One request for the page, plus one for `<product url>.js` when the page is a Shopify one.
-// Keeps only <head>, JSON-LD blocks and <meta> tags; the rest of <body> is dropped. No cookies are sent or stored.
+// Keeps only <head>, JSON-LD blocks, <meta> tags and the WooCommerce gallery images and attributes table; the rest of
+// <body> is dropped. No cookies are sent or stored.
 import { mkdirSync, writeFileSync } from "node:fs";
 
 const USER_AGENT = "Mozilla/5.0 (compatible; ClosyriaBot/1.0; +https://closyria.com)";
@@ -25,6 +26,9 @@ if (page.status !== 200) process.exit(1);
 const head = page.body.match(/<head\b[\s\S]*?<\/head\s*>/i)?.[0] ?? "";
 const ldBlocks = page.body.match(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script\s*>/gi) ?? [];
 const metas = page.body.match(/<meta\b[^>]*>/gi) ?? [];
+// WooCommerce: each gallery image is a flat <div> (link + img), the attributes are one <table>.
+const wooGallery = page.body.match(/<div\b[^>]*woocommerce-product-gallery__image[^>]*>[\s\S]*?<\/div\s*>/gi) ?? [];
+const wooAttributes = page.body.match(/<table\b[^>]*woocommerce-product-attributes[^>]*>[\s\S]*?<\/table\s*>/gi) ?? [];
 const isShopify = page.body.includes("Shopify.shop") || page.body.includes("cdn.shopify.com");
 const headWithoutScripts = head.replace(/<script\b(?![^>]*ld\+json)[\s\S]*?<\/script\s*>/gi, "");
 const outHtml = [
@@ -33,6 +37,8 @@ const outHtml = [
   "<body>",
   ...ldBlocks.filter((b) => !headWithoutScripts.includes(b)),
   ...metas.filter((m) => !headWithoutScripts.includes(m)),
+  ...wooGallery,
+  ...wooAttributes,
   "</body></html>",
 ].join("\n");
 writeFileSync(new URL(`${name}.html`, outDir), outHtml);

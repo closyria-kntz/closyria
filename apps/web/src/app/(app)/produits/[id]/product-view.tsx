@@ -15,6 +15,7 @@ import { KeepActions } from "./keep-actions";
 import { ManualForm } from "./manual-form";
 import { PhotoManager, PhotoPlaceholder } from "./photo-manager";
 import { ProductDescription } from "./product-description";
+import { ProductDetails } from "./product-details";
 import { ProductTraits } from "./product-traits";
 
 type Load = "loading" | "ready" | "not_found" | "error";
@@ -203,6 +204,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
         )}
         {hasName && <ProductTraits traits={product.traits} />}
         {hasName && product.description && <ProductDescription text={product.description} />}
+        {hasName && <ProductDetails details={product.details} />}
         {product.lastCapturedAt && (
           <p className="text-sm text-ink-muted">
             <time dateTime={product.lastCapturedAt}>

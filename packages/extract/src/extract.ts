@@ -3,6 +3,7 @@ import { extractJsonLd } from "./jsonld";
 import { extractOpenGraph } from "./opengraph";
 import { extractShopify } from "./shopify";
 import type { Candidate } from "./types";
+import { withWooCommerce } from "./woocommerce";
 
 export type ExtractInput = { url: string; contentType: string; body: string; shopifyJson?: string };
 export type ExtractResult =
@@ -15,10 +16,12 @@ type Method = {
   run: (input: ExtractInput) => Candidate | null;
 };
 
+const woo = (c: Candidate | null, i: ExtractInput) => (c ? withWooCommerce(c, i.body, i.url) : null);
+
 const METHODS: Method[] = [
   { method: "shopify", platform: "shopify", run: (i) => (i.shopifyJson ? extractShopify(i.shopifyJson, i.url) : null) },
-  { method: "jsonld", platform: "other", run: (i) => extractJsonLd(i.body, i.url) },
-  { method: "opengraph", platform: "other", run: (i) => extractOpenGraph(i.body, i.url) },
+  { method: "jsonld", platform: "other", run: (i) => woo(extractJsonLd(i.body, i.url), i) },
+  { method: "opengraph", platform: "other", run: (i) => woo(extractOpenGraph(i.body, i.url), i) },
 ];
 
 export function extract(input: ExtractInput): ExtractResult {
