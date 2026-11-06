@@ -1,7 +1,7 @@
 import { registerOwnedTable } from "@closyria/auth";
 import { schema } from "@closyria/db";
 import { registerEntitlementsOwnedTables } from "@closyria/entitlements";
-import { mergeItems, mergeProfiles, mergeTags, mergeWishlists } from "./wardrobe/merge";
+import { mergeItems, mergeProfiles, mergeRecentProducts, mergeTags, mergeWishlists } from "./wardrobe/merge";
 
 /**
  * Registers, in the API process, every table holding a user's data, so that anonymous -> account linking
@@ -19,5 +19,8 @@ export function registerOwnedTables(): void {
   registerOwnedTable(schema.profiles, schema.profiles.userId, mergeProfiles);
   registerOwnedTable(schema.tags, schema.tags.userId, mergeTags);
   registerOwnedTable(schema.items, schema.items.userId, mergeItems);
+  // After items: imports point to items (already the account's); recents fold by product, the latest visit wins.
+  registerOwnedTable(schema.photoImports, schema.photoImports.userId);
+  registerOwnedTable(schema.recentProducts, schema.recentProducts.userId, mergeRecentProducts);
   registerOwnedTable(schema.wishlists, schema.wishlists.userId, mergeWishlists);
 }

@@ -1,6 +1,7 @@
 import type { Database } from "@closyria/db";
 import type { ObjectStore } from "@closyria/storage";
 import type { PgBoss } from "pg-boss";
+import { purgeTransient } from "./purge-transient";
 import { purgeTrash } from "./purge-trash";
 
 export const PURGE_QUEUE = "wardrobe-purge";
@@ -31,7 +32,13 @@ export async function registerWardrobeQueues(boss: PgBoss, deps: { db: Database;
   await boss.createQueue(PURGE_QUEUE);
   await boss.work(
     PURGE_QUEUE,
-    purgeHandler(() => purgeTrash(deps.db, new Date(), deps.store)),
+    purgeHandler(async () => {
+      const now = new Date();
+      const { recents, imports } = await purgeTransient(deps.db, now, deps.store);
+      if (recents + imports > 0)
+        console.log(`transient purge: ${recents} recent link(s), ${imports} photo import(s) deleted`);
+      return purgeTrash(deps.db, now, deps.store);
+    }),
   );
   await boss.schedule(PURGE_QUEUE, "30 3 * * *");
 }

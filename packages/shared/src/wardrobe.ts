@@ -43,6 +43,18 @@ export const MAX_SALE_CHANNEL = 60;
 export const UNDO_DELAY_MS = 8000;
 export const TRASH_RETENTION_DAYS = 30;
 
+/** « Derniers liens »: how many a user sees, and how long a visit is kept. */
+export const RECENT_PRODUCTS_LIMIT = 20;
+export const RECENT_RETENTION_DAYS = 90;
+
+/** A photo import that is still around this long after creation is purged (with its object unless attached). */
+export const PHOTO_IMPORT_RETENTION_HOURS = 24;
+export const MAX_PHOTO_IMPORT_URL = 2048;
+export const photoImportStatusSchema = z.enum(["queued", "ready", "failed", "attached"]);
+export type PhotoImportStatus = z.infer<typeof photoImportStatusSchema>;
+export const photoImportErrorSchema = z.enum(["blocked", "timeout", "too_large", "unsupported", "failed"]);
+export type PhotoImportError = z.infer<typeof photoImportErrorSchema>;
+
 const centsSchema = z.number().int().nonnegative().max(100_000_000);
 const dateTimeSchema = z.iso.datetime({ offset: true });
 const nameOf = (max: number) => z.string().trim().min(1).max(max);
