@@ -725,6 +725,61 @@ describe("GET /api/me/items", () => {
   });
 });
 
+describe("purge from the trash", () => {
+  async function withPhoto(userId: string, itemId: string) {
+    const key = `users/${userId}/${randomUUID()}.webp`;
+    await t.store.put(key, Buffer.from("webp"), "image/webp");
+    const [media] = await t.db
+      .insert(schema.media)
+      .values({ id: randomUUID(), userId, key, contentType: "image/webp", sizeBytes: 4, width: 3, height: 4 })
+      .returning();
+    if (!media) throw new Error("no media");
+    await t.db.insert(schema.itemMedia).values({ itemId, mediaId: media.id, position: 0 });
+    return { key, mediaId: media.id };
+  }
+
+  it("deletes a trashed item for good, with its photo rows and stored objects", async () => {
+    const { cookie, userId } = await t.signIn();
+    const product = await newProduct();
+    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const photo = await withPhoto(userId, item.id);
+    await call("DELETE", `/api/me/items/${item.id}`, cookie);
+    const res = await call("DELETE", `/api/me/items/${item.id}/purge`, cookie);
+    expect(res.status).toBe(204);
+    expect(await t.db.select().from(schema.items).where(eq(schema.items.id, item.id))).toHaveLength(0);
+    expect(await t.db.select().from(schema.media).where(eq(schema.media.id, photo.mediaId))).toHaveLength(0);
+    await expect(t.store.get(photo.key)).rejects.toThrow();
+    expect((await call("DELETE", `/api/me/items/${item.id}/purge`, cookie)).status).toBe(404);
+  });
+
+  it("refuses an active item with 409 item_not_deleted", async () => {
+    const { cookie } = await t.signIn();
+    const product = await newProduct();
+    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const res = await call("DELETE", `/api/me/items/${item.id}/purge`, cookie);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "item_not_deleted" });
+    expect(await t.db.select().from(schema.items).where(eq(schema.items.id, item.id))).toHaveLength(1);
+  });
+
+  it("answers 404 for another account's trashed item, and leaves it alone", async () => {
+    const owner = await t.signIn();
+    const other = await t.signIn();
+    const product = await newProduct();
+    const { item } = await keep(owner.cookie, { productId: product.id, action: "favorite" });
+    await call("DELETE", `/api/me/items/${item.id}`, owner.cookie);
+    for (const [cookie, id] of [
+      [other.cookie, item.id],
+      [owner.cookie, UNKNOWN_ID],
+    ] as const) {
+      const res = await call("DELETE", `/api/me/items/${id}/purge`, cookie);
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ error: "not_found" });
+    }
+    expect(await t.db.select().from(schema.items).where(eq(schema.items.id, item.id))).toHaveLength(1);
+  });
+});
+
 describe("isolation", () => {
   it("answers 404 on every item route for another user's item", async () => {
     const owner = await t.signIn();

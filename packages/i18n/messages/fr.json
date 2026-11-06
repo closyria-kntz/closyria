@@ -618,5 +618,235 @@
       },
       "loading": "Un instant…"
     }
+  },
+  "Lists": {
+    "title": "Listes",
+    "metadata": "Mes listes",
+    "loading": "Chargement de tes listes…",
+    "loadError": "Tes listes ne s’affichent pas. Réessaie dans un instant.",
+    "retry": "Réessayer",
+    "empty": {
+      "title": "Aucune liste pour l’instant",
+      "body": "Crée une liste pour rassembler des articles, puis partage-la avec qui tu veux."
+    },
+    "create": {
+      "label": "Nom de la nouvelle liste",
+      "submit": "Créer la liste",
+      "created": "Liste « {name} » créée",
+      "failed": "La liste n’a pas pu être créée. Réessaie."
+    },
+    "listsLabel": "Mes listes",
+    "count": "{count, plural, =0 {Aucun article} one {# article} other {# articles}}",
+    "shared": "Partagée",
+    "moveUp": "Monter {name}",
+    "moveDown": "Descendre {name}",
+    "moved": "« {name} » est en position {position} sur {count}",
+    "moveFailed": "L’ordre n’a pas pu être changé. Réessaie.",
+    "detail": {
+      "back": "← Toutes mes listes",
+      "itemsLabel": "Articles de la liste",
+      "close": "Fermer",
+      "notFound": {
+        "title": "Cette liste n’existe plus",
+        "body": "Elle a peut-être été supprimée.",
+        "back": "Voir mes listes"
+      },
+      "rename": {
+        "open": "Renommer",
+        "label": "Nom de la liste",
+        "save": "Enregistrer",
+        "cancel": "Annuler",
+        "done": "Liste renommée en « {name} »",
+        "failed": "Le nom n’a pas pu être changé. Réessaie."
+      },
+      "delete": {
+        "open": "Supprimer la liste",
+        "title": "Supprimer « {name} » ?",
+        "body": "Les articles restent dans ton dressing. Si la liste est partagée, son lien cesse de marcher.",
+        "confirm": "Supprimer la liste",
+        "cancel": "Annuler",
+        "done": "Liste « {name} » supprimée",
+        "failed": "La liste n’a pas pu être supprimée. Réessaie."
+      },
+      "empty": {
+        "title": "Cette liste est vide",
+        "body": "Ajoute des articles depuis une vue : choisis-les, puis « Liste »."
+      },
+      "remove": "Retirer {name}",
+      "removed": "« {name} » retiré de la liste",
+      "removeFailed": "L’article n’a pas pu être retiré. Réessaie.",
+      "itemsFailed": "Certains articles ne s’affichent pas."
+    },
+    "share": {
+      "title": "Partage",
+      "intro": "Toute personne qui a le lien voit le nom de la liste, les photos de la boutique, le nom, le prix et le lien vers la boutique. Jamais tes photos, notes, tailles ni profils.",
+      "notShared": "Cette liste n’est pas partagée.",
+      "sharedSince": "Partagée depuis le {date}.",
+      "action": "Partager",
+      "renewWarning": "Le lien n’est montré qu’au moment où il est créé. Cliquer de nouveau sur « Partager » crée un nouveau lien et désactive l’ancien.",
+      "created": "Lien créé. Copie-le maintenant.",
+      "linkLabel": "Lien de partage",
+      "copy": "Copier le lien",
+      "copied": "Lien copié",
+      "copyFailed": "Copie impossible ici : le lien est sélectionné, copie-le à la main.",
+      "stop": "Arrêter le partage",
+      "stopped": "Partage arrêté : le lien ne marche plus.",
+      "failed": "Le partage n’a pas abouti. Réessaie."
+    }
+  },
+  "SharedList": {
+    "metadata": "Liste partagée",
+    "itemsLabel": "Articles",
+    "empty": "Cette liste est vide pour l’instant.",
+    "noPrice": "Prix non renseigné",
+    "noName": "Article sans nom",
+    "noPhoto": "Pas de photo",
+    "visit": "Voir chez {shop}",
+    "footer": "Liste partagée avec Closyria.",
+    "footerLink": "Découvrir Closyria",
+    "notFound": {
+      "title": "Ce lien ne marche plus",
+      "body": "La personne a arrêté de partager cette liste, ou le lien est incomplet.",
+      "home": "Découvrir Closyria"
+    },
+    "visitFor": "{name}, s’ouvre dans un nouvel onglet"
+  },
+  "Settings": {
+    "title": "Réglages",
+    "metadata": "Réglages",
+    "nav": {
+      "label": "Réglages",
+      "profiles": "Profils",
+      "tags": "Étiquettes",
+      "trash": "Corbeille",
+      "iphone": "Aide iPhone"
+    },
+    "colors": {
+      "plum": "Prune",
+      "rose": "Rose",
+      "sage": "Sauge",
+      "sand": "Sable",
+      "slate": "Ardoise",
+      "sky": "Ciel"
+    },
+    "loading": "Chargement…",
+    "loadError": "Ça ne s’affiche pas. Réessaie dans un instant.",
+    "retry": "Réessayer",
+    "failed": "L’enregistrement n’a pas abouti. Réessaie.",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "profiles": {
+      "title": "Profils",
+      "metadata": "Profils",
+      "intro": "Un profil par personne dont tu ranges les vêtements : toi, ta fille…",
+      "listLabel": "Tes profils",
+      "name": "Nom",
+      "audience": "Public",
+      "childDetail": "Précision",
+      "color": "Couleur",
+      "audienceOptions": {
+        "women": "Femme",
+        "men": "Homme",
+        "child": "Enfant",
+        "mixed": "Mixte"
+      },
+      "childOptions": {
+        "girl": "Fille",
+        "boy": "Garçon",
+        "baby": "Bébé"
+      },
+      "childNone": "Non précisé",
+      "groupLabel": "Profil {name}",
+      "itemCount": "{count, plural, =0 {Aucun article} one {# article} other {# articles}}",
+      "save": "Enregistrer",
+      "saved": "Profil « {name} » enregistré",
+      "add": "Ajouter un profil",
+      "addTitle": "Nouveau profil",
+      "added": "Profil « {name} » ajouté",
+      "delete": "Supprimer",
+      "deleteTitle": "Supprimer le profil « {name} » ?",
+      "deleteBody": "Ses articles dans la corbeille passent dans ton premier autre profil.",
+      "deleteConfirm": "Supprimer le profil",
+      "deleted": "Profil « {name} » supprimé",
+      "notEmpty": "Déplace d’abord ses articles.",
+      "moveUp": "Monter {name}",
+      "moveDown": "Descendre {name}",
+      "moved": "« {name} » est en position {position} sur {count}"
+    },
+    "tags": {
+      "title": "Étiquettes",
+      "metadata": "Étiquettes",
+      "intro": "Pour retrouver tes articles par thème : « été », « cadeau »…",
+      "listLabel": "Tes étiquettes",
+      "empty": "Aucune étiquette pour l’instant.",
+      "name": "Nom",
+      "color": "Couleur",
+      "noColor": "Sans couleur",
+      "create": "Créer l’étiquette",
+      "newLabel": "Nouvelle étiquette",
+      "created": "Étiquette « {name} » créée",
+      "groupLabel": "Étiquette {name}",
+      "save": "Enregistrer",
+      "saved": "Étiquette « {name} » enregistrée",
+      "delete": "Supprimer",
+      "deleteTitle": "Supprimer l’étiquette « {name} » ?",
+      "deleteBody": "Elle est retirée de tes articles ; les articles restent.",
+      "deleteConfirm": "Supprimer l’étiquette",
+      "deleted": "Étiquette « {name} » supprimée",
+      "exists": "Une étiquette porte déjà ce nom.",
+      "limit": "Tu as atteint la limite de 200 étiquettes."
+    },
+    "trash": {
+      "title": "Corbeille",
+      "metadata": "Corbeille",
+      "notice": "Effacés automatiquement après 30 jours",
+      "empty": "La corbeille est vide.",
+      "listLabel": "Articles dans la corbeille",
+      "deletedOn": "Supprimé le {date}",
+      "restore": "Restaurer",
+      "restoreLabel": "Restaurer {name}",
+      "restored": "« {name} » restauré",
+      "merged": "« {name} » est réuni avec l’article que tu avais déjà gardé",
+      "purge": "Supprimer définitivement",
+      "purgeLabel": "Supprimer définitivement {name}",
+      "purgeTitle": "Supprimer définitivement ?",
+      "purgeBody": "« {name} » et ses photos seront effacés pour toujours. Tu ne pourras pas annuler.",
+      "purgeCancel": "Garder dans la corbeille",
+      "purged": "« {name} » supprimé définitivement",
+      "loadMore": "Voir la suite",
+      "noName": "Article sans nom",
+      "noPhoto": "Pas de photo",
+      "restoreFailed": "L’article n’a pas pu être restauré. Réessaie.",
+      "purgeFailed": "L’article n’a pas pu être supprimé. Réessaie.",
+      "alreadyGone": "Cet article n’est plus dans la corbeille."
+    }
+  },
+  "IphoneHelp": {
+    "metadata": "Aide iPhone",
+    "back": "← Réglages",
+    "title": "Ajouter Closyria au menu Partager",
+    "intro": "Sur iPhone, Closyria n’apparaît pas tout seul dans le menu Partager. Un Raccourci que tu crées en 4 étapes ajoute « Envoyer à Closyria » à ce menu.",
+    "stepsLabel": "Les 4 étapes",
+    "steps": {
+      "1": {
+        "title": "Crée le raccourci",
+        "body": "Ouvre l’app Raccourcis, touche +, puis nomme le raccourci « Envoyer à Closyria »."
+      },
+      "2": {
+        "title": "Montre-le dans le menu Partager",
+        "body": "Touche l’icône de détails, active « Afficher dans la feuille de partage », puis garde seulement « URL » dans les types acceptés."
+      },
+      "3": {
+        "title": "Ajoute l’action « Ouvrir les URL »",
+        "body": "Dans le champ de l’action, écris l’adresse ci-dessous, puis touche le champ et ajoute juste après la variable « Entrée du raccourci » : c’est le lien partagé."
+      },
+      "4": {
+        "title": "Essaie",
+        "body": "Dans Safari, ouvre la page d’un article, touche Partager, puis « Envoyer à Closyria ». L’article s’ajoute à tes envies."
+      }
+    },
+    "addressLabel": "Adresse à écrire dans l’action",
+    "address": "https://closyria.com/partager?url=",
+    "note": "Le fichier du raccourci n’est pas fourni : tu le crées toi-même, en quelques secondes."
   }
 }

@@ -6,7 +6,7 @@ import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { type AccessEnv, defineAccess } from "../../access";
 import type { WardrobeDeps } from "../../wardrobe/deps";
-import { attachPhoto, ownsActiveItem, removePhoto } from "../../wardrobe/item-photos";
+import { attachPhoto, ownsActiveItem, purgeTrashedItem, removePhoto } from "../../wardrobe/item-photos";
 import { loadItemView } from "../../wardrobe/item-view";
 import type { MediaPipeline } from "../media";
 
@@ -89,6 +89,25 @@ const deleteRoute = defineAccess(
   "user",
 );
 
+const purgeRoute = defineAccess(
+  createRoute({
+    method: "delete",
+    path: "/me/items/{id}/purge",
+    summary: "Delete a trashed item for good",
+    description:
+      "Only for an item already in the trash. Deletes the item and its private photos (rows and stored files). " +
+      "No undo.",
+    request: { params: itemParams },
+    responses: {
+      204: { description: "Deleted for good" },
+      400: errorContent("Malformed id (invalid_request)"),
+      404: errorContent("Unknown or another account's item (not_found)"),
+      409: errorContent("The item is not in the trash (item_not_deleted)"),
+    },
+  }),
+  "user",
+);
+
 const fileRoute = defineAccess(
   createRoute({
     method: "get",
@@ -155,6 +174,12 @@ export function itemMediaRoutes(deps: WardrobeDeps & { store: ObjectStore }, pip
       if (!(await removePhoto(db, store, userId, itemId, mediaId))) return c.json(notFound, 404);
       const item = await loadItemView(db, userId, itemId);
       return item ? c.json({ itemIds: [itemId], undo: null, item }, 200) : c.json(notFound, 404);
+    })
+    .openapi(purgeRoute, async (c) => {
+      const outcome = await purgeTrashedItem(db, store, userIdOf(c), c.req.valid("param").id);
+      if (outcome === "not_found") return c.json(notFound, 404);
+      if (outcome === "item_not_deleted") return c.json({ error: "item_not_deleted" } as const, 409);
+      return c.body(null, 204);
     })
     .openapi(fileRoute, async (c) => {
       const { id } = c.req.valid("param");

@@ -1,4 +1,4 @@
-import { and, asc, count, type Database, eq, schema, sql } from "@closyria/db";
+import { and, asc, count, type Database, eq, inArray, schema, sql } from "@closyria/db";
 import { MAX_ITEM_PHOTOS } from "@closyria/shared";
 import type { Tx } from "./events";
 import { lockOwnItem } from "./items";
@@ -64,4 +64,48 @@ export async function removePhoto(
   if (key === null) return false;
   await store.delete(key).catch((error) => console.error("photo object not deleted:", error));
   return true;
+}
+
+export type PurgeOutcome = "purged" | "not_found" | "item_not_deleted";
+
+/**
+ * Deletes one of her items for good, from the trash only: the item (its history, tags and list places go with it by
+ * cascade) and its private photos, rows first, in one transaction; the stored objects after the commit, so a store
+ * failure (logged) cannot undo the purge. A photo still attached to another item (a merge) is kept.
+ */
+export async function purgeTrashedItem(
+  db: Database,
+  store: { delete(key: string): Promise<void> },
+  userId: string,
+  itemId: string,
+): Promise<PurgeOutcome> {
+  const keys: string[] = [];
+  const outcome = await db.transaction(async (tx): Promise<PurgeOutcome> => {
+    const item = await lockOwnItem(tx, userId, itemId);
+    if (!item) return "not_found";
+    if (!item.deletedAt) return "item_not_deleted";
+    const attached = await tx
+      .select({ mediaId: schema.itemMedia.mediaId })
+      .from(schema.itemMedia)
+      .where(eq(schema.itemMedia.itemId, itemId));
+    const mediaIds = attached.map((a) => a.mediaId);
+    if (mediaIds.length > 0) {
+      const removed = await tx
+        .delete(schema.media)
+        .where(
+          and(
+            inArray(schema.media.id, mediaIds),
+            sql`not exists (select 1 from ${schema.itemMedia} where ${schema.itemMedia.mediaId} = ${schema.media.id} and ${schema.itemMedia.itemId} <> ${itemId})`,
+          ),
+        )
+        .returning({ key: schema.media.key });
+      keys.push(...removed.map((r) => r.key));
+    }
+    await tx.delete(schema.items).where(eq(schema.items.id, itemId));
+    return "purged";
+  });
+  for (const key of keys) {
+    await store.delete(key).catch((error) => console.error(`purge: could not delete stored object ${key}`, error));
+  }
+  return outcome;
 }

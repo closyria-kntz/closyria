@@ -2,10 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   changeStage,
   createItem,
+  deleteProfile,
   fetchFacets,
   fetchItemForProduct,
   fetchItemsPage,
   fetchReference,
+  purgeItem,
+  reorderWishlists,
+  shareWishlist,
   undoMutation,
 } from "./wardrobe-client";
 
@@ -129,5 +133,51 @@ describe("view reads", () => {
     const ok = { categories: [{ id, parentId: null, name: "Robes", position: 0 }], colors: [] };
     expect((await fetchReference(deps(json(ok)))).categories).toHaveLength(1);
     await expect(fetchReference(deps(json({ categories: 3 })))).rejects.toThrow();
+  });
+});
+
+describe("lists, sharing, profiles and trash", () => {
+  const listId = "00000000-0000-4000-8000-000000000002";
+
+  it("shareWishlist returns the path the API gave, once", async () => {
+    const d = deps(json({ url: "/l/abcDEF_-123" }));
+    const result = await shareWishlist(listId, d);
+    expect(result).toMatchObject({ ok: true, url: "/l/abcDEF_-123" });
+    expect(d.fetch).toHaveBeenCalledWith(`/api/me/wishlists/${listId}/share`, { method: "POST" });
+  });
+
+  it("shareWishlist refuses an answer that is not a share path", async () => {
+    expect(await shareWishlist(listId, deps(json({ url: "https://evil.test/x" })))).toEqual({
+      ok: false,
+      error: "failed",
+    });
+  });
+
+  it("reorderWishlists posts the ids in their new order", async () => {
+    const d = deps(json({ wishlists: [] }));
+    expect(await reorderWishlists([listId, id], d)).toMatchObject({ ok: true });
+    expect(d.fetch).toHaveBeenCalledWith(
+      "/api/me/wishlists/order",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ ids: [listId, id] }) }),
+    );
+  });
+
+  it("deleteProfile keeps the API's profile_not_empty code", async () => {
+    expect(await deleteProfile(id, deps(json({ error: "profile_not_empty" }, 409)))).toEqual({
+      ok: false,
+      error: "profile_not_empty",
+    });
+  });
+
+  it("deleteProfile and purgeItem succeed on 204 with no body", async () => {
+    expect(await deleteProfile(id, deps(new Response(null, { status: 204 })))).toEqual({ ok: true });
+    expect(await purgeItem(id, deps(new Response(null, { status: 204 })))).toEqual({ ok: true });
+  });
+
+  it("purgeItem keeps item_not_deleted", async () => {
+    expect(await purgeItem(id, deps(json({ error: "item_not_deleted" }, 409)))).toEqual({
+      ok: false,
+      error: "item_not_deleted",
+    });
   });
 });

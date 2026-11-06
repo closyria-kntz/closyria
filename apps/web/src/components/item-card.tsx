@@ -3,6 +3,7 @@
 import type { ItemView } from "@closyria/shared";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import type { MouseEvent, ReactNode } from "react";
 import { formatOptionalPrice } from "@/lib/price";
 import { focusRing } from "./ui";
 
@@ -11,13 +12,18 @@ type Props = {
   selected: boolean;
   /** At least one card is selected: a click on a card then selects instead of opening. */
   selecting: boolean;
-  onToggle: (id: string) => void;
+  /** Without it the card has no selection box (list contents, trash). */
+  onToggle?: ((id: string) => void) | undefined;
+  /** False: no link to the sheet (the trash). */
+  linked?: boolean;
+  /** Extra controls under the card (move up / down, remove, restore…). */
+  children?: ReactNode;
   /** Show the stage (« Vendu », « Renvoyé »): for the items that the view's own stage does not describe. */
   showStage: boolean;
 };
 
 /** One item in the grid: 3:4 frame with the whole photo, name, shop, price, favourite, link to the sheet. */
-export function ItemCard({ item, selected, selecting, onToggle, showStage }: Props) {
+export function ItemCard({ item, selected, selecting, onToggle, showStage, linked = true, children }: Props) {
   const t = useTranslations("Views.card");
   const tStage = useTranslations("Item.stage");
   const locale = useLocale();
@@ -31,14 +37,14 @@ export function ItemCard({ item, selected, selecting, onToggle, showStage }: Pro
   );
   return (
     <li className="card group relative flex flex-col" data-testid="item-card">
-      <Link
+      <Wrapper
+        linked={linked}
         href={`/produits/${item.product.id}`}
         onClick={(event) => {
-          if (!selecting) return;
+          if (!selecting || !onToggle) return;
           event.preventDefault();
           onToggle(item.id);
         }}
-        className={`flex flex-col gap-space-2 rounded-card ${focusRing}`}
       >
         <div
           className={`relative aspect-3/4 overflow-hidden rounded-card bg-media-backdrop ${selected ? "outline-2 outline-accent outline-solid" : ""}`}
@@ -80,16 +86,38 @@ export function ItemCard({ item, selected, selecting, onToggle, showStage }: Pro
           <span className="truncate text-sm text-ink-muted">{item.product.shop.name}</span>
           <span className="text-sm">{price}</span>
         </div>
-      </Link>
-      <label className="absolute top-space-1 left-space-1 flex size-touch-target cursor-pointer items-center justify-center">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={() => onToggle(item.id)}
-          aria-label={t("select", { name })}
-          className={`size-space-5 accent-accent ${focusRing}`}
-        />
-      </label>
+      </Wrapper>
+      {onToggle && (
+        <label className="absolute top-space-1 left-space-1 flex size-touch-target cursor-pointer items-center justify-center">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggle(item.id)}
+            aria-label={t("select", { name })}
+            className={`size-space-5 accent-accent ${focusRing}`}
+          />
+        </label>
+      )}
+      {children}
     </li>
+  );
+}
+
+function Wrapper({
+  linked,
+  href,
+  onClick,
+  children,
+}: {
+  linked: boolean;
+  href: string;
+  onClick: (event: MouseEvent<HTMLAnchorElement>) => void;
+  children: ReactNode;
+}) {
+  if (!linked) return <div className="flex flex-col gap-space-2">{children}</div>;
+  return (
+    <Link href={href} onClick={onClick} className={`flex flex-col gap-space-2 rounded-card ${focusRing}`}>
+      {children}
+    </Link>
   );
 }

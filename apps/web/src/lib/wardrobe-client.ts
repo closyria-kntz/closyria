@@ -10,10 +10,17 @@ import {
   type ItemView,
   itemMutationResultSchema,
   itemPageSchema,
+  itemViewSchema,
   mediaErrorCodes,
   mutationResultSchema,
+  type ProfileInput,
+  type ProfilePatch,
+  profileListSchema,
+  profileViewSchema,
   type ReferenceView,
   referenceViewSchema,
+  shareResultSchema,
+  type TagPatch,
   type TagView,
   tagListSchema,
   tagViewSchema,
@@ -192,4 +199,92 @@ export async function fetchFacets(deps: ClientDeps = defaultDeps): Promise<Facet
   if (response.status === 401) return { shops: [] };
   if (!response.ok) throw new Error(`facets ${response.status}`);
   return facetsViewSchema.parse(await response.json());
+}
+
+/** A call whose success is a 204 with no body. */
+async function callNoContent(deps: ClientDeps, path: string, init: RequestInit): Promise<Result<object>> {
+  try {
+    await deps.ensure();
+    const response = await deps.fetch(path, init);
+    if (response.status === 204) return { ok: true };
+    const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+    if (typeof body?.error === "string" && KNOWN_ERRORS.includes(body.error)) {
+      return { ok: false, error: body.error as ClientError };
+    }
+  } catch {
+    // Falls through to the generic error.
+  }
+  return { ok: false, error: "failed" };
+}
+
+/** One of her items by id (trashed ones included). Throws on a network error or a malformed answer; null if gone. */
+export async function fetchItem(id: string, deps: ClientDeps = defaultDeps): Promise<ItemView | null> {
+  const response = await deps.fetch(`/api/me/items/${id}`, { cache: "no-store" });
+  if (response.status === 404 || response.status === 401) return null;
+  if (!response.ok) throw new Error(`item ${response.status}`);
+  return itemViewSchema.parse(await response.json());
+}
+
+export async function renameWishlist(id: string, name: string, deps: ClientDeps = defaultDeps) {
+  return await call(deps, `/api/me/wishlists/${id}`, jsonInit("PATCH", { name }), wishlistViewSchema);
+}
+
+export async function deleteWishlist(id: string, deps: ClientDeps = defaultDeps) {
+  return await callNoContent(deps, `/api/me/wishlists/${id}`, { method: "DELETE" });
+}
+
+export async function reorderWishlists(ids: readonly string[], deps: ClientDeps = defaultDeps) {
+  return await call(deps, "/api/me/wishlists/order", jsonInit("POST", { ids }), wishlistListSchema);
+}
+
+export async function reorderWishlistItems(id: string, ids: readonly string[], deps: ClientDeps = defaultDeps) {
+  return await call(deps, `/api/me/wishlists/${id}/order`, jsonInit("POST", { ids }), wishlistViewSchema);
+}
+
+export async function removeFromWishlist(id: string, itemId: string, deps: ClientDeps = defaultDeps) {
+  return await call(deps, `/api/me/wishlists/${id}/items/${itemId}`, { method: "DELETE" }, wishlistViewSchema);
+}
+
+/** Makes a new link (`/l/<token>`, shown this once) and ends the previous one. */
+export async function shareWishlist(id: string, deps: ClientDeps = defaultDeps) {
+  return await call(deps, `/api/me/wishlists/${id}/share`, { method: "POST" }, shareResultSchema);
+}
+
+export async function unshareWishlist(id: string, deps: ClientDeps = defaultDeps) {
+  return await callNoContent(deps, `/api/me/wishlists/${id}/share`, { method: "DELETE" });
+}
+
+export async function createProfile(input: ProfileInput, deps: ClientDeps = defaultDeps) {
+  return await call(deps, "/api/me/profiles", jsonInit("POST", input), profileViewSchema);
+}
+
+export async function patchProfile(id: string, patch: ProfilePatch, deps: ClientDeps = defaultDeps) {
+  return await call(deps, `/api/me/profiles/${id}`, jsonInit("PATCH", patch), profileViewSchema);
+}
+
+/** Refused with `profile_not_empty` while the profile holds active items. */
+export async function deleteProfile(id: string, deps: ClientDeps = defaultDeps) {
+  return await callNoContent(deps, `/api/me/profiles/${id}`, { method: "DELETE" });
+}
+
+export async function reorderProfiles(ids: readonly string[], deps: ClientDeps = defaultDeps) {
+  return await call(deps, "/api/me/profiles/order", jsonInit("POST", { ids }), profileListSchema);
+}
+
+export async function patchTag(id: string, patch: TagPatch, deps: ClientDeps = defaultDeps) {
+  return await call(deps, `/api/me/tags/${id}`, jsonInit("PATCH", patch), tagViewSchema);
+}
+
+export async function deleteTag(id: string, deps: ClientDeps = defaultDeps) {
+  return await callNoContent(deps, `/api/me/tags/${id}`, { method: "DELETE" });
+}
+
+/** Takes an item out of the trash; when she kept the product again meanwhile, both are merged (`item.id` differs). */
+export async function restoreItem(id: string, deps: ClientDeps = defaultDeps) {
+  return await mutation(deps, `/api/me/items/${id}/restore`, { method: "POST" });
+}
+
+/** Deletes a trashed item for good (photos included). No undo. */
+export async function purgeItem(id: string, deps: ClientDeps = defaultDeps) {
+  return await callNoContent(deps, `/api/me/items/${id}/purge`, { method: "DELETE" });
 }
