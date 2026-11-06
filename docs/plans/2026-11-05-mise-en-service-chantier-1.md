@@ -72,6 +72,49 @@ Mêmes étapes, avec les noms de prod :
    (`seed: domain … is already attached to another shop (starting shop …)`), fusionner la boutique en attente dans
    la boutique de départ dans l'admin
 
+## Chantier 2a (« Garder ») : mise en service avec le chantier 1
+
+> Le 2a part en prod **avec** le chantier 1 (spec `docs/specs/2026-11-05-chantier-2a-garder.md`, §9). Les étapes
+> ci-dessus restent valables ; cette section ajoute ce qui change. Dev d'abord, prod seulement après les tests de la
+> fondatrice.
+
+### Ce qui change
+
+- **Migrations 0007 à 0012** appliquées par le déploiement avant le redémarrage (elles n'ajoutent que des tables et
+  des colonnes) : 0007 `catalog` · 0008 `capture_url` · 0009 `product_nullable_fields` · 0010
+  `capture_queue_unavailable` (chantier 1) ; 0011 `reference_and_product_fields` (catégories, couleurs, champs de la
+  fiche) · 0012 `wardrobe` (articles, profils, listes, étiquettes, événements d'étape).
+- **Listes de référence** (catégories, couleurs…) créées par le worker à son démarrage, en plus des boutiques de
+  départ. Elles sont journalisées au niveau « info » : `sudo journalctl -u closyria-<env>-worker --no-pager | grep 'seed:'`
+  ne doit montrer aucun avertissement (par exemple `seed: parent … is missing, skipped`).
+- **Nouvelle file `wardrobe-purge`** : vide la corbeille (articles supprimés depuis plus de 30 jours) chaque nuit à
+  03:30 UTC. Le worker la crée et la planifie seul ; ligne de journal `trash purge: N item(s) permanently deleted`
+  seulement quand il y a eu des suppressions.
+
+### Dev
+
+1. [ ] `sudo closyria-deploy dev <id>` : migrations 0011 et 0012 appliquées, worker `active`, `network barrier: active`
+2. [ ] `grep 'seed:'` du journal du worker dev : aucun avertissement ; les filtres Type et Couleur se chargent
+3. [ ] Coller un lien d'article, appuyer sur ♡ : l'article est dans « Envies » ; « Annuler » le retire
+4. [ ] Changer l'étape (« Reçu » avec un prix payé) : il passe dans « Dressing » ; « Annuler » le remet
+5. [ ] Créer une liste, y mettre un article, la partager, ouvrir le lien dans une fenêtre privée : ni notes ni taille
+   visibles ; « Arrêter le partage » puis recharger : page « Ce lien ne marche plus »
+6. [ ] Créer un second profil, y déplacer deux articles, changer de profil en haut de page
+7. [ ] Anonyme avec 3 articles : le bandeau propose un compte ; connexion par code : les articles sont toujours là
+8. [ ] Sur iPhone : l'aide « Ajouter Closyria au menu Partager » (Réglages) et le Raccourci fonctionnent
+9. [ ] Purge : rien à vérifier à la main (aucun article n'a 30 jours) ; le lendemain, pas d'erreur de `wardrobe-purge`
+   dans `sudo journalctl -u closyria-dev-worker --no-pager | grep 'wardrobe-purge'`
+
+### Prod
+
+- [ ] **Prérequis : « Sauvegardes automatiques de la prod »** livrées et la restauration essayée (copie chiffrée de la
+  base chaque nuit sur OVH, gardée 30 jours ; spec 2a §9). Sans elles, pas de prod : les articles des utilisatrices
+  seront des données à ne pas perdre.
+- [ ] Les étapes « Prod » ci-dessus (variables comparées, barrière, déploiement), avec migrations 0007 à 0012
+- [ ] `grep 'seed:'` vide ; filtres Type et Couleur chargés sur https://closyria.com
+- [ ] Parcours ♡, étape, liste partagée (fenêtre privée), profil, comme en dev
+- [ ] Le lendemain : pas d'erreur de `wardrobe-purge` dans le journal du worker prod
+
 ## Retour arrière
 
 - **Quand** : santé en échec (API ou web), worker qui ne démarre pas ou redémarre en boucle, `network barrier: ABSENT` après recopie de l'unité, captures toutes en erreur
