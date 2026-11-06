@@ -15,6 +15,25 @@ export async function ownsActiveItem(db: Database, userId: string, itemId: strin
 export type AttachOutcome = "attached" | "not_found" | "item_deleted" | "too_many_photos";
 
 /**
+ * Whether one more photo could be attached to her item now (a check before work is queued, without lock;
+ * `attachPhoto` decides when the photo is there).
+ */
+export async function photoRoom(
+  db: Database,
+  userId: string,
+  itemId: string,
+): Promise<"room" | Exclude<AttachOutcome, "attached">> {
+  const [row] = await db
+    .select({ deletedAt: schema.items.deletedAt })
+    .from(schema.items)
+    .where(and(eq(schema.items.id, itemId), eq(schema.items.userId, userId)));
+  if (!row) return "not_found";
+  if (row.deletedAt) return "item_deleted";
+  const [photos] = await db.select({ n: count() }).from(schema.itemMedia).where(eq(schema.itemMedia.itemId, itemId));
+  return (photos?.n ?? 0) >= MAX_ITEM_PHOTOS ? "too_many_photos" : "room";
+}
+
+/**
  * Attaches a stored photo (its `media` row already inserted in `tx`) as her item's last photo. The item row is locked
  * first, so the count and the insert cannot interleave with another upload on the same item.
  */

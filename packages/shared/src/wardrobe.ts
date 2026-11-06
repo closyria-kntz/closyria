@@ -300,6 +300,46 @@ export type MutationResult = z.infer<typeof mutationResultSchema>;
 export const itemMutationResultSchema = mutationResultSchema.extend({ item: itemViewSchema });
 export type ItemMutationResult = z.infer<typeof itemMutationResultSchema>;
 
+/** pg-boss queue of the photo imports (`POST /api/me/items/{id}/media/imports`), fed by the API, run by the worker. */
+export const PHOTO_IMPORT_QUEUE = "photo-import";
+/** Data of a `photo-import` job. */
+export const photoImportJobSchema = z.object({ importId: z.uuid() });
+export type PhotoImportJob = z.infer<typeof photoImportJobSchema>;
+
+/** Body of `POST /api/me/items/{id}/media/imports`: the address of a photo, http(s) only. */
+export const photoImportRequestSchema = z.object({
+  url: z
+    .string()
+    .trim()
+    .min(1)
+    .max(MAX_PHOTO_IMPORT_URL)
+    .refine((value) => {
+      try {
+        const { protocol } = new URL(value);
+        return protocol === "http:" || protocol === "https:";
+      } catch {
+        return false;
+      }
+    }),
+});
+export type PhotoImportRequest = z.infer<typeof photoImportRequestSchema>;
+export const photoImportAcceptedSchema = z.object({ importId: z.uuid() });
+
+/** Why an import gave no photo: the worker's codes, or the attachment refused (10 photos, item in the trash). */
+export const photoImportViewErrorSchema = z.enum([
+  ...photoImportErrorSchema.options,
+  "too_many_photos",
+  "item_deleted",
+]);
+export type PhotoImportViewError = z.infer<typeof photoImportViewErrorSchema>;
+/** `GET /api/me/items/{id}/media/imports/{importId}`. */
+export const photoImportViewSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("queued") }),
+  z.object({ status: z.literal("failed"), error: photoImportViewErrorSchema }),
+  z.object({ status: z.literal("attached"), item: itemViewSchema }),
+]);
+export type PhotoImportView = z.infer<typeof photoImportViewSchema>;
+
 export const profilePatchSchema = profileInputSchema.partial();
 export type ProfilePatch = z.infer<typeof profilePatchSchema>;
 

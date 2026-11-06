@@ -1,6 +1,8 @@
 import type { Database } from "@closyria/db";
+import { PHOTO_IMPORT_QUEUE, photoImportJobSchema } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import type { PgBoss } from "pg-boss";
+import { runPhotoImport } from "./photo-import";
 import { purgeTransient } from "./purge-transient";
 import { purgeTrash } from "./purge-trash";
 
@@ -27,8 +29,31 @@ export function purgeHandler(run: () => Promise<number>) {
   };
 }
 
-/** Creates the wardrobe-purge queue, processes it and schedules it every night at 03:30. */
+/** photo-import: `{ importId }`; anything else fails the job and `run` is not called. */
+export function photoImportHandler(run: (importId: string) => Promise<void>) {
+  return async (jobs: JobLike[]): Promise<void> => {
+    for (const job of jobs) {
+      const parsed = photoImportJobSchema.safeParse(job.data);
+      if (!parsed.success) {
+        console.error(`${PHOTO_IMPORT_QUEUE}: invalid job data (job ${job.id ?? "?"}), failing it`);
+        throw new Error(`invalid job data on ${PHOTO_IMPORT_QUEUE}`);
+      }
+      await run(parsed.data.importId);
+    }
+  };
+}
+
+/**
+ * Creates the wardrobe-purge queue, processes it and schedules it every night at 03:30; creates and processes the
+ * photo-import queue (the API creates it too), two photos at a time (each re-encoding takes ~60-80 MB).
+ */
 export async function registerWardrobeQueues(boss: PgBoss, deps: { db: Database; store: ObjectStore }): Promise<void> {
+  await boss.createQueue(PHOTO_IMPORT_QUEUE);
+  await boss.work(
+    PHOTO_IMPORT_QUEUE,
+    { localConcurrency: 2 },
+    photoImportHandler((importId) => runPhotoImport(importId, deps)),
+  );
   await boss.createQueue(PURGE_QUEUE);
   await boss.work(
     PURGE_QUEUE,

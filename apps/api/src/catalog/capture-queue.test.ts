@@ -22,17 +22,20 @@ function fakeBoss(failStart = 0) {
 }
 
 describe("pgBossQueue", () => {
-  it("starts once, creates both queues, then sends the capture id", async () => {
+  it("starts once, creates its queues, then sends the capture or import id", async () => {
     const { boss, log } = fakeBoss();
     const queue = pgBossQueue(boss);
     await queue.enqueue("capture-user", "c1");
     await queue.enqueue("capture-admin", "c2");
+    await queue.enqueue("photo-import", "i1");
     expect(log).toEqual([
       "start",
       "create capture-user",
       "create capture-admin",
+      "create photo-import",
       'send capture-user {"captureId":"c1"}',
       'send capture-admin {"captureId":"c2"}',
+      'send photo-import {"importId":"i1"}',
     ]);
   });
 

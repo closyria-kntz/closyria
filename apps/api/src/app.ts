@@ -113,7 +113,10 @@ export function createApp(deps: AppDeps) {
     .route("/", profilesRoutes(deps.wardrobe))
     .route("/", bulkRoutes(deps.wardrobe))
     .route("/", itemsRoutes(deps.wardrobe))
-    .route("/", itemMediaRoutes({ ...deps.wardrobe, store: deps.media.store }, mediaPipeline))
+    .route(
+      "/",
+      itemMediaRoutes({ ...deps.wardrobe, store: deps.media.store, queue: deps.catalog.queue }, mediaPipeline),
+    )
     .route("/", tagsRoutes(deps.wardrobe))
     .route("/", recentsRoutes(deps.wardrobe))
     .route("/", facetsRoutes(deps.wardrobe))
