@@ -50,6 +50,7 @@ async function keepWithPhotos(page: Page, count: number): Promise<void> {
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
   const png = bigPng(3000, 2000);
   for (let n = 1; n <= count; n++) {
+    await page.getByRole("button", { name: "Ajouter une photo" }).click();
     await page.getByTestId("photo-input").setInputFiles({ name: `p${n}.png`, mimeType: "image/png", buffer: png });
     await expect(page.getByRole("list", { name: "Mes photos" }).getByRole("listitem")).toHaveCount(n);
   }
@@ -124,4 +125,158 @@ test("la fiche d'un article pas encore gardé ouvre aussi les photos de la bouti
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(opener).toBeFocused();
+});
+
+// Chantier 2a, task 7: the « Ajouter une photo » window.
+
+const addButton = (page: Page) => page.getByRole("button", { name: "Ajouter une photo" });
+const dialog = (page: Page) => page.getByRole("dialog", { name: "Ajouter une photo" });
+
+async function keepItem(page: Page): Promise<void> {
+  await page.goto("/");
+  await page.getByLabel("Coller un lien").fill(autoProductUrl());
+  await page.getByRole("button", { name: "Ajouter" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: "Favori" }).click();
+  await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+}
+
+/** Pastes (or drops) something on the window's zone, as the browser would. */
+async function transfer(
+  page: Page,
+  type: "paste" | "drop",
+  data: { text?: string; file?: { name: string; mime: string; base64: string } },
+): Promise<void> {
+  await dialog(page)
+    .getByTestId("photo-drop-zone")
+    .evaluate(
+      (el, { type, data }) => {
+        const dt = new DataTransfer();
+        if (data.text) dt.setData("text/plain", data.text);
+        if (data.file) {
+          const bytes = Uint8Array.from(atob(data.file.base64), (c) => c.charCodeAt(0));
+          dt.items.add(new File([bytes], data.file.name, { type: data.file.mime }));
+        }
+        const event =
+          type === "paste"
+            ? new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true })
+            : new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true });
+        el.dispatchEvent(event);
+      },
+      { type, data },
+    );
+}
+
+const PIXEL_FILE = {
+  name: "p.png",
+  mime: "image/png",
+  base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+};
+
+test("coller une image ajoute la photo et ferme la fenêtre", async ({ page }) => {
+  await keepItem(page);
+  await addButton(page).click();
+  await expect(dialog(page)).toBeVisible();
+  await transfer(page, "paste", { file: PIXEL_FILE });
+  await expect(dialog(page)).toBeHidden();
+  await expect(mine(page).getByRole("listitem")).toHaveCount(1);
+  await expect(page.getByRole("status", { name: "Notifications" })).toContainText("Photo ajoutée");
+});
+
+test("déposer un fichier ajoute la photo", async ({ page }) => {
+  await keepItem(page);
+  await addButton(page).click();
+  await transfer(page, "drop", { file: PIXEL_FILE });
+  await expect(dialog(page)).toBeHidden();
+  await expect(mine(page).getByRole("listitem")).toHaveCount(1);
+});
+
+test("un texte qui n'est pas une adresse donne un message, sans rien ajouter", async ({ page }) => {
+  await keepItem(page);
+  await addButton(page).click();
+  await transfer(page, "paste", { text: "bonjour" });
+  await expect(dialog(page).getByRole("alert")).toHaveText("Colle une image ou un lien vers une image.");
+  await dialog(page).getByLabel("Lien vers une image").fill("pas une adresse");
+  await dialog(page).getByRole("button", { name: "Ajouter", exact: true }).click();
+  await expect(dialog(page).getByRole("alert")).toHaveText("Colle une image ou un lien vers une image.");
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
+});
+
+test("« Prendre une photo » n'existe que sur écran tactile", async ({ page }, testInfo) => {
+  await keepItem(page);
+  await addButton(page).click();
+  const camera = dialog(page).getByRole("button", { name: "Prendre une photo" });
+  if (testInfo.project.name === "Desktop Chrome") await expect(camera).toHaveCount(0);
+  else {
+    await expect(camera).toBeVisible();
+    await expect(dialog(page).getByTestId("photo-camera")).toHaveAttribute("capture", "environment");
+  }
+});
+
+test("une adresse collée lance l'import par lien, puis la photo apparaît", async ({ page }) => {
+  await keepItem(page);
+  await addButton(page).click();
+  await transfer(page, "paste", { file: PIXEL_FILE });
+  await expect(mine(page).getByRole("listitem")).toHaveCount(1);
+
+  // The worker refuses local addresses by design, so the two import routes are stubbed; the real fetch path is
+  // covered by the worker's own tests. `attached` carries the page's current item plus one more photo.
+  const { items } = (await (await page.request.get("/api/me/items")).json()) as {
+    items: { photos: { id: string; url: string; width: number; height: number; source: string }[] }[];
+  };
+  const current = items[0];
+  if (!current) throw new Error("no item");
+  const first = current.photos[0];
+  if (!first) throw new Error("no photo");
+  const importId = "00000000-0000-4000-8000-0000000000aa";
+  const attached = {
+    status: "attached",
+    item: { ...current, photos: [...current.photos, { ...first, id: "00000000-0000-4000-8000-0000000000bb" }] },
+  };
+  let polls = 0;
+  await page.route("**/api/me/items/*/media/imports", (route) =>
+    route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ importId }) }),
+  );
+  await page.route(`**/api/me/items/*/media/imports/${importId}`, (route) => {
+    polls += 1;
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(polls === 1 ? { status: "queued" } : attached),
+    });
+  });
+
+  await addButton(page).click();
+  await transfer(page, "paste", { text: "  https://photos.test/robe.jpg " });
+  await expect(dialog(page).getByRole("status")).toHaveText("Ajout…");
+  await expect(dialog(page)).toBeHidden();
+  await expect(mine(page).getByRole("listitem")).toHaveCount(2);
+  expect(polls).toBeGreaterThanOrEqual(2);
+});
+
+test("un import refusé affiche son message", async ({ page }) => {
+  await keepItem(page);
+  const importId = "00000000-0000-4000-8000-0000000000aa";
+  await page.route("**/api/me/items/*/media/imports", (route) =>
+    route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ importId }) }),
+  );
+  await page.route(`**/api/me/items/*/media/imports/${importId}`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "failed", error: "blocked" }),
+    }),
+  );
+  await addButton(page).click();
+  await dialog(page).getByLabel("Lien vers une image").fill("https://photos.test/robe.jpg");
+  await dialog(page).getByRole("button", { name: "Ajouter", exact: true }).click();
+  await expect(dialog(page).getByRole("alert")).toHaveText(
+    "Ce site ne laisse pas récupérer l'image. Enregistre-la puis ajoute le fichier.",
+  );
+});
+
+test("à 10 photos, le bouton « Ajouter une photo » disparaît", async ({ page }) => {
+  await keepWithPhotos(page, 10);
+  await expect(addButton(page)).toHaveCount(0);
 });

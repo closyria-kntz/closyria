@@ -33,6 +33,7 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   baseURL,
 }, testInfo) => {
   await keepFavorite(page, { size: "XL-secrète", notes: "Note-privée-42" });
+  await page.getByRole("button", { name: "Ajouter une photo" }).click();
   await page.getByTestId("photo-input").setInputFiles({
     name: "p.png",
     mimeType: "image/png",

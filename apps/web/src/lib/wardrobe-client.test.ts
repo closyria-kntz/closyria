@@ -6,9 +6,11 @@ import {
   fetchFacets,
   fetchItemForProduct,
   fetchItemsPage,
+  fetchPhotoImport,
   fetchRecents,
   fetchReference,
   forgetRecent,
+  importPhoto,
   purgeItem,
   reorderWishlists,
   shareWishlist,
@@ -212,5 +214,37 @@ describe("recents", () => {
     const d = deps(new Response(null, { status: 204 }));
     expect(await forgetRecent(id, d)).toEqual({ ok: true });
     expect(d.fetch).toHaveBeenCalledWith(`/api/me/recents/${id}`, { method: "DELETE" });
+  });
+});
+
+describe("photo import", () => {
+  it("starts an import and keeps its id", async () => {
+    const d = deps(json({ importId: id }, 202));
+    expect(await importPhoto(id, "https://x.test/a.jpg", d)).toMatchObject({ ok: true, importId: id });
+    expect(d.fetch).toHaveBeenCalledWith(
+      `/api/me/items/${id}/media/imports`,
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ url: "https://x.test/a.jpg" }) }),
+    );
+  });
+  it("keeps the API error code", async () => {
+    expect(await importPhoto(id, "https://x.test/a.jpg", deps(json({ error: "too_many_photos" }, 409)))).toEqual({
+      ok: false,
+      error: "too_many_photos",
+    });
+    expect(await importPhoto(id, "https://x.test/a.jpg", deps(json({ error: "rate_limited" }, 429)))).toEqual({
+      ok: false,
+      error: "rate_limited",
+    });
+  });
+  it("reads the state of an import", async () => {
+    expect(await fetchPhotoImport(id, id, deps(json({ status: "queued" })))).toEqual({ status: "queued" });
+    expect(await fetchPhotoImport(id, id, deps(json({ status: "failed", error: "blocked" })))).toEqual({
+      status: "failed",
+      error: "blocked",
+    });
+  });
+  it("throws on an error status or a malformed answer", async () => {
+    await expect(fetchPhotoImport(id, id, deps(json({}, 500)))).rejects.toThrow();
+    await expect(fetchPhotoImport(id, id, deps(json({ status: "weird" })))).rejects.toThrow();
   });
 });

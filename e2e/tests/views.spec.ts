@@ -97,6 +97,7 @@ test("la grille a 2, 3 ou 5 colonnes selon l'écran", async ({ page }, testInfo)
 
 test("la 1re photo ajoutée propose un compte, la proposition se ferme sans bloquer", async ({ page }, testInfo) => {
   await keepFavorite(page);
+  await page.getByRole("button", { name: "Ajouter une photo" }).click();
   await page.getByTestId("photo-input").setInputFiles({ name: "p.png", mimeType: "image/png", buffer: PIXEL });
   const banner = page.getByRole("region", { name: "Proposition de compte" });
   await expect(banner).toContainText("Garde tes articles");
@@ -108,6 +109,7 @@ test("la 1re photo ajoutée propose un compte, la proposition se ferme sans bloq
   await banner.getByRole("button", { name: "Plus tard" }).click();
   await expect(banner).toHaveCount(0);
   await page.reload();
+  await page.getByRole("button", { name: "Ajouter une photo" }).click();
   await page.getByTestId("photo-input").setInputFiles({ name: "p2.png", mimeType: "image/png", buffer: PIXEL });
   await expect(page.getByRole("list", { name: "Mes photos" }).getByRole("img").first()).toBeVisible();
   await expect(banner).toHaveCount(0);

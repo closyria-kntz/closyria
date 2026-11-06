@@ -14,6 +14,8 @@ import {
   mutationResultSchema,
   type ProfileInput,
   type ProfilePatch,
+  photoImportAcceptedSchema,
+  photoImportViewSchema,
   profileListSchema,
   profileViewSchema,
   type RecentList,
@@ -115,6 +117,32 @@ export async function uploadPhoto(id: string, file: File, deps: ClientDeps = def
   const form = new FormData();
   form.set("file", file);
   return await mutation(deps, `/api/me/items/${id}/media`, { method: "POST", body: form });
+}
+
+/** Starts the import of a photo from its address; the answer is the id to follow with `fetchPhotoImport`. */
+export async function importPhoto(id: string, url: string, deps: ClientDeps = defaultDeps) {
+  return await call(
+    deps,
+    `/api/me/items/${id}/media/imports`,
+    jsonInit("POST", { url }),
+    photoImportAcceptedSchema,
+    [202],
+  );
+}
+
+/** Where an import stands. Throws on a network error or a malformed answer (the poller tries again). */
+export async function fetchPhotoImport(
+  id: string,
+  importId: string,
+  deps: ClientDeps = defaultDeps,
+  signal?: AbortSignal,
+) {
+  const response = await deps.fetch(`/api/me/items/${id}/media/imports/${importId}`, {
+    cache: "no-store",
+    signal: signal ?? null,
+  });
+  if (!response.ok) throw new Error(`photo import ${response.status}`);
+  return photoImportViewSchema.parse(await response.json());
 }
 
 export async function removePhoto(id: string, mediaId: string, deps: ClientDeps = defaultDeps) {

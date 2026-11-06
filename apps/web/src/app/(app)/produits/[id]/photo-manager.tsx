@@ -2,14 +2,13 @@
 
 import { type ItemPhotoView, type ItemView, MAX_ITEM_PHOTOS } from "@closyria/shared";
 import { useTranslations } from "next-intl";
-import { useRef, useState } from "react";
+import { useState } from "react";
+import { AddPhotoDialog } from "@/components/add-photo-dialog";
 import { Dialog } from "@/components/dialog";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { buttonClass, primaryButtonClass } from "@/components/ui";
-import { requestAccountPrompt } from "@/lib/account-prompt-request";
-import { checkPhoto } from "@/lib/photo-check";
 import { pushUndo } from "@/lib/undo";
-import { patchItem, removePhoto, undoWith, uploadPhoto } from "@/lib/wardrobe-client";
+import { patchItem, removePhoto, undoWith } from "@/lib/wardrobe-client";
 
 /** Stand-in for a sheet without photo (hand-entered, shop blocked): tokens only, same 3:4 frame. */
 export function PhotoPlaceholder({ label }: { label: string }) {
@@ -71,7 +70,7 @@ export function PhotoManager({
   const t = useTranslations("Item");
   const tMedia = useTranslations("Media");
   const [viewing, setViewing] = useState<{ group: "private" | "shop"; index: number } | null>(null);
-  const input = useRef<HTMLInputElement>(null);
+  const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<ItemPhotoView | null>(null);
@@ -79,20 +78,6 @@ export function PhotoManager({
   const mine = item.photos.filter((photo) => photo.source === "private");
   const shop = item.photos.filter((photo) => photo.source === "shop");
   const fail = (code: string) => setError(t(`errors.${code}` as "errors.failed"));
-
-  async function add(file: File) {
-    setError(null);
-    const refused = checkPhoto(file);
-    if (refused) return fail(refused);
-    setBusy(true);
-    const result = await uploadPhoto(item.id, file);
-    if (result.ok) {
-      onChange(result.item);
-      pushUndo(t("toast.photoAdded"), null);
-      void requestAccountPrompt("photo");
-    } else fail(result.error);
-    setBusy(false);
-  }
 
   async function remove(photo: ItemPhotoView) {
     setBusy(true);
@@ -160,27 +145,11 @@ export function PhotoManager({
       )}
 
       <div className="flex flex-col items-start gap-space-1">
-        <input
-          ref={input}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/avif"
-          className="hidden"
-          aria-label={t("photos.add")}
-          data-testid="photo-input"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (file) void add(file);
-          }}
-        />
-        <button
-          type="button"
-          disabled={busy || mine.length >= MAX_ITEM_PHOTOS}
-          onClick={() => input.current?.click()}
-          className={`${buttonClass} ${touch}`}
-        >
-          {t("photos.add")}
-        </button>
+        {mine.length < MAX_ITEM_PHOTOS && (
+          <button type="button" disabled={busy} onClick={() => setAdding(true)} className={`${buttonClass} ${touch}`}>
+            {t("photos.add")}
+          </button>
+        )}
         <p className="text-sm text-ink-muted">{t("photos.count", { count: mine.length, max: MAX_ITEM_PHOTOS })}</p>
         {busy && (
           <p role="status" className="text-sm text-ink-muted">
@@ -193,6 +162,8 @@ export function PhotoManager({
           </p>
         )}
       </div>
+
+      <AddPhotoDialog open={adding} onClose={() => setAdding(false)} itemId={item.id} onChange={onChange} />
 
       <Dialog
         open={confirming !== null}
