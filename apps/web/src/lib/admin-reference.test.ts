@@ -8,6 +8,7 @@ import {
   keywordsToText,
   type ProductForm,
   productPatch,
+  referenceBody,
   slugify,
 } from "./admin-reference";
 
@@ -68,46 +69,77 @@ describe("keywords", () => {
 });
 
 describe("productPatch", () => {
-  const base: ProductForm = {
+  const initial: ProductForm = {
     name: "Robe",
-    brand: "",
+    brand: "Zara",
     price: "49,90",
-    audience: "child",
-    childDetail: "girl",
-    categoryId: "",
-    colorId: "x",
+    audience: "women",
+    childDetail: "",
+    categoryId: "cat",
+    colorId: "",
     materialId: "",
     patternId: "",
     season: "",
   };
-  it("turns the form into a patch with nulls for cleared fields and cents for the price", () => {
-    expect(productPatch(base)).toEqual({
+  it("sends only the fields that changed, with nulls for cleared ones and cents for the price", () => {
+    expect(productPatch({ ...initial, brand: "", price: "12" }, initial)).toEqual({
       ok: true,
-      patch: {
-        name: "Robe",
-        brand: null,
-        priceCents: 4990,
-        audience: "child",
-        childDetail: "girl",
-        categoryId: null,
-        colorId: "x",
-        materialId: null,
-        patternId: null,
-        season: null,
-      },
+      patch: { brand: null, priceCents: 1200 },
     });
   });
-  it("drops the child detail unless the audience is child", () => {
-    const result = productPatch({ ...base, audience: "women" });
-    expect(result.ok && result.patch.childDetail).toBe(null);
+  it("sends audience and child detail together, and drops the detail unless the audience is child", () => {
+    const result = productPatch({ ...initial, audience: "child", childDetail: "girl" }, initial);
+    expect(result).toEqual({ ok: true, patch: { audience: "child", childDetail: "girl" } });
+    const back = productPatch({ ...initial, audience: "men", childDetail: "girl" }, { ...initial, audience: "child" });
+    expect(back).toEqual({ ok: true, patch: { audience: "men", childDetail: null } });
   });
-  it("refuses an empty name and an unreadable price", () => {
-    expect(productPatch({ ...base, name: "  " })).toEqual({ ok: false, field: "name" });
-    expect(productPatch({ ...base, price: "abc" })).toEqual({ ok: false, field: "price" });
+  it("refuses an empty name when the sheet had one, and leaves a missing name alone", () => {
+    expect(productPatch({ ...initial, name: "  " }, initial)).toEqual({ ok: false, field: "name" });
+    const unnamed = { ...initial, name: "" };
+    expect(productPatch({ ...unnamed, categoryId: "other" }, unnamed)).toEqual({
+      ok: true,
+      patch: { categoryId: "other" },
+    });
+    expect(productPatch({ ...unnamed, name: "Robe lin" }, unnamed)).toEqual({ ok: true, patch: { name: "Robe lin" } });
   });
-  it("an empty price clears the price", () => {
-    const result = productPatch({ ...base, price: "" });
-    expect(result.ok && result.patch.priceCents).toBe(null);
+  it("refuses over-long fields and unreadable prices", () => {
+    expect(productPatch({ ...initial, name: "a".repeat(301) }, initial)).toEqual({ ok: false, field: "name" });
+    expect(productPatch({ ...initial, brand: "a".repeat(121) }, initial)).toEqual({ ok: false, field: "brand" });
+    expect(productPatch({ ...initial, price: "abc" }, initial)).toEqual({ ok: false, field: "price" });
+    expect(productPatch({ ...initial, price: "9999999999" }, initial)).toEqual({ ok: false, field: "price" });
+  });
+  it("reports nothing to save when nothing changed", () => {
+    expect(productPatch(initial, initial)).toEqual({ ok: false, field: "nothing" });
+  });
+});
+
+describe("referenceBody", () => {
+  const draft = { name: "Rouge", slug: "", keywords: "rouge, carmin", hex: "", parentId: "" };
+  it("builds a category body with the parent, a generated slug and keywords", () => {
+    expect(referenceBody("categories", { ...draft, parentId: "p" }, true)).toEqual({
+      ok: true,
+      body: { name: "Rouge", slug: "rouge", keywords: ["rouge", "carmin"], parentId: "p" },
+    });
+  });
+  it("checks the colour hex, the name length and the keywords", () => {
+    expect(referenceBody("colors", { ...draft, hex: "red" }, true).ok).toBe(false);
+    expect(referenceBody("colors", { ...draft, hex: `#${"12ab"}ef` }, true).ok).toBe(true);
+    expect(referenceBody("materials", { ...draft, name: "a".repeat(81) }, true).ok).toBe(false);
+    expect(referenceBody("materials", { ...draft, name: " " }, true).ok).toBe(false);
+    expect(referenceBody("materials", { ...draft, keywords: "a".repeat(61) }, true).ok).toBe(false);
+    expect(referenceBody("materials", { ...draft, keywords: Array(101).fill("k").join(",") }, true).ok).toBe(false);
+  });
+});
+
+describe("category cycles", () => {
+  it("shows entries caught in a cycle as roots, flagged", () => {
+    const loop = [entry("x", "X", "y"), entry("y", "Y", "x"), entry("z", "Z", null)];
+    const tree = buildCategoryTree(loop);
+    expect(tree.map((n) => [n.entry.id, n.inCycle])).toEqual([
+      ["x", true],
+      ["y", true],
+      ["z", false],
+    ]);
   });
 });
 

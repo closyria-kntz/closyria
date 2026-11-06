@@ -194,7 +194,8 @@
         "invalidFields": "Vérifie le slug et les domaines.",
         "cycle": "Ce déplacement créerait une boucle.",
         "hasChildren": "Supprime ou déplace d’abord ses sous-catégories.",
-        "invalidReference": "Un des choix n’existe plus. Recharge la page."
+        "invalidEntry": "Vérifie le nom, la teinte et les mots-clés.",
+        "invalidProduct": "Vérifie le nom, la marque, le prix et les choix."
       }
     },
     "shops": {
@@ -414,6 +415,12 @@
         "winter": "Hiver",
         "mid": "Mi-saison",
         "all": "Toutes saisons"
+      },
+      "fieldErrors": {
+        "name": "Le nom doit faire entre 1 et 300 caractères.",
+        "brand": "La marque ne doit pas dépasser 120 caractères.",
+        "price": "Le prix n’est pas valide.",
+        "nothing": "Rien n’a changé."
       }
     },
     "reference": {
@@ -453,7 +460,10 @@
       "move": "Déplacer vers",
       "hexText": "Teinte {hex}",
       "noKeywords": "Aucun mot-clé",
-      "subCategories": "{count, plural, =0 {Aucune sous-catégorie} one {# sous-catégorie} other {# sous-catégories}}"
+      "subCategories": "{count, plural, =0 {Aucune sous-catégorie} one {# sous-catégorie} other {# sous-catégories}}",
+      "cycle": "boucle",
+      "cycleHint": "Ce type est pris dans une boucle : déplace-le pour la défaire.",
+      "colorSwatch": "Aperçu de la teinte {hex}"
     }
   },
   "Capture": {

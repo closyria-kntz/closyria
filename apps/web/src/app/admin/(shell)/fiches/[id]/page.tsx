@@ -1,9 +1,11 @@
-import { adminProductDetailSchema, referenceListSchema } from "@closyria/shared";
+import type { ReferenceKind } from "@closyria/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
+import { ColorSwatch } from "@/components/color-swatch";
+import { fetchAdminProduct, fetchAdminReference } from "@/lib/admin-api";
 import { categoryChoices } from "@/lib/admin-reference";
-import { adminRead, requireAdminPage } from "../../../server";
+import { adminCall, adminCallOrThrow, requireAdminPage } from "../../../server";
 import { buttonClass } from "../../../ui";
 import { CorrectedPill } from "../corrected-pill";
 import { CorrectForm } from "./correct-form";
@@ -21,20 +23,27 @@ export default async function AdminProductPage({ params }: Props) {
   const t = await getTranslations("Admin.products");
   const common = await getTranslations("Admin.common");
   const format = await getFormatter();
-  const product = await adminRead(`/api/admin/products/${id}`, adminProductDetailSchema);
-  if (!product) notFound();
-  // The reference lists are loaded once: the sheet only stores ids.
-  const [categories, colors, materials, patterns] = await Promise.all(
-    (["categories", "colors", "materials", "patterns"] as const).map((kind) =>
-      adminRead(`/api/admin/reference/${kind}`, referenceListSchema),
-    ),
-  );
+  const read = await adminCall((api) => fetchAdminProduct(api, id));
+  // Only an unknown sheet is a 404; any other refusal is an error page, never a missing sheet.
+  if (!read.ok && read.status === 404) notFound();
+  if (!read.ok) throw new Error(`The admin product answered ${read.status}`);
+  const product = read.data;
+  // The reference lists are loaded once (the sheet only stores ids); a failed read throws instead of showing empty lists.
+  const reference = (kind: ReferenceKind) =>
+    adminCallOrThrow(`The ${kind} list`, (api) => fetchAdminReference(api, kind));
+  const [categories, colors, materials, patterns] = await Promise.all([
+    reference("categories"),
+    reference("colors"),
+    reference("materials"),
+    reference("patterns"),
+  ]);
   const nameOf = (list: typeof colors, itemId: string | null) =>
-    itemId ? (list?.entries.find((e) => e.id === itemId)?.name ?? common("none")) : t("notSet");
-  const categoryLabels = categoryChoices(categories?.entries ?? [], " › ");
+    itemId ? (list.entries.find((e) => e.id === itemId)?.name ?? common("none")) : t("notSet");
+  const color = colors.entries.find((e) => e.id === product.colorId);
+  const categoryLabels = categoryChoices(categories.entries, " › ");
   const when = (iso: string | null) =>
     iso ? format.dateTime(new Date(iso), { dateStyle: "short", timeStyle: "medium", timeZone: "UTC" }) : common("none");
-  const plain = (list: typeof colors) => (list?.entries ?? []).map((e) => ({ id: e.id, label: e.name }));
+  const plain = (list: typeof colors) => list.entries.map((e) => ({ id: e.id, label: e.name }));
 
   const section = "flex flex-col gap-space-3 rounded-card border border-card-border bg-card-bg p-space-4";
   const rows = (items: [string, React.ReactNode][]) => (
@@ -153,7 +162,13 @@ export default async function AdminProductPage({ params }: Props) {
               ? (categoryLabels.find((c) => c.id === product.categoryId)?.label ?? common("none"))
               : t("notSet"),
           ],
-          [t("color"), nameOf(colors, product.colorId)],
+          [
+            t("color"),
+            <span key="c" className="inline-flex items-center gap-space-2">
+              <ColorSwatch hex={color?.hex} />
+              {nameOf(colors, product.colorId)}
+            </span>,
+          ],
           [t("material"), nameOf(materials, product.materialId)],
           [t("pattern"), nameOf(patterns, product.patternId)],
           [t("season"), product.season ? t(`seasons.${product.season}`) : t("notSet")],

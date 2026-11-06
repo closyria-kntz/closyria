@@ -3,19 +3,22 @@
 import type { ReferenceEntry, ReferenceKind } from "@closyria/shared";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ColorSwatch } from "@/components/color-swatch";
 import { adminRequest, referenceErrorKey } from "@/lib/admin-catalog";
 import {
   buildCategoryTree,
   type CategoryNode,
   categoryChoices,
-  keywordsFromText,
+  descendantIds,
   keywordsToText,
+  type ReferenceDraft,
+  referenceBody,
   slugify,
 } from "@/lib/admin-reference";
 import { buttonClass, inputClass, primaryButtonClass } from "../../ui";
 
-type Draft = { name: string; slug: string; keywords: string; hex: string; parentId: string };
+type Draft = ReferenceDraft;
 
 const emptyDraft: Draft = { name: "", slug: "", keywords: "", hex: "", parentId: "" };
 
@@ -27,22 +30,14 @@ const draftOf = (entry: ReferenceEntry): Draft => ({
   parentId: entry.parentId ?? "",
 });
 
-/** The body to send for a draft; categories carry their parent, colours their hex. */
-function bodyOf(kind: ReferenceKind, draft: Draft, creating: boolean) {
-  return {
-    name: draft.name.trim(),
-    slug: draft.slug.trim() || (creating ? slugify(draft.name) : ""),
-    keywords: keywordsFromText(draft.keywords),
-    ...(kind === "colors" ? { hex: draft.hex.trim() } : {}),
-    ...(kind === "categories" ? { parentId: draft.parentId || null } : {}),
-  };
-}
-
 type Ops = {
   kind: ReferenceKind;
   entries: readonly ReferenceEntry[];
   /** Runs a request, then reports its outcome next to the entry. */
   run: (key: string, request: () => ReturnType<typeof adminRequest>, done: string) => Promise<boolean>;
+  /** Reports a refusal found before sending anything. */
+  fail: (key: string) => false;
+  busy: boolean;
 };
 
 function EntryForm({
@@ -50,20 +45,29 @@ function EntryForm({
   draft,
   onChange,
   excludeId,
+  nameRef,
 }: {
   ops: Ops;
   draft: Draft;
   onChange: (draft: Draft) => void;
   excludeId?: string | undefined;
+  nameRef?: React.Ref<HTMLInputElement>;
 }) {
   const t = useTranslations("Admin.reference");
   const set = (patch: Partial<Draft>) => onChange({ ...draft, ...patch });
-  const parents = categoryChoices(ops.entries, " › ").filter((c) => c.id !== excludeId);
+  // A category cannot move under itself or under one of its own sub-categories.
+  const blocked = excludeId ? new Set([excludeId, ...descendantIds(ops.entries, excludeId)]) : new Set<string>();
+  const parents = categoryChoices(ops.entries, " › ").filter((c) => !blocked.has(c.id));
   return (
     <div className="grid gap-space-3 md:grid-cols-2">
       <label className="flex flex-col gap-space-1 text-sm">
         {t("name")}
-        <input value={draft.name} onChange={(e) => set({ name: e.target.value })} className={inputClass} />
+        <input
+          ref={nameRef}
+          value={draft.name}
+          onChange={(e) => set({ name: e.target.value })}
+          className={inputClass}
+        />
       </label>
       <label className="flex flex-col gap-space-1 text-sm">
         {t("slug")}
@@ -103,29 +107,86 @@ function EntryForm({
   );
 }
 
-function EntryRow({ ops, entry, childCount }: { ops: Ops; entry: ReferenceEntry; childCount: number }) {
+/** Keeps Tab and Shift+Tab on the enabled buttons of an aria-modal dialog. */
+function trapTab(e: React.KeyboardEvent<HTMLElement>) {
+  if (e.key !== "Tab") return;
+  const buttons = [...e.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+  const first = buttons[0];
+  const last = buttons[buttons.length - 1];
+  if (!first || !last) return e.preventDefault();
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+function EntryRow({
+  ops,
+  entry,
+  childCount,
+  inCycle,
+}: {
+  ops: Ops;
+  entry: ReferenceEntry;
+  childCount: number;
+  inCycle: boolean;
+}) {
   const t = useTranslations("Admin.reference");
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => draftOf(entry));
+  const editRef = useRef<HTMLButtonElement>(null);
+  const deleteRef = useRef<HTMLButtonElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
+  // Focus goes into the form or the confirmation when it opens, and back to its trigger when it closes.
+  useEffect(() => {
+    if (editing) nameRef.current?.focus();
+  }, [editing]);
+  useEffect(() => {
+    if (confirming) confirmRef.current?.focus();
+  }, [confirming]);
+  const closeEdit = () => {
+    setEditing(false);
+    editRef.current?.focus();
+  };
+  const closeConfirm = () => {
+    setConfirming(false);
+    deleteRef.current?.focus();
+  };
 
   const save = async () => {
+    const built = referenceBody(ops.kind, draft, false);
+    if (!built.ok) return ops.fail(entry.id);
     const ok = await ops.run(
       entry.id,
-      () => adminRequest("PATCH", `/api/admin/reference/${ops.kind}/${entry.id}`, bodyOf(ops.kind, draft, false)),
+      () => adminRequest("PATCH", `/api/admin/reference/${ops.kind}/${entry.id}`, built.body),
       t("saved"),
     );
-    if (ok) setEditing(false);
+    if (ok) closeEdit();
   };
   const remove = async () => {
     await ops.run(entry.id, () => adminRequest("DELETE", `/api/admin/reference/${ops.kind}/${entry.id}`), t("deleted"));
-    setConfirming(false);
+    closeConfirm();
   };
 
   return (
     <div className="flex flex-col gap-space-2">
       <div className="flex flex-wrap items-center gap-space-3">
+        {ops.kind === "colors" ? <ColorSwatch hex={entry.hex} /> : null}
         <span className="font-strong">{entry.name}</span>
+        {inCycle ? (
+          <span
+            className="rounded-button bg-surface-sunken px-space-2 py-space-1 text-sm font-strong text-danger"
+            title={t("cycleHint")}
+          >
+            {t("cycle")}
+          </span>
+        ) : null}
         {ops.kind === "colors" && entry.hex ? (
           <span className="text-sm text-ink-muted tabular-nums">{t("hexText", { hex: entry.hex })}</span>
         ) : null}
@@ -136,18 +197,21 @@ function EntryRow({ ops, entry, childCount }: { ops: Ops; entry: ReferenceEntry;
           <span className="text-sm text-ink-muted">{t("subCategories", { count: childCount })}</span>
         ) : null}
         <button
+          ref={editRef}
           type="button"
           className={buttonClass}
           aria-expanded={editing}
           aria-label={t("editLabel", { name: entry.name })}
           onClick={() => {
+            if (editing) return closeEdit();
             setDraft(draftOf(entry));
-            setEditing((v) => !v);
+            setEditing(true);
           }}
         >
           {t("edit")}
         </button>
         <button
+          ref={deleteRef}
           type="button"
           className={buttonClass}
           aria-label={t("deleteLabel", { name: entry.name })}
@@ -159,18 +223,31 @@ function EntryRow({ ops, entry, childCount }: { ops: Ops; entry: ReferenceEntry;
       {confirming ? (
         <div
           role="alertdialog"
+          aria-modal="true"
           aria-labelledby={`confirm-${entry.id}`}
           className="flex flex-col gap-space-2 rounded-card border border-line bg-surface-sunken p-space-3"
           onKeyDown={(e) => {
-            if (e.key === "Escape") setConfirming(false);
+            if (e.key === "Escape" && !ops.busy) return closeConfirm();
+            trapTab(e);
           }}
         >
           <p id={`confirm-${entry.id}`}>{t("deleteConfirm", { name: entry.name })}</p>
           <div className="flex flex-wrap gap-space-2">
-            <button type="button" ref={(el) => el?.focus()} className={primaryButtonClass} onClick={remove}>
+            <button
+              type="button"
+              ref={confirmRef}
+              className={`${primaryButtonClass} aria-disabled:opacity-60`}
+              aria-disabled={ops.busy}
+              onClick={remove}
+            >
               {t("confirmDelete")}
             </button>
-            <button type="button" className={buttonClass} onClick={() => setConfirming(false)}>
+            <button
+              type="button"
+              className={`${buttonClass} aria-disabled:opacity-60`}
+              aria-disabled={ops.busy}
+              onClick={() => !ops.busy && closeConfirm()}
+            >
               {t("cancel")}
             </button>
           </div>
@@ -185,12 +262,12 @@ function EntryRow({ ops, entry, childCount }: { ops: Ops; entry: ReferenceEntry;
             void save();
           }}
         >
-          <EntryForm ops={ops} draft={draft} onChange={setDraft} excludeId={entry.id} />
+          <EntryForm ops={ops} draft={draft} onChange={setDraft} excludeId={entry.id} nameRef={nameRef} />
           <div className="flex flex-wrap gap-space-2">
-            <button type="submit" className={primaryButtonClass}>
+            <button type="submit" className={`${primaryButtonClass} aria-disabled:opacity-60`} aria-disabled={ops.busy}>
               {t("save")}
             </button>
-            <button type="button" className={buttonClass} onClick={() => setEditing(false)}>
+            <button type="button" className={buttonClass} onClick={closeEdit}>
               {t("close")}
             </button>
           </div>
@@ -205,7 +282,7 @@ function Tree({ ops, nodes }: { ops: Ops; nodes: CategoryNode[] }) {
     <ul className="flex flex-col gap-space-3">
       {nodes.map((node) => (
         <li key={node.entry.id} className="flex flex-col gap-space-3">
-          <EntryRow ops={ops} entry={node.entry} childCount={node.children.length} />
+          <EntryRow ops={ops} entry={node.entry} childCount={node.children.length} inCycle={node.inCycle} />
           {node.children.length > 0 ? (
             <div className="border-l border-line pl-space-4">
               <Tree ops={ops} nodes={node.children} />
@@ -226,13 +303,23 @@ export function ReferenceSection({ kind, entries }: { kind: ReferenceKind; entri
   const [message, setMessage] = useState<{ key: string; text: string; failed: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const busyRef = useRef(false);
   const ops: Ops = {
     kind,
     entries,
+    busy,
+    fail: (key) => {
+      setMessage({ key, text: errors("invalidEntry"), failed: true });
+      return false;
+    },
     run: async (key, request, done) => {
+      // One request at a time: a second click while one is running does nothing.
+      if (busyRef.current) return false;
+      busyRef.current = true;
       setBusy(true);
       setMessage(null);
       const res = await request();
+      busyRef.current = false;
       setBusy(false);
       if (!res.ok) {
         setMessage({ key, text: errors(referenceErrorKey(res.status, res.body)), failed: true });
@@ -245,12 +332,9 @@ export function ReferenceSection({ kind, entries }: { kind: ReferenceKind; entri
   };
 
   const add = async () => {
-    if (busy) return;
-    const ok = await ops.run(
-      "new",
-      () => adminRequest("POST", `/api/admin/reference/${kind}`, bodyOf(kind, draft, true)),
-      t("added"),
-    );
+    const built = referenceBody(kind, draft, true);
+    if (!built.ok) return void ops.fail("new");
+    const ok = await ops.run("new", () => adminRequest("POST", `/api/admin/reference/${kind}`, built.body), t("added"));
     if (ok) setDraft(emptyDraft);
   };
 
@@ -284,7 +368,7 @@ export function ReferenceSection({ kind, entries }: { kind: ReferenceKind; entri
         <ul className="flex flex-col gap-space-3">
           {entries.map((entry) => (
             <li key={entry.id}>
-              <EntryRow ops={ops} entry={entry} childCount={0} />
+              <EntryRow ops={ops} entry={entry} childCount={0} inCycle={false} />
             </li>
           ))}
         </ul>

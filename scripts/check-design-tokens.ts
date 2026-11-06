@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 export type Violation = { file: string; line: number; match: string; rule: string };
 
 const GENERATED_FILES = new Set(["apps/web/src/styles/tokens.css"]);
+// The one place a colour may come from data (a stored hex set as a CSS custom property): see color-swatch.tsx.
+const DATA_COLOR_FILES = new Set(["apps/web/src/components/color-swatch.tsx"]);
 const SCANNED_EXTENSIONS = [".ts", ".tsx", ".css"];
 
 const HEX_COLOR = /(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g;
@@ -184,7 +186,7 @@ function checkInlineStyles(src: string, file: string, out: Violation[]): void {
 
 export function findHardcodedStyles(source: string, file: string): Violation[] {
   const normalized = file.split(sep).join("/");
-  if (GENERATED_FILES.has(normalized)) return [];
+  if (GENERATED_FILES.has(normalized) || DATA_COLOR_FILES.has(normalized)) return [];
 
   const isCss = normalized.endsWith(".css");
   const found: Violation[] = [];

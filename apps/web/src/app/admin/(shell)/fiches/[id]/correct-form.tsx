@@ -4,7 +4,7 @@ import type { AdminProductDetail } from "@closyria/shared";
 import { audienceSchema, childDetailSchema, seasonSchema } from "@closyria/shared";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { adminRequest, productErrorKey } from "@/lib/admin-catalog";
 import { type ProductForm, productPatch } from "@/lib/admin-reference";
 import { buttonClass, inputClass, primaryButtonClass } from "../../../ui";
@@ -23,7 +23,7 @@ export function CorrectForm({ product, options }: { product: AdminProductDetail;
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null);
-  const [form, setForm] = useState<ProductForm>({
+  const initial: ProductForm = {
     name: product.name ?? "",
     brand: product.brand ?? "",
     price: euros(product.priceCents),
@@ -34,21 +34,43 @@ export function CorrectForm({ product, options }: { product: AdminProductDetail;
     materialId: product.materialId ?? "",
     patternId: product.patternId ?? "",
     season: product.season ?? "",
-  });
+  };
+  const [form, setForm] = useState<ProductForm>(initial);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+  const busyRef = useRef(false);
+
+  // Focus moves into the form when it opens.
+  useEffect(() => {
+    if (open) firstFieldRef.current?.focus();
+  }, [open]);
+
+  const close = () => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+  // « Annuler » drops what was typed: the form starts again from the sheet.
+  const cancel = () => {
+    setForm(initial);
+    setMessage(null);
+    close();
+  };
   const set = <K extends keyof ProductForm>(key: K, value: ProductForm[K]) => setForm((f) => ({ ...f, [key]: value }));
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (busy) return;
-    const built = productPatch(form);
-    if (!built.ok) return setMessage({ text: errors("invalidFields"), failed: true });
+    if (busyRef.current) return;
+    const built = productPatch(form, initial);
+    if (!built.ok) return setMessage({ text: t(`fieldErrors.${built.field}`), failed: true });
+    busyRef.current = true;
     setBusy(true);
     setMessage(null);
     const res = await adminRequest("PATCH", `/api/admin/products/${product.id}`, built.patch);
+    busyRef.current = false;
     setBusy(false);
     if (!res.ok) return setMessage({ text: errors(productErrorKey(res.status, res.body)), failed: true });
     setMessage({ text: t("saved"), failed: false });
-    setOpen(false);
+    close();
     router.refresh();
   };
 
@@ -56,6 +78,7 @@ export function CorrectForm({ product, options }: { product: AdminProductDetail;
     <label className="flex flex-col gap-space-1 text-sm">
       {label}
       <input
+        ref={key === "name" ? firstFieldRef : undefined}
         value={form[key]}
         onChange={(e) => set(key, e.target.value as never)}
         className={inputClass}
@@ -83,11 +106,12 @@ export function CorrectForm({ product, options }: { product: AdminProductDetail;
     <div className="flex flex-col gap-space-2">
       <div className="flex flex-wrap items-center gap-space-3">
         <button
+          ref={triggerRef}
           type="button"
           className={buttonClass}
           aria-expanded={open}
           aria-controls={formId}
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => (open ? cancel() : setOpen(true))}
         >
           {t("correct")}
         </button>
@@ -132,7 +156,7 @@ export function CorrectForm({ product, options }: { product: AdminProductDetail;
             <button type="submit" className={`${primaryButtonClass} aria-disabled:opacity-60`} aria-disabled={busy}>
               {t("save")}
             </button>
-            <button type="button" className={buttonClass} onClick={() => setOpen(false)}>
+            <button type="button" className={buttonClass} onClick={cancel}>
               {t("cancel")}
             </button>
           </div>

@@ -7,7 +7,8 @@ export type CatalogErrorKey =
   | "invalidMerge"
   | "invalidUrl"
   | "invalidFields"
-  | "invalidReference"
+  | "invalidEntry"
+  | "invalidProduct"
   | "cycle"
   | "hasChildren"
   | "generic";
@@ -62,11 +63,11 @@ export function referenceErrorKey(status: number, body: unknown): CatalogErrorKe
   if (status === 400 && error === "cycle") return "cycle";
   if (status === 409 && error === "has_children") return "hasChildren";
   const key = catalogErrorKey(status, body);
-  return status === 400 && key === "generic" ? "invalidFields" : key;
+  return status === 400 && key === "generic" ? "invalidEntry" : key;
 }
 
-/** Like `catalogErrorKey`, for a product PATCH or re-capture: its 400 is a field or a list entry that no longer exists. */
+/** Like `catalogErrorKey`, for a product PATCH or re-capture: its 400 is a bad field or a list entry that no longer exists (the API does not tell them apart). */
 export function productErrorKey(status: number, body: unknown): CatalogErrorKey {
   const key = catalogErrorKey(status, body);
-  return status === 400 && key === "generic" ? "invalidReference" : key;
+  return status === 400 && key === "generic" ? "invalidProduct" : key;
 }

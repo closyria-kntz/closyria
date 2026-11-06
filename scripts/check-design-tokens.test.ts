@@ -153,6 +153,20 @@ describe("findHardcodedStyles", () => {
     });
   });
 
+  describe("data-driven colour swatch", () => {
+    const swatch = 'const s = <span style={{ "--swatch": hex }} />;';
+    it("exempts the one swatch component", () => {
+      expect(findHardcodedStyles(swatch, "apps/web/src/components/color-swatch.tsx")).toEqual([]);
+    });
+
+    it("still flags a data colour in an inline style anywhere else", () => {
+      expect(findHardcodedStyles(swatch, "apps/web/src/app/p.tsx").map((v) => v.rule)).toEqual(["inline-style"]);
+      expect(findHardcodedStyles("const a = '#" + "12ab" + "ef';", "apps/web/src/components/other.tsx")).toHaveLength(
+        1,
+      );
+    });
+  });
+
   describe("comments", () => {
     it("ignores hex-looking text in comments", () => {
       expect(rules("// fix #123\n/* #fff and 12px [50%] */\nconst a = 1;")).toEqual([]);

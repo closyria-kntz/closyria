@@ -1,13 +1,9 @@
-import {
-  adminClassifiedFilterSchema,
-  adminProductListSchema,
-  adminShopListSchema,
-  productCaptureStatusSchema,
-} from "@closyria/shared";
+import { adminClassifiedFilterSchema, productCaptureStatusSchema } from "@closyria/shared";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
-import { adminProductsPath, type ProductFilters } from "@/lib/admin-api";
-import { adminRead, requireAdminPage } from "../../server";
+import { fetchAdminProducts, fetchAdminShops, type ProductFilters } from "@/lib/admin-api";
+import { adminCall, adminCallOrThrow, requireAdminPage } from "../../server";
 import { buttonClass, inputClass, primaryButtonClass } from "../../ui";
 import { CorrectedPill } from "./corrected-pill";
 
@@ -15,7 +11,7 @@ type Props = { searchParams: Promise<Record<string, string | string[] | undefine
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const text = (value: unknown, max: number): string | undefined =>
+const clean = (value: unknown, max: number): string | undefined =>
   typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, max) : undefined;
 
 /** A filter value kept only when the shared enum knows it. */
@@ -27,19 +23,12 @@ export default async function AdminProductsPage({ searchParams }: Props) {
   await requireAdminPage();
   const query = await searchParams;
   const filters: ProductFilters = {
-    q: text(query.q, 200),
+    q: clean(query.q, 200),
     shopId: typeof query.shopId === "string" && UUID.test(query.shopId) ? query.shopId : undefined,
     captureStatus: known(productCaptureStatusSchema.options, query.captureStatus),
     classified: known(adminClassifiedFilterSchema.options, query.classified),
   };
-  const cursor = text(query.cursor, 200);
-  const t = await getTranslations("Admin.products");
-  const common = await getTranslations("Admin.common");
-  const format = await getFormatter();
-  const page = await adminRead(adminProductsPath({ ...filters, cursor }), adminProductListSchema);
-  if (!page) throw new Error("The admin product list could not be read");
-  const shops = await adminRead("/api/admin/shops", adminShopListSchema);
-
+  const cursor = clean(query.cursor, 200);
   const withFilters = (nextCursor: string | null) => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries({ ...filters, cursor: nextCursor ?? undefined })) {
@@ -48,6 +37,16 @@ export default async function AdminProductsPage({ searchParams }: Props) {
     const suffix = params.toString();
     return suffix ? `/admin/fiches?${suffix}` : "/admin/fiches";
   };
+  const t = await getTranslations("Admin.products");
+  const common = await getTranslations("Admin.common");
+  const format = await getFormatter();
+  const read = await adminCall((api) => fetchAdminProducts(api, { ...filters, cursor }));
+  // A bad or stale cursor (400) goes back to the first page; any other refusal is an error, not an empty list.
+  if (!read.ok && read.status === 400 && cursor) redirect(withFilters(null));
+  if (!read.ok) throw new Error(`The admin product list answered ${read.status}`);
+  const page = read.data;
+  const shops = await adminCallOrThrow("The admin shop list", (api) => fetchAdminShops(api, {}));
+
   const nextHref = page.nextCursor ? withFilters(page.nextCursor) : null;
 
   const cell = "px-space-3 py-space-2 text-left align-top";
@@ -56,9 +55,9 @@ export default async function AdminProductsPage({ searchParams }: Props) {
       {label}
       <select name={name} defaultValue={current ?? ""} className={inputClass}>
         <option value="">{common("all")}</option>
-        {values.map(([value, text]) => (
+        {values.map(([value, optionLabel]) => (
           <option key={value} value={value}>
-            {text}
+            {optionLabel}
           </option>
         ))}
       </select>
@@ -84,7 +83,7 @@ export default async function AdminProductsPage({ searchParams }: Props) {
           "shopId",
           t("filterShop"),
           filters.shopId,
-          (shops?.shops ?? []).map((shop) => [shop.id, shop.name]),
+          shops.shops.map((shop) => [shop.id, shop.name]),
         )}
         {select(
           "captureStatus",

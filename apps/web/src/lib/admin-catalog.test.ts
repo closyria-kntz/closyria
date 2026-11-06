@@ -83,12 +83,12 @@ describe("shopPatchErrorKey", () => {
     expect(referenceErrorKey(400, { error: "cycle" })).toBe("cycle");
     expect(referenceErrorKey(409, { error: "has_children" })).toBe("hasChildren");
     expect(referenceErrorKey(409, { error: "slug_taken" })).toBe("slugTaken");
-    expect(referenceErrorKey(400, { error: "invalid_request" })).toBe("invalidFields");
+    expect(referenceErrorKey(400, { error: "invalid_request" })).toBe("invalidEntry");
     expect(referenceErrorKey(500, null)).toBe("generic");
   });
 
   it("maps the product refusals", () => {
-    expect(productErrorKey(400, { error: "invalid_request" })).toBe("invalidReference");
+    expect(productErrorKey(400, { error: "invalid_request" })).toBe("invalidProduct");
     expect(productErrorKey(409, { error: "capture_active" })).toBe("captureActive");
   });
 
