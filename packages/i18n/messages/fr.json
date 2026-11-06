@@ -700,8 +700,8 @@
       "invalid_upload": "Aucune photo reçue.",
       "busy": "Le traitement des photos est occupé. Réessaie dans un instant.",
       "not_a_photo": "Colle une image ou un lien vers une image.",
-      "import_blocked": "Ce site ne laisse pas récupérer l'image. Enregistre-la puis ajoute le fichier.",
-      "import_timeout": "Le site n'a pas répondu à temps.",
+      "import_blocked": "Ce site ne laisse pas récupérer l’image. Enregistre-la puis ajoute le fichier.",
+      "import_timeout": "Le site n’a pas répondu à temps.",
       "import_unsupported": "Ce lien ne mène pas à une image.",
       "itemLoad": "Ton article ne s’affiche pas. Réessaie dans un instant.",
       "extrasLoad": "Tes listes et étiquettes ne s’affichent pas."

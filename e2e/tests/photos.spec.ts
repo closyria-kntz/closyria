@@ -183,6 +183,21 @@ test("coller une image ajoute la photo et ferme la fenêtre", async ({ page }) =
   await expect(page.getByRole("status", { name: "Notifications" })).toContainText("Photo ajoutée");
 });
 
+test("coller tout de suite après l'ouverture, le focus étant sur « Fermer », ajoute la photo", async ({ page }) => {
+  await keepItem(page);
+  await addButton(page).click();
+  await expect(dialog(page)).toBeVisible();
+  await page.evaluate((file) => {
+    const bytes = Uint8Array.from(atob(file.base64), (c) => c.charCodeAt(0));
+    const dt = new DataTransfer();
+    dt.items.add(new File([bytes], file.name, { type: file.mime }));
+    const target = document.activeElement ?? document.body;
+    target.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, PIXEL_FILE);
+  await expect(dialog(page)).toBeHidden();
+  await expect(mine(page).getByRole("listitem")).toHaveCount(1);
+});
+
 test("déposer un fichier ajoute la photo", async ({ page }) => {
   await keepItem(page);
   await addButton(page).click();
@@ -272,7 +287,7 @@ test("un import refusé affiche son message", async ({ page }) => {
   await dialog(page).getByLabel("Lien vers une image").fill("https://photos.test/robe.jpg");
   await dialog(page).getByRole("button", { name: "Ajouter", exact: true }).click();
   await expect(dialog(page).getByRole("alert")).toHaveText(
-    "Ce site ne laisse pas récupérer l'image. Enregistre-la puis ajoute le fichier.",
+    "Ce site ne laisse pas récupérer l’image. Enregistre-la puis ajoute le fichier.",
   );
 });
 

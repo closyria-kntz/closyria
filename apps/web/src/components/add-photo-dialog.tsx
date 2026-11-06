@@ -2,7 +2,7 @@
 
 import type { ItemView } from "@closyria/shared";
 import { useTranslations } from "next-intl";
-import { type ClipboardEvent, type DragEvent, type FormEvent, useEffect, useRef, useState } from "react";
+import { type DragEvent, type FormEvent, useEffect, useRef, useState } from "react";
 import { requestAccountPrompt } from "@/lib/account-prompt-request";
 import { pollUntil } from "@/lib/capture-poll";
 import { checkPhoto } from "@/lib/photo-check";
@@ -121,12 +121,20 @@ function AddPhotoBody({
     else fail("not_a_photo");
   }
 
-  function onPaste(event: ClipboardEvent) {
-    // Text pasted into the link field is just typing there; anything else is a photo to add.
-    if (event.target === linkInput.current && photoSource(event.clipboardData).kind !== "file") return;
-    event.preventDefault();
-    handle(event.clipboardData);
-  }
+  // Paste works wherever the focus is (right after opening it is on « Fermer », outside the body): listen on the
+  // document while the window is open. The latest `handle` is kept in a ref so the listener is added only once.
+  const latest = useRef(handle);
+  latest.current = handle;
+  useEffect(() => {
+    function onPaste(event: globalThis.ClipboardEvent) {
+      // Text pasted into the link field is just typing there; anything else is a photo to add.
+      if (event.target === linkInput.current && photoSource(event.clipboardData).kind !== "file") return;
+      event.preventDefault();
+      latest.current(event.clipboardData);
+    }
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, []);
 
   function onDrop(event: DragEvent) {
     event.preventDefault();
@@ -152,10 +160,9 @@ function AddPhotoBody({
     // biome-ignore lint/a11y/noStaticElementInteractions: paste and drop are shortcuts on top of the buttons and the link field below.
     <div
       className="flex flex-col gap-space-4"
-      onPaste={onPaste}
       onDragOver={(e) => e.preventDefault()}
       onDragEnter={() => setDragging(true)}
-      onDragLeave={() => setDragging(false)}
+      onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setDragging(false)}
       onDrop={onDrop}
     >
       <div
