@@ -41,3 +41,10 @@ Remarques de la fondatrice après les tests en dev, avec la réponse proposée. 
 ## Hors 2a
 
 - Correction des caractéristiques par l'utilisatrice pour elle seule : **2b**.
+
+## Reste à faire (relevé par la revue finale de `finitions-2a`)
+
+- Une photo ajoutée par lien sur un article mis à la corbeille avant d'être rattachée est perdue si une liste est
+  lue avant la restauration. Correction prévue : ne rattacher que les imports des articles actifs.
+- Quand l'attente de la photo par lien s'arrête, le message dit « dans un instant », mais la fiche ne se recharge
+  pas seule : la photo n'apparaît qu'au prochain chargement. Renvoyer le même lien peut l'ajouter deux fois.
