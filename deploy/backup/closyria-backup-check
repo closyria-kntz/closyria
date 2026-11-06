@@ -2,8 +2,8 @@
 # closyria-backup-check <dev|prod>: proves the newest copy can be used. Downloads it, decrypts it, restores it into a
 # throwaway database (BACKUP_SCRATCH_DB) and compares it with the live database (read only): same tables, same
 # migrations, and at least 90 % of the live rows of "user", items and products (those the live database has). Fails
-# when the newest copy is older than BACKUP_MAX_AGE_HOURS (6 by default: the check runs 1 h 30 after the nightly backup), so a night without backup
-# is noticed the same morning.
+# when the newest copy is older than BACKUP_MAX_AGE_HOURS (6 by default: the check runs 1 h 30 after the nightly
+# backup), so a night without backup is noticed the same morning.
 set -euo pipefail
 source "$(dirname "$(readlink -f "$0")")/lib.sh" || exit 1
 
