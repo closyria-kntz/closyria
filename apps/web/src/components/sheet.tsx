@@ -86,10 +86,12 @@ export function Sheet({
       aria-labelledby={labelledBy}
       onClose={onClose}
       onClick={(event) => event.target === ref.current && onClose()}
-      className={`${PHONE} ${wide ? PANEL : CENTERED} overflow-hidden border border-line bg-surface-raised p-space-0 text-ink shadow-lifted backdrop:bg-ink/40`}
+      className={`${PHONE} ${wide ? PANEL : CENTERED} overflow-hidden border open:flex open:flex-col border-line bg-surface-raised p-space-0 text-ink shadow-lifted backdrop:bg-ink/40`}
     >
       {open && (
-        <div className="flex h-full flex-col">
+        // The dialog is a column with a height cap (centered) or a fixed height (sheet, panel): the body scrolls inside
+        // it and the footer always stays in view.
+        <div className="flex min-h-space-0 flex-1 flex-col">
           <div
             data-testid="preview-handle"
             onPointerDown={startDrag}
@@ -114,7 +116,7 @@ export function Sheet({
 
           <div
             data-testid="preview-body"
-            className={`grid flex-1 content-start gap-space-4 overflow-y-auto overscroll-contain p-space-4 ${bodyClassName}`}
+            className={`grid min-h-space-0 flex-1 content-start gap-space-4 overflow-y-auto overscroll-contain p-space-4 ${bodyClassName}`}
           >
             {children}
           </div>
