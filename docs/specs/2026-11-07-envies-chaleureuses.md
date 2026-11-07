@@ -133,7 +133,7 @@ vignettes voulues, la barre d'actions en lot existante apparaît (niveau, priori
 - Budgets : table `budgets` (`id`, `user_id`, `profile_id` **ou** `wishlist_id` — exactement l'un des deux,
   `amount_cents` > 0, `period` `week`|`month`|`custom`|`none`, `starts_on`/`ends_on` pour `custom`, `reset_at`
   pour `none`, `created_at`) ; au plus un budget par profil et un par liste (index uniques partiels).
-- Montant au passage à « Commandé » : `item_events.amount_cents` (déjà là pour les changements d'étape) rempli avec
+- Montant au passage à « Commandé » : `item_events.spent_cents` (colonne dédiée ; `amount_cents` garde le montant saisi) rempli avec
   le prix payé, sinon le prix courant de la boutique ; « Déjà commandé » = somme des événements `ordered` de la
   période, moins les événements `returned` de la période, sans les événements annulés.
 - Périodes : calculées en heure de Paris (lundi 00:00, le 1er 00:00).
@@ -149,7 +149,7 @@ vignettes voulues, la barre d'actions en lot existante apparaît (niveau, priori
 - Garder un article : `action` `wish` (niveau, priorité, avis) remplace `favorite` ; `list` et `ordered` gardent
   leur effet.
 - `PATCH /me/items/{id}` accepte `loveLevel`, `priority`, `why`, `inOrderDraft`.
-- Lots : opérations `setLoveLevel`, `setPriority`, `setOrderDraft`, avec annulation comme les autres.
+- Lots : `setFields` porte le niveau, le prioritaire et la sélection, avec annulation comme les autres.
 - Vues : filtres `loveLevel` (plusieurs valeurs) et `priority`, tri `love`.
 - `GET/PUT /me/love-levels` (4 niveaux).
 - `GET/PUT/DELETE /me/profiles/{id}/budget` et `/me/wishlists/{id}/budget` : réglage, et lecture avec la période en
@@ -203,7 +203,7 @@ vignettes voulues, la barre d'actions en lot existante apparaît (niveau, priori
 ## 9. Écarts et décisions prises pendant le code
 
 Ce qui change par rapport au texte ci-dessus, ou qui précise un cas non prévu :
-- Dans « Préparer une commande », cocher un article n'affiche pas de message « Annuler » : il suffit de le décocher.
+- Dans « Préparer une commande », cocher un article n'affiche pas de message « Annuler » : il suffit de le décocher. « J'ai commandé » sans rien de coché répond « Coche au moins une envie ».
 - « Recommencer à zéro » (budget) demande une confirmation et ne peut pas être annulé ; enregistrer ou supprimer un
   budget affiche en revanche un message avec « Annuler ».
 - Plus de 200 articles cochés : la commande est refusée avec le message « Tu as coché plus de 200 articles :
@@ -221,5 +221,7 @@ Ce qui change par rapport au texte ci-dessus, ou qui précise un cas non prévu 
 - Passer un budget en « Sans période » compte depuis sa création, pas depuis le changement.
 - Un article déjà gardé ailleurs et gardé à nouveau prend le niveau, la priorité et la raison choisis à cet instant
   (cela peut faire passer un 🔥 en J'aime) : à revoir.
+- Le montant compté dans le budget est enregistré à part (`spent_cents`) ; le montant saisi reste dans `amount_cents`.
+- En mode « Sélectionner », toucher la pastille de niveau d'une carte ne la sélectionne pas (toucher ailleurs sur la carte) ; sur téléphone la barre de sélection défile sur le côté et ses actions des bords peuvent être hors écran sans indice. À valider.
 - Détails visuels à valider par la fondatrice : onglets du téléphone en 13 px, valeurs sombres du fond creux, du trait,
   des conseils et du fond des photos.
