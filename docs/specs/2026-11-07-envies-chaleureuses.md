@@ -1,0 +1,165 @@
+# Envies chaleureuses — partie 1 : mes envies
+
+Date : 2026-11-07 · Statut : **à relire par la fondatrice**.
+Maquette validée (palette C) : https://claude.ai/artifact/Q6tEj3ZNKbrXbunv6B1LTQ (rangée « Palette C », 5 écrans).
+Partie 2 (avis et choix des amies sur le lien de partage) : cahier des charges séparé, après celui-ci.
+
+## 1. Pourquoi
+
+Retours de la fondatrice (2026-11-07) :
+- « Favori » est trop léger. Entre amies on dit « Mims » (mignon) et on met 🔥 quand on aime beaucoup ; ces nuances
+  servent à choisir au moment de commander. Certains achats sont prioritaires.
+- On ne sait pas comment mettre un lien dans les Envies sans passer par « Favori ».
+- Le ♡ doit se toucher directement sur les vignettes, sans ouvrir la fiche.
+- Les cases à cocher des vignettes sont moches : un menu « … » à la place.
+- Elle veut cocher des envies et voir le total, avec un budget, pour préparer une commande.
+- L'app doit être plus chaleureuse et conviviale.
+
+## 2. Décisions validées
+
+| # | Sujet | Décision |
+|---|---|---|
+| E1 | Niveaux d'amour | 4 niveaux : 😕 Bof · 🤍 J'aime · 🥰 Mims · 🔥 En feu. Ils remplacent « Favori ». |
+| E2 | Personnaliser | Chaque utilisatrice change l'émoji et le nom de chacun des 4 niveaux (Réglages). Le nombre reste 4. |
+| E3 | Prioritaire | Une étiquette à part, sur n'importe quel niveau. |
+| E4 | Avis | Un « Pourquoi ? » en une phrase à côté du niveau (pour elle ; les avis des amies sont la partie 2). |
+| E5 | Préparer une commande | Une sélection **enregistrée**, avec un **budget** enregistré, total et écart affichés en direct. |
+| E6 | Vignettes | Niveau touchable sur la vignette, menu « … » ; plus de case à cocher hors du mode « Sélectionner ». |
+| E7 | Palette | C · chocolat et rose poudré, caractères Fraunces (titres) et DM Sans (texte), coins plus ronds. |
+| E8 | Cadre fixe | Gardé (déjà en dev). |
+
+## 3. Ce que voit l'utilisatrice
+
+### 3.1 Mettre un lien dans ses envies (fiche d'un article pas encore gardé)
+- Bloc « Tu l'aimes comment ? » : les 4 niveaux en gros boutons ; **J'aime** est présélectionné.
+- Bouton « Prioritaire » (bascule) et champ « Pourquoi ? (facultatif) », 200 caractères au plus.
+- Bouton principal **« Ajouter à mes envies »** → l'article est gardé à l'étape « Repéré » avec ce niveau, cette
+  priorité et cet avis ; message « Ajouté à tes envies · Annuler ».
+- Boutons secondaires inchangés dans leur effet : « Ajouter à une liste », « Déjà commandé » (ex-« Commandé »).
+- Le bouton « Favori » disparaît.
+
+### 3.2 Les vignettes (Envies, Commandé, Dressing, À vendre, listes)
+- En haut à gauche : **pastille du niveau** (émoji + nom). Un toucher passe au niveau suivant
+  (Bof → J'aime → Mims → En feu → Bof), message « Niveau : Mims · Annuler ». Sans niveau : pastille « + » qui
+  pose J'aime.
+- En haut à droite : bouton **« … »** (menu, § 3.3).
+- En bas de la photo : étiquette **« Prioritaire »** si posée.
+- Sous le prix : l'avis entre guillemets, sur une ligne (coupé au besoin).
+- Plus de case à cocher.
+
+### 3.3 Le menu « … » d'une vignette
+Panneau qui monte du bas (téléphone) ou petit menu (ordinateur) :
+- les 4 niveaux (le courant est marqué) ;
+- « Prioritaire » / « Retirer de Prioritaire » ;
+- « Mon avis » (modifier le « Pourquoi ? ») ;
+- changer d'étape (« Je l'ai commandé », « Dans mon dressing »…, selon l'étape) ;
+- « Ajouter à une liste », « Déplacer vers un profil », « Étiquettes » ;
+- « Retirer de mes envies » / « Supprimer » (corbeille, « Annuler » pendant 8 s).
+Chaque action garde son message « … · Annuler ».
+
+### 3.4 Plusieurs articles à la fois
+Bouton **« Sélectionner »** en haut des vues : une coche ronde discrète apparaît sur chaque vignette ; on touche les
+vignettes voulues, la barre d'actions en lot existante apparaît (niveau, prioritaire, étape, liste, profil,
+étiquette, supprimer). « Terminé » quitte le mode.
+
+### 3.5 Filtres et tri des vues
+- Le filtre « Favori » est remplacé par les filtres **par niveau** (puces : 🔥 En feu, 🥰 Mims, 🤍 J'aime, 😕 Bof)
+  et **« Prioritaires »**.
+- Nouveau tri **« Ce que j'aime le plus »** : niveau décroissant, prioritaires d'abord à niveau égal, puis date.
+
+### 3.6 Préparer une commande (Envies)
+- Bouton « Préparer une commande » en haut d'Envies → page dédiée (`/envies/commande`).
+- **Mon budget** en haut (montant en euros, facultatif), enregistré.
+- La liste des envies du profil courant, triée « Ce que j'aime le plus » ; chaque ligne se coche d'un toucher.
+- La sélection est **enregistrée** : on la retrouve en revenant, sur tous ses appareils.
+- Bandeau du bas, en direct : « 3 articles · 187 € » et « Il te reste 13 € » ou « 37 € au-dessus de ton budget »
+  (rien sur l'écart sans budget). Prix pris : le prix actuel de la boutique ; un article sans prix compte pour 0 et
+  porte « prix inconnu ».
+- **« J'ai commandé »** : les articles cochés passent à « Commandé » (date du jour), la sélection se vide,
+  message « 3 articles passés en Commandé · Annuler ». Le budget reste.
+- Un article qui quitte les Envies (autre étape, supprimé) sort de la sélection.
+
+### 3.7 Réglages → Mes niveaux
+- 4 lignes : émoji (choix dans une grille d'émojis courants, ou saisie libre d'un seul émoji) et nom (20 caractères
+  au plus).
+- « Enregistrer » ; « Revenir aux niveaux de départ ».
+- Ses noms et émojis s'affichent partout dans l'app (et, en partie 2, sur ses listes partagées).
+
+### 3.8 Nouvelle palette et ton
+- Palette C, en clair et en sombre (§ 5.4), appliquée à toute l'app (l'admin suit les mêmes jetons).
+- Caractères : Fraunces pour les titres, DM Sans pour le texte, hébergés avec l'app (pas d'appel à Google).
+- Coins plus ronds (cartes 26 px, boutons en pilule).
+- Textes plus chaleureux : « Mes envies », « Tu l'aimes comment ? », « Ajouter à mes envies ».
+
+## 4. Ce qui change pour les données existantes
+
+- Les articles « Favori » prennent le niveau **🤍 J'aime** ; les autres n'ont pas de niveau.
+- Décocher un niveau ou en changer ne supprime jamais l'article (fin de la règle « envie nue retirée quand on
+  enlève le ♡ », source de la surprise avec la cape Margot). On retire un article par « … » → « Retirer de mes envies ».
+- Le champ « Notes » existant reste ; l'avis (« Pourquoi ? ») est un champ à part, court, affiché sur la vignette.
+
+## 5. Technique
+
+### 5.1 Base de données (une migration)
+- `items.love_level` : entier 1 à 4 ou `null` (1 Bof, 2 J'aime, 3 Mims, 4 En feu), contrôle `between 1 and 4`.
+- `items.priority` : booléen, `false` par défaut.
+- `items.why` : texte, 200 caractères au plus, `null` par défaut.
+- `items.in_order_draft` : booléen, `false` par défaut (la sélection « Préparer une commande »), index partiel
+  `(user_id, profile_id) where in_order_draft`.
+- Budget : `profiles.order_budget_cents` (entier ≥ 0 ou `null`), un budget par profil (Moi, Léa…).
+- Niveaux personnalisés : table `love_levels` (`user_id`, `level` 1–4, `emoji`, `label`), clé (`user_id`, `level`) ;
+  absente = niveaux de départ.
+- Reprise : `love_level = 2 where favorite`, puis suppression de la colonne `favorite` dans la même migration
+  (le filtre et l'API « favori » disparaissent).
+- Fusion anonyme → compte : niveau le plus haut, prioritaire si l'un l'est, avis de la cible sinon de la source,
+  sélection si l'une l'est.
+
+### 5.2 API
+- `ItemView` : `loveLevel`, `priority`, `why`, `inOrderDraft` (à la place de `favorite`).
+- Garder un article : `action` `wish` (niveau, priorité, avis) remplace `favorite` ; `list` et `ordered` gardent
+  leur effet.
+- `PATCH /me/items/{id}` accepte `loveLevel`, `priority`, `why`, `inOrderDraft`.
+- Lots : opérations `setLoveLevel`, `setPriority`, `setOrderDraft`, avec annulation comme les autres.
+- Vues : filtres `loveLevel` (plusieurs valeurs) et `priority`, tri `love`.
+- `GET/PUT /me/love-levels` (4 niveaux), `PATCH /me/profiles/{id}` accepte `orderBudgetCents`.
+- `POST /me/order-draft/ordered` : passe la sélection du profil à « Commandé » et la vide, en une transaction,
+  annulable.
+
+### 5.3 Web
+- Composants : `LoveLevelPill` (vignette), `LoveLevelPicker` (fiche et menu), `ItemMenu` (« … »),
+  `SelectMode` (« Sélectionner »), page `/envies/commande`, page `/reglages/niveaux`.
+- Contexte des niveaux de l'utilisatrice (comme les profils) pour afficher ses émojis et noms partout.
+
+### 5.4 Jetons de design
+- Nouvelles couleurs dans `primitives.ts`, mêmes noms de jetons sémantiques (l'UI ne change pas de classes) :
+  - clair : fond `#F2EDE7`, carte `#FFFFFF`, encre `#2B1D17`, encre douce `#6E5A50`, trait `#E5D7CC`,
+    accent chocolat `#5A3A2E`, rose poudré `#EBC7C3`, jaune beurre `#F3E3A6`, camel `#DCC3A6`, sauge `#D5DCC8` ;
+  - sombre : fond `#1E1612`, carte `#2A201B`, encre `#F2EDE7`, encre douce `#C9B8AE`, accent rose poudré `#EBC7C3`
+    (encre d'accent chocolat foncé) — valeurs ajustées pour passer les tests de contraste existants.
+- Polices : `@fontsource-variable/fraunces` et `@fontsource-variable/dm-sans` à la place de Cormorant Garamond et
+  Jost ; mise à jour de `docs/specs/2026-11-01-direction-visuelle.md`.
+
+## 6. Tests
+
+- Unitaires : niveau suivant (cycle), tri « Ce que j'aime le plus », calcul total / écart au budget (prix inconnus,
+  sans budget), contrastes de la palette (tests existants).
+- Intégration API : reprise des favoris en J'aime, garder avec `wish`, filtres et tri, lots et annulation, budget par
+  profil, « J'ai commandé » (transaction, annulation), fusion anonyme → compte, niveaux personnalisés (4 exactement,
+  un émoji, 20 caractères).
+- Parcours navigateur (téléphone, tablette, ordinateur, axe sans violation) : lien collé → « Ajouter à mes envies »
+  en Mims ; toucher la pastille d'une vignette ; menu « … » → Prioritaire puis Retirer ; mode « Sélectionner » ;
+  préparer une commande avec budget, revenir le lendemain (sélection gardée), « J'ai commandé » ; renommer un niveau
+  et le voir sur les vignettes.
+
+## 7. Hors de cette partie
+
+- Partie 2 : avis et choix des amies sur le lien de partage (cahier des charges à suivre).
+- Les autres écrans (accueil, fiche gardée en détail, admin) prennent la palette mais pas de nouvelle mise en page.
+
+## 8. Points supposés, à confirmer
+
+1. Les anciens favoris deviennent **🤍 J'aime** (et non 🥰 Mims).
+2. Un **budget par profil** (le tien, celui de ta fille…), plutôt qu'un seul budget.
+3. « J'aime » est **présélectionné** sur la fiche d'un lien collé, pour ajouter en un toucher.
+4. Le prix compté est le **prix actuel de la boutique** (pas un prix que tu saisis).
+5. La pastille d'une vignette **tourne** d'un toucher ; le choix direct d'un niveau passe par « … ».
