@@ -324,11 +324,11 @@ export function OrderDraft() {
             )}
             {totals.afterCents !== null &&
               (totals.afterCents >= 0 ? (
-                <p className="rounded-button bg-success px-space-2 font-strong text-sm text-success-surface">
+                <p className="rounded-button border border-success-edge bg-success-soft px-space-2 font-strong text-sm text-success">
                   {t("band.left", { amount: money(totals.afterCents) })}
                 </p>
               ) : (
-                <p className="rounded-button bg-danger px-space-2 font-strong text-sm text-surface">
+                <p className="rounded-button border border-danger-edge bg-danger-soft px-space-2 font-strong text-sm text-danger">
                   {t("band.over", { amount: money(-totals.afterCents) })}
                 </p>
               ))}

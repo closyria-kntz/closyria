@@ -24,6 +24,11 @@ export const primitives = {
     pine: "#1F4A3F",
     bronze: "#6A4F12",
     garnet: "#9B1C31",
+    // Budget pills (version B): soft fills and edges.
+    mint: "#E3F1E7",
+    leaf: "#6FA58A",
+    rosePetal: "#FBE3E6",
+    coral: "#D97F8C",
     // Dark
     espresso: "#1E1612",
     mocha: "#2A201B",
@@ -39,6 +44,9 @@ export const primitives = {
     gold: "#E8CF8F",
     olivewood: "#3A3220",
     salmon: "#F4A3A8",
+    fern: "#4E8A6E",
+    wine: "#4A2228",
+    oldRose: "#B4646C",
   },
   space: {
     0: "0",

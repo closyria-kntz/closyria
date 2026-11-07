@@ -112,6 +112,15 @@ describe("Équilibré themes", () => {
     expect(get(equilibreLight, "color-band-line")).toBe("#D8A9A3");
     expect(get(equilibreLight, "color-band-button")).toBe("#7A5444");
     expect(get(equilibreLight, "color-band-button-ink")).toBe("#FFFFFF");
+    // Budget pills (version B, 2026-11-07): a soft fill and an edge, the same for green and red.
+    expect(get(equilibreLight, "color-success-soft")).toBe("#E3F1E7");
+    expect(get(equilibreLight, "color-success-edge")).toBe("#6FA58A");
+    expect(get(equilibreLight, "color-danger-soft")).toBe("#FBE3E6");
+    expect(get(equilibreLight, "color-danger-edge")).toBe("#D97F8C");
+    expect(get(equilibreDark, "color-success-soft")).toBe("#1D3A31");
+    expect(get(equilibreDark, "color-success-edge")).toBe("#4E8A6E");
+    expect(get(equilibreDark, "color-danger-soft")).toBe("#4A2228");
+    expect(get(equilibreDark, "color-danger-edge")).toBe("#B4646C");
     expect(get(equilibreDark, "color-surface")).toBe("#1E1612");
     expect(get(equilibreDark, "color-surface-raised")).toBe("#2A201B");
     expect(get(equilibreDark, "color-ink")).toBe("#DDD0C6");
@@ -157,6 +166,10 @@ describe("Équilibré themes", () => {
     ["color-band-button-ink", "color-band-button", 4.5],
     ["color-surface", "color-danger", 4.5],
     ["color-band-line", "color-band", 1.2],
+    ["color-success", "color-success-soft", 4.5],
+    ["color-danger", "color-danger-soft", 4.5],
+    ["color-success-edge", "color-band", 2],
+    ["color-danger-edge", "color-band", 2],
   ];
 
   describe.each(themes)("$id", (theme) => {

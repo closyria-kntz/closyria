@@ -56,7 +56,18 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   // A very light pink band with a pink edge (version B), and over the budget in red (the danger color).
   await expect(band(page)).toHaveCSS("background-color", "rgb(246, 228, 225)");
   await expect(band(page)).toHaveCSS("border-top-color", "rgb(216, 169, 163)");
-  await expect(band(page).getByText(/au-dessus/)).toHaveCSS("background-color", "rgb(155, 28, 49)");
+  // Over the budget: a soft red fill, a red edge and red text (version B, same style as the green one).
+  const over = band(page).getByText(/au-dessus/);
+  await expect(over).toHaveCSS("background-color", "rgb(251, 227, 230)");
+  await expect(over).toHaveCSS("border-top-color", "rgb(217, 127, 140)");
+  await expect(over).toHaveCSS("color", "rgb(155, 28, 49)");
+  // Same in dark mode: a wine fill, an old-rose edge and salmon text.
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "equilibre-dark"));
+  await expect(over).toHaveCSS("background-color", "rgb(74, 34, 40)");
+  await expect(over).toHaveCSS("border-top-color", "rgb(180, 100, 108)");
+  await expect(over).toHaveCSS("color", "rgb(244, 163, 168)");
+  await axe(page);
+  await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
   await page.screenshot({ path: testInfo.outputPath("commande.png") });
   await axe(page);
 
@@ -67,10 +78,18 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await row(page, "Gilet Brume").uncheck();
   await expect(band(page)).toContainText(/1 article · 89\s€/);
   await expect(band(page)).toContainText(/Il te resterait 61\s€/);
-  // Under the budget: a solid pine pill with light bold text, as strong as the red one.
+  // Under the budget: a soft mint fill, a green edge and pine text (version B).
   const left = band(page).getByText(/Il te resterait/);
-  await expect(left).toHaveCSS("background-color", "rgb(31, 74, 63)");
-  await expect(left).toHaveCSS("color", "rgb(213, 220, 200)");
+  await expect(left).toHaveCSS("background-color", "rgb(227, 241, 231)");
+  await expect(left).toHaveCSS("border-top-color", "rgb(111, 165, 138)");
+  await expect(left).toHaveCSS("color", "rgb(31, 74, 63)");
+  // Same in dark mode: a spruce fill, a fern edge and celadon text.
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "equilibre-dark"));
+  await expect(left).toHaveCSS("background-color", "rgb(29, 58, 49)");
+  await expect(left).toHaveCSS("border-top-color", "rgb(78, 138, 110)");
+  await expect(left).toHaveCSS("color", "rgb(169, 220, 191)");
+  await axe(page);
+  await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
   await row(page, "Gilet Brume").check();
   await expect(band(page)).toContainText(/2 articles · 154\s€/);
 

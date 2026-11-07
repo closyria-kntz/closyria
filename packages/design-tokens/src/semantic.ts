@@ -27,6 +27,11 @@ export const defaultSemanticTokens = {
   "color-hint": palette.powder,
   "color-media-backdrop": palette.latte,
   "color-danger": palette.garnet,
+  // Budget pills in the order band (version B chosen on 2026-11-07): soft fill, edge, same for green and red.
+  "color-success-soft": palette.mint,
+  "color-success-edge": palette.leaf,
+  "color-danger-soft": palette.rosePetal,
+  "color-danger-edge": palette.coral,
   "color-focus-ring": palette.chocolate,
   // « Préparer une commande » band (version B chosen on 2026-11-07).
   "color-band": palette.blush,
