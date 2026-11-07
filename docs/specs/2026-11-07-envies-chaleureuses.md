@@ -2,7 +2,7 @@
 
 Date : 2026-11-07 · Statut : **livrée en dev (branche envies-chaleureuses), à tester par la fondatrice**.
 Maquette validée (palette C) : https://claude.ai/artifact/Q6tEj3ZNKbrXbunv6B1LTQ (rangée « Palette C », 5 écrans).
-Partie 2 (avis et choix des amies sur le lien de partage) : cahier des charges séparé, après celui-ci.
+Partie 2 (avis et choix des amies sur le lien de partage) : `docs/specs/2026-11-07-avis-des-amies.md` (2a, avis), puis 2b (offrir) et 2c (acheter ensemble).
 
 ## 1. Pourquoi
 
