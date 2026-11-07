@@ -106,7 +106,7 @@ describe("Équilibré themes", () => {
     expect(get(equilibreLight, "color-hint")).toBe("#EBC7C3");
     expect(get(equilibreLight, "color-premium-surface")).toBe("#F3E3A6");
     expect(get(equilibreLight, "color-success-surface")).toBe("#D5DCC8");
-    expect(get(equilibreLight, "color-media-backdrop")).toBe("#DCC3A6");
+    expect(get(equilibreLight, "color-media-backdrop")).toBe("#EADBC8");
     expect(get(equilibreDark, "color-surface")).toBe("#1E1612");
     expect(get(equilibreDark, "color-surface-raised")).toBe("#2A201B");
     expect(get(equilibreDark, "color-ink")).toBe("#F2EDE7");
@@ -134,6 +134,7 @@ describe("Équilibré themes", () => {
     ["color-ink-muted", "color-surface", 4.5],
     ["color-ink-muted", "color-surface-raised", 4.5],
     ["color-ink-muted", "color-surface-sunken", 4.5],
+    ["color-ink-muted", "color-media-backdrop", 4.5],
     ["color-ink", "color-hint", 4.5],
     ["color-accent-ink", "color-accent", 4.5],
     ["color-accent", "color-surface", 4.5],

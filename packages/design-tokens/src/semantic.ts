@@ -24,7 +24,7 @@ export const defaultSemanticTokens = {
   "color-premium": palette.bronze,
   "color-premium-surface": palette.butter,
   "color-hint": palette.powder,
-  "color-media-backdrop": palette.camel,
+  "color-media-backdrop": palette.latte,
   "color-danger": palette.garnet,
   "color-focus-ring": palette.chocolate,
   // Component tokens

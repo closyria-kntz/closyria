@@ -15,7 +15,7 @@ export const primitives = {
     chocolate: "#5A3A2E",
     powder: "#EBC7C3",
     butter: "#F3E3A6",
-    camel: "#DCC3A6",
+    latte: "#EADBC8",
     sage: "#D5DCC8",
     pine: "#1F4A3F",
     bronze: "#6A4F12",
