@@ -1,3 +1,4 @@
+import type { ItemView } from "@closyria/shared";
 import { describe, expect, it } from "vitest";
 import {
   activeFilterCount,
@@ -5,7 +6,9 @@ import {
   filtersToParams,
   initialMoreState,
   moreReducer,
+  paramsText,
   STAGE_FILTER_OPTIONS,
+  stillShown,
   toggleSelection,
   toItemQuery,
   VIEWS,
@@ -64,6 +67,64 @@ describe("filters in the address", () => {
       stage: "sold",
       sort: "price_desc",
     });
+  });
+});
+
+describe("levels, priority and the love sort", () => {
+  it("reads `niveau=4,3` and `prioritaire=1`, dropping what is not a level", () => {
+    expect(filtersFromParams(new URLSearchParams("niveau=3,4,9,x,3&prioritaire=1&tri=love"))).toEqual({
+      levels: [4, 3],
+      priority: true,
+      sort: "love",
+    });
+    expect(filtersFromParams(new URLSearchParams("niveau=&prioritaire=0"))).toEqual({});
+  });
+
+  it("writes them plainly in the address and round-trips", () => {
+    const params = filtersToParams({ levels: [4, 3], priority: true, sort: "love" });
+    expect(paramsText(params)).toBe("niveau=4,3&prioritaire=1&tri=love");
+    expect(filtersFromParams(new URLSearchParams(paramsText(params)))).toEqual({
+      levels: [4, 3],
+      priority: true,
+      sort: "love",
+    });
+  });
+
+  it("asks the API for the levels, the priority and the sort", () => {
+    expect(toItemQuery("envies", { levels: [4, 3], priority: true, sort: "love" }, null)).toEqual({
+      stage: "spotted",
+      loveLevel: "4,3",
+      priority: "true",
+      sort: "love",
+    });
+  });
+
+  it("counts the levels as one filter and the priority as another", () => {
+    expect(activeFilterCount({ levels: [4, 1], priority: true, sort: "love" })).toBe(2);
+  });
+});
+
+describe("stillShown", () => {
+  const item = {
+    stage: "spotted",
+    profileId: UUID,
+    loveLevel: 3,
+    priority: false,
+    tags: [{ id: UUID, name: "Été", color: null }],
+  } as unknown as ItemView;
+
+  it("keeps a card that still matches the view, its profile and its filters", () => {
+    expect(stillShown(item, "spotted", UUID, { tag: UUID, levels: [3] })).toBe(true);
+    expect(stillShown(item, "spotted", null, {})).toBe(true);
+  });
+
+  it("drops a card whose stage, profile, tag, level or priority no longer match", () => {
+    expect(stillShown(item, "owned", null, {})).toBe(false);
+    expect(stillShown(item, "spotted", "9b1f6a52-3a0b-4a4c-9f0e-5b1c2d3e4f50", {})).toBe(false);
+    expect(stillShown({ ...item, tags: [] }, "spotted", null, { tag: UUID })).toBe(false);
+    expect(stillShown(item, "spotted", null, { levels: [4] })).toBe(false);
+    expect(stillShown({ ...item, loveLevel: null }, "spotted", null, { levels: [4, 3] })).toBe(false);
+    expect(stillShown(item, "spotted", null, { priority: true })).toBe(false);
   });
 });
 

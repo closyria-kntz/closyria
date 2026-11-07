@@ -37,7 +37,7 @@ test("créer « Léa », y déplacer deux articles, filtrer par profil, suppress
   const moveFirst = async () => {
     await page.getByTestId("item-card").first().getByRole("button", { name: "Plus d’actions" }).click();
     await page
-      .getByRole("region", { name: `Actions sur ${PRODUCT.name}` })
+      .getByRole("dialog", { name: `Actions sur ${PRODUCT.name}` })
       .getByRole("button", { name: "Déplacer vers un profil" })
       .click();
     await page.getByRole("dialog", { name: "Déplacer vers un profil" }).getByRole("button", { name: "Léa" }).click();

@@ -823,18 +823,24 @@
       "stageOptions": {
         "sold": "Vendu",
         "returned": "Renvoyé"
-      }
+      },
+      "levels": "Niveau",
+      "priority": "Prioritaires"
     },
     "selection": {
-      "count": "{count, plural, one {# article choisi} other {# articles choisis}}",
+      "count": "{count, plural, one {# sélectionné} other {# sélectionnés}}",
       "all": "Tout choisir",
       "none": "Tout désélectionner",
+      "level": "Niveau",
+      "priority": "Prioritaire",
       "stage": "Étape",
       "list": "Liste",
       "profile": "Profil",
       "tag": "Étiquette",
       "delete": "Supprimer",
       "bar": "Actions sur la sélection",
+      "levelTitle": "Donner un niveau",
+      "priorityTitle": "Prioritaire",
       "stageTitle": "Changer d’étape",
       "listTitle": "Ajouter à une liste",
       "profileTitle": "Déplacer vers un profil",
@@ -849,9 +855,19 @@
         "list": "{count, plural, one {# article ajouté} other {# articles ajoutés}} à {name}",
         "profile": "{count, plural, one {# article déplacé} other {# articles déplacés}} vers {name}",
         "tag": "Étiquette {name} posée sur {count, plural, one {# article} other {# articles}}",
-        "delete": "{count, plural, one {# article supprimé} other {# articles supprimés}}"
+        "delete": "{count, plural, one {# article supprimé} other {# articles supprimés}}",
+        "level": "Niveau « {label} » pour {count, plural, one {# article} other {# articles}}",
+        "levelCleared": "Niveau retiré de {count, plural, one {# article} other {# articles}}",
+        "priorityOn": "{count, plural, one {# article prioritaire} other {# articles prioritaires}}",
+        "priorityOff": "{count, plural, one {# article retiré} other {# articles retirés}} de Prioritaire"
       },
-      "loading": "Un instant…"
+      "loading": "Un instant…",
+      "start": "Sélectionner",
+      "done": "Terminé",
+      "hint": "Touche les articles à choisir.",
+      "levelNone": "Aucun",
+      "priorityOn": "Marquer prioritaire",
+      "priorityOff": "Retirer de Prioritaire"
     },
     "menu": {
       "open": "Plus d’actions",
@@ -943,7 +959,7 @@
       },
       "empty": {
         "title": "Cette liste est vide",
-        "body": "Ajoute des articles depuis une vue : choisis-les, puis « Liste »."
+        "body": "Ajoute des articles depuis une vue : « Sélectionner », puis « Liste »."
       },
       "remove": "Retirer {name}",
       "removed": "« {name} » retiré de la liste",

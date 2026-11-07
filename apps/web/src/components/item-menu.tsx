@@ -19,6 +19,8 @@ import { Dialog } from "./dialog";
 import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
 
 type Choice = "why" | "list" | "profile" | "tags";
+/** The `md` breakpoint (48rem): from there the menu opens under « … », below it a sheet from the bottom. */
+const TABLET_UP = "(min-width: 48rem)";
 const touch = "min-h-touch-target";
 const entryClass = `flex ${touch} w-full items-center gap-space-2 rounded-button px-space-3 text-left text-sm text-ink hover:bg-surface-strong disabled:opacity-60 ${focusRing}`;
 const levelClass = `flex ${touch} items-center justify-center gap-space-1 rounded-button border border-line px-space-2 text-sm text-ink hover:bg-surface-strong aria-pressed:border-accent aria-pressed:bg-surface-strong aria-pressed:font-strong ${focusRing}`;
@@ -47,25 +49,37 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
   const [stage, setStage] = useState<ItemStage | null>(null);
   const [busy, setBusy] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
-  const panel = useRef<HTMLElement>(null);
+  const panel = useRef<HTMLDialogElement>(null);
   const panelId = useId();
   const name = item.name?.trim() || item.product.name || "";
   const fail = (code: string) => pushUndo(tItem(`errors.${code}` as "errors.failed"), null);
 
   const close = useCallback((returnFocus: boolean) => {
+    // Closed right away: while the sheet is modal, « … » behind it is inert and cannot take the focus.
+    panel.current?.close();
     setOpen(false);
     if (returnFocus) button.current?.focus();
   }, []);
 
-  // Open: the focus goes to the first entry; Escape closes and gives it back to « … ».
+  // Open: a modal sheet on a phone (the page behind is inert for every reader), a small non-modal menu from a tablet
+  // up; the focus goes to the first entry; Escape closes and gives it back to « … ».
   useEffect(() => {
-    if (!open) return;
-    panel.current?.querySelector<HTMLElement>("button")?.focus();
+    const dialog = panel.current;
+    if (!open || !dialog) return;
+    if (window.matchMedia(TABLET_UP).matches) dialog.show();
+    else dialog.showModal();
+    dialog.querySelector<HTMLElement>("button")?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close(true);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close(true);
+      }
     };
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      dialog.close();
+    };
   }, [open, close]);
 
   /** Runs an action from the panel: the panel closes, the focus goes back to « … ». */
@@ -135,61 +149,65 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
 
       {open && (
         <>
-          {/* A tap outside closes; Escape is the keyboard way. */}
-          <div
-            aria-hidden="true"
-            onClick={() => close(false)}
-            className="fixed inset-space-0 z-30 bg-ink/40 md:bg-transparent"
-          />
-          <section
+          {/* From a tablet up the menu is not modal: a tap outside closes it (on a phone, the sheet's backdrop does). */}
+          <div aria-hidden="true" onClick={() => close(false)} className="fixed inset-space-0 z-30 hidden md:block" />
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: the click on the backdrop is a touch shortcut; Escape is the keyboard way. */}
+          <dialog
             ref={panel}
             id={panelId}
             aria-label={t("panel", { name })}
+            onCancel={(event) => {
+              event.preventDefault();
+              close(true);
+            }}
+            onClick={(event) => event.target === panel.current && close(false)}
             onBlur={(event) => {
               const next = event.relatedTarget as Node | null;
               if (next && !panel.current?.contains(next) && next !== button.current) close(false);
             }}
-            className="fixed inset-x-space-0 bottom-space-0 z-30 flex max-h-dvh flex-col gap-space-3 overflow-y-auto rounded-t-card border border-line bg-surface-raised p-space-4 pb-space-6 shadow-lifted md:absolute md:top-touch-target md:bottom-auto md:max-h-none md:rounded-card md:p-space-2"
+            className="fixed inset-x-space-0 top-auto bottom-space-0 z-30 m-space-0 max-h-dvh w-full max-w-none overflow-y-auto rounded-t-card border border-line bg-surface-raised p-space-0 text-ink shadow-lifted backdrop:bg-ink/40 md:absolute md:top-touch-target md:bottom-auto md:max-h-none md:rounded-card"
           >
-            <fieldset className="flex flex-col gap-space-2">
-              <legend className="px-space-1 pb-space-2 text-sm font-strong">{t("levels")}</legend>
-              <div className="grid grid-cols-2 gap-space-2 lg:grid-cols-1">
-                {levels.map((level) => (
-                  <button
-                    key={level.level}
-                    type="button"
-                    aria-pressed={item.loveLevel === level.level}
-                    onClick={() => void setLevel(level.level)}
-                    className={levelClass}
+            <div className="flex flex-col gap-space-3 p-space-4 pb-space-6 md:p-space-2">
+              <fieldset className="flex flex-col gap-space-2">
+                <legend className="px-space-1 pb-space-2 text-sm font-strong">{t("levels")}</legend>
+                <div className="grid grid-cols-2 gap-space-2 lg:grid-cols-1">
+                  {levels.map((level) => (
+                    <button
+                      key={level.level}
+                      type="button"
+                      aria-pressed={item.loveLevel === level.level}
+                      onClick={() => void setLevel(level.level)}
+                      className={levelClass}
+                    >
+                      <span aria-hidden="true">{level.emoji}</span>
+                      <span className="min-w-space-0 truncate">{level.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <ul className="flex flex-col border-t border-line pt-space-2">
+                <Entry onClick={() => void togglePriority()}>{t(item.priority ? "priorityOff" : "priorityOn")}</Entry>
+                <Entry onClick={() => openChoice("why")}>{t("why")}</Entry>
+                {MENU_STAGES[item.stage].map((target) => (
+                  <Entry
+                    key={target}
+                    onClick={() => {
+                      close(true);
+                      setStage(target);
+                    }}
                   >
-                    <span aria-hidden="true">{level.emoji}</span>
-                    <span className="min-w-space-0 truncate">{level.label}</span>
-                  </button>
+                    {t(`toStage.${target}`)}
+                  </Entry>
                 ))}
-              </div>
-            </fieldset>
-            <ul className="flex flex-col border-t border-line pt-space-2">
-              <Entry onClick={() => void togglePriority()}>{t(item.priority ? "priorityOff" : "priorityOn")}</Entry>
-              <Entry onClick={() => openChoice("why")}>{t("why")}</Entry>
-              {MENU_STAGES[item.stage].map((target) => (
-                <Entry
-                  key={target}
-                  onClick={() => {
-                    close(true);
-                    setStage(target);
-                  }}
-                >
-                  {t(`toStage.${target}`)}
+                <Entry onClick={() => openChoice("list")}>{t("list")}</Entry>
+                {profiles.length > 1 && <Entry onClick={() => openChoice("profile")}>{t("profile")}</Entry>}
+                <Entry onClick={() => openChoice("tags")}>{t("tags")}</Entry>
+                <Entry danger onClick={() => void trash()}>
+                  {t(item.stage === "spotted" ? "removeWish" : "delete")}
                 </Entry>
-              ))}
-              <Entry onClick={() => openChoice("list")}>{t("list")}</Entry>
-              {profiles.length > 1 && <Entry onClick={() => openChoice("profile")}>{t("profile")}</Entry>}
-              <Entry onClick={() => openChoice("tags")}>{t("tags")}</Entry>
-              <Entry danger onClick={() => void trash()}>
-                {t(item.stage === "spotted" ? "removeWish" : "delete")}
-              </Entry>
-            </ul>
-          </section>
+              </ul>
+            </div>
+          </dialog>
         </>
       )}
 

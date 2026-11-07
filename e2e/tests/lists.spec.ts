@@ -54,7 +54,7 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   await page.goto("/envies");
   await page.getByTestId("item-card").getByRole("button", { name: "Plus d’actions" }).click();
   await page
-    .getByRole("region", { name: `Actions sur ${PRODUCT.name}` })
+    .getByRole("dialog", { name: `Actions sur ${PRODUCT.name}` })
     .getByRole("button", { name: "Ajouter à une liste" })
     .click();
   await page.getByRole("dialog").getByRole("button", { name: "Été à Nice" }).click();
@@ -144,6 +144,40 @@ test("une liste se renomme, se réordonne au clavier et se supprime", async ({ p
   await expect(page.getByRole("link", { name: /Voyage/ })).toHaveCount(0);
 });
 
+test("sur la page d'une liste, retirer un article de la liste par son « … » le fait partir de la page", async ({
+  page,
+}) => {
+  await keepFavorite(page);
+  await page.goto("/listes");
+  await page.getByLabel("Nom de la nouvelle liste").fill("Été");
+  await page.getByRole("button", { name: "Créer la liste" }).click();
+  await expect(toast(page)).toContainText("Liste « Été » créée");
+  await page.goto("/envies");
+  await page.getByRole("button", { name: "Sélectionner", exact: true }).click();
+  await page.getByTestId("item-card").getByRole("button", { name: PRODUCT.name }).click();
+  await page
+    .getByRole("region", { name: "Actions sur la sélection" })
+    .getByRole("button", { name: "Liste", exact: true })
+    .click();
+  await page.getByRole("dialog", { name: "Ajouter à une liste" }).getByRole("button", { name: "Été" }).click();
+  await expect(toast(page)).toContainText("1 article ajouté à Été");
+
+  await page.goto("/listes");
+  await page.getByRole("link", { name: /Été/ }).click();
+  await expect(page.getByTestId("item-card")).toHaveCount(1);
+  await page.getByTestId("item-card").getByRole("button", { name: "Plus d’actions" }).click();
+  await page
+    .getByRole("dialog", { name: `Actions sur ${PRODUCT.name}` })
+    .getByRole("button", { name: "Ajouter à une liste" })
+    .click();
+  await page.getByRole("dialog", { name: "Ajouter à une liste" }).getByRole("button", { name: "Été" }).click();
+  await expect(toast(page)).toContainText("Retiré de Été");
+  // The card leaves the page, its window with it.
+  await expect(page.getByTestId("item-card")).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Cette liste est vide" })).toBeVisible();
+});
+
 test("corbeille : restaurer un article, en supprimer un autre pour toujours", async ({ page }) => {
   await keepFavorite(page);
   await keepFavorite(page);
@@ -152,7 +186,7 @@ test("corbeille : restaurer un article, en supprimer un autre pour toujours", as
   const remove = async () => {
     await page.getByTestId("item-card").first().getByRole("button", { name: "Plus d’actions" }).click();
     await page
-      .getByRole("region", { name: `Actions sur ${PRODUCT.name}` })
+      .getByRole("dialog", { name: `Actions sur ${PRODUCT.name}` })
       .getByRole("button", { name: "Retirer de mes envies" })
       .click();
     await expect(toast(page)).toContainText("Retiré de tes envies");

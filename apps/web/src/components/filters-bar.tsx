@@ -1,10 +1,12 @@
 "use client";
 
-import { audienceSchema, itemSortSchema, type ReferenceView, type TagView } from "@closyria/shared";
+import { audienceSchema, itemSortSchema, type LoveLevel, type ReferenceView, type TagView } from "@closyria/shared";
 import { useTranslations } from "next-intl";
 import { useId, useMemo, useState } from "react";
+import { levelOf } from "@/lib/love-levels";
+import { useLoveLevels } from "@/lib/profile-context";
 import { STAGE_FILTER_OPTIONS, type ViewFilters } from "@/lib/wardrobe-view";
-import { buttonClass, inputClass } from "./ui";
+import { buttonClass, focusRing, inputClass } from "./ui";
 
 type Props = {
   filters: ViewFilters;
@@ -17,6 +19,9 @@ type Props = {
 };
 
 const field = `${inputClass} min-h-touch-target`;
+const chipClass = `inline-flex min-h-touch-target items-center gap-space-1 rounded-full border border-line bg-surface-raised px-space-3 text-sm text-ink hover:bg-surface-strong aria-pressed:border-accent aria-pressed:bg-surface-strong aria-pressed:font-strong ${focusRing}`;
+/** Highest first, as in the menu of a card: En feu, Mims, J'aime, Bof. */
+const CHIP_LEVELS: readonly LoveLevel[] = [4, 3, 2, 1];
 
 function Select({
   label,
@@ -42,9 +47,13 @@ function Select({
   );
 }
 
-/** Sort, and the filters (shop, type, colour, audience, tag, stage) in a panel; state lives in the address. */
+/**
+ * Sort, her level chips (several at once) and « Prioritaires », then the other filters (shop, type, colour,
+ * audience, tag, stage) in a panel; state lives in the address.
+ */
 export function FiltersBar({ filters, onChange, shops, tags, reference, activeCount }: Props) {
   const t = useTranslations("Views.filters");
+  const levels = useLoveLevels();
   const [open, setOpen] = useState(activeCount > 0);
   const panel = useId();
 
@@ -68,6 +77,17 @@ export function FiltersBar({ filters, onChange, shops, tags, reference, activeCo
       else next[key] = value;
     }
     onChange(next as ViewFilters);
+  };
+
+  const toggleLevel = (level: LoveLevel) => {
+    const chosen = new Set(filters.levels);
+    if (!chosen.delete(level)) chosen.add(level);
+    const { levels: _, ...rest } = filters;
+    onChange(chosen.size > 0 ? { ...rest, levels: [...chosen].sort((a, b) => b - a) } : rest);
+  };
+  const togglePriority = () => {
+    const { priority: _, ...rest } = filters;
+    onChange(filters.priority ? rest : { ...rest, priority: true });
   };
 
   return (
@@ -98,6 +118,29 @@ export function FiltersBar({ filters, onChange, shops, tags, reference, activeCo
             {t("reset")}
           </button>
         )}
+      </div>
+      <div className="flex flex-wrap items-center gap-space-2">
+        <fieldset className="flex flex-wrap gap-space-2">
+          <legend className="sr-only">{t("levels")}</legend>
+          {CHIP_LEVELS.map((level) => {
+            const { emoji, label } = levelOf(levels, level);
+            return (
+              <button
+                key={level}
+                type="button"
+                aria-pressed={filters.levels?.includes(level) ?? false}
+                onClick={() => toggleLevel(level)}
+                className={chipClass}
+              >
+                <span aria-hidden="true">{emoji}</span>
+                {label}
+              </button>
+            );
+          })}
+        </fieldset>
+        <button type="button" aria-pressed={filters.priority ?? false} onClick={togglePriority} className={chipClass}>
+          {t("priority")}
+        </button>
       </div>
       {open && (
         <div

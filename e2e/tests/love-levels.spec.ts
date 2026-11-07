@@ -24,7 +24,7 @@ async function wishInEnvies(page: Page): Promise<void> {
 }
 
 const card = (page: Page) => page.getByTestId("item-card").first();
-const menu = (page: Page) => page.getByRole("region", { name: `Actions sur ${PRODUCT.name}` });
+const menu = (page: Page) => page.getByRole("dialog", { name: `Actions sur ${PRODUCT.name}` });
 
 test("la pastille passe de J’aime à Mims, « Annuler » remet J’aime ; plus de case à cocher", async ({ page }) => {
   await wishInEnvies(page);
@@ -56,6 +56,9 @@ test("menu « … » : focus, Échap, niveau, Prioritaire et Mon avis sur la vig
   await expect(more).toHaveAttribute("aria-expanded", "true");
   await expect(menu(page).getByRole("button", { name: "J’aime" })).toHaveAttribute("aria-pressed", "true");
   await expect(menu(page).getByRole("button").first()).toBeFocused();
+  // On a phone the sheet is modal (the page behind is inert for every reader); from a tablet up, a small menu.
+  const phone = testInfo.project.name === "iPhone 15";
+  expect(await menu(page).evaluate((dialog) => dialog.matches(":modal"))).toBe(phone);
   await page.screenshot({ path: testInfo.outputPath("menu.png") });
   await axe(page);
   await page.keyboard.press("Escape");

@@ -79,15 +79,8 @@ export function WishlistDetail({ id }: { id: string }) {
     });
   }, []);
 
-  // A card changed from its pill or its « … » menu; a trashed one leaves the list.
-  const changed = useCallback((item: ItemView) => {
-    setState((previous) =>
-      previous.status === "ready"
-        ? { ...previous, items: previous.items.map((known) => (known.id === item.id ? item : known)) }
-        : previous,
-    );
-  }, []);
-  const trashed = useCallback((itemId: string) => {
+  /** The item is no longer in this list (trashed, or taken out of it from the « … » menu). */
+  const dropped = useCallback((itemId: string) => {
     setState((previous) =>
       previous.status === "ready"
         ? {
@@ -98,6 +91,19 @@ export function WishlistDetail({ id }: { id: string }) {
         : previous,
     );
   }, []);
+  // A card changed from its pill or its « … » menu: it stays while it is still in this list.
+  const changed = useCallback(
+    (item: ItemView) => {
+      if (!item.wishlistIds.includes(id)) return dropped(item.id);
+      setState((previous) =>
+        previous.status === "ready"
+          ? { ...previous, items: previous.items.map((known) => (known.id === item.id ? item : known)) }
+          : previous,
+      );
+    },
+    [id, dropped],
+  );
+  const trashed = dropped;
   const actions = useMemo(() => ({ onChanged: changed, onTrashed: trashed, reload: load }), [changed, trashed, load]);
 
   if (state.status === "loading") {

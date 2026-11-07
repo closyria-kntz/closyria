@@ -13,6 +13,9 @@ import {
   filtersToParams,
   initialMoreState,
   moreReducer,
+  paramsText,
+  stillShown,
+  toggleSelection,
   toItemQuery,
   VIEWS,
   type ViewFilters,
@@ -29,7 +32,8 @@ const touch = "min-h-touch-target";
 
 /**
  * One of the four views (Envies, Commandé, Dressing, À vendre): filters in the address, infinite scroll, a pill and
- * a « … » menu on each card. The selection bar comes back with the « Sélectionner » mode (task 8).
+ * a « … » menu on each card. « Sélectionner » turns each card into a toggle and brings the selection bar; « Terminé »
+ * (or Escape) leaves the mode and forgets the selection (spec §3.4).
  */
 export function WardrobeView({ view }: { view: ViewKey }) {
   const t = useTranslations("Views");
@@ -47,6 +51,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   const [more, dispatchMore] = useReducer(moreReducer, initialMoreState);
   const { loading: loadingMore, failed: moreFailed } = more;
   const [tooMany, setTooMany] = useState(false);
+  const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [shops, setShops] = useState<{ id: string; name: string }[]>([]);
   const [tags, setTags] = useState<TagView[]>([]);
@@ -125,7 +130,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
 
   const setFilters = (next: ViewFilters) => {
     const params = filtersToParams(next, new URLSearchParams(search.toString()));
-    const text = params.toString();
+    const text = paramsText(params);
     router.push(text ? `${pathname}?${text}` : pathname, { scroll: false });
   };
 
@@ -135,11 +140,14 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     setData((previous) => ({ ...previous, items: previous.items.filter((item) => !away.has(item.id)) }));
   }, []);
 
-  // A card changed from its pill or its « … » menu: kept while it still belongs to the view, else it leaves.
+  // A card changed from its pill or its « … » menu: kept while it still belongs to the view and its filters.
   const viewStage = filters.stage ?? VIEWS[view].stage;
+  const { tag, levels, priority } = filters;
+  const levelsKey = levels?.join(",");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: levelsKey stands for levels.
   const changed = useCallback(
     (item: ItemView) => {
-      const stays = item.stage === viewStage && (current.id === null || item.profileId === current.id);
+      const stays = stillShown(item, viewStage, current.id, { tag, levels, priority });
       setData((previous) => ({
         ...previous,
         items: stays
@@ -147,19 +155,59 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           : previous.items.filter((known) => known.id !== item.id),
       }));
     },
-    [viewStage, current.id],
+    [viewStage, current.id, tag, levelsKey, priority],
   );
   const trashed = useCallback((id: string) => gone([id]), [gone]);
   const actions = useMemo(() => ({ onChanged: changed, onTrashed: trashed, reload }), [changed, trashed, reload]);
 
   useEffect(() => () => moreController.current?.abort(), []);
+
+  const leaveSelection = useCallback(() => {
+    setSelecting(false);
+    setSelected(new Set());
+    setTooMany(false);
+  }, []);
+  const toggle = useCallback(
+    (id: string) => {
+      const { next, refused } = toggleSelection(selected, id);
+      setTooMany(refused);
+      setSelected(next);
+    },
+    [selected],
+  );
+  const selection = useMemo(() => (selecting ? { selected, onToggle: toggle } : null), [selecting, selected, toggle]);
+
+  // Escape leaves the mode, unless it is closing a window (a choice of the selection bar).
+  useEffect(() => {
+    if (!selecting) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented && !document.querySelector("dialog:modal")) {
+        leaveSelection();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selecting, leaveSelection]);
+
   const count = activeFilterCount(filters);
   const label = t(`title.${view}`);
   const isEmpty = data.status === "ready" && data.items.length === 0;
 
   return (
     <div className="flex flex-col gap-space-4 pb-space-6">
-      <h1 className="font-display text-title font-strong">{label}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-space-3">
+        <h1 className="font-display text-title font-strong">{label}</h1>
+        {(selecting || data.items.length > 0) && (
+          <button
+            type="button"
+            className={`${selecting ? primaryButtonClass : buttonClass} ${touch}`}
+            onClick={() => (selecting ? leaveSelection() : setSelecting(true))}
+          >
+            {selecting ? t("selection.done") : t("selection.start")}
+          </button>
+        )}
+      </div>
+      {selecting && selected.size === 0 && <p className="text-sm text-ink-muted">{t("selection.hint")}</p>}
       <FiltersBar
         filters={filters}
         onChange={setFilters}
@@ -212,7 +260,13 @@ export function WardrobeView({ view }: { view: ViewKey }) {
       )}
 
       {data.items.length > 0 && (
-        <ItemGrid label={label} items={data.items} actions={actions} showStage={filters.stage !== undefined}>
+        <ItemGrid
+          label={label}
+          items={data.items}
+          actions={actions}
+          selection={selection}
+          showStage={filters.stage !== undefined}
+        >
           <div ref={sentinel} aria-hidden="true" />
           {loadingMore && (
             <p role="status" className="text-center text-sm text-ink-muted">
@@ -239,7 +293,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           {t("selection.tooMany")}
         </p>
       )}
-      {selected.size > 0 && (
+      {selecting && selected.size > 0 && (
         <SelectionBar
           currentStage={filters.stage ?? VIEWS[view].stage}
           ids={[...selected]}
