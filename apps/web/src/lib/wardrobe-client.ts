@@ -1,5 +1,10 @@
 import { createAuthClient, ensureSession } from "@closyria/auth/client";
 import {
+  type BudgetHistory,
+  type BudgetInput,
+  type BudgetView,
+  budgetHistorySchema,
+  budgetViewSchema,
   DEFAULT_LOVE_LEVELS,
   type FacetsView,
   facetsViewSchema,
@@ -16,6 +21,7 @@ import {
   loveLevelsSchema,
   mediaErrorCodes,
   mutationResultSchema,
+  type OrderDraftInput,
   type ProfileInput,
   type ProfilePatch,
   photoImportAcceptedSchema,
@@ -362,4 +368,48 @@ export async function saveLoveLevels(levels: readonly LoveLevelView[], deps: Cli
 /** Back to the starting levels. */
 export async function resetLoveLevels(deps: ClientDeps = defaultDeps) {
   return await callNoContent(deps, "/api/me/love-levels", { method: "DELETE" });
+}
+
+/** Whose budget (and selection): a profile's, or a list's (spec §3.6, §3.7). */
+export type BudgetScope = OrderDraftInput;
+
+const budgetPath = (scope: BudgetScope) =>
+  "profileId" in scope ? `/api/me/profiles/${scope.profileId}/budget` : `/api/me/wishlists/${scope.wishlistId}/budget`;
+
+/** Her budget, or null when she set none (or has no session yet). Throws on any other failure. */
+export async function fetchBudget(scope: BudgetScope, deps: ClientDeps = defaultDeps): Promise<BudgetView | null> {
+  const response = await deps.fetch(budgetPath(scope), { cache: "no-store" });
+  if (response.status === 404 || response.status === 401) return null;
+  if (!response.ok) throw new Error(`budget ${response.status}`);
+  return budgetViewSchema.parse(await response.json());
+}
+
+/** Creates or changes it. */
+export async function saveBudget(scope: BudgetScope, input: BudgetInput, deps: ClientDeps = defaultDeps) {
+  return await call(deps, budgetPath(scope), jsonInit("PUT", input), budgetViewSchema);
+}
+
+export async function deleteBudget(scope: BudgetScope, deps: ClientDeps = defaultDeps) {
+  return await callNoContent(deps, budgetPath(scope), { method: "DELETE" });
+}
+
+/** « Recommencer à zéro »: a budget without a period only (`budget_not_resettable` otherwise). */
+export async function resetBudget(scope: BudgetScope, deps: ClientDeps = defaultDeps) {
+  return await call(deps, `${budgetPath(scope)}/reset`, { method: "POST" }, budgetViewSchema);
+}
+
+/** Its past weeks or months, newest first; none without a budget. Throws on any other failure. */
+export async function fetchBudgetHistory(
+  scope: BudgetScope,
+  deps: ClientDeps = defaultDeps,
+): Promise<BudgetHistory["periods"]> {
+  const response = await deps.fetch(`${budgetPath(scope)}/history`, { cache: "no-store" });
+  if (response.status === 404 || response.status === 401) return [];
+  if (!response.ok) throw new Error(`budget history ${response.status}`);
+  return budgetHistorySchema.parse(await response.json()).periods;
+}
+
+/** « J'ai commandé »: the ticked wishes of the profile or the list go to « Commandé », with their undo. */
+export async function orderDraftOrdered(scope: BudgetScope, deps: ClientDeps = defaultDeps) {
+  return await call(deps, "/api/me/order-draft/ordered", jsonInit("POST", scope), mutationResultSchema);
 }

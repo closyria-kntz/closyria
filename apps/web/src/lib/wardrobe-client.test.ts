@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   changeStage,
   createItem,
+  deleteBudget,
   deleteProfile,
+  fetchBudget,
+  fetchBudgetHistory,
   fetchFacets,
   fetchItemForProduct,
   fetchItemsPage,
@@ -12,8 +15,11 @@ import {
   fetchReference,
   forgetRecent,
   importPhoto,
+  orderDraftOrdered,
   purgeItem,
   reorderWishlists,
+  resetBudget,
+  saveBudget,
   saveLoveLevels,
   shareWishlist,
   undoMutation,
@@ -314,6 +320,70 @@ describe("love levels", () => {
     expect(await saveLoveLevels(levels, deps(json({ error: "invalid_request" }, 400)))).toEqual({
       ok: false,
       error: "invalid_request",
+    });
+  });
+});
+
+describe("budgets", () => {
+  const view = {
+    amountCents: 15_000,
+    period: "week",
+    startsOn: null,
+    endsOn: null,
+    current: {
+      start: "2026-11-02T00:00:00.000+01:00",
+      end: "2026-11-09T00:00:00.000+01:00",
+      spentCents: 0,
+      remainingCents: 15_000,
+    },
+    ended: false,
+  };
+
+  it("reads the budget of a profile or a list; none is null", async () => {
+    const found = deps(json(view));
+    expect(await fetchBudget({ profileId: id }, found)).toEqual(view);
+    expect(found.fetch).toHaveBeenCalledWith(`/api/me/profiles/${id}/budget`, { cache: "no-store" });
+    const none = deps(json({ error: "not_found" }, 404));
+    expect(await fetchBudget({ wishlistId: id }, none)).toBeNull();
+    expect(none.fetch).toHaveBeenCalledWith(`/api/me/wishlists/${id}/budget`, { cache: "no-store" });
+    await expect(fetchBudget({ profileId: id }, deps(json({}, 500)))).rejects.toThrow();
+  });
+
+  it("writes, resets and deletes it", async () => {
+    const put = deps(json(view));
+    const saved = await saveBudget({ profileId: id }, { amountCents: 15_000, period: "week" }, put);
+    expect(saved).toMatchObject({ ok: true, amountCents: 15_000 });
+    expect(put.fetch).toHaveBeenCalledWith(`/api/me/profiles/${id}/budget`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amountCents: 15_000, period: "week" }),
+    });
+    expect(await resetBudget({ profileId: id }, deps(json({ error: "budget_not_resettable" }, 409)))).toEqual({
+      ok: false,
+      error: "budget_not_resettable",
+    });
+    expect(await deleteBudget({ wishlistId: id }, deps(new Response(null, { status: 204 })))).toEqual({ ok: true });
+  });
+
+  it("reads the past periods, none without a budget", async () => {
+    const periods = [{ start: view.current.start, end: view.current.end, spentCents: 100, amountCents: 15_000 }];
+    expect(await fetchBudgetHistory({ profileId: id }, deps(json({ periods })))).toEqual(periods);
+    expect(await fetchBudgetHistory({ profileId: id }, deps(json({ error: "not_found" }, 404)))).toEqual([]);
+  });
+});
+
+describe("orderDraftOrdered", () => {
+  it("sends the scope and keeps the refusals", async () => {
+    const ok = deps(json({ itemIds: [id], undo: null }));
+    expect(await orderDraftOrdered({ wishlistId: id }, ok)).toMatchObject({ ok: true, itemIds: [id] });
+    expect(ok.fetch).toHaveBeenCalledWith("/api/me/order-draft/ordered", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wishlistId: id }),
+    });
+    expect(await orderDraftOrdered({ profileId: id }, deps(json({ error: "order_draft_empty" }, 409)))).toEqual({
+      ok: false,
+      error: "order_draft_empty",
     });
   });
 });

@@ -747,7 +747,8 @@
       "envies": "Mes envies",
       "commande": "Mes commandes",
       "dressing": "Mon dressing",
-      "a-vendre": "Mes articles à vendre"
+      "a-vendre": "Mes articles à vendre",
+      "order": "Préparer une commande"
     },
     "loading": "Chargement de tes articles…",
     "loadError": "Tes articles ne s’affichent pas. Réessaie dans un instant.",
@@ -906,7 +907,8 @@
         "priorityOff": "Retiré de Prioritaire",
         "why": "Avis enregistré"
       }
-    }
+    },
+    "prepareOrder": "Préparer une commande"
   },
   "Lists": {
     "title": "Listes",
@@ -964,7 +966,8 @@
       "remove": "Retirer {name}",
       "removed": "« {name} » retiré de la liste",
       "removeFailed": "L’article n’a pas pu être retiré. Réessaie.",
-      "itemsFailed": "Certains articles ne s’affichent pas."
+      "itemsFailed": "Certains articles ne s’affichent pas.",
+      "prepareOrder": "Préparer une commande"
     },
     "share": {
       "title": "Partage",
@@ -981,6 +984,82 @@
       "stop": "Arrêter le partage",
       "stopped": "Partage arrêté : le lien ne marche plus.",
       "failed": "Le partage n’a pas abouti. Réessaie."
+    }
+  },
+  "OrderDraft": {
+    "title": "Préparer une commande",
+    "backToWishes": "‹ Mes envies",
+    "backToList": "‹ {name}",
+    "loading": "Un instant…",
+    "loadError": "Tes envies ne s’affichent pas.",
+    "retry": "Réessayer",
+    "missingList": "Cette liste n’existe plus.",
+    "hint": "Coche ce que tu prendrais. Les 🔥 et les prioritaires sont en haut.",
+    "listLabel": "Envies à commander",
+    "empty": {
+      "title": "Rien à commander pour l’instant",
+      "body": "Tes envies à l’étape « Repéré » s’afficheront ici."
+    },
+    "row": {
+      "priority": "Prioritaire",
+      "unknownPrice": "prix inconnu",
+      "noName": "Sans nom"
+    },
+    "toggleFailed": "La sélection n’a pas pu être enregistrée. Réessaie.",
+    "band": {
+      "label": "Ma commande",
+      "total": "{count, plural, one {# article} other {# articles}} · {amount}",
+      "unknown": "dont {count, plural, one {# prix inconnu} other {# prix inconnus}}",
+      "left": "Il te resterait {amount}",
+      "over": "{amount} au-dessus",
+      "ordered": "J’ai commandé",
+      "ordering": "Un instant…"
+    },
+    "ordered": "{count, plural, one {# article passé} other {# articles passés}} en Commandé",
+    "errors": {
+      "empty": "Coche au moins une envie",
+      "tooLarge": "Tu as coché plus de 200 articles : décoches-en quelques-uns",
+      "failed": "La commande n’a pas pu être enregistrée. Réessaie."
+    },
+    "budget": {
+      "profileTitle": "Mon budget",
+      "listTitle": "Budget de la liste",
+      "open": "Budget",
+      "none": "Pas encore de budget.",
+      "loadError": "Le budget ne s’affiche pas.",
+      "week": "Budget de la semaine : {amount}",
+      "month": "Budget du mois : {amount}",
+      "custom": "Budget du {start} au {end} : {amount}",
+      "plain": "Budget : {amount}",
+      "ended": "Budget terminé (du {start} au {end}) : {amount}",
+      "spent": "Déjà commandé : {amount}",
+      "historyWeeks": "Semaines passées",
+      "historyMonths": "Mois passés",
+      "historyWeek": "Semaine du {start} : {spent} sur {amount}",
+      "historyMonth": "{month} : {spent} sur {amount}"
+    },
+    "dialog": {
+      "close": "Fermer",
+      "amount": "Montant (en euros)",
+      "period": "Période",
+      "periods": {
+        "week": "Par semaine",
+        "month": "Par mois",
+        "custom": "Dates au choix",
+        "none": "Sans période"
+      },
+      "from": "Du",
+      "to": "Au",
+      "save": "Enregistrer",
+      "delete": "Supprimer le budget",
+      "reset": "Recommencer à zéro",
+      "resetHelp": "Remet « Déjà commandé » à 0 € à partir d’aujourd’hui.",
+      "amountError": "Indique un montant, par exemple 150 ou 150,50.",
+      "datesError": "Choisis la date de début et celle de fin, dans l’ordre.",
+      "failed": "Le budget n’a pas pu être enregistré. Réessaie.",
+      "saved": "Budget enregistré",
+      "deleted": "Budget supprimé",
+      "resetDone": "Budget remis à zéro"
     }
   },
   "SharedList": {

@@ -219,6 +219,9 @@ export function WishlistDetail({ id }: { id: string }) {
           <>
             <h1 className="font-display text-title font-strong">{list.name}</h1>
             <div className="flex flex-wrap gap-space-2">
+              <Link href={`/envies/commande?liste=${list.id}`} className={`${primaryButtonClass} ${touch}`}>
+                {t("detail.prepareOrder")}
+              </Link>
               <button
                 type="button"
                 className={`${buttonClass} ${touch}`}

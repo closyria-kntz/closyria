@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { useCurrentProfile, useProfilesReady } from "@/lib/profile-context";
+import { profileHref, useCurrentProfile, useProfilesReady } from "@/lib/profile-context";
 import { fetchFacets, fetchItemsPage, fetchReference, fetchTags } from "@/lib/wardrobe-client";
 import {
   activeFilterCount,
@@ -197,15 +197,25 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     <div className="flex flex-col gap-space-4 pb-space-6">
       <div className="flex flex-wrap items-center justify-between gap-space-3">
         <h1 className="font-display text-title font-strong">{label}</h1>
-        {(selecting || data.items.length > 0) && (
-          <button
-            type="button"
-            className={`${selecting ? primaryButtonClass : buttonClass} ${touch}`}
-            onClick={() => (selecting ? leaveSelection() : setSelecting(true))}
-          >
-            {selecting ? t("selection.done") : t("selection.start")}
-          </button>
-        )}
+        <div className="flex flex-wrap gap-space-2">
+          {view === "envies" && !filters.stage && !selecting && (
+            <Link
+              href={profileHref("/envies/commande", current.id, current.isDefault)}
+              className={`${buttonClass} ${touch}`}
+            >
+              {t("prepareOrder")}
+            </Link>
+          )}
+          {(selecting || data.items.length > 0) && (
+            <button
+              type="button"
+              className={`${selecting ? primaryButtonClass : buttonClass} ${touch}`}
+              onClick={() => (selecting ? leaveSelection() : setSelecting(true))}
+            >
+              {selecting ? t("selection.done") : t("selection.start")}
+            </button>
+          )}
+        </div>
       </div>
       {selecting && selected.size === 0 && <p className="text-sm text-ink-muted">{t("selection.hint")}</p>}
       <FiltersBar
