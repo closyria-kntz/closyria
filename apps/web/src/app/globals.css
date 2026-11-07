@@ -1,39 +1,15 @@
 @import "tailwindcss";
 @import "../styles/tokens.css";
 
-/* Phone tab bar: its own padding for the home indicator, and the room the page keeps clear below it. */
+/* Phone tab bar: its own padding for the home indicator. */
 @utility tabbar-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-@utility tabbar-clearance {
-  padding-bottom: calc(var(--spacing-space-8) + env(safe-area-inset-bottom));
-
-  /* No tab bar from the tablet up: the usual bottom padding. */
-  @variant md {
-    padding-bottom: var(--spacing-space-6);
-  }
-}
-
-/* Same, with the « Plus » panel open above the bar (three links and « Mon compte » on two lines, gaps and padding). */
-@utility tabbar-clearance-open {
-  padding-bottom: calc(
-    var(--spacing-space-8) +
-    4 *
-    var(--spacing-touch-target) +
-    var(--spacing-space-5) +
-    var(--spacing-space-3) +
-    env(safe-area-inset-bottom)
-  );
-
-  @variant md {
-    padding-bottom: var(--spacing-space-6);
-  }
-}
-
 /* While a modal window is open (photo viewer, « Ajouter une photo »), the page behind does not scroll and shows no
-   scroll bar of its own. */
-html:has(dialog:modal) {
+   scroll bar of its own: neither the window nor the app content (the only area that scrolls in the app frame). */
+html:has(dialog:modal),
+#app-content:has(dialog:modal) {
   overflow: hidden;
 }
 
@@ -81,9 +57,11 @@ body {
   }
 }
 
-/* The selection bar sticks above the phone tab bar and the undo toast. */
+/* The selection bar sticks above the undo toast. It sticks in the app content, which already ends above the phone
+   tab bar (fixed frame), and the offset counts from the end of its bottom padding (space-6): what is left of the
+   toast's room (it sits space-8 above the window's bottom, about space-7 high) once the tabs are deducted. */
 @utility selection-bar-offset {
-  bottom: calc(var(--spacing-space-8) + var(--spacing-space-7) + env(safe-area-inset-bottom));
+  bottom: var(--spacing-space-6);
 
   @variant md {
     bottom: var(--spacing-space-8);

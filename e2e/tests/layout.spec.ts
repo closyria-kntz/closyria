@@ -14,6 +14,22 @@ async function openSheet(page: Page): Promise<void> {
   await expect(page.getByRole("img", { name: PRODUCT.name }).first()).toBeVisible();
 }
 
+/** The app content is the only area that scrolls (Passe design §1). */
+async function scrollContentToBottom(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const main = document.getElementById("app-content");
+    if (!main) throw new Error("no #app-content");
+    main.scrollTop = main.scrollHeight;
+    return main.scrollTop;
+  });
+}
+
+const windowScroll = (page: Page) =>
+  page.evaluate(() => ({
+    y: window.scrollY,
+    overflow: (document.scrollingElement?.scrollHeight ?? 0) - window.innerHeight,
+  }));
+
 async function box(page: Page, selector: string) {
   const found = await page.locator(selector).first().boundingBox();
   if (!found) throw new Error(`no box for ${selector}`);
@@ -157,8 +173,7 @@ test.describe("390 px", () => {
     const bar = page.getByTestId("app-nav-bottom");
 
     const expectLastAboveBar = async () => {
-      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-      await expect.poll(() => page.evaluate(() => window.scrollY + window.innerHeight)).toBeGreaterThan(0);
+      await scrollContentToBottom(page);
       const lastBox = await last.boundingBox();
       const barBox = await bar.boundingBox();
       expect(lastBox && barBox ? lastBox.y + lastBox.height : Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
@@ -262,5 +277,45 @@ test.describe("structure de la fiche", () => {
       await expect(page.getByRole("region", { name: "Mon article" })).toBeVisible();
       expect(await overflow()).toBeLessThanOrEqual(0);
     });
+  });
+});
+
+// Passe design §1: the frame stays, only the content scrolls.
+test.describe("cadre fixe", () => {
+  test("ordinateur : le menu et l'en-tête restent en place quand le contenu défile", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 600 });
+    await openSheet(page);
+    const aside = await box(page, "aside");
+    const header = await box(page, "header");
+    expect(await scrollContentToBottom(page)).toBeGreaterThan(0);
+    expect(await windowScroll(page)).toEqual({ y: 0, overflow: 0 });
+    expect(await box(page, "aside")).toEqual(aside);
+    expect(await box(page, "header")).toEqual(header);
+  });
+
+  test("téléphone : les onglets restent en bas et le contenu défile seul", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 600 });
+    await openSheet(page);
+    const bottom = async () => {
+      const bar = await box(page, "[data-testid=app-nav-bottom]");
+      return bar.y + bar.height;
+    };
+    expect(await bottom()).toBeGreaterThan(600 - 2);
+    expect(await scrollContentToBottom(page)).toBeGreaterThan(0);
+    expect(await bottom()).toBeGreaterThan(600 - 2);
+    expect(await windowScroll(page)).toEqual({ y: 0, overflow: 0 });
+  });
+
+  test("une nouvelle page commence en haut, et aussi au retour arrière", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 600 });
+    await openSheet(page);
+    const contentTop = () => page.evaluate(() => document.getElementById("app-content")?.scrollTop ?? -1);
+    expect(await scrollContentToBottom(page)).toBeGreaterThan(0);
+    await page.getByRole("navigation", { name: "Onglets" }).getByRole("link", { name: "Envies" }).click();
+    await expect(page).toHaveURL(/\/envies/);
+    await expect.poll(contentTop).toBe(0);
+    await page.goBack();
+    await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible();
+    await expect.poll(contentTop).toBe(0);
   });
 });
