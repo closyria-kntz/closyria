@@ -52,13 +52,17 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   await axe(page);
 
   await page.goto("/envies");
-  await page.getByRole("checkbox", { name: new RegExp(`Sélectionner ${PRODUCT.name}`) }).check();
+  await page.getByTestId("item-card").getByRole("button", { name: "Plus d’actions" }).click();
   await page
-    .getByRole("region", { name: "Actions sur la sélection" })
-    .getByRole("button", { name: "Liste", exact: true })
+    .getByRole("region", { name: `Actions sur ${PRODUCT.name}` })
+    .getByRole("button", { name: "Ajouter à une liste" })
     .click();
   await page.getByRole("dialog").getByRole("button", { name: "Été à Nice" }).click();
-  await expect(toast(page)).toContainText("ajouté à Été à Nice");
+  await expect(toast(page)).toContainText("Ajouté à Été à Nice");
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Été à Nice" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 
   await page.goto("/listes");
   await page.getByRole("link", { name: /Été à Nice/ }).click();
@@ -146,15 +150,12 @@ test("corbeille : restaurer un article, en supprimer un autre pour toujours", as
   await page.goto("/envies");
   await expect(page.getByTestId("item-card")).toHaveCount(2);
   const remove = async () => {
+    await page.getByTestId("item-card").first().getByRole("button", { name: "Plus d’actions" }).click();
     await page
-      .getByRole("checkbox", { name: new RegExp(`Sélectionner ${PRODUCT.name}`) })
-      .first()
-      .check();
-    await page
-      .getByRole("region", { name: "Actions sur la sélection" })
-      .getByRole("button", { name: "Supprimer" })
+      .getByRole("region", { name: `Actions sur ${PRODUCT.name}` })
+      .getByRole("button", { name: "Retirer de mes envies" })
       .click();
-    await expect(toast(page)).toContainText("supprimé");
+    await expect(toast(page)).toContainText("Retiré de tes envies");
   };
 
   await remove();

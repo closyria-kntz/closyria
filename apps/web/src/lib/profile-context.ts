@@ -1,6 +1,6 @@
 "use client";
 
-import type { ProfileView, SummaryView } from "@closyria/shared";
+import { DEFAULT_LOVE_LEVELS, type LoveLevelView, type ProfileView, type SummaryView } from "@closyria/shared";
 import { useSearchParams } from "next/navigation";
 import { createContext, useContext } from "react";
 import { z } from "zod";
@@ -40,6 +40,10 @@ export type ProfilesState = {
   /** Who is signed in (null until the first read): her e-mail, null without an account. */
   account: SummaryView["account"] | null;
   refreshProfiles: () => Promise<void>;
+  /** Her names and emojis for the 4 levels: the starting ones until the shell has read hers. */
+  loveLevels: readonly LoveLevelView[];
+  /** Re-reads her levels (after « Mes niveaux » saved them). */
+  refreshLoveLevels: () => Promise<void>;
 };
 
 /** The profiles of the signed-in (or anonymous) account; filled by the app shell. */
@@ -48,6 +52,8 @@ export const ProfilesContext = createContext<ProfilesState>({
   ready: true,
   account: null,
   refreshProfiles: async () => {},
+  loveLevels: DEFAULT_LOVE_LEVELS,
+  refreshLoveLevels: async () => {},
 });
 
 export function useProfiles(): readonly ProfileView[] {
@@ -60,6 +66,15 @@ export function useProfilesReady(): boolean {
 
 export function useRefreshProfiles(): () => Promise<void> {
   return useContext(ProfilesContext).refreshProfiles;
+}
+
+/** Her 4 levels (name and emoji), as every pill and menu shows them. */
+export function useLoveLevels(): readonly LoveLevelView[] {
+  return useContext(ProfilesContext).loveLevels;
+}
+
+export function useRefreshLoveLevels(): () => Promise<void> {
+  return useContext(ProfilesContext).refreshLoveLevels;
 }
 
 export function useCurrentProfile(): CurrentProfile {

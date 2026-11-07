@@ -4,7 +4,7 @@ import type { ItemView, WishlistView } from "@closyria/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { type FormEvent, useCallback, useEffect, useId, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useId, useMemo, useState } from "react";
 import { moveId } from "@/lib/reorder";
 import { pushUndo } from "@/lib/undo";
 import {
@@ -78,6 +78,27 @@ export function WishlistDetail({ id }: { id: string }) {
       return { ...previous, list, items };
     });
   }, []);
+
+  // A card changed from its pill or its « … » menu; a trashed one leaves the list.
+  const changed = useCallback((item: ItemView) => {
+    setState((previous) =>
+      previous.status === "ready"
+        ? { ...previous, items: previous.items.map((known) => (known.id === item.id ? item : known)) }
+        : previous,
+    );
+  }, []);
+  const trashed = useCallback((itemId: string) => {
+    setState((previous) =>
+      previous.status === "ready"
+        ? {
+            ...previous,
+            list: { ...previous.list, itemIds: previous.list.itemIds.filter((known) => known !== itemId) },
+            items: previous.items.filter((known) => known.id !== itemId),
+          }
+        : previous,
+    );
+  }, []);
+  const actions = useMemo(() => ({ onChanged: changed, onTrashed: trashed, reload: load }), [changed, trashed, load]);
 
   if (state.status === "loading") {
     return (
@@ -230,7 +251,7 @@ export function WishlistDetail({ id }: { id: string }) {
       ) : (
         <ul aria-label={t("detail.itemsLabel")} data-testid="item-grid" className={GRID_CLASS}>
           {items.map((item, index) => (
-            <ItemCard key={item.id} item={item} selected={false} selecting={false} showStage={false}>
+            <ItemCard key={item.id} item={item} actions={actions} showStage={false}>
               <div className="mt-space-2 flex flex-wrap items-center gap-space-2">
                 <MoveButtons
                   id={item.id}

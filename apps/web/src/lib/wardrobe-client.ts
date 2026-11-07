@@ -1,5 +1,6 @@
 import { createAuthClient, ensureSession } from "@closyria/auth/client";
 import {
+  DEFAULT_LOVE_LEVELS,
   type FacetsView,
   facetsViewSchema,
   type ItemBulk,
@@ -10,6 +11,8 @@ import {
   type ItemView,
   itemMutationResultSchema,
   itemPageSchema,
+  type LoveLevelView,
+  loveLevelsSchema,
   mediaErrorCodes,
   mutationResultSchema,
   type ProfileInput,
@@ -320,4 +323,22 @@ export async function fetchRecents(deps: ClientDeps = defaultDeps): Promise<Rece
 
 export async function forgetRecent(productId: string, deps: ClientDeps = defaultDeps) {
   return await callNoContent(deps, `/api/me/recents/${productId}`, { method: "DELETE" });
+}
+
+/** Her names and emojis for the 4 levels; the starting ones without a session. Throws on any other failure. */
+export async function fetchLoveLevels(deps: ClientDeps = defaultDeps): Promise<LoveLevelView[]> {
+  const response = await deps.fetch("/api/me/love-levels", { cache: "no-store" });
+  if (response.status === 401) return [...DEFAULT_LOVE_LEVELS];
+  if (!response.ok) throw new Error(`love levels ${response.status}`);
+  return loveLevelsSchema.parse(await response.json()).levels;
+}
+
+/** Replaces her 4 levels (Réglages → Mes niveaux). */
+export async function saveLoveLevels(levels: readonly LoveLevelView[], deps: ClientDeps = defaultDeps) {
+  return await call(deps, "/api/me/love-levels", jsonInit("PUT", { levels }), loveLevelsSchema);
+}
+
+/** Back to the starting levels. */
+export async function resetLoveLevels(deps: ClientDeps = defaultDeps) {
+  return await callNoContent(deps, "/api/me/love-levels", { method: "DELETE" });
 }

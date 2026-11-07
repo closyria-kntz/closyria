@@ -6,6 +6,7 @@ import {
   fetchFacets,
   fetchItemForProduct,
   fetchItemsPage,
+  fetchLoveLevels,
   fetchPhotoImport,
   fetchRecents,
   fetchReference,
@@ -13,6 +14,7 @@ import {
   importPhoto,
   purgeItem,
   reorderWishlists,
+  saveLoveLevels,
   shareWishlist,
   undoMutation,
 } from "./wardrobe-client";
@@ -250,5 +252,37 @@ describe("photo import", () => {
   it("throws on an error status or a malformed answer", async () => {
     await expect(fetchPhotoImport(id, id, deps(json({}, 500)))).rejects.toThrow();
     await expect(fetchPhotoImport(id, id, deps(json({ status: "weird" })))).rejects.toThrow();
+  });
+});
+
+describe("love levels", () => {
+  const levels = [
+    { level: 1, emoji: "😕", label: "Bof" },
+    { level: 2, emoji: "🤍", label: "J’aime" },
+    { level: 3, emoji: "💖", label: "Coup de cœur" },
+    { level: 4, emoji: "🔥", label: "En feu" },
+  ];
+
+  it("reads her levels, the starting ones without a session", async () => {
+    const d = deps(json({ levels }));
+    expect(await fetchLoveLevels(d)).toEqual(levels);
+    expect(d.fetch).toHaveBeenCalledWith("/api/me/love-levels", expect.anything());
+    expect((await fetchLoveLevels(deps(json({}, 401)))).map((l) => l.label)).toEqual([
+      "Bof",
+      "J’aime",
+      "Mims",
+      "En feu",
+    ]);
+    await expect(fetchLoveLevels(deps(json({}, 500)))).rejects.toThrow();
+  });
+
+  it("saves the four levels with PUT", async () => {
+    const d = deps(json({ levels }));
+    expect(await saveLoveLevels(levels, d)).toMatchObject({ ok: true, levels });
+    expect(d.fetch).toHaveBeenCalledWith("/api/me/love-levels", expect.objectContaining({ method: "PUT" }));
+    expect(await saveLoveLevels(levels, deps(json({ error: "invalid_request" }, 400)))).toEqual({
+      ok: false,
+      error: "invalid_request",
+    });
   });
 });

@@ -13,7 +13,6 @@ import {
   filtersToParams,
   initialMoreState,
   moreReducer,
-  toggleSelection,
   toItemQuery,
   VIEWS,
   type ViewFilters,
@@ -28,7 +27,10 @@ type Loaded = { items: ItemView[]; nextCursor: string | null; status: "loading" 
 
 const touch = "min-h-touch-target";
 
-/** One of the four views (Envies, Commandé, Dressing, À vendre): filters in the address, infinite scroll, selection. */
+/**
+ * One of the four views (Envies, Commandé, Dressing, À vendre): filters in the address, infinite scroll, a pill and
+ * a « … » menu on each card. The selection bar comes back with the « Sélectionner » mode (task 8).
+ */
 export function WardrobeView({ view }: { view: ViewKey }) {
   const t = useTranslations("Views");
   const router = useRouter();
@@ -127,17 +129,28 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     router.push(text ? `${pathname}?${text}` : pathname, { scroll: false });
   };
 
-  const toggle = (id: string) => {
-    const { next, refused } = toggleSelection(selected, id);
-    setSelected(next);
-    setTooMany(refused);
-  };
-
   const reload = useCallback(async () => setReloadToken((value) => value + 1), []);
   const gone = useCallback((ids: readonly string[]) => {
     const away = new Set(ids);
     setData((previous) => ({ ...previous, items: previous.items.filter((item) => !away.has(item.id)) }));
   }, []);
+
+  // A card changed from its pill or its « … » menu: kept while it still belongs to the view, else it leaves.
+  const viewStage = filters.stage ?? VIEWS[view].stage;
+  const changed = useCallback(
+    (item: ItemView) => {
+      const stays = item.stage === viewStage && (current.id === null || item.profileId === current.id);
+      setData((previous) => ({
+        ...previous,
+        items: stays
+          ? previous.items.map((known) => (known.id === item.id ? item : known))
+          : previous.items.filter((known) => known.id !== item.id),
+      }));
+    },
+    [viewStage, current.id],
+  );
+  const trashed = useCallback((id: string) => gone([id]), [gone]);
+  const actions = useMemo(() => ({ onChanged: changed, onTrashed: trashed, reload }), [changed, trashed, reload]);
 
   useEffect(() => () => moreController.current?.abort(), []);
   const count = activeFilterCount(filters);
@@ -199,13 +212,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
       )}
 
       {data.items.length > 0 && (
-        <ItemGrid
-          label={label}
-          items={data.items}
-          selected={selected}
-          onToggle={toggle}
-          showStage={filters.stage !== undefined}
-        >
+        <ItemGrid label={label} items={data.items} actions={actions} showStage={filters.stage !== undefined}>
           <div ref={sentinel} aria-hidden="true" />
           {loadingMore && (
             <p role="status" className="text-center text-sm text-ink-muted">

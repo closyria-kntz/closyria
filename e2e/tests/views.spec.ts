@@ -29,7 +29,7 @@ test("un article gardé apparaît dans Envies, l'onglet courant est marqué, et 
   await expect(page.getByRole("heading", { level: 1, name: "Envies" })).toBeVisible();
   const card = page.getByTestId("item-card").first();
   await expect(card).toContainText(PRODUCT.name);
-  await expect(card.getByRole("img", { name: "Favori" })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Niveau : J’aime. Toucher pour changer" })).toBeVisible();
   const nav = page.getByRole("navigation", { name: /Menu principal|Onglets/ }).filter({ visible: true });
   await expect(nav.locator("[aria-current=page]")).toHaveText("Envies");
 
@@ -66,7 +66,9 @@ test("les filtres vivent dans l'adresse et le bouton Précédent les restaure", 
   await expect(page.getByLabel("Favoris seulement")).toHaveCount(0);
 });
 
-test("sélection multiple : changer l'étape, puis Annuler", async ({ page }) => {
+// The cards lost their checkbox (Envies chaleureuses task 7); task 8 brings the selection back with « Sélectionner »
+// and rewrites this journey.
+test.fixme("sélection multiple : changer l'étape, puis Annuler", async ({ page }) => {
   await keepFavorite(page);
   await page.goto("/envies");
   await page.getByRole("checkbox", { name: new RegExp(`Sélectionner ${PRODUCT.name}`) }).check();
@@ -120,22 +122,15 @@ test("la 1re photo ajoutée propose un compte, la proposition se ferme sans bloq
   await expect(banner).toHaveCount(0);
 });
 
-test("retirer le ♡ d'une simple envie la retire, « Annuler » la remet", async ({ page, context }) => {
+test("retirer le ♡ d'une simple envie ne la retire jamais (spec §4)", async ({ page }) => {
   await keepFavorite(page);
   await page.getByRole("button", { name: "Favori", exact: true }).click();
-  await expect(toast(page)).toContainText("Retiré de tes envies");
-  await expect(page.getByRole("heading", { name: "Garder cet article" })).toBeVisible();
-
-  // A second tab, so that the first one keeps its « Annuler » toast (8 s).
-  const other = await context.newPage();
-  await other.goto("/envies");
-  await expect(other.getByRole("heading", { level: 1, name: "Envies" })).toBeVisible();
-  await expect(other.getByTestId("item-card")).toHaveCount(0);
-
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
-  await expect(toast(page)).toContainText("C’est annulé.");
-  await other.reload();
-  await expect(other.getByTestId("item-card")).toHaveCount(1);
+  await expect(toast(page)).toContainText("Retiré des favoris");
+  await expect(toast(page)).not.toContainText("Retiré de tes envies");
+  await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+  await page.goto("/envies");
+  await expect(page.getByTestId("item-card")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Donner un niveau" })).toBeVisible();
 });
 
 test("retirer le ♡ d'une envie rangée dans une liste ne retire que le favori", async ({ page }) => {
@@ -149,7 +144,8 @@ test("retirer le ♡ d'une envie rangée dans une liste ne retire que le favori"
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
 });
 
-test("téléphone : la barre de sélection reste juste au-dessus du toast et des onglets (cadre fixe)", async ({
+// Task 8 (« Sélectionner »): no way to select a card until then.
+test.fixme("téléphone : la barre de sélection reste juste au-dessus du toast et des onglets (cadre fixe)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 420 });

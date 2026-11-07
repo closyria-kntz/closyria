@@ -3,17 +3,25 @@
 import type { ItemView } from "@closyria/shared";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { formatOptionalPrice } from "@/lib/price";
+import { ItemMenu } from "./item-menu";
+import { LoveLevelBadge, LoveLevelPill } from "./love-level-pill";
 import { focusRing } from "./ui";
+
+export type CardActions = {
+  /** The item came back changed from the API (pill or « … » menu). */
+  onChanged: (item: ItemView) => void;
+  /** The item went to the trash from the « … » menu. */
+  onTrashed: (id: string) => void;
+  /** Re-reads what changed (after « Annuler »). */
+  reload: () => Promise<void>;
+};
 
 type Props = {
   item: ItemView;
-  selected: boolean;
-  /** At least one card is selected: a click on a card then selects instead of opening. */
-  selecting: boolean;
-  /** Without it the card has no selection box (list contents, trash). */
-  onToggle?: ((id: string) => void) | undefined;
+  /** The level pill and the « … » menu; without them the level only shows (the trash). */
+  actions?: CardActions | undefined;
   /** False: no link to the sheet (the trash). */
   linked?: boolean;
   /** Extra controls under the card (move up / down, remove, restore…). */
@@ -22,8 +30,11 @@ type Props = {
   showStage: boolean;
 };
 
-/** One item in the grid: 3:4 frame with the whole photo, name, shop, price, favourite, link to the sheet. */
-export function ItemCard({ item, selected, selecting, onToggle, showStage, linked = true, children }: Props) {
+/**
+ * One item in the grid (spec §3.2): 3:4 frame with the whole photo, level pill top left, « … » top right,
+ * « Prioritaire » at the bottom of the photo; name, shop, price and her opinion under it; link to the sheet.
+ */
+export function ItemCard({ item, actions, showStage, linked = true, children }: Props) {
   const t = useTranslations("Views.card");
   const tStage = useTranslations("Item.stage");
   const locale = useLocale();
@@ -37,18 +48,8 @@ export function ItemCard({ item, selected, selecting, onToggle, showStage, linke
   );
   return (
     <li className="card group relative flex flex-col" data-testid="item-card">
-      <Wrapper
-        linked={linked}
-        href={`/produits/${item.product.id}`}
-        onClick={(event) => {
-          if (!selecting || !onToggle) return;
-          event.preventDefault();
-          onToggle(item.id);
-        }}
-      >
-        <div
-          className={`relative aspect-3/4 overflow-hidden rounded-card bg-media-backdrop ${selected ? "outline-2 outline-accent outline-solid" : ""}`}
-        >
+      <Wrapper linked={linked} href={`/produits/${item.product.id}`}>
+        <div className="relative aspect-3/4 overflow-hidden rounded-card bg-media-backdrop">
           {item.coverUrl ? (
             // biome-ignore lint/performance/noImgElement: photos come from our own API, already resized.
             <img
@@ -66,17 +67,13 @@ export function ItemCard({ item, selected, selecting, onToggle, showStage, linke
               {t("noPhoto")}
             </span>
           )}
-          {item.loveLevel !== null && (
-            <span
-              role="img"
-              aria-label={t("favorite")}
-              className="absolute right-space-2 bottom-space-2 flex size-space-6 items-center justify-center rounded-full bg-surface-raised text-accent shadow-soft"
-            >
-              <span aria-hidden="true">♥</span>
+          {item.priority && (
+            <span className="absolute bottom-space-2 left-space-2 rounded-full bg-accent px-space-2 py-space-1 text-caption font-strong text-accent-ink shadow-soft">
+              {t("priority")}
             </span>
           )}
           {showStage && (item.stage === "sold" || item.stage === "returned") && (
-            <span className="absolute top-space-2 right-space-2 rounded-full bg-ink px-space-2 py-space-1 text-sm text-surface-raised">
+            <span className="absolute right-space-2 bottom-space-2 rounded-full bg-ink px-space-2 py-space-1 text-sm text-surface-raised">
               {tStage(item.stage)}
             </span>
           )}
@@ -85,38 +82,26 @@ export function ItemCard({ item, selected, selecting, onToggle, showStage, linke
           <span className="truncate text-sm font-strong">{name}</span>
           <span className="truncate text-sm text-ink-muted">{item.product.shop.name}</span>
           <span className="text-sm">{price}</span>
+          {item.why && <span className="truncate text-sm text-ink-muted italic">{t("why", { why: item.why })}</span>}
         </div>
       </Wrapper>
-      {onToggle && (
-        <label className="absolute top-space-1 left-space-1 flex size-touch-target cursor-pointer items-center justify-center">
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={() => onToggle(item.id)}
-            aria-label={t("select", { name })}
-            className={`size-space-5 accent-accent ${focusRing}`}
-          />
-        </label>
+      {actions ? (
+        <>
+          <LoveLevelPill item={item} onChange={actions.onChanged} reload={actions.reload} />
+          <ItemMenu item={item} onChanged={actions.onChanged} onTrashed={actions.onTrashed} reload={actions.reload} />
+        </>
+      ) : (
+        <LoveLevelBadge item={item} />
       )}
       {children}
     </li>
   );
 }
 
-function Wrapper({
-  linked,
-  href,
-  onClick,
-  children,
-}: {
-  linked: boolean;
-  href: string;
-  onClick: (event: MouseEvent<HTMLAnchorElement>) => void;
-  children: ReactNode;
-}) {
+function Wrapper({ linked, href, children }: { linked: boolean; href: string; children: ReactNode }) {
   if (!linked) return <div className="flex flex-col gap-space-2">{children}</div>;
   return (
-    <Link href={href} onClick={onClick} className={`flex flex-col gap-space-2 rounded-card ${focusRing}`}>
+    <Link href={href} className={`flex flex-col gap-space-2 rounded-card ${focusRing}`}>
       {children}
     </Link>
   );

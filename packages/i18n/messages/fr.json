@@ -783,9 +783,11 @@
       "noPrice": "Prix non renseigné",
       "noName": "Article sans nom",
       "noPhoto": "Pas de photo",
-      "favorite": "Favori",
-      "select": "Sélectionner {name}",
-      "open": "Ouvrir {name}"
+      "open": "Ouvrir {name}",
+      "level": "Niveau : {label}. Toucher pour changer",
+      "levelAdd": "Donner un niveau",
+      "priority": "Prioritaire",
+      "why": "« {why} »"
     },
     "filters": {
       "title": "Filtres",
@@ -850,6 +852,44 @@
         "delete": "{count, plural, one {# article supprimé} other {# articles supprimés}}"
       },
       "loading": "Un instant…"
+    },
+    "menu": {
+      "open": "Plus d’actions",
+      "panel": "Actions sur {name}",
+      "levels": "Niveau",
+      "priorityOn": "Prioritaire",
+      "priorityOff": "Retirer de Prioritaire",
+      "why": "Mon avis",
+      "list": "Ajouter à une liste",
+      "profile": "Déplacer vers un profil",
+      "tags": "Étiquettes",
+      "removeWish": "Retirer de mes envies",
+      "delete": "Supprimer",
+      "toStage": {
+        "spotted": "Remettre dans mes envies",
+        "ordered": "Je l’ai commandé",
+        "owned": "Dans mon dressing",
+        "for_sale": "Mettre en vente",
+        "sold": "Je l’ai vendu",
+        "returned": "Je l’ai renvoyé"
+      },
+      "close": "Fermer",
+      "whyTitle": "Mon avis",
+      "whyLabel": "Pourquoi ?",
+      "whyHint": "200 caractères au plus, montrés sur la vignette.",
+      "whySave": "Enregistrer",
+      "noLists": "Aucune liste pour l’instant.",
+      "noTags": "Aucune étiquette pour l’instant.",
+      "noProfiles": "Aucun autre profil pour l’instant.",
+      "loading": "Un instant…",
+      "loadFailed": "Tes listes, étiquettes ou profils ne s’affichent pas.",
+      "toast": {
+        "level": "Niveau : {label}",
+        "levelCleared": "Niveau retiré",
+        "priorityOn": "Prioritaire",
+        "priorityOff": "Retiré de Prioritaire",
+        "why": "Avis enregistré"
+      }
     }
   },
   "Lists": {

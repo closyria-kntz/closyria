@@ -1,12 +1,13 @@
 "use client";
 
-import type { ProfileView, SummaryView } from "@closyria/shared";
+import { DEFAULT_LOVE_LEVELS, type LoveLevelView, type ProfileView, type SummaryView } from "@closyria/shared";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ReactNode, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
 import { fetchSummary } from "@/lib/catalog-client";
 import { ProfilesContext, profileHref, useAccount, useCurrentProfile } from "@/lib/profile-context";
+import { fetchLoveLevels } from "@/lib/wardrobe-client";
 import { AccountPrompt } from "./account-prompt";
 import { type AppNavItem, desktopNav, isCurrent, moreNav, phoneTabs, tabletTabs } from "./app-nav";
 import { CaptureForm } from "./capture-form";
@@ -180,6 +181,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<SummaryView["account"] | null>(null);
   const [ready, setReady] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [loveLevels, setLoveLevels] = useState<readonly LoveLevelView[]>(DEFAULT_LOVE_LEVELS);
   const alive = useRef(true);
 
   const refreshProfiles = useCallback(async () => {
@@ -191,19 +193,29 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (alive.current) setReady(true);
   }, []);
 
+  // Her level names: the starting ones stay shown when they cannot be read.
+  const refreshLoveLevels = useCallback(async () => {
+    const levels = await fetchLoveLevels().catch(() => null);
+    if (levels && alive.current) setLoveLevels(levels);
+  }, []);
+
   // Read on arrival, and again whenever the window regains focus (profiles may have changed in another tab).
   useEffect(() => {
     alive.current = true;
-    void refreshProfiles();
-    window.addEventListener("focus", refreshProfiles);
+    const refresh = () => {
+      void refreshProfiles();
+      void refreshLoveLevels();
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
     return () => {
       alive.current = false;
-      window.removeEventListener("focus", refreshProfiles);
+      window.removeEventListener("focus", refresh);
     };
-  }, [refreshProfiles]);
+  }, [refreshProfiles, refreshLoveLevels]);
 
   return (
-    <ProfilesContext.Provider value={{ profiles, ready, account, refreshProfiles }}>
+    <ProfilesContext.Provider value={{ profiles, ready, account, refreshProfiles, loveLevels, refreshLoveLevels }}>
       <a
         href="#app-content"
         className={`sr-only rounded-button bg-surface-raised px-space-3 py-space-2 focus:not-sr-only focus:absolute focus:top-space-2 focus:left-space-2 focus:z-30 ${focusRing}`}

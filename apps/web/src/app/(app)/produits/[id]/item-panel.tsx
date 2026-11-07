@@ -15,7 +15,6 @@ import {
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { buttonClass, inputClass, primaryButtonClass } from "@/components/ui";
-import { isBareWish } from "@/lib/bare-wish";
 import { formatPrice } from "@/lib/price";
 import { useProfiles } from "@/lib/profile-context";
 import { pushUndo } from "@/lib/undo";
@@ -104,17 +103,10 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
     }
   }
 
-  // Until the level picker (task 9): the heart sets « J'aime » or clears the level.
+  // Until the level picker (task 9): the heart sets « J'aime » or clears the level, never removes the item (spec §4).
   const loved = item.loveLevel !== null;
   const toggleFavorite = () =>
     run(async () => {
-      if (loved && isBareWish(item)) {
-        const trashed = await trashItem(item.id);
-        if (!trashed.ok) return fail(trashed.error);
-        onGone();
-        pushUndo(t("toast.wishRemoved"), undoWith(trashed.undo, reload));
-        return;
-      }
       const result = await patchItem(item.id, { loveLevel: loved ? null : DEFAULT_LOVE_LEVEL });
       if (!result.ok) return fail(result.error);
       onChange(result.item);

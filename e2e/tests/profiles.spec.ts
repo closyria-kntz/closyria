@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 import { autoProductUrl, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
-// Chantier 2a, task 18: a second profile (« Léa »), bulk move, filtering by profile, delete refused while non-empty.
+// Chantier 2a, task 18: a second profile (« Léa »), move (menu « … »), filtering by profile, delete refused while non-empty.
 
 const toast = (page: Page) => page.getByRole("status", { name: "Notifications" });
 
@@ -16,7 +16,7 @@ async function keepFavorite(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
 }
 
-test("créer « Léa », y déplacer deux articles en lot, filtrer par profil, suppression refusée tant qu'elle n'est pas vide", async ({
+test("créer « Léa », y déplacer deux articles, filtrer par profil, suppression refusée tant qu'elle n'est pas vide", async ({
   page,
 }) => {
   await keepFavorite(page);
@@ -33,24 +33,25 @@ test("créer « Léa », y déplacer deux articles en lot, filtrer par profil, s
 
   await page.goto("/envies");
   await expect(page.getByTestId("item-card")).toHaveCount(3);
-  const boxes = page.getByRole("checkbox", { name: new RegExp(`Sélectionner ${PRODUCT.name}`) });
-  await boxes.nth(0).check();
-  await boxes.nth(1).check();
-  const bar = page.getByRole("region", { name: "Actions sur la sélection" });
-  await expect(bar).toContainText("2 articles choisis");
-  await bar.getByRole("button", { name: "Profil", exact: true }).click();
-  await page.getByRole("dialog", { name: "Déplacer vers un profil" }).getByRole("button", { name: "Léa" }).click();
-  await expect(toast(page)).toContainText("2 articles déplacés vers Léa");
-  await expect(page.getByTestId("item-card")).toHaveCount(1);
+  // One by one from the « … » menu (the bulk move comes back with « Sélectionner », task 8).
+  const moveFirst = async () => {
+    await page.getByTestId("item-card").first().getByRole("button", { name: "Plus d’actions" }).click();
+    await page
+      .getByRole("region", { name: `Actions sur ${PRODUCT.name}` })
+      .getByRole("button", { name: "Déplacer vers un profil" })
+      .click();
+    await page.getByRole("dialog", { name: "Déplacer vers un profil" }).getByRole("button", { name: "Léa" }).click();
+    await expect(toast(page)).toContainText("Déplacé vers Léa");
+  };
+  await moveFirst();
+  await expect(page.getByTestId("item-card")).toHaveCount(2);
 
-  // « Annuler » brings them back.
+  // « Annuler » brings it back.
   await toast(page).getByRole("button", { name: "Annuler" }).click();
   await expect(page.getByTestId("item-card")).toHaveCount(3);
-  await boxes.nth(0).check();
-  await boxes.nth(1).check();
-  await bar.getByRole("button", { name: "Profil", exact: true }).click();
-  await page.getByRole("dialog", { name: "Déplacer vers un profil" }).getByRole("button", { name: "Léa" }).click();
-  await expect(toast(page)).toContainText("2 articles déplacés vers Léa");
+  await moveFirst();
+  await expect(page.getByTestId("item-card")).toHaveCount(2);
+  await moveFirst();
   await expect(page.getByTestId("item-card")).toHaveCount(1);
 
   // Filter by profile: the choice lives in the address.
