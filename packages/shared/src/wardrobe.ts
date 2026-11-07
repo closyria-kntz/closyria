@@ -153,6 +153,58 @@ export const itemStageInputSchema = z.object({
 });
 export type ItemStageInput = z.infer<typeof itemStageInputSchema>;
 
+/** A budget of a profile or of a list. `custom`: both dates (inclusive, Paris), in order; other periods: none. */
+export const budgetInputSchema = z
+  .object({
+    amountCents: centsSchema.positive(),
+    period: budgetPeriodSchema,
+    startsOn: z.iso.date().optional(),
+    endsOn: z.iso.date().optional(),
+  })
+  .refine(
+    (v) =>
+      v.period === "custom"
+        ? v.startsOn !== undefined && v.endsOn !== undefined && v.startsOn <= v.endsOn
+        : v.startsOn === undefined && v.endsOn === undefined,
+    { error: "dates required and ordered for custom only", path: ["startsOn"] },
+  );
+export type BudgetInput = z.infer<typeof budgetInputSchema>;
+
+/**
+ * A budget with its current period: `spentCents` = « Déjà commandé » (never below 0), `remainingCents` below 0 when
+ * over. `none`: from the last reset (or the creation), `end` far away. After a `custom` budget's last day: `current`
+ * null and `ended` true.
+ */
+export const budgetViewSchema = z.object({
+  amountCents: z.number().int().positive(),
+  period: budgetPeriodSchema,
+  startsOn: z.iso.date().nullable(),
+  endsOn: z.iso.date().nullable(),
+  current: z
+    .object({
+      start: dateTimeSchema,
+      end: dateTimeSchema,
+      spentCents: z.number().int().nonnegative(),
+      remainingCents: z.number().int(),
+    })
+    .nullable(),
+  ended: z.boolean(),
+});
+export type BudgetView = z.infer<typeof budgetViewSchema>;
+
+/** Past periods of a `week` (8) or `month` (12) budget, newest first, at its current amount; empty otherwise. */
+export const budgetHistorySchema = z.object({
+  periods: z.array(
+    z.object({
+      start: dateTimeSchema,
+      end: dateTimeSchema,
+      spentCents: z.number().int().nonnegative(),
+      amountCents: z.number().int().positive(),
+    }),
+  ),
+});
+export type BudgetHistory = z.infer<typeof budgetHistorySchema>;
+
 export const itemMoveSchema = z.object({ profileId: z.uuid() });
 export type ItemMove = z.infer<typeof itemMoveSchema>;
 
@@ -491,6 +543,7 @@ export const wardrobeErrorCodes = [
   "tag_exists",
   "tag_limit",
   "too_many_photos",
+  "budget_not_resettable",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];

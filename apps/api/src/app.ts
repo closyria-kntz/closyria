@@ -13,6 +13,7 @@ import { adminReferenceRoutes } from "./routes/admin/reference";
 import { adminShopsRoutes } from "./routes/admin/shops";
 import { capturesRoutes } from "./routes/captures";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
+import { budgetsRoutes } from "./routes/me/budgets";
 import { bulkRoutes } from "./routes/me/bulk";
 import { facetsRoutes } from "./routes/me/facets";
 import { itemMediaRoutes } from "./routes/me/item-media";
@@ -136,6 +137,7 @@ export function createApp(deps: AppDeps) {
     .route("/", facetsRoutes(deps.wardrobe))
     .route("/", referenceRoutes(deps.wardrobe))
     .route("/", wishlistsRoutes(deps.wardrobe))
+    .route("/", budgetsRoutes(deps.wardrobe))
     .route("/", sharedRoutes(deps.wardrobe))
     .route("/", overviewRoutes(deps.admin))
     .route("/", auditRoutes(deps.admin))

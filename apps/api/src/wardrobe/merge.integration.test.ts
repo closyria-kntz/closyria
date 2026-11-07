@@ -462,6 +462,42 @@ describe("anonymous -> account merge on sign-in", () => {
     expect(await labelsOf(second.userId)).toEqual([]);
   });
 
+  it("folds her « Moi » budget into the account's « Moi » when it has none, else keeps the account's", async () => {
+    const budgetOf = async (profileId: string) =>
+      (await handle.db.select().from(schema.budgets).where(eq(schema.budgets.profileId, profileId))).map((b) => ({
+        amountCents: b.amountCents,
+        period: b.period,
+      }));
+
+    const bareEmail = `budget-moi-vide-${randomUUID()}@example.test`;
+    const bare = await signInWithEmail(bareEmail);
+    const bareMoi = await newProfile(bare, "Moi", day(1));
+    const first = await signInAnonymously();
+    const firstMoi = await newProfile(first.userId, "Moi", day(2));
+    await handle.db
+      .insert(schema.budgets)
+      .values({ userId: first.userId, profileId: firstMoi.id, amountCents: 15000, period: "week" });
+    expect(await signInWithEmail(bareEmail, first.cookie)).toBe(bare);
+    await expectNothingLeftOrCrossed(first.userId);
+    expect(await budgetOf(bareMoi.id)).toEqual([{ amountCents: 15000, period: "week" }]);
+
+    const fullEmail = `budget-moi-plein-${randomUUID()}@example.test`;
+    const full = await signInWithEmail(fullEmail);
+    const fullMoi = await newProfile(full, "Moi", day(1));
+    await handle.db
+      .insert(schema.budgets)
+      .values({ userId: full, profileId: fullMoi.id, amountCents: 20000, period: "month" });
+    const second = await signInAnonymously();
+    const secondMoi = await newProfile(second.userId, "Moi", day(2));
+    await handle.db
+      .insert(schema.budgets)
+      .values({ userId: second.userId, profileId: secondMoi.id, amountCents: 15000, period: "week" });
+    expect(await signInWithEmail(fullEmail, second.cookie)).toBe(full);
+    await expectNothingLeftOrCrossed(second.userId);
+    expect(await budgetOf(fullMoi.id)).toEqual([{ amountCents: 20000, period: "month" }]);
+    expect(await handle.db.select().from(schema.budgets).where(eq(schema.budgets.userId, full))).toHaveLength(1);
+  });
+
   it("folds into the first profile by position, not the oldest one", async () => {
     const email = `position-${randomUUID()}@example.test`;
     const accountId = await signInWithEmail(email);
