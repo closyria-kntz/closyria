@@ -11,6 +11,7 @@ import {
   type ItemView,
   itemMutationResultSchema,
   itemPageSchema,
+  type LoveLevel,
   type LoveLevelView,
   loveLevelsSchema,
   mediaErrorCodes,
@@ -82,6 +83,26 @@ async function call<T extends object>(
 
 function mutation(deps: ClientDeps, path: string, init: RequestInit, okStatuses?: readonly number[]) {
   return call(deps, path, init, itemMutationResultSchema, okStatuses);
+}
+
+/** Her « Pourquoi ? » as the API keeps it: trimmed, a blank one is null. */
+export function whyOrNull(why: string): string | null {
+  return why.trim() || null;
+}
+
+/** What she chose on the sheet before « Ajouter à mes envies ». */
+export type WishChoice = { loveLevel: LoveLevel; priority: boolean; why: string };
+
+/** The « Ajouter à mes envies » request: her level, priority and opinion (a blank one is left out). */
+export function wishCreate(base: { productId: string; profileId?: string }, choice: WishChoice): ItemCreate {
+  const why = whyOrNull(choice.why);
+  return {
+    ...base,
+    action: "wish",
+    loveLevel: choice.loveLevel,
+    priority: choice.priority,
+    ...(why ? { why } : {}),
+  };
 }
 
 /** « Garder » a product. `created: false`: she already kept it, and this is her existing item, unchanged. */

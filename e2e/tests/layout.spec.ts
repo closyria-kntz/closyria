@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { autoProductUrl, PRODUCT } from "../fixtures/shops";
+import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Chantier 2a, task 13: the shell and the pages adapt to the screen (spec §4, « Adaptation aux écrans »).
@@ -218,7 +218,7 @@ test.describe("structure de la fiche", () => {
     });
     expect(created.ok()).toBe(true);
     await page.reload();
-    await page.getByRole("button", { name: "Favori" }).click();
+    await keepWish(page);
     const mine = page.getByRole("region", { name: "Mon article" });
     await expect(mine).toBeVisible();
 
@@ -252,7 +252,7 @@ test.describe("structure de la fiche", () => {
   test("fiche non gardée : en-tête, Garder cet article, La fiche de la boutique", async ({ page }) => {
     await openSheet(page);
     await expect(page.getByRole("heading", { name: "Garder cet article" })).toBeAttached();
-    await expect(page.getByRole("button", { name: "Favori" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ajouter à mes envies" })).toBeVisible();
     await expect(page.getByRole("region", { name: "Mon article" })).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Autres actions" })).toHaveCount(0);
     await expect(
@@ -273,7 +273,7 @@ test.describe("structure de la fiche", () => {
       const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       await openSheet(page);
       expect(await overflow()).toBeLessThanOrEqual(0);
-      await page.getByRole("button", { name: "Favori" }).click();
+      await keepWish(page);
       await expect(page.getByRole("region", { name: "Mon article" })).toBeVisible();
       expect(await overflow()).toBeLessThanOrEqual(0);
     });

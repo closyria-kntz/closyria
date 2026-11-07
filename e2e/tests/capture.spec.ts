@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { autoProductUrl, MANUAL_SHOP, manualProductUrl, PRODUCT } from "../fixtures/shops";
+import { autoProductUrl, keepWish, MANUAL_SHOP, manualProductUrl, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Chantier 1, task 14: a pasted link becomes a product sheet. The capture worker runs in the Playwright
@@ -100,11 +100,10 @@ test("l'accueil rappelle les derniers liens collés, ✕ en retire un, et une fi
   await recents.getByRole("button", { name: `Retirer ${PRODUCT.name} de la liste` }).click();
   await expect(recents).toHaveCount(0);
 
-  // Pasted again then kept (♡): it is in her dressing, not in the recents.
+  // Pasted again then kept (« Ajouter à mes envies »): it is in her dressing, not in the recents.
   await paste(page, autoProductUrl());
   await expectCapturedSheet(page, 10_000);
-  await page.getByRole("button", { name: /Favori/ }).click();
-  await expect(page.getByRole("button", { name: /Favori/ })).toHaveAttribute("aria-pressed", "true");
+  await keepWish(page);
   await page.goto("/");
   await expect(page.getByRole("textbox", { name: "Coller un lien" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Derniers liens" })).toHaveCount(0);

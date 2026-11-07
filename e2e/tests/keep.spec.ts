@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { autoProductUrl, PRODUCT } from "../fixtures/shops";
+import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Chantier 2a, task 14: the product sheet keeps the product in one gesture, then shows HER item.
@@ -17,26 +17,81 @@ async function openSheet(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
 }
 
-test("♡ garde l'article, Annuler le retire, et la fiche garde l'article après rechargement", async ({ page }) => {
+test("« Ajouter à mes envies » garde l'article, Annuler le retire, et la fiche le garde après rechargement", async ({
+  page,
+}) => {
   await openSheet(page);
-  await page.getByRole("button", { name: "Favori" }).click();
-  await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Favori" })).toHaveCount(0);
+  await keepWish(page);
   const toast = page.getByRole("status", { name: "Notifications" });
-  await expect(toast).toContainText("Gardé en favori");
+  await expect(toast).toContainText("Ajouté à tes envies");
 
   await toast.getByRole("button", { name: "Annuler" }).click();
-  await expect(page.getByRole("button", { name: "Je l’ai commandé" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Déjà commandé" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mon article" })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Favori" }).click();
+  await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
 });
 
+test("Mims, Prioritaire et « Trop mims » avant d'ajouter ; sur la fiche gardée, En feu puis Annuler", async ({
+  page,
+}, testInfo) => {
+  await openSheet(page);
+  const levels = page.getByRole("group", { name: "Tu l’aimes comment ?" });
+  await expect(levels.getByRole("button")).toHaveText([/Bof/, /J’aime/, /Mims/, /En feu/]);
+  await expect(levels.getByRole("button", { name: "J’aime" })).toHaveAttribute("aria-pressed", "true");
+  await levels.getByRole("button", { name: "Mims" }).click();
+  await expect(levels.getByRole("button", { name: "Mims" })).toHaveAttribute("aria-pressed", "true");
+  await expect(levels.getByRole("button", { name: "J’aime" })).toHaveAttribute("aria-pressed", "false");
+  const priority = page.getByRole("button", { name: "Prioritaire" });
+  await expect(priority).toHaveAttribute("aria-pressed", "false");
+  await priority.click();
+  await expect(priority).toHaveAttribute("aria-pressed", "true");
+  const why = page.getByLabel("Pourquoi ? (facultatif)");
+  await expect(why).toHaveAttribute("maxlength", "200");
+  await why.fill("Trop mims");
+  await page.getByRole("region", { name: "Garder cet article" }).screenshot({ path: testInfo.outputPath("keep.png") });
+  await expect(page.getByRole("button", { name: "Ajouter à une liste" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Déjà commandé" })).toBeVisible();
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
+
+  await page.getByRole("button", { name: "Ajouter à mes envies" }).click();
+  const mine = page.getByRole("region", { name: "Mon article" });
+  await expect(mine).toBeVisible();
+  const toast = page.getByRole("status", { name: "Notifications" });
+  await expect(toast).toContainText("Ajouté à tes envies");
+  // Her item shows what she chose, and changes it in place.
+  const kept = mine.getByRole("group", { name: "Tu l’aimes comment ?" });
+  await expect(kept.getByRole("button", { name: "Mims" })).toHaveAttribute("aria-pressed", "true");
+  await expect(mine.getByRole("button", { name: "Prioritaire" })).toHaveAttribute("aria-pressed", "true");
+  await expect(mine.getByLabel("Pourquoi ? (facultatif)")).toHaveValue("Trop mims");
+  await kept.getByRole("button", { name: "En feu" }).click();
+  await expect(toast).toContainText("Niveau : En feu");
+  await expect(kept.getByRole("button", { name: "En feu" })).toHaveAttribute("aria-pressed", "true");
+  await toast.getByRole("button", { name: "Annuler" }).click();
+  await expect(kept.getByRole("button", { name: "Mims" })).toHaveAttribute("aria-pressed", "true");
+
+  await mine.getByLabel("Pourquoi ? (facultatif)").fill("Trop trop mims");
+  await mine.getByRole("button", { name: "Enregistrer l’avis" }).click();
+  await expect(toast).toContainText("Avis enregistré");
+  await mine.screenshot({ path: testInfo.outputPath("kept-level.png") });
+  expect((await new AxeBuilder({ page }).analyze()).violations.map((v) => v.id)).toEqual([]);
+
+  await page.goto("/envies");
+  const card = page.getByTestId("item-card").first();
+  await expect(card).toContainText("🥰");
+  await expect(card).toContainText("Mims");
+  await expect(card.getByText("Prioritaire", { exact: true })).toBeVisible();
+  await expect(card).toContainText("Trop trop mims");
+});
+
 test("l'étape se change dans une fenêtre accessible, avec date et montant", async ({ page }) => {
   await openSheet(page);
-  await page.getByRole("button", { name: "Je l’ai commandé" }).click();
+  await page.getByRole("button", { name: "Déjà commandé" }).click();
   await expect(page.getByRole("button", { name: /Commandé \(étape actuelle\)/ })).toBeDisabled();
 
   const open = page.getByRole("button", { name: "Passer à « Reçu »" });
@@ -56,10 +111,10 @@ test("l'étape se change dans une fenêtre accessible, avec date et montant", as
 
 test("taille, notes, étiquette, photo personnelle et suppression", async ({ page }, testInfo) => {
   await openSheet(page);
-  await page.getByRole("button", { name: "Favori" }).click();
+  await keepWish(page);
   await page.getByLabel("Taille", { exact: true }).fill("M");
   await page.getByLabel("Notes").fill("Offerte par Léa");
-  await page.getByRole("button", { name: "Enregistrer" }).click();
+  await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await expect(page.getByRole("status", { name: "Notifications" })).toContainText("Modifications enregistrées");
 
   await page.getByPlaceholder("Nouvelle étiquette").fill("Été");
@@ -77,7 +132,7 @@ test("taille, notes, étiquette, photo personnelle et suppression", async ({ pag
 
   await page.getByRole("button", { name: "Supprimer" }).click();
   await expect(page.getByRole("status", { name: "Notifications" })).toContainText("Article supprimé");
-  await expect(page.getByRole("button", { name: "Je l’ai commandé" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Déjà commandé" })).toBeVisible();
 });
 
 test("un article déjà gardé ailleurs : « Ajouter à une liste » l'ajoute à l'article existant", async ({
@@ -88,7 +143,7 @@ test("un article déjà gardé ailleurs : « Ajouter à une liste » l'ajoute à
   // The same sheet, open in another tab, where she keeps it first.
   const other = await context.newPage();
   await other.goto(page.url());
-  await other.getByRole("button", { name: "Favori" }).click();
+  await keepWish(other);
   await expect(other.getByRole("heading", { name: "Mon article" })).toBeVisible();
 
   // The first tab still shows the keep actions: the API answers with the existing item.
@@ -103,7 +158,7 @@ test("un article déjà gardé ailleurs : « Ajouter à une liste » l'ajoute à
 
 test("un article gardé dans un autre profil : bandeau « Déjà dans le profil … »", async ({ page }) => {
   await openSheet(page);
-  await page.getByRole("button", { name: "Favori" }).click();
+  await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
   const sheet = page.url();
 
@@ -122,7 +177,7 @@ test("un article gardé dans un autre profil : bandeau « Déjà dans le profil 
 
 test("passer à « Reçu » avec le prix payé : l'article est dans Dressing, puis Annuler", async ({ page }) => {
   await openSheet(page);
-  await page.getByRole("button", { name: "Favori" }).click();
+  await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
 
   await page.getByRole("button", { name: "Passer à « Reçu »" }).click();

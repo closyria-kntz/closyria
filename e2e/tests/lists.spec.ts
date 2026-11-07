@@ -1,22 +1,22 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { CLIENT_IP_HEADER } from "../fixtures/proxy";
-import { autoProductUrl, PRODUCT } from "../fixtures/shops";
+import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Chantier 2a, task 16: lists and sharing, the public page, settings (profiles, tags, trash), the iPhone help.
 
-async function keepFavorite(page: Page, details?: { size: string; notes: string }): Promise<void> {
+async function pasteAndWish(page: Page, details?: { size: string; notes: string }): Promise<void> {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
   await page.getByRole("button", { name: "Ajouter" }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Favori" }).click();
+  await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
   if (details) {
     await page.getByLabel("Taille", { exact: true }).fill(details.size);
     await page.getByLabel("Notes").fill(details.notes);
-    await page.getByRole("button", { name: "Enregistrer" }).click();
+    await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
     await expect(toast(page)).toContainText("Modifications enregistrées");
   }
 }
@@ -32,7 +32,7 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   browser,
   baseURL,
 }, testInfo) => {
-  await keepFavorite(page, { size: "XL-secrète", notes: "Note-privée-42" });
+  await pasteAndWish(page, { size: "XL-secrète", notes: "Note-privée-42" });
   await page.getByRole("button", { name: "Ajouter une photo" }).click();
   await page.getByTestId("photo-input").setInputFiles({
     name: "p.png",
@@ -116,7 +116,7 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
 });
 
 test("une liste se renomme, se réordonne au clavier et se supprime", async ({ page }) => {
-  await keepFavorite(page);
+  await pasteAndWish(page);
   await page.goto("/listes");
   for (const name of ["Première", "Seconde"]) {
     await page.getByLabel("Nom de la nouvelle liste").fill(name);
@@ -135,7 +135,7 @@ test("une liste se renomme, se réordonne au clavier et se supprime", async ({ p
   await page.getByRole("link", { name: /Seconde/ }).click();
   await page.getByRole("button", { name: "Renommer" }).click();
   await page.getByLabel("Nom de la liste").fill("Voyage");
-  await page.getByRole("button", { name: "Enregistrer" }).click();
+  await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Voyage" })).toBeVisible();
 
   await page.getByRole("button", { name: "Supprimer la liste" }).click();
@@ -147,7 +147,7 @@ test("une liste se renomme, se réordonne au clavier et se supprime", async ({ p
 test("sur la page d'une liste, retirer un article de la liste par son « … » le fait partir de la page", async ({
   page,
 }) => {
-  await keepFavorite(page);
+  await pasteAndWish(page);
   await page.goto("/listes");
   await page.getByLabel("Nom de la nouvelle liste").fill("Été");
   await page.getByRole("button", { name: "Créer la liste" }).click();
@@ -179,8 +179,8 @@ test("sur la page d'une liste, retirer un article de la liste par son « … » 
 });
 
 test("corbeille : restaurer un article, en supprimer un autre pour toujours", async ({ page }) => {
-  await keepFavorite(page);
-  await keepFavorite(page);
+  await pasteAndWish(page);
+  await pasteAndWish(page);
   await page.goto("/envies");
   await expect(page.getByTestId("item-card")).toHaveCount(2);
   const remove = async () => {
@@ -218,7 +218,7 @@ test("corbeille : restaurer un article, en supprimer un autre pour toujours", as
 });
 
 test("profils : ajouter, réordonner, supprimer ; un profil qui contient des articles est refusé", async ({ page }) => {
-  await keepFavorite(page);
+  await pasteAndWish(page);
   await page.goto("/reglages/profils");
   await expect(page.getByRole("heading", { level: 1, name: "Réglages" })).toBeVisible();
   await axe(page);
@@ -244,7 +244,7 @@ test("profils : ajouter, réordonner, supprimer ; un profil qui contient des art
   await expect(page.getByRole("button", { name: "Descendre Léa" })).toBeFocused();
 
   await rows.first().getByLabel("Nom").fill("Léa M.");
-  await rows.first().getByRole("button", { name: "Enregistrer" }).click();
+  await rows.first().getByRole("button", { name: "Enregistrer", exact: true }).click();
   await expect(toast(page)).toContainText("Profil « Léa M. » enregistré");
 
   await page.getByRole("button", { name: "Supprimer Léa M." }).click();
@@ -266,7 +266,7 @@ test("étiquettes : créer, renommer, supprimer", async ({ page }) => {
 
   const row = page.getByTestId("tag-row").first();
   await row.getByLabel("Nom").fill("Offert");
-  await row.getByRole("button", { name: "Enregistrer" }).click();
+  await row.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await expect(toast(page)).toContainText("Étiquette « Offert » enregistrée");
   await page.getByRole("button", { name: "Supprimer Offert" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Supprimer l’étiquette" }).click();

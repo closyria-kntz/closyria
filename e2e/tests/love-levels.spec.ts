@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { autoProductUrl, PRODUCT } from "../fixtures/shops";
+import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Envies chaleureuses, task 7: the level pill and the « … » menu on the cards (spec §3.2, §3.3, §4).
@@ -17,7 +17,7 @@ async function wishInEnvies(page: Page): Promise<void> {
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
   await page.getByRole("button", { name: "Ajouter" }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Favori" }).click();
+  await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
   await page.goto("/envies");
   await expect(page.getByTestId("item-card")).toHaveCount(1);

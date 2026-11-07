@@ -1,27 +1,27 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { autoProductUrl, PRODUCT } from "../fixtures/shops";
+import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Chantier 2a, task 18: a second profile (« Léa »), move (menu « … »), filtering by profile, delete refused while non-empty.
 
 const toast = (page: Page) => page.getByRole("status", { name: "Notifications" });
 
-async function keepFavorite(page: Page): Promise<void> {
+async function pasteAndWish(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
   await page.getByRole("button", { name: "Ajouter" }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Favori" }).click();
+  await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
 }
 
 test("créer « Léa », y déplacer deux articles, filtrer par profil, suppression refusée tant qu'elle n'est pas vide", async ({
   page,
 }) => {
-  await keepFavorite(page);
-  await keepFavorite(page);
-  await keepFavorite(page);
+  await pasteAndWish(page);
+  await pasteAndWish(page);
+  await pasteAndWish(page);
 
   await page.goto("/reglages/profils");
   const add = page.getByRole("form", { name: "Nouveau profil" });

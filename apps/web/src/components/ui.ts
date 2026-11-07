@@ -7,3 +7,6 @@ export const buttonClass = `inline-flex items-center gap-space-2 rounded-button 
 export const primaryButtonClass = `inline-flex items-center justify-center gap-space-2 rounded-button bg-button-bg px-space-4 py-space-2 text-sm font-strong text-button-ink disabled:opacity-60 ${focusRing}`;
 
 export const inputClass = `w-full rounded-button border border-line bg-surface-raised px-space-3 py-space-2 text-body text-ink ${focusRing}`;
+
+/** A pill that stays pressed (« Prioritaire »): accent border and a soft fill when on. */
+export const toggleButtonClass = `${buttonClass} min-h-touch-target aria-pressed:border-accent aria-pressed:bg-hint aria-pressed:font-strong`;

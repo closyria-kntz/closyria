@@ -17,6 +17,8 @@ import {
   saveLoveLevels,
   shareWishlist,
   undoMutation,
+  whyOrNull,
+  wishCreate,
 } from "./wardrobe-client";
 
 const id = "00000000-0000-4000-8000-000000000001";
@@ -91,6 +93,35 @@ describe("createItem", () => {
       ok: false,
       error: "failed",
     });
+  });
+});
+
+describe("wishCreate and whyOrNull", () => {
+  it("sends her level, priority and trimmed opinion with action wish", () => {
+    expect(wishCreate({ productId: id, profileId: id }, { loveLevel: 3, priority: true, why: "  Trop mims " })).toEqual(
+      {
+        productId: id,
+        profileId: id,
+        action: "wish",
+        loveLevel: 3,
+        priority: true,
+        why: "Trop mims",
+      },
+    );
+  });
+
+  it("leaves a blank opinion out", () => {
+    expect(wishCreate({ productId: id }, { loveLevel: 2, priority: false, why: "   " })).toEqual({
+      productId: id,
+      action: "wish",
+      loveLevel: 2,
+      priority: false,
+    });
+  });
+
+  it("turns a blank opinion into null for a patch", () => {
+    expect(whyOrNull("  ")).toBeNull();
+    expect(whyOrNull(" Douce ")).toBe("Douce");
   });
 });
 

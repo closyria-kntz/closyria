@@ -1,5 +1,5 @@
 import { signInAsAdmin } from "../fixtures/auth";
-import { autoProductUrl, PRODUCT } from "../fixtures/shops";
+import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Chantier 2a, task 17: the product sheet admin. A sheet is captured by pasting its address, then an admin
@@ -16,7 +16,7 @@ test("une admin retrouve une fiche capturée, corrige son type et voit « Corrig
   await page.getByRole("button", { name: "Ajouter" }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
   // Keep the sheet: « Gardée par » then counts one active item.
-  await page.getByRole("button", { name: "Favori" }).click();
+  await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
   const productId = /\/produits\/([0-9a-f-]{36})/.exec(page.url())?.[1];
   expect(productId).toBeTruthy();
@@ -134,7 +134,7 @@ test("une admin supprime une fiche que personne ne garde ; une fiche gardée ne 
     return /\/produits\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? "";
   };
   const kept = await open();
-  await page.getByRole("button", { name: "Favori" }).click();
+  await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
   const loose = await open();
 

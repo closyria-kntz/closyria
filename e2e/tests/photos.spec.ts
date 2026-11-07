@@ -5,7 +5,7 @@ import { deflateSync } from "node:zlib";
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { setupValue } from "../fixtures/paths";
-import { autoProductUrl, PRODUCT } from "../fixtures/shops";
+import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Chantier 2a, task 5: the photo viewer (full-screen dialog) on the kept item's photos.
@@ -50,7 +50,7 @@ async function keepWithPhotos(page: Page, count: number): Promise<void> {
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
   await page.getByRole("button", { name: "Ajouter" }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Favori" }).click();
+  await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
   const png = bigPng(3000, 2000);
   for (let n = 1; n <= count; n++) {
@@ -209,7 +209,7 @@ async function keepItem(page: Page): Promise<void> {
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
   await page.getByRole("button", { name: "Ajouter" }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Favori" }).click();
+  await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
 }
 

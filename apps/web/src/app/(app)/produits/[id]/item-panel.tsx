@@ -1,22 +1,25 @@
 "use client";
 
 import {
-  DEFAULT_LOVE_LEVEL,
   ITEM_STAGE_ORDER,
   type ItemStage,
   type ItemView,
+  type LoveLevel,
   MAX_NOTES,
   MAX_SIZE_LABEL,
   MAX_SIZE_NOTE,
   MAX_TAG_NAME,
+  MAX_WHY,
   type TagView,
   type WishlistView,
 } from "@closyria/shared";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { buttonClass, inputClass, primaryButtonClass } from "@/components/ui";
+import { LoveLevelPicker } from "@/components/love-level-picker";
+import { buttonClass, inputClass, primaryButtonClass, toggleButtonClass } from "@/components/ui";
+import { levelOf } from "@/lib/love-levels";
 import { formatPrice } from "@/lib/price";
-import { useProfiles } from "@/lib/profile-context";
+import { useLoveLevels, useProfiles } from "@/lib/profile-context";
 import { pushUndo } from "@/lib/undo";
 import {
   bulkItems,
@@ -28,6 +31,7 @@ import {
   patchItem,
   trashItem,
   undoWith,
+  whyOrNull,
 } from "@/lib/wardrobe-client";
 import { StageDialog } from "./stage-dialog";
 
@@ -45,9 +49,11 @@ type Props = {
   shop: React.ReactNode;
 };
 
-/** HER item in three parts: « Mon article » (stage, size and amounts, notes, lists, tags), the shop sheet, « Autres actions » (profile, delete). Photos live in the gallery column. */
+/** HER item in three parts: « Mon article » (level, priority and opinion, stage, size and amounts, notes, lists, tags), the shop sheet, « Autres actions » (profile, delete). Photos live in the gallery column. */
 export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
   const t = useTranslations("Item");
+  const tMenu = useTranslations("Views.menu");
+  const levels = useLoveLevels();
   const locale = useLocale();
   const profiles = useProfiles();
   const currency = item.product.currency ?? "EUR";
@@ -57,6 +63,7 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
   const [sizeLabel, setSizeLabel] = useState(item.sizeLabel ?? "");
   const [sizeNote, setSizeNote] = useState(item.sizeNote ?? "");
   const [notes, setNotes] = useState(item.notes ?? "");
+  const [why, setWhy] = useState(item.why ?? "");
   const [lists, setLists] = useState<WishlistView[] | null>(null);
   const [tags, setTags] = useState<TagView[] | null>(null);
   const [newList, setNewList] = useState("");
@@ -91,7 +98,8 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
     setSizeLabel(item.sizeLabel ?? "");
     setSizeNote(item.sizeNote ?? "");
     setNotes(item.notes ?? "");
-  }, [item.sizeLabel, item.sizeNote, item.notes]);
+    setWhy(item.why ?? "");
+  }, [item.sizeLabel, item.sizeNote, item.notes, item.why]);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -103,15 +111,36 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
     }
   }
 
-  // Until the level picker (task 9): the heart sets « J'aime » or clears the level, never removes the item (spec §4).
-  const loved = item.loveLevel !== null;
-  const toggleFavorite = () =>
+  // Touching her current level clears it, as in the « … » menu; it never removes the item (spec §4).
+  const chooseLevel = (level: LoveLevel) =>
     run(async () => {
-      const result = await patchItem(item.id, { loveLevel: loved ? null : DEFAULT_LOVE_LEVEL });
+      const cleared = item.loveLevel === level;
+      const result = await patchItem(item.id, { loveLevel: cleared ? null : level });
       if (!result.ok) return fail(result.error);
       onChange(result.item);
-      pushUndo(t(loved ? "toast.favoriteOff" : "toast.favoriteOn"), undoWith(result.undo, reload));
+      pushUndo(
+        cleared ? tMenu("toast.levelCleared") : tMenu("toast.level", { label: levelOf(levels, level).label }),
+        undoWith(result.undo, reload),
+      );
     });
+
+  const togglePriority = () =>
+    run(async () => {
+      const result = await patchItem(item.id, { priority: !item.priority });
+      if (!result.ok) return fail(result.error);
+      onChange(result.item);
+      pushUndo(tMenu(item.priority ? "toast.priorityOff" : "toast.priorityOn"), undoWith(result.undo, reload));
+    });
+
+  const saveWhy = (event: React.FormEvent) => {
+    event.preventDefault();
+    return run(async () => {
+      const result = await patchItem(item.id, { why: whyOrNull(why) });
+      if (!result.ok) return fail(result.error);
+      onChange(result.item);
+      pushUndo(tMenu("toast.why"), undoWith(result.undo, reload));
+    });
+  };
 
   const saveDetails = (event: React.FormEvent) => {
     event.preventDefault();
@@ -218,26 +247,51 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
         aria-labelledby="mine-title"
         className="flex flex-col gap-space-5 rounded-card border border-line bg-surface-raised p-space-4"
       >
-        <div className="flex items-center justify-between gap-space-3">
-          <h2 id="mine-title" className="font-display text-lead font-strong">
-            {t("sections.mine")}
-          </h2>
-          <button
-            type="button"
-            disabled={busy}
-            aria-pressed={loved}
-            onClick={toggleFavorite}
-            className={`${buttonClass} ${touch} aria-pressed:bg-surface-strong aria-pressed:font-strong`}
-          >
-            <span aria-hidden="true">{loved ? "♥" : "♡"}</span> {t("panel.favorite")}
-          </button>
-        </div>
+        <h2 id="mine-title" className="font-display text-lead font-strong">
+          {t("sections.mine")}
+        </h2>
 
         {error && (
           <p role="alert" className="text-sm text-danger">
             {error}
           </p>
         )}
+
+        <div className="flex flex-col gap-space-3">
+          <LoveLevelPicker value={item.loveLevel} onChange={(level) => void chooseLevel(level)} disabled={busy} />
+          <div className="flex flex-wrap items-center gap-space-2">
+            <button
+              type="button"
+              disabled={busy}
+              aria-pressed={item.priority}
+              onClick={togglePriority}
+              className={toggleButtonClass}
+            >
+              {t("keep.priority")}
+            </button>
+            <form onSubmit={saveWhy} className="flex min-w-space-0 flex-1 basis-1/2 flex-wrap items-center gap-space-2">
+              <label htmlFor="item-why" className="sr-only">
+                {t("keep.why")}
+              </label>
+              <input
+                id="item-why"
+                value={why}
+                maxLength={MAX_WHY}
+                placeholder={t("keep.why")}
+                onChange={(e) => setWhy(e.target.value)}
+                className={`${inputClass} ${touch} w-auto min-w-space-0 flex-1`}
+              />
+              <button
+                type="submit"
+                disabled={busy}
+                aria-label={t("panel.whySave")}
+                className={`${buttonClass} ${touch}`}
+              >
+                {t("panel.save")}
+              </button>
+            </form>
+          </div>
+        </div>
 
         <section aria-labelledby="stages-title" className="flex flex-col gap-space-2">
           <h3 id="stages-title" className="text-sm font-strong">

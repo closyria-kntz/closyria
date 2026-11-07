@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { autoProductUrl, PRODUCT } from "../fixtures/shops";
+import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Chantier 2a, task 15: the four views, filters in the address, multi-select with « Annuler », account prompt.
@@ -11,12 +11,12 @@ const PIXEL = Buffer.from(
   "base64",
 );
 
-async function keepFavorite(page: Page): Promise<void> {
+async function pasteAndWish(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
   await page.getByRole("button", { name: "Ajouter" }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Favori" }).click();
+  await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
 }
 
@@ -29,7 +29,7 @@ const axe = async (page: Page) => {
 test("un article gardé apparaît dans Envies, l'onglet courant est marqué, et la vue vide propose de coller un lien", async ({
   page,
 }) => {
-  await keepFavorite(page);
+  await pasteAndWish(page);
   await page.goto("/envies");
   await expect(page.getByRole("heading", { level: 1, name: "Envies" })).toBeVisible();
   const card = page.getByTestId("item-card").first();
@@ -50,7 +50,7 @@ test("un article gardé apparaît dans Envies, l'onglet courant est marqué, et 
 });
 
 test("les filtres vivent dans l'adresse et le bouton Précédent les restaure", async ({ page }) => {
-  await keepFavorite(page);
+  await pasteAndWish(page);
   await page.goto("/envies");
   await expect(page.getByTestId("item-card")).toHaveCount(1);
   await page.getByRole("button", { name: "Filtres" }).click();
@@ -79,9 +79,9 @@ const pick = (page: Page, index: number) =>
 test("Sélectionner : deux articles passent En feu, Annuler ; filtres par niveau, Prioritaires, tri « Ce que j’aime le plus »", async ({
   page,
 }, testInfo) => {
-  await keepFavorite(page);
-  await keepFavorite(page);
-  await keepFavorite(page);
+  await pasteAndWish(page);
+  await pasteAndWish(page);
+  await pasteAndWish(page);
   await page.goto("/envies");
   const cards = page.getByTestId("item-card");
   await expect(cards).toHaveCount(3);
@@ -160,7 +160,7 @@ test("Sélectionner : deux articles passent En feu, Annuler ; filtres par niveau
 });
 
 test("Sélectionner : changer l'étape puis Annuler ; Échap quitte le mode", async ({ page }) => {
-  await keepFavorite(page);
+  await pasteAndWish(page);
   await page.goto("/envies");
   await page.getByRole("button", { name: "Sélectionner", exact: true }).click();
   await pick(page, 0).click();
@@ -183,9 +183,9 @@ test("Sélectionner : changer l'étape puis Annuler ; Échap quitte le mode", as
 test("Sélectionner : déplacer deux articles vers un profil, les ajouter à une liste, les supprimer, chaque fois Annuler", async ({
   page,
 }) => {
-  await keepFavorite(page);
-  await keepFavorite(page);
-  await keepFavorite(page);
+  await pasteAndWish(page);
+  await pasteAndWish(page);
+  await pasteAndWish(page);
   await page.goto("/reglages/profils");
   const add = page.getByRole("form", { name: "Nouveau profil" });
   await add.getByLabel("Nom").fill("Léa");
@@ -252,7 +252,7 @@ test("Sélectionner : déplacer deux articles vers un profil, les ajouter à une
 });
 
 test("la grille a 2, 3 ou 5 colonnes selon l'écran", async ({ page }, testInfo) => {
-  await keepFavorite(page);
+  await pasteAndWish(page);
   await page.goto("/envies");
   await expect(page.getByTestId("item-card")).toHaveCount(1);
   const columns = await page
@@ -263,7 +263,7 @@ test("la grille a 2, 3 ou 5 colonnes selon l'écran", async ({ page }, testInfo)
 });
 
 test("la 1re photo ajoutée propose un compte, la proposition se ferme sans bloquer", async ({ page }, testInfo) => {
-  await keepFavorite(page);
+  await pasteAndWish(page);
   await page.getByRole("button", { name: "Ajouter une photo" }).click();
   await page.getByTestId("photo-input").setInputFiles({ name: "p.png", mimeType: "image/png", buffer: PIXEL });
   const banner = page.getByRole("region", { name: "Proposition de compte" });
@@ -282,10 +282,10 @@ test("la 1re photo ajoutée propose un compte, la proposition se ferme sans bloq
   await expect(banner).toHaveCount(0);
 });
 
-test("retirer le ♡ d'une simple envie ne la retire jamais (spec §4)", async ({ page }) => {
-  await keepFavorite(page);
-  await page.getByRole("button", { name: "Favori", exact: true }).click();
-  await expect(toast(page)).toContainText("Retiré des favoris");
+test("retirer le niveau d'une simple envie ne la retire jamais (spec §4)", async ({ page }) => {
+  await pasteAndWish(page);
+  await page.getByRole("group", { name: "Tu l’aimes comment ?" }).getByRole("button", { name: "J’aime" }).click();
+  await expect(toast(page)).toContainText("Niveau retiré");
   await expect(toast(page)).not.toContainText("Retiré de tes envies");
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
   await page.goto("/envies");
@@ -293,13 +293,13 @@ test("retirer le ♡ d'une simple envie ne la retire jamais (spec §4)", async (
   await expect(page.getByRole("button", { name: "Donner un niveau" })).toBeVisible();
 });
 
-test("retirer le ♡ d'une envie rangée dans une liste ne retire que le favori", async ({ page }) => {
-  await keepFavorite(page);
+test("retirer le niveau d'une envie rangée dans une liste ne retire que le niveau", async ({ page }) => {
+  await pasteAndWish(page);
   await page.getByLabel("Nouvelle liste").fill("Été");
   await page.getByRole("button", { name: "Créer et ajouter" }).and(page.locator(":enabled")).click();
   await expect(toast(page)).toContainText("Ajouté à Été");
-  await page.getByRole("button", { name: "Favori", exact: true }).click();
-  await expect(toast(page)).toContainText("Retiré des favoris");
+  await page.getByRole("group", { name: "Tu l’aimes comment ?" }).getByRole("button", { name: "J’aime" }).click();
+  await expect(toast(page)).toContainText("Niveau retiré");
   await expect(toast(page)).not.toContainText("Retiré de tes envies");
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
 });
@@ -308,7 +308,7 @@ test("téléphone : la barre de sélection reste juste au-dessus du toast et des
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 420 });
-  await keepFavorite(page);
+  await pasteAndWish(page);
   await page.goto("/envies");
   await page.getByRole("button", { name: "Sélectionner", exact: true }).click();
   await pick(page, 0).click();

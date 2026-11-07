@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { expect, type Page } from "@playwright/test";
 import type pg from "pg";
 import { setupValue } from "./paths";
 
@@ -42,6 +43,12 @@ export function newShopUrl(): { host: string; url: string } {
   const host = `boutique-${unique()}${LOOPBACK_NAME_SUFFIX}`;
   const port = new URL(setupValue("E2E_FAKE_SHOP_URL")).port;
   return { host, url: `http://${host}:${port}${PRODUCT_PATH}` };
+}
+
+/** « Ajouter à mes envies » on a sheet not kept yet (« J’aime », the preselected level), then her item shows. */
+export async function keepWish(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Ajouter à mes envies" }).click();
+  await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
 }
 
 /** Inserts the two shops of the journeys (once, from the global setup). */
