@@ -14,6 +14,7 @@ import {
   MAX_TAG_NAME,
   MAX_WHY,
   MAX_WISHLIST_NAME,
+  OPINION_NAME_MAX,
   photoImportErrorSchema,
   photoImportStatusSchema,
   profileColorSchema,
@@ -188,7 +189,16 @@ export const wishlists = pgTable(
     name: text("name").notNull(),
     /** SHA-256 of the share token; null = not shared. The token itself is never stored. */
     shareTokenHash: text("share_token_hash").unique(),
+    /** The share token, encrypted so she can see her link again; null = not shared (or shared before this existed). */
+    shareTokenEncrypted: text("share_token_encrypted"),
     sharedAt: timestamp("shared_at", { withTimezone: true }),
+    /** Friends may leave opinions on the shared list. */
+    allowOpinions: boolean("allow_opinions").notNull().default(true),
+    showOwnerName: boolean("show_owner_name").notNull().default(true),
+    showOwnerOpinions: boolean("show_owner_opinions").notNull().default(true),
+    showBudget: boolean("show_budget").notNull().default(false),
+    /** When she last looked at the opinions; newer ones are « new ». */
+    opinionsSeenAt: timestamp("opinions_seen_at", { withTimezone: true }),
     position: integer("position").notNull().default(0),
     createdAt: createdAt(),
   },
@@ -288,6 +298,53 @@ export const photoImports = pgTable(
       "photo_imports_error_code_check",
       sql`${t.errorCode} IS NULL OR ${oneOf(t.errorCode, photoImportErrorSchema.options)}`,
     ),
+  ],
+);
+
+/** A friend's opinion on an item of a shared list; one per (list, item, name). Goes with the list or the item. */
+export const wishlistOpinions = pgTable(
+  "wishlist_opinions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    wishlistId: uuid("wishlist_id")
+      .notNull()
+      .references(() => wishlists.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    authorName: text("author_name").notNull(),
+    /** Normalised name (case, accents, spaces) that makes two spellings the same author. */
+    authorNameKey: text("author_name_key").notNull(),
+    level: smallint("level").notNull(),
+    note: text("note"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("wishlist_opinions_author_idx").on(t.wishlistId, t.itemId, t.authorNameKey),
+    index("wishlist_opinions_wishlist_id_updated_at_idx").on(t.wishlistId, t.updatedAt),
+    index("wishlist_opinions_item_id_idx").on(t.itemId),
+    check("wishlist_opinions_author_name_check", lengthBetween(t.authorName, OPINION_NAME_MAX)),
+    check("wishlist_opinions_level_check", sql`${t.level} BETWEEN 1 AND 4`),
+    // Loose guard: the real limit (200 graphemes) is enforced by the API; a grapheme can be several characters.
+    check("wishlist_opinions_note_check", atMost(t.note, 400)),
+  ],
+);
+
+/** Which device claimed a name on a list, so nobody else writes under it. Goes with the list. */
+export const wishlistOpinionDevices = pgTable(
+  "wishlist_opinion_devices",
+  {
+    wishlistId: uuid("wishlist_id")
+      .notNull()
+      .references(() => wishlists.id, { onDelete: "cascade" }),
+    authorNameKey: text("author_name_key").notNull(),
+    /** SHA-256 of the device key; the key itself stays on her friend's device. */
+    deviceKeyHash: text("device_key_hash").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ name: "wishlist_opinion_devices_pk", columns: [t.wishlistId, t.authorNameKey, t.deviceKeyHash] }),
   ],
 );
 
