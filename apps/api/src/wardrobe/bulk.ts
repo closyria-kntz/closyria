@@ -4,6 +4,7 @@ import { pgCode } from "../pg-code";
 import type { Tx } from "./events";
 import { AMOUNT_COLUMN, type Item, lockProductOfUser } from "./items";
 import { mergeItemInto } from "./merge-items";
+import { spentCentsFor } from "./spent";
 import { changedFields, groupIds, type ItemFieldValues, setFieldsUndo } from "./undo";
 
 /** Aborts the whole transaction with a stable error code (all or nothing). */
@@ -159,10 +160,18 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
       let eventIds: string[] = [];
       if (options.writeEvents) {
         const at = new Date(op.at);
+        const spent = await spentCentsFor(tx, ids, op.stage, op.amountCents);
         const rows = await tx
           .insert(schema.itemEvents)
           .values(
-            ids.map((itemId) => ({ itemId, type: "stage", stage: op.stage, at, amountCents: op.amountCents ?? null })),
+            ids.map((itemId) => ({
+              itemId,
+              type: "stage",
+              stage: op.stage,
+              at,
+              amountCents: op.amountCents ?? null,
+              spentCents: spent.get(itemId) ?? null,
+            })),
           )
           .returning({ id: schema.itemEvents.id });
         eventIds = rows.map((r) => r.id);
