@@ -792,7 +792,6 @@
       "show": "Filtrer et trier",
       "hide": "Masquer les filtres",
       "active": "{count, plural, =0 {Filtres} one {Filtres (#)} other {Filtres (#)}}",
-      "favorite": "Favoris seulement",
       "shop": "Boutique",
       "category": "Type",
       "color": "Couleur",
@@ -815,7 +814,8 @@
         "oldest": "Plus anciens",
         "name": "Nom",
         "price_asc": "Prix croissant",
-        "price_desc": "Prix décroissant"
+        "price_desc": "Prix décroissant",
+        "love": "Ce que j’aime le plus"
       },
       "reference": "Les filtres Type et Couleur ne se chargent pas.",
       "stageOptions": {

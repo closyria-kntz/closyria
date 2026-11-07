@@ -98,7 +98,7 @@ describe("wardrobe tables", () => {
     const product = await newProduct();
     const item = await newItem(u.id, profile.id, product.id);
     expect(item.stage).toBe("spotted");
-    expect(item.favorite).toBe(false);
+    expect(item).toMatchObject({ loveLevel: null, priority: false, why: null, inOrderDraft: false });
     expect(item.deletedAt).toBeNull();
     const p2 = await newProduct();
     await expectSqlState(newItem(u.id, profile.id, p2.id, { stage: "gone" as never }), "23514", "items_stage_check");
@@ -128,6 +128,40 @@ describe("wardrobe tables", () => {
       "wishlists_name_check",
     );
     await expectSqlState(handle.db.insert(schema.tags).values({ userId: u.id, name: "" }), "23514", "tags_name_check");
+  });
+
+  it("bounds levels, opinions, custom levels and budgets", async () => {
+    const u = await newUser();
+    const profile = await newProfile(u.id);
+    const item = (p: Partial<typeof schema.items.$inferInsert>) =>
+      newProduct().then((x) => newItem(u.id, profile.id, x.id, p));
+    await expectSqlState(item({ loveLevel: 0 }), "23514", "items_love_level_check");
+    await expectSqlState(item({ loveLevel: 5 }), "23514", "items_love_level_check");
+    await expectSqlState(item({ why: "x".repeat(201) }), "23514", "items_why_check");
+    expect(await item({ loveLevel: 4, why: "x".repeat(200) })).toMatchObject({ loveLevel: 4 });
+    const level = (v: Partial<typeof schema.loveLevels.$inferInsert>) =>
+      handle.db.insert(schema.loveLevels).values({ userId: u.id, level: 1, emoji: "🙂", label: "Bof", ...v });
+    await expectSqlState(level({ level: 5 }), "23514", "love_levels_level_check");
+    await expectSqlState(level({ label: "x".repeat(21) }), "23514", "love_levels_label_check");
+    await expectSqlState(level({ emoji: "x".repeat(17) }), "23514", "love_levels_emoji_check");
+    await level({});
+    const [list] = await handle.db.insert(schema.wishlists).values({ userId: u.id, name: "Envies" }).returning();
+    const budget = (v: Partial<typeof schema.budgets.$inferInsert>) =>
+      handle.db.insert(schema.budgets).values({ userId: u.id, amountCents: 1000, period: "month", ...v });
+    await expectSqlState(budget({}), "23514", "budgets_target_check");
+    await expectSqlState(budget({ profileId: profile.id, wishlistId: list?.id }), "23514", "budgets_target_check");
+    await expectSqlState(budget({ profileId: profile.id, amountCents: 0 }), "23514", "budgets_amount_check");
+    await expectSqlState(budget({ profileId: profile.id, period: "year" }), "23514", "budgets_period_check");
+    await expectSqlState(budget({ profileId: profile.id, period: "custom" }), "23514", "budgets_dates_check");
+    await expectSqlState(
+      budget({ profileId: profile.id, period: "custom", startsOn: "2026-11-10", endsOn: "2026-11-09" }),
+      "23514",
+      "budgets_dates_check",
+    );
+    await budget({ profileId: profile.id, period: "custom", startsOn: "2026-11-10", endsOn: "2026-11-10" });
+    await expectSqlState(budget({ profileId: profile.id }), "23505", "budgets_profile_id_idx");
+    await budget({ wishlistId: list?.id, period: "none" });
+    await expectSqlState(budget({ wishlistId: list?.id }), "23505", "budgets_wishlist_id_idx");
   });
 
   it("allows one active item per product, but a deleted one next to an active one", async () => {

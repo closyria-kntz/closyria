@@ -52,7 +52,8 @@ const createItemRoute = (limiter: MiddlewareHandler<AccessEnv>) =>
       path: "/me/items",
       summary: "Keep a product",
       description:
-        "`favorite` (♡: spotted, favorite), `list` (spotted, added to `wishlistId`) or `ordered` (ordered, with its " +
+        "`wish` (spotted, with `loveLevel` — 2 by default —, `priority` and `why`), `list` (spotted, added to " +
+        "`wishlistId`, no level) or `ordered` (ordered, with its " +
         "history row). Without `profileId`, goes to her first profile (« Moi » is created if needed). One item per " +
         "product (G2): when she already has an active one, it is returned as is with 200 and `undo: null`. " +
         "300 creations an hour per account.",
@@ -77,7 +78,9 @@ const listRoute = defineAccess(
     description:
       "48 per page, newest first by default; `nextCursor` gives the next page. `deleted=true`: the trash. " +
       "`category`/`color` match her correction, else the product's; `audience` and the price sorts use the product. " +
-      "`wishlist` keeps the items of one of her lists; `product` her item for one product. Photos imported by link " +
+      "`wishlist` keeps the items of one of her lists; `product` her item for one product. `loveLevel` takes a " +
+      "comma-separated list (`4,3`); `orderDraft` her order selection; `sort=love` puts the highest level first, " +
+      "priority first at equal level, then the newest. Photos imported by link " +
       "that the worker has finished are attached first.",
     request: { query: itemListQuerySchema },
     responses: {
@@ -111,8 +114,8 @@ const patchRoute = defineAccess(
     path: "/me/items/{id}",
     summary: "Change her own fields",
     description:
-      "`coverMediaId` must be one of the item's photos; `categoryId`/`colorId` must exist. Only a favorite toggle " +
-      "comes with an undo.",
+      "`coverMediaId` must be one of the item's photos; `categoryId`/`colorId` must exist. `loveLevel: null` clears " +
+      "the level and never deletes the item. Undo restores the previous values of the fields that changed.",
     request: { params: idParams, ...body(itemPatchSchema) },
     responses: {
       200: mutation("Changed"),

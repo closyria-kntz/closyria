@@ -147,6 +147,16 @@ export async function mergeWishlists(fromUserId: string, toUserId: string, tx: D
     where w.id = moved.id`);
 }
 
+/** Her own level names: the account's win when it has some, else the anonymous ones move. */
+export async function mergeLoveLevels(fromUserId: string, toUserId: string, tx: DbTransaction): Promise<void> {
+  await tx.execute(sql`
+    insert into ${schema.loveLevels} (user_id, level, emoji, label)
+    select ${toUserId}, level, emoji, label from ${schema.loveLevels}
+    where user_id = ${fromUserId}
+      and not exists (select 1 from ${schema.loveLevels} where user_id = ${toUserId})`);
+  await tx.delete(schema.loveLevels).where(eq(schema.loveLevels.userId, fromUserId));
+}
+
 /** « Derniers liens »: folded into the account's by product, the latest visit wins; the anonymous rows are removed. */
 export async function mergeRecentProducts(fromUserId: string, toUserId: string, tx: DbTransaction): Promise<void> {
   await tx.execute(sql`

@@ -43,7 +43,7 @@ async function productOf(shopName: string, shopId?: string) {
 }
 
 async function keep(cookie: string, productId: string) {
-  const res = await call("POST", "/api/me/items", cookie, { productId, action: "favorite" });
+  const res = await call("POST", "/api/me/items", cookie, { productId, action: "wish" });
   expect([200, 201]).toContain(res.status);
   return ((await res.json()) as { item: { id: string } }).item.id;
 }

@@ -106,7 +106,7 @@ describe("/api/me/tags", () => {
       .insert(schema.products)
       .values({ shopId: shop?.id ?? "", canonicalUrl: "https://me-tags.test/p", name: "Robe" })
       .returning();
-    const res = await call("POST", "/api/me/items", cookie, { productId: product?.id, action: "favorite" });
+    const res = await call("POST", "/api/me/items", cookie, { productId: product?.id, action: "wish" });
     const { item } = (await res.json()) as { item: { id: string } };
     await t.db.insert(schema.itemTags).values([
       { itemId: item.id, tagId: tag.id },

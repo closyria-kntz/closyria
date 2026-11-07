@@ -12,11 +12,14 @@ import {
   itemMoveSchema,
   itemPageSchema,
   itemPatchSchema,
+  itemSortSchema,
   itemStageInputSchema,
   itemStageSchema,
   itemViewSchema,
+  loveLevelSchema,
   MAX_BULK_ITEMS,
   MAX_ITEM_PHOTOS,
+  MAX_WHY,
   mutationResultSchema,
   profileColorSchema,
   profileInputSchema,
@@ -70,12 +73,27 @@ describe("inputs", () => {
   it("create refuses action list without wishlistId", () => {
     expect(itemCreateSchema.safeParse({ productId: id, action: "list" }).success).toBe(false);
     expect(itemCreateSchema.safeParse({ productId: id, action: "list", wishlistId: id2 }).success).toBe(true);
-    expect(itemCreateSchema.safeParse({ productId: id, action: "favorite" }).success).toBe(true);
+    expect(itemCreateSchema.safeParse({ productId: id, action: "wish" }).success).toBe(true);
+    expect(itemCreateSchema.safeParse({ productId: id, action: "favorite" }).success).toBe(false);
+    expect(
+      itemCreateSchema.safeParse({ productId: id, action: "wish", loveLevel: 4, priority: true, why: "Mims" }).success,
+    ).toBe(true);
+    expect(itemCreateSchema.safeParse({ productId: id, action: "wish", loveLevel: 5 }).success).toBe(false);
+    expect(itemCreateSchema.safeParse({ productId: id, action: "wish", why: "x".repeat(201) }).success).toBe(false);
     expect(itemCreateSchema.safeParse({ productId: id, profileId: id2, action: "ordered" }).success).toBe(true);
     expect(itemCreateSchema.safeParse({ productId: id, action: "sold" }).success).toBe(false);
   });
   it("patch enforces text limits", () => {
-    expect(itemPatchSchema.safeParse({ favorite: true, sizeLabel: "M", notes: "x".repeat(2000) }).success).toBe(true);
+    expect(itemPatchSchema.safeParse({ loveLevel: 3, sizeLabel: "M", notes: "x".repeat(2000) }).success).toBe(true);
+    expect(itemPatchSchema.safeParse({ loveLevel: null, priority: true, why: null, inOrderDraft: true }).success).toBe(
+      true,
+    );
+    expect(itemPatchSchema.safeParse({ why: "x".repeat(MAX_WHY) }).success).toBe(true);
+    expect(itemPatchSchema.safeParse({ why: "x".repeat(MAX_WHY + 1) }).success).toBe(false);
+    expect(itemPatchSchema.safeParse({ loveLevel: 0 }).success).toBe(false);
+    expect(itemPatchSchema.safeParse({ loveLevel: 2.5 }).success).toBe(false);
+    // `favorite` is gone: an unknown key is stripped, so it changes nothing.
+    expect(itemPatchSchema.parse({ favorite: true })).toEqual({});
     expect(itemPatchSchema.safeParse({ sizeLabel: "x".repeat(41) }).success).toBe(false);
     expect(itemPatchSchema.safeParse({ sizeNote: "x".repeat(201) }).success).toBe(false);
     expect(itemPatchSchema.safeParse({ notes: "x".repeat(2001) }).success).toBe(false);
@@ -125,12 +143,13 @@ describe("bulk", () => {
       { op: "removeTag", tagId: id2 },
       { op: "delete" },
       { op: "restore" },
-      { op: "setFavorite", favorite: true },
+      { op: "setFields", fields: { loveLevel: 4, priority: true, why: null, inOrderDraft: false } },
       { op: "setFields", fields: { notes: null, pricePaidCents: 1200, saleChannel: "Vinted" } },
     ];
     for (const c of cases) expect(itemBulkSchema.safeParse({ ids: [id], ...c }).success, c.op).toBe(true);
     expect(itemBulkSchema.safeParse({ ids: [id], op: "move" }).success).toBe(false);
     expect(itemBulkSchema.safeParse({ ids: [id], op: "explode" }).success).toBe(false);
+    expect(itemBulkSchema.safeParse({ ids: [id], op: "setFavorite", favorite: true }).success).toBe(false);
   });
   it("setFields needs at least one valid field", () => {
     expect(itemBulkSchema.safeParse({ ids: [id], op: "setFields", fields: {} }).success).toBe(false);
@@ -144,10 +163,27 @@ describe("bulk", () => {
   });
 });
 
+describe("love levels", () => {
+  it("are 1 to 4, and the sort knows love", () => {
+    expect([1, 2, 3, 4].every((n) => loveLevelSchema.safeParse(n).success)).toBe(true);
+    expect([0, 5, 1.5].some((n) => loveLevelSchema.safeParse(n).success)).toBe(false);
+    expect(MAX_WHY).toBe(200);
+    expect(itemSortSchema.options).toContain("love");
+  });
+});
+
 describe("list query", () => {
   it("parses query-string filters", () => {
-    const q = itemListQuerySchema.parse({ stage: "owned", favorite: "true", audience: "women", sort: "recent" });
-    expect(q.favorite).toBe(true);
+    const q = itemListQuerySchema.parse({ stage: "owned", priority: "true", audience: "women", sort: "love" });
+    expect(q.priority).toBe(true);
+    expect(q.sort).toBe("love");
+    expect(itemListQuerySchema.parse({ orderDraft: "false" }).orderDraft).toBe(false);
+    expect(itemListQuerySchema.parse({ loveLevel: "4,3" }).loveLevel).toEqual([4, 3]);
+    expect(itemListQuerySchema.parse({ loveLevel: "2" }).loveLevel).toEqual([2]);
+    for (const bad of ["", "5", "0", "4,", "a", "2.5", "1,,2"]) {
+      expect(itemListQuerySchema.safeParse({ loveLevel: bad }).success, bad).toBe(false);
+    }
+    expect("favorite" in itemListQuerySchema.parse({ favorite: "true" })).toBe(false);
     expect(itemListQuerySchema.safeParse({ stage: "nope" }).success).toBe(false);
     expect(itemListQuerySchema.safeParse({ cursor: "abc" }).success).toBe(true);
     expect(itemListQuerySchema.safeParse({}).success).toBe(true);
@@ -179,7 +215,10 @@ const itemView = {
   profileId: id2,
   product,
   stage: "owned",
-  favorite: false,
+  loveLevel: null,
+  priority: false,
+  why: null,
+  inOrderDraft: false,
   name: "Robe",
   brand: null,
   sizeLabel: null,

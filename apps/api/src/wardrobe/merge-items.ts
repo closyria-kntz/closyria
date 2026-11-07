@@ -17,11 +17,13 @@ const KEPT_UNLESS_EMPTY = [
   "categoryId",
   "colorId",
   "coverMediaId",
+  "why",
 ] as const satisfies (keyof Item)[];
 
 /**
  * Merges `source` into `target`, two items of the same user for the same product (spec §3 « Fusion », G2): the most
- * advanced stage (`ITEM_STAGE_ORDER`, the target's on a tie), favorite if either is, the target's own fields unless
+ * advanced stage (`ITEM_STAGE_ORDER`, the target's on a tie), the highest level (none lowest), priority and order
+ * selection if either has them, the target's own fields (opinion included) unless
  * empty, and the union of photos, lists, tags, history and photo imports; then deletes `source`. Nothing is lost: the merged item
  * may hold more than 10 photos (the cap is checked on upload only). Runs inside the caller's transaction.
  */
@@ -30,7 +32,9 @@ export async function mergeItemInto(tx: Tx, source: Item, target: Item, now: Dat
   const targetStage = target.stage as ItemStage;
   const patch: Partial<typeof schema.items.$inferInsert> = {
     stage: ITEM_STAGE_ORDER[sourceStage] > ITEM_STAGE_ORDER[targetStage] ? sourceStage : targetStage,
-    favorite: source.favorite || target.favorite,
+    loveLevel: Math.max(source.loveLevel ?? 0, target.loveLevel ?? 0) || null,
+    priority: source.priority || target.priority,
+    inOrderDraft: source.inOrderDraft || target.inOrderDraft,
     updatedAt: now,
   };
   for (const field of KEPT_UNLESS_EMPTY) {

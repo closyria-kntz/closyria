@@ -1,8 +1,10 @@
 import {
   audienceSchema,
+  budgetPeriodSchema,
   childDetailSchema,
   itemEventTypeSchema,
   itemStageSchema,
+  MAX_LOVE_LEVEL_LABEL,
   MAX_NOTES,
   MAX_PHOTO_IMPORT_URL,
   MAX_PROFILE_NAME,
@@ -10,6 +12,7 @@ import {
   MAX_SIZE_LABEL,
   MAX_SIZE_NOTE,
   MAX_TAG_NAME,
+  MAX_WHY,
   MAX_WISHLIST_NAME,
   photoImportErrorSchema,
   photoImportStatusSchema,
@@ -20,10 +23,12 @@ import {
   type AnyPgColumn,
   boolean,
   check,
+  date,
   index,
   integer,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -84,7 +89,13 @@ export const items = pgTable(
     /** Not null in 2a; nullable later for items born from a photo (2b). */
     productId: uuid("product_id").references(() => products.id),
     stage: text("stage").notNull().default("spotted"),
-    favorite: boolean("favorite").notNull().default(false),
+    /** 1 Bof, 2 J'aime, 3 Mims, 4 En feu; null = no level. */
+    loveLevel: smallint("love_level"),
+    priority: boolean("priority").notNull().default(false),
+    /** Her « Pourquoi ? », one sentence. */
+    why: text("why"),
+    /** In her « Préparer une commande » selection. */
+    inOrderDraft: boolean("in_order_draft").notNull().default(false),
     sizeLabel: text("size_label"),
     sizeNote: text("size_note"),
     notes: text("notes"),
@@ -107,6 +118,9 @@ export const items = pgTable(
     index("items_profile_id_idx").on(t.profileId),
     index("items_product_id_idx").on(t.productId),
     uniqueIndex("items_user_id_product_id_active_idx").on(t.userId, t.productId).where(sql`${t.deletedAt} IS NULL`),
+    index("items_order_draft_idx").on(t.userId, t.profileId).where(sql`${t.inOrderDraft}`),
+    check("items_love_level_check", sql`${t.loveLevel} IS NULL OR ${t.loveLevel} BETWEEN 1 AND 4`),
+    check("items_why_check", atMost(t.why, MAX_WHY)),
     check("items_stage_check", oneOf(t.stage, itemStageSchema.options)),
     check("items_size_label_check", atMost(t.sizeLabel, MAX_SIZE_LABEL)),
     check("items_size_note_check", atMost(t.sizeNote, MAX_SIZE_NOTE)),
@@ -134,6 +148,8 @@ export const itemEvents = pgTable(
     /** Date of the event, editable by the user. */
     at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
     amountCents: integer("amount_cents"),
+    /** What an `ordered` (or `returned`) event counts in a budget: the amount, else the shop's price, else 0. */
+    spentCents: integer("spent_cents"),
     createdAt: createdAt(),
   },
   (t) => [
@@ -141,6 +157,7 @@ export const itemEvents = pgTable(
     check("item_events_type_check", oneOf(t.type, itemEventTypeSchema.options)),
     check("item_events_stage_check", sql`${t.stage} IS NULL OR ${oneOf(t.stage, itemStageSchema.options)}`),
     check("item_events_amount_check", sql`${t.amountCents} IS NULL OR ${t.amountCents} >= 0`),
+    check("item_events_spent_check", sql`${t.spentCents} IS NULL OR ${t.spentCents} >= 0`),
   ],
 );
 
@@ -270,6 +287,56 @@ export const photoImports = pgTable(
     check(
       "photo_imports_error_code_check",
       sql`${t.errorCode} IS NULL OR ${oneOf(t.errorCode, photoImportErrorSchema.options)}`,
+    ),
+  ],
+);
+
+/** Her own names and emojis for the 4 levels; no row = the starting ones. Owned by the user. */
+export const loveLevels = pgTable(
+  "love_levels",
+  {
+    userId: owner(),
+    level: smallint("level").notNull(),
+    /** One grapheme, checked by the API; at most 16 bytes here. */
+    emoji: text("emoji").notNull(),
+    label: text("label").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.level] }),
+    check("love_levels_level_check", sql`${t.level} BETWEEN 1 AND 4`),
+    check("love_levels_emoji_check", sql`octet_length(${t.emoji}) BETWEEN 1 AND 16`),
+    check("love_levels_label_check", lengthBetween(t.label, MAX_LOVE_LEVEL_LABEL)),
+  ],
+);
+
+/** A budget for one of her profiles or one of her lists (exactly one), over a period. Owned by the user. */
+export const budgets = pgTable(
+  "budgets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: owner(),
+    profileId: uuid("profile_id").references(() => profiles.id, { onDelete: "cascade" }),
+    wishlistId: uuid("wishlist_id").references(() => wishlists.id, { onDelete: "cascade" }),
+    amountCents: integer("amount_cents").notNull(),
+    period: text("period").notNull(),
+    /** `custom` only, both inclusive. */
+    startsOn: date("starts_on"),
+    endsOn: date("ends_on"),
+    /** `none`: what she ordered since then counts. */
+    resetAt: timestamp("reset_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("budgets_user_id_idx").on(t.userId),
+    uniqueIndex("budgets_profile_id_idx").on(t.profileId).where(sql`${t.profileId} IS NOT NULL`),
+    uniqueIndex("budgets_wishlist_id_idx").on(t.wishlistId).where(sql`${t.wishlistId} IS NOT NULL`),
+    check("budgets_target_check", sql`(${t.profileId} IS NULL) <> (${t.wishlistId} IS NULL)`),
+    check("budgets_amount_check", sql`${t.amountCents} > 0`),
+    check("budgets_period_check", oneOf(t.period, budgetPeriodSchema.options)),
+    check(
+      "budgets_dates_check",
+      sql`CASE WHEN ${t.period} = 'custom' THEN ${t.startsOn} IS NOT NULL AND ${t.endsOn} IS NOT NULL AND ${t.startsOn} <= ${t.endsOn} ELSE ${t.startsOn} IS NULL AND ${t.endsOn} IS NULL END`,
     ),
   ],
 );

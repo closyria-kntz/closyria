@@ -84,15 +84,15 @@ const audienceEvents = (userId: string, name: string) =>
 describe("POST /api/me/items", () => {
   it("answers 401 without a session", async () => {
     const product = await newProduct();
-    expect((await call("POST", "/api/me/items", undefined, { productId: product.id, action: "favorite" })).status).toBe(
+    expect((await call("POST", "/api/me/items", undefined, { productId: product.id, action: "wish" })).status).toBe(
       401,
     );
   });
 
-  it("♡ keeps a favorite spotted item in « Moi », with no history row", async () => {
+  it("♡ keeps a spotted wish (level 2) in « Moi », with no history row", async () => {
     const { cookie, userId } = await t.signIn();
     const product = await newProduct({ brand: "Marque", priceCents: 4990, currency: "EUR" });
-    const res = await call("POST", "/api/me/items", cookie, { productId: product.id, action: "favorite" });
+    const res = await call("POST", "/api/me/items", cookie, { productId: product.id, action: "wish" });
     expect(res.status).toBe(201);
     const body = (await res.json()) as ItemResult;
     const moi = await defaultProfile(cookie);
@@ -101,7 +101,10 @@ describe("POST /api/me/items", () => {
     expect(body.item).toMatchObject({
       profileId: moi.id,
       stage: "spotted",
-      favorite: true,
+      loveLevel: 2,
+      priority: false,
+      why: null,
+      inOrderDraft: false,
       name: product.name,
       brand: "Marque",
       product: { id: product.id, priceCents: 4990 },
@@ -112,7 +115,7 @@ describe("POST /api/me/items", () => {
     });
     expect(await eventsOf(body.item.id)).toEqual([]);
     expect(await audienceEvents(userId, "item_saved")).toEqual([
-      expect.objectContaining({ props: { action: "favorite", stage: "spotted" } }),
+      expect.objectContaining({ props: { action: "wish", stage: "spotted" } }),
     ]);
   });
 
@@ -120,7 +123,7 @@ describe("POST /api/me/items", () => {
     const { cookie } = await t.signIn();
     const product = await newProduct();
     const body = await keep(cookie, { productId: product.id, action: "ordered" });
-    expect(body.item).toMatchObject({ stage: "ordered", favorite: false });
+    expect(body.item).toMatchObject({ stage: "ordered", loveLevel: null });
     const events = await eventsOf(body.item.id);
     expect(events).toEqual([expect.objectContaining({ type: "stage", stage: "ordered", amountCents: null })]);
     expect(body.undo).toEqual({ ops: [{ ids: [body.item.id], op: "delete" }], removeEventIds: [events[0]?.id] });
@@ -139,7 +142,7 @@ describe("POST /api/me/items", () => {
     });
     expect(refused.status).toBe(404);
     const body = await keep(cookie, { productId: product.id, action: "list", wishlistId: mine?.id });
-    expect(body.item).toMatchObject({ stage: "spotted", favorite: false, wishlistIds: [mine?.id] });
+    expect(body.item).toMatchObject({ stage: "spotted", loveLevel: null, wishlistIds: [mine?.id] });
   });
 
   it("returns the existing item as is when the same product is kept again from another profile", async () => {
@@ -147,7 +150,7 @@ describe("POST /api/me/items", () => {
     const moi = await defaultProfile(cookie);
     const lea = await newProfile(cookie);
     const product = await newProduct();
-    const first = await keep(cookie, { productId: product.id, action: "favorite" });
+    const first = await keep(cookie, { productId: product.id, action: "wish" });
     const res = await call("POST", "/api/me/items", cookie, {
       productId: product.id,
       profileId: lea.id,
@@ -156,7 +159,7 @@ describe("POST /api/me/items", () => {
     expect(res.status).toBe(200);
     const again = (await res.json()) as ItemResult;
     expect(again.item.id).toBe(first.item.id);
-    expect(again.item).toMatchObject({ profileId: moi.id, stage: "spotted", favorite: true });
+    expect(again.item).toMatchObject({ profileId: moi.id, stage: "spotted", loveLevel: 2 });
     expect(again.undo).toBeNull();
     const rows = await t.db.select().from(schema.items).where(eq(schema.items.productId, product.id));
     expect(rows).toHaveLength(1);
@@ -167,13 +170,11 @@ describe("POST /api/me/items", () => {
     const other = await t.signIn();
     const theirs = await newProfile(other.cookie);
     const product = await newProduct();
-    expect((await call("POST", "/api/me/items", cookie, { productId: UNKNOWN_ID, action: "favorite" })).status).toBe(
-      404,
-    );
+    expect((await call("POST", "/api/me/items", cookie, { productId: UNKNOWN_ID, action: "wish" })).status).toBe(404);
     const res = await call("POST", "/api/me/items", cookie, {
       productId: product.id,
       profileId: theirs.id,
-      action: "favorite",
+      action: "wish",
     });
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "not_found" });
@@ -203,13 +204,11 @@ describe("POST /api/me/items", () => {
       const statuses = await Promise.all(
         products
           .slice(i, i + 25)
-          .map(
-            async (p) => (await call("POST", "/api/me/items", cookie, { productId: p.id, action: "favorite" })).status,
-          ),
+          .map(async (p) => (await call("POST", "/api/me/items", cookie, { productId: p.id, action: "wish" })).status),
       );
       expect(statuses.every((s) => s === 201)).toBe(true);
     }
-    const res = await call("POST", "/api/me/items", cookie, { productId: products[300]?.id, action: "favorite" });
+    const res = await call("POST", "/api/me/items", cookie, { productId: products[300]?.id, action: "wish" });
     expect(res.status).toBe(429);
     expect(await res.json()).toEqual({ error: "rate_limited" });
   }, 60_000);
@@ -223,7 +222,7 @@ describe("GET /api/me/items/:id and PATCH", () => {
       .insert(schema.categories)
       .values({ slug: `me-items-cat-${++counter}`, name: "Robes" })
       .returning();
-    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const { item } = await keep(cookie, { productId: product.id, action: "wish" });
     const res = await call("PATCH", `/api/me/items/${item.id}`, cookie, {
       sizeLabel: "M",
       notes: "Taille petit",
@@ -255,16 +254,16 @@ describe("GET /api/me/items/:id and PATCH", () => {
     expect(await read.json()).toMatchObject({ id: item.id, sizeLabel: "M", name: "Ma robe" });
   });
 
-  it("gives the previous favorite value as undo", async () => {
+  it("gives the previous level as undo", async () => {
     const { cookie } = await t.signIn();
     const product = await newProduct();
-    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const { item } = await keep(cookie, { productId: product.id, action: "wish" });
     const body = (await (
-      await call("PATCH", `/api/me/items/${item.id}`, cookie, { favorite: false })
+      await call("PATCH", `/api/me/items/${item.id}`, cookie, { loveLevel: 4 })
     ).json()) as ItemResult;
-    expect(body.item.favorite).toBe(false);
+    expect(body.item.loveLevel).toBe(4);
     expect(body.undo).toEqual({
-      ops: [{ ids: [item.id], op: "setFields", fields: { favorite: true } }],
+      ops: [{ ids: [item.id], op: "setFields", fields: { loveLevel: 2 } }],
       removeEventIds: [],
     });
   });
@@ -272,8 +271,8 @@ describe("GET /api/me/items/:id and PATCH", () => {
   it("reports nothing changed for a patch with the current values", async () => {
     const { cookie } = await t.signIn();
     const product = await newProduct();
-    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
-    const res = await call("PATCH", `/api/me/items/${item.id}`, cookie, { favorite: true, notes: null });
+    const { item } = await keep(cookie, { productId: product.id, action: "wish" });
+    const res = await call("PATCH", `/api/me/items/${item.id}`, cookie, { loveLevel: 2, notes: null });
     expect(res.status).toBe(200);
     const body = (await res.json()) as ItemResult;
     expect(body.itemIds).toEqual([]);
@@ -284,7 +283,7 @@ describe("GET /api/me/items/:id and PATCH", () => {
   it("refuses a cover that is not one of the item's photos, an unknown category or colour", async () => {
     const { cookie, userId } = await t.signIn();
     const product = await newProduct();
-    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const { item } = await keep(cookie, { productId: product.id, action: "wish" });
     const mediaId = randomUUID();
     await t.db.insert(schema.media).values({
       id: mediaId,
@@ -322,7 +321,7 @@ describe("POST /api/me/items/:id/stage", () => {
   it("answers 400, never 500, for an amount above the cap", async () => {
     const { cookie } = await t.signIn();
     const product = await newProduct();
-    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const { item } = await keep(cookie, { productId: product.id, action: "wish" });
     const res = await call("POST", `/api/me/items/${item.id}/stage`, cookie, {
       stage: "owned",
       at: "2026-10-20T09:30:00.000Z",
@@ -334,7 +333,7 @@ describe("POST /api/me/items/:id/stage", () => {
   it("writes the history row with its date and amount, and the paid price", async () => {
     const { cookie, userId } = await t.signIn();
     const product = await newProduct();
-    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const { item } = await keep(cookie, { productId: product.id, action: "wish" });
     const at = "2026-10-20T09:30:00.000Z";
     const res = await call("POST", `/api/me/items/${item.id}/stage`, cookie, { stage: "owned", at, amountCents: 3500 });
     expect(res.status).toBe(200);
@@ -373,7 +372,7 @@ describe("POST /api/me/items/:id/stage", () => {
   it("refuses the same stage with 400 same_stage", async () => {
     const { cookie } = await t.signIn();
     const product = await newProduct();
-    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const { item } = await keep(cookie, { productId: product.id, action: "wish" });
     const res = await call("POST", `/api/me/items/${item.id}/stage`, cookie, {
       stage: "spotted",
       at: "2026-11-01T10:00:00.000Z",
@@ -385,7 +384,7 @@ describe("POST /api/me/items/:id/stage", () => {
   it("writes the channel only for the sale stages", async () => {
     const { cookie } = await t.signIn();
     const product = await newProduct();
-    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const { item } = await keep(cookie, { productId: product.id, action: "wish" });
     const res = await call("POST", `/api/me/items/${item.id}/stage`, cookie, {
       stage: "owned",
       at: "2026-11-01T10:00:00.000Z",
@@ -421,7 +420,7 @@ describe("POST /api/me/items/:id/move", () => {
     const moi = await defaultProfile(cookie);
     const lea = await newProfile(cookie);
     const product = await newProduct();
-    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const { item } = await keep(cookie, { productId: product.id, action: "wish" });
     const res = await call("POST", `/api/me/items/${item.id}/move`, cookie, { profileId: lea.id });
     expect(res.status).toBe(200);
     const body = (await res.json()) as ItemResult;
@@ -445,7 +444,7 @@ describe("trash and restore", () => {
   it("trashes an item, lists it in the trash only, and restores it", async () => {
     const { cookie } = await t.signIn();
     const product = await newProduct();
-    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const { item } = await keep(cookie, { productId: product.id, action: "wish" });
     const del = await call("DELETE", `/api/me/items/${item.id}`, cookie);
     expect(del.status).toBe(200);
     const deleted = (await del.json()) as ItemResult;
@@ -504,8 +503,8 @@ describe("trash and restore", () => {
     await t.db.insert(schema.wishlistItems).values({ wishlistId: list.id, itemId: old.id });
     await call("DELETE", `/api/me/items/${old.id}`, cookie);
 
-    // Kept again meanwhile: a fresh spotted favorite with its own notes, in « Moi ».
-    const fresh = (await keep(cookie, { productId: product.id, action: "favorite" })).item;
+    // Kept again meanwhile: a fresh spotted wish with its own notes, in « Moi ».
+    const fresh = (await keep(cookie, { productId: product.id, action: "wish" })).item;
     expect(fresh.id).not.toBe(old.id);
     await call("PATCH", `/api/me/items/${fresh.id}`, cookie, { notes: "Nouvelle note" });
 
@@ -518,7 +517,7 @@ describe("trash and restore", () => {
       id: fresh.id,
       profileId: fresh.profileId,
       stage: "owned",
-      favorite: true,
+      loveLevel: 2,
       sizeLabel: "M",
       notes: "Nouvelle note",
       pricePaidCents: 4000,
@@ -539,7 +538,7 @@ describe("restore merge under concurrency", () => {
     const product = await newProduct();
     const old = (await keep(cookie, { productId: product.id, action: "ordered" })).item;
     await call("DELETE", `/api/me/items/${old.id}`, cookie);
-    const fresh = (await keep(cookie, { productId: product.id, action: "favorite" })).item;
+    const fresh = (await keep(cookie, { productId: product.id, action: "wish" })).item;
     // Another transaction holds the target row and moves it to « sold ».
     const client = await t.pool.connect();
     try {
@@ -599,7 +598,7 @@ describe("GET /api/me/items", () => {
       seen.push(...page.items.map((i) => i.id));
       if (first) {
         // A new item kept between two pages shows on top, never shifts the next pages.
-        await keep(cookie, { productId: (await newProduct()).id, action: "favorite" });
+        await keep(cookie, { productId: (await newProduct()).id, action: "wish" });
       }
       first = false;
       cursor = page.nextCursor;
@@ -614,16 +613,16 @@ describe("GET /api/me/items", () => {
     expect(seen).toEqual(expected);
   });
 
-  it("filters by stage, profile and favorite, and sorts by price with unknown prices last", async () => {
+  it("filters by stage and profile, and sorts by price with unknown prices last", async () => {
     const { cookie } = await t.signIn();
     const lea = await newProfile(cookie);
-    const cheap = await keep(cookie, { productId: (await newProduct({ priceCents: 1000 })).id, action: "favorite" });
+    const cheap = await keep(cookie, { productId: (await newProduct({ priceCents: 1000 })).id, action: "wish" });
     const dear = await keep(cookie, {
       productId: (await newProduct({ priceCents: 9000 })).id,
       profileId: lea.id,
       action: "ordered",
     });
-    const noPriceId = (await keep(cookie, { productId: (await newProduct()).id, action: "favorite" })).item.id;
+    const noPriceId = (await keep(cookie, { productId: (await newProduct()).id, action: "wish" })).item.id;
 
     const ids = async (query: string) =>
       ((await (await call("GET", `/api/me/items?${query}`, cookie)).json()) as { items: ItemView[] }).items.map(
@@ -636,9 +635,8 @@ describe("GET /api/me/items", () => {
     expect((await call("GET", "/api/me/items?product=not-a-uuid", cookie)).status).toBe(400);
     // Another account's item for the same product is never returned.
     const stranger = await t.signIn();
-    await keep(stranger.cookie, { productId: dear.item.product.id, action: "favorite" });
+    await keep(stranger.cookie, { productId: dear.item.product.id, action: "wish" });
     expect(await ids(`product=${dear.item.product.id}`)).toEqual([dear.item.id]);
-    expect(await ids("favorite=true&sort=price_asc")).toEqual([cheap.item.id, noPriceId]);
     expect(await ids("sort=price_asc")).toEqual([cheap.item.id, dear.item.id, noPriceId]);
     expect(await ids("sort=price_desc")).toEqual([dear.item.id, cheap.item.id, noPriceId]);
     expect(await ids("sort=oldest")).toEqual([cheap.item.id, dear.item.id, noPriceId]);
@@ -737,6 +735,140 @@ describe("GET /api/me/items", () => {
   });
 });
 
+describe("levels, priority and opinion", () => {
+  it("keeps a wish with its level, priority and opinion", async () => {
+    const { cookie } = await t.signIn();
+    const product = await newProduct();
+    const res = await call("POST", "/api/me/items", cookie, {
+      productId: product.id,
+      action: "wish",
+      loveLevel: 3,
+      priority: true,
+      why: "Trop mims",
+    });
+    expect(res.status).toBe(201);
+    expect(((await res.json()) as ItemResult).item).toMatchObject({
+      stage: "spotted",
+      loveLevel: 3,
+      priority: true,
+      why: "Trop mims",
+      inOrderDraft: false,
+    });
+    const plain = await keep(cookie, { productId: (await newProduct()).id, action: "wish" });
+    expect(plain.item).toMatchObject({ loveLevel: 2, priority: false, why: null });
+  });
+
+  it("refuses a level outside 1–4 and an opinion over 200 characters", async () => {
+    const { cookie } = await t.signIn();
+    const product = await newProduct();
+    for (const extra of [{ loveLevel: 5 }, { loveLevel: 0 }, { why: "x".repeat(201) }]) {
+      const res = await call("POST", "/api/me/items", cookie, { productId: product.id, action: "wish", ...extra });
+      expect(res.status, JSON.stringify(extra)).toBe(400);
+    }
+    const { item } = await keep(cookie, { productId: product.id, action: "wish" });
+    for (const patch of [{ loveLevel: 5 }, { loveLevel: 0 }, { why: "x".repeat(201) }]) {
+      expect((await call("PATCH", `/api/me/items/${item.id}`, cookie, patch)).status).toBe(400);
+    }
+    const ok = await call("PATCH", `/api/me/items/${item.id}`, cookie, { why: "x".repeat(200), inOrderDraft: true });
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as ItemResult).item).toMatchObject({ why: "x".repeat(200), inOrderDraft: true });
+  });
+
+  it("clearing the level never deletes the item", async () => {
+    const { cookie } = await t.signIn();
+    const { item } = await keep(cookie, { productId: (await newProduct()).id, action: "wish" });
+    const res = await call("PATCH", `/api/me/items/${item.id}`, cookie, { loveLevel: null });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ItemResult;
+    expect(body.item).toMatchObject({ id: item.id, loveLevel: null, deletedAt: null });
+    expect(body.undo).toEqual({
+      ops: [{ ids: [item.id], op: "setFields", fields: { loveLevel: 2 } }],
+      removeEventIds: [],
+    });
+    const read = await call("GET", `/api/me/items/${item.id}`, cookie);
+    expect(read.status).toBe(200);
+    expect(await read.json()).toMatchObject({ loveLevel: null, deletedAt: null });
+  });
+
+  it("filters by levels and priority, sorts by love", async () => {
+    const { cookie } = await t.signIn();
+    const four = await keep(cookie, { productId: (await newProduct()).id, action: "wish", loveLevel: 4 });
+    const two = await keep(cookie, { productId: (await newProduct()).id, action: "wish" });
+    const none = await keep(cookie, { productId: (await newProduct()).id, action: "ordered" });
+    const fourFirst = await keep(cookie, {
+      productId: (await newProduct()).id,
+      action: "wish",
+      loveLevel: 4,
+      priority: true,
+    });
+    const ids = async (query: string) => {
+      const res = await call("GET", `/api/me/items?${query}`, cookie);
+      expect(res.status, query).toBe(200);
+      return ((await res.json()) as { items: ItemView[] }).items.map((i) => i.id);
+    };
+    expect((await ids("loveLevel=4")).toSorted()).toEqual([four.item.id, fourFirst.item.id].toSorted());
+    expect((await ids("loveLevel=4,2")).toSorted()).toEqual([four.item.id, two.item.id, fourFirst.item.id].toSorted());
+    expect(await ids("priority=true")).toEqual([fourFirst.item.id]);
+    expect(await ids("sort=love")).toEqual([fourFirst.item.id, four.item.id, two.item.id, none.item.id]);
+    for (const bad of ["loveLevel=5", "loveLevel=0", "loveLevel=", "loveLevel=4,x", "loveLevel=2.5"]) {
+      expect((await call("GET", `/api/me/items?${bad}`, cookie)).status, bad).toBe(400);
+    }
+    await call("PATCH", `/api/me/items/${two.item.id}`, cookie, { inOrderDraft: true });
+    expect(await ids("orderDraft=true")).toEqual([two.item.id]);
+  });
+
+  it("pages the love sort with a stable cursor", async () => {
+    const { cookie, userId } = await t.signIn();
+    const moi = await defaultProfile(cookie);
+    const shop = await newShop();
+    const products = await t.db
+      .insert(schema.products)
+      .values(
+        Array.from({ length: 60 }, (_, i) => ({
+          shopId: shop.id,
+          canonicalUrl: `https://me-love-${shop.id}.test/${i}`,
+        })),
+      )
+      .returning({ id: schema.products.id });
+    const base = new Date("2026-10-01T00:00:00Z").getTime();
+    await t.db.insert(schema.items).values(
+      products.map((p, i) => ({
+        userId,
+        profileId: moi.id,
+        productId: p.id,
+        loveLevel: [null, 1, 2, 3, 4][i % 5] ?? null,
+        priority: i % 7 === 0,
+        // Ties on the date: the id breaks them.
+        createdAt: new Date(base + (i % 3) * 1000),
+      })),
+    );
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const res = await call(
+        "GET",
+        `/api/me/items?sort=love${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+        cookie,
+      );
+      expect(res.status).toBe(200);
+      const page = (await res.json()) as { items: ItemView[]; nextCursor: string | null };
+      seen.push(...page.items.map((i) => i.id));
+      cursor = page.nextCursor;
+    } while (cursor);
+    const rows = await t.db.select().from(schema.items).where(eq(schema.items.userId, userId));
+    const expected = rows
+      .toSorted(
+        (a, b) =>
+          (b.loveLevel ?? 0) - (a.loveLevel ?? 0) ||
+          Number(b.priority) - Number(a.priority) ||
+          b.createdAt.getTime() - a.createdAt.getTime() ||
+          (a.id < b.id ? 1 : -1),
+      )
+      .map((r) => r.id);
+    expect(seen).toEqual(expected);
+  });
+});
+
 describe("purge from the trash", () => {
   async function withPhoto(userId: string, itemId: string) {
     const key = `users/${userId}/${randomUUID()}.webp`;
@@ -753,7 +885,7 @@ describe("purge from the trash", () => {
   it("deletes a trashed item for good, with its photo rows and stored objects", async () => {
     const { cookie, userId } = await t.signIn();
     const product = await newProduct();
-    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const { item } = await keep(cookie, { productId: product.id, action: "wish" });
     const photo = await withPhoto(userId, item.id);
     await call("DELETE", `/api/me/items/${item.id}`, cookie);
     const res = await call("DELETE", `/api/me/items/${item.id}/purge`, cookie);
@@ -767,7 +899,7 @@ describe("purge from the trash", () => {
   it("refuses an active item with 409 item_not_deleted", async () => {
     const { cookie } = await t.signIn();
     const product = await newProduct();
-    const { item } = await keep(cookie, { productId: product.id, action: "favorite" });
+    const { item } = await keep(cookie, { productId: product.id, action: "wish" });
     const res = await call("DELETE", `/api/me/items/${item.id}/purge`, cookie);
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "item_not_deleted" });
@@ -778,7 +910,7 @@ describe("purge from the trash", () => {
     const owner = await t.signIn();
     const other = await t.signIn();
     const product = await newProduct();
-    const { item } = await keep(owner.cookie, { productId: product.id, action: "favorite" });
+    const { item } = await keep(owner.cookie, { productId: product.id, action: "wish" });
     await call("DELETE", `/api/me/items/${item.id}`, owner.cookie);
     for (const [cookie, id] of [
       [other.cookie, item.id],
@@ -798,7 +930,7 @@ describe("items of a list", () => {
     const ids: string[] = [];
     for (let i = 0; i < 50; i++) {
       const product = await newProduct();
-      ids.push((await keep(cookie, { productId: product.id, action: "favorite" })).item.id);
+      ids.push((await keep(cookie, { productId: product.id, action: "wish" })).item.id);
     }
     const created = await call("POST", "/api/me/wishlists", cookie, { name: "Ordre" });
     const list = (await created.json()) as { id: string };
@@ -844,7 +976,7 @@ describe("isolation", () => {
     const other = await t.signIn();
     const theirProfile = await defaultProfile(other.cookie);
     const product = await newProduct();
-    const { item } = await keep(owner.cookie, { productId: product.id, action: "favorite" });
+    const { item } = await keep(owner.cookie, { productId: product.id, action: "wish" });
     const at = "2026-11-01T10:00:00.000Z";
     const attempts: [string, string, unknown?][] = [
       ["GET", `/api/me/items/${item.id}`],
@@ -861,7 +993,7 @@ describe("isolation", () => {
       expect(await res.json()).toEqual({ error: "not_found" });
     }
     // Moving her own item into another user's profile.
-    const own = await keep(other.cookie, { productId: product.id, action: "favorite" });
+    const own = await keep(other.cookie, { productId: product.id, action: "wish" });
     const ownerProfile = await defaultProfile(owner.cookie);
     expect(
       (await call("POST", `/api/me/items/${own.item.id}/move`, other.cookie, { profileId: ownerProfile.id })).status,

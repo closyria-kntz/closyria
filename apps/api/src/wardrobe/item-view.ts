@@ -66,7 +66,10 @@ export async function loadItemViews(db: Database | Tx, userId: string, itemIds: 
       profileId: item.profileId,
       product,
       stage: item.stage as ItemView["stage"],
-      favorite: item.favorite,
+      loveLevel: item.loveLevel as ItemView["loveLevel"],
+      priority: item.priority,
+      why: item.why,
+      inOrderDraft: item.inOrderDraft,
       name: item.nameOverride ?? product.name,
       brand: item.brandOverride ?? product.brand,
       sizeLabel: item.sizeLabel,
@@ -181,6 +184,16 @@ const SORTS: Record<ListSort, { keys: SortKey[]; desc: boolean }> = {
     ],
     desc: false,
   },
+  /** « Ce que j'aime le plus »: level (none last), priority first at equal level, then newest. */
+  love: {
+    keys: [
+      { expr: sql`coalesce(${schema.items.loveLevel}, 0)::int`, type: "integer" },
+      { expr: sql`${schema.items.priority}::int`, type: "integer" },
+      { expr: sql`${schema.items.createdAt}`, type: "timestamptz" },
+      idKey,
+    ],
+    desc: true,
+  },
   price_desc: {
     keys: [
       { expr: sql`(${schema.products.priceCents} is not null)::int`, type: "integer" },
@@ -193,7 +206,7 @@ const SORTS: Record<ListSort, { keys: SortKey[]; desc: boolean }> = {
 
 const cursorSchema = z.object({
   s: z.enum([...itemSortSchema.options, "trash", "list"]),
-  k: z.array(z.string()).min(2).max(3),
+  k: z.array(z.string()).min(2).max(4),
 });
 
 function encodeCursor(sort: ListSort, keys: string[]): string {
@@ -233,7 +246,9 @@ export async function listItems(db: Database, userId: string, query: ItemListQue
   if (query.stage) conditions.push(eq(schema.items.stage, query.stage));
   if (query.profile) conditions.push(eq(schema.items.profileId, query.profile));
   if (query.product) conditions.push(eq(schema.items.productId, query.product));
-  if (query.favorite !== undefined) conditions.push(eq(schema.items.favorite, query.favorite));
+  if (query.loveLevel) conditions.push(inArray(schema.items.loveLevel, query.loveLevel));
+  if (query.priority !== undefined) conditions.push(eq(schema.items.priority, query.priority));
+  if (query.orderDraft !== undefined) conditions.push(eq(schema.items.inOrderDraft, query.orderDraft));
   if (query.tag) {
     conditions.push(
       sql`exists (select 1 from ${schema.itemTags} where ${schema.itemTags.itemId} = ${schema.items.id} and ${schema.itemTags.tagId} = ${query.tag})`,

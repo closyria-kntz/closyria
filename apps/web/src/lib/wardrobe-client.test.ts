@@ -45,7 +45,10 @@ const item = {
   profileId: id,
   product,
   stage: "spotted",
-  favorite: true,
+  loveLevel: 2,
+  priority: false,
+  why: null,
+  inOrderDraft: false,
   name: "Robe",
   brand: null,
   sizeLabel: null,
@@ -71,18 +74,18 @@ const item = {
 describe("createItem", () => {
   it("tells a creation (201) from an existing item (200)", async () => {
     const body = { itemIds: [id], undo: null, item };
-    expect(await createItem({ productId: id, action: "favorite" }, deps(json(body, 201)))).toMatchObject({
+    expect(await createItem({ productId: id, action: "wish" }, deps(json(body, 201)))).toMatchObject({
       ok: true,
       created: true,
     });
-    expect(await createItem({ productId: id, action: "favorite" }, deps(json(body, 200)))).toMatchObject({
+    expect(await createItem({ productId: id, action: "wish" }, deps(json(body, 200)))).toMatchObject({
       ok: true,
       created: false,
     });
   });
 
   it("refuses a malformed answer", async () => {
-    expect(await createItem({ productId: id, action: "favorite" }, deps(json({ item: {} }, 201)))).toEqual({
+    expect(await createItem({ productId: id, action: "wish" }, deps(json({ item: {} }, 201)))).toEqual({
       ok: false,
       error: "failed",
     });
@@ -125,9 +128,9 @@ describe("fetchItemForProduct", () => {
 describe("view reads", () => {
   it("asks a page with the filters and the cursor", async () => {
     const d = deps(json({ items: [], nextCursor: "abc" }));
-    const page = await fetchItemsPage({ stage: "owned", favorite: "true" }, "cur", d);
+    const page = await fetchItemsPage({ stage: "owned", priority: "true" }, "cur", d);
     expect(page.nextCursor).toBe("abc");
-    expect(d.fetch).toHaveBeenCalledWith("/api/me/items?stage=owned&favorite=true&cursor=cur", expect.anything());
+    expect(d.fetch).toHaveBeenCalledWith("/api/me/items?stage=owned&priority=true&cursor=cur", expect.anything());
   });
 
   it("shows nothing without a session, and throws on a server error", async () => {

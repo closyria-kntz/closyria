@@ -1,7 +1,14 @@
 import { registerOwnedTable } from "@closyria/auth";
 import { schema } from "@closyria/db";
 import { registerEntitlementsOwnedTables } from "@closyria/entitlements";
-import { mergeItems, mergeProfiles, mergeRecentProducts, mergeTags, mergeWishlists } from "./wardrobe/merge";
+import {
+  mergeItems,
+  mergeLoveLevels,
+  mergeProfiles,
+  mergeRecentProducts,
+  mergeTags,
+  mergeWishlists,
+} from "./wardrobe/merge";
 
 /**
  * Registers, in the API process, every table holding a user's data, so that anonymous -> account linking
@@ -23,4 +30,7 @@ export function registerOwnedTables(): void {
   registerOwnedTable(schema.photoImports, schema.photoImports.userId);
   registerOwnedTable(schema.recentProducts, schema.recentProducts.userId, mergeRecentProducts);
   registerOwnedTable(schema.wishlists, schema.wishlists.userId, mergeWishlists);
+  registerOwnedTable(schema.loveLevels, schema.loveLevels.userId, mergeLoveLevels);
+  // After profiles and lists: a budget follows its profile or list (one folded into the account's goes with it).
+  registerOwnedTable(schema.budgets, schema.budgets.userId);
 }

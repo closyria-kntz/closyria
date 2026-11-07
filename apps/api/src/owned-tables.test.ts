@@ -45,8 +45,10 @@ describe("owned tables of the API process", () => {
   it("registers every table holding user data, each with a cascading foreign key to user(id)", async () => {
     const tables = listOwnedColumns().map((o) => o.table);
     expect(tables.sort()).toEqual([
+      "budgets",
       "events",
       "items",
+      "love_levels",
       "media",
       "photo_imports",
       "profiles",
@@ -64,9 +66,18 @@ describe("owned tables of the API process", () => {
     const order = listOwnedColumns()
       .map((o) => o.table)
       .filter((t) =>
-        ["media", "profiles", "tags", "items", "photo_imports", "recent_products", "wishlists"].includes(t),
+        ["media", "profiles", "tags", "items", "photo_imports", "recent_products", "wishlists", "budgets"].includes(t),
       );
-    expect(order).toEqual(["media", "profiles", "tags", "items", "photo_imports", "recent_products", "wishlists"]);
+    expect(order).toEqual([
+      "media",
+      "profiles",
+      "tags",
+      "items",
+      "photo_imports",
+      "recent_products",
+      "wishlists",
+      "budgets",
+    ]);
   });
 
   it("leaves no foreign key to user(id) unregistered, except the explicit allowlist", async () => {

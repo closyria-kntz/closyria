@@ -1,10 +1,10 @@
 import type { ItemView } from "@closyria/shared";
 
-/** A simple wish: spotted and favorite, with nothing of hers on it. Un-hearting it removes it (« Annuler » restores it). */
+/** A simple wish: spotted and with a level, with nothing of hers on it. Un-hearting it removes it (« Annuler » restores it). */
 export function isBareWish(item: ItemView): boolean {
   return (
     item.stage === "spotted" &&
-    item.favorite &&
+    item.loveLevel !== null &&
     item.sizeLabel === null &&
     item.sizeNote === null &&
     item.notes === null &&

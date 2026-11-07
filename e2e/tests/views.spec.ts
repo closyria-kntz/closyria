@@ -57,8 +57,13 @@ test("les filtres vivent dans l'adresse et le bouton Précédent les restaure", 
   await page.goBack();
   await expect(page).not.toHaveURL(/etape=sold/);
   await expect(page.getByTestId("item-card")).toHaveCount(1);
+  await page.getByLabel("Trier par").selectOption("love");
+  await expect(page).toHaveURL(/tri=love/);
+  await expect(page.getByTestId("item-card")).toHaveCount(1);
+  // The « Favoris seulement » filter is gone (levels replace it): an old address still shows everything.
   await page.goto("/envies?favori=1");
-  await expect(page.getByLabel("Favoris seulement")).toBeChecked();
+  await expect(page.getByTestId("item-card")).toHaveCount(1);
+  await expect(page.getByLabel("Favoris seulement")).toHaveCount(0);
 });
 
 test("sélection multiple : changer l'étape, puis Annuler", async ({ page }) => {

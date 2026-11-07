@@ -147,7 +147,7 @@ describe("PATCH, DELETE and order", () => {
     const kept = await call("POST", "/api/me/items", cookie, {
       productId: product.id,
       profileId: lea.id,
-      action: "favorite",
+      action: "wish",
     });
     expect(kept.status).toBe(201);
     const refused = await call("DELETE", `/api/me/profiles/${lea.id}`, cookie);
@@ -174,7 +174,7 @@ describe("PATCH, DELETE and order", () => {
     ).json()) as ProfileJson;
     const product = await newProduct();
     const kept = (await (
-      await call("POST", "/api/me/items", cookie, { productId: product.id, profileId: lea.id, action: "favorite" })
+      await call("POST", "/api/me/items", cookie, { productId: product.id, profileId: lea.id, action: "wish" })
     ).json()) as { item: { id: string } };
     expect((await call("DELETE", `/api/me/items/${kept.item.id}`, cookie)).status).toBe(200);
 
@@ -192,7 +192,7 @@ describe("PATCH, DELETE and order", () => {
       .profiles[0] as ProfileJson;
     const product = await newProduct();
     const kept = (await (
-      await call("POST", "/api/me/items", cookie, { productId: product.id, action: "favorite" })
+      await call("POST", "/api/me/items", cookie, { productId: product.id, action: "wish" })
     ).json()) as { item: { id: string } };
     await call("DELETE", `/api/me/items/${kept.item.id}`, cookie);
 
@@ -252,7 +252,7 @@ describe("GET /api/me/summary", () => {
   it("tells whether the session is anonymous, the active item count and the profiles", async () => {
     const { cookie } = await t.signIn();
     const product = await newProduct();
-    await call("POST", "/api/me/items", cookie, { productId: product.id, action: "favorite" });
+    await call("POST", "/api/me/items", cookie, { productId: product.id, action: "wish" });
     const res = await call("GET", "/api/me/summary", cookie);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({

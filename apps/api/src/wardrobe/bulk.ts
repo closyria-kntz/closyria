@@ -260,12 +260,6 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
       const ids = removed.map((r) => r.itemId);
       return result(ids, ids.length ? [{ ids, op: "addTag", tagId: op.tagId }] : []);
     }
-    case "setFavorite": {
-      requireActive(items);
-      const ids = items.filter((item) => item.favorite !== op.favorite).map((item) => item.id);
-      await setItems(tx, ids, { favorite: op.favorite, updatedAt: now });
-      return result(ids, ids.length ? [{ ids, op: "setFavorite", favorite: !op.favorite }] : []);
-    }
     case "setFields": {
       requireActive(items);
       const values = Object.fromEntries(

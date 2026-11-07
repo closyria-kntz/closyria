@@ -148,7 +148,7 @@ async function count(query: ReturnType<typeof sql>): Promise<number> {
 /** Rows left behind by the anonymous user, and links that cross two users (none may survive a merge). */
 async function expectNothingLeftOrCrossed(anonymousId: string) {
   expect(await count(sql`select count(*)::int as n from "user" where id = ${anonymousId}`)).toBe(0);
-  for (const table of ["profiles", "tags", "items", "wishlists", "media", "events"]) {
+  for (const table of ["profiles", "tags", "items", "wishlists", "media", "events", "love_levels", "budgets"]) {
     expect(
       await count(sql`select count(*)::int as n from ${sql.identifier(table)} where user_id = ${anonymousId}`),
     ).toBe(0);
@@ -270,7 +270,7 @@ describe("anonymous -> account merge on sign-in", () => {
       profileId: anonMoi.id,
       productId: shared.id,
       stage: "for_sale",
-      favorite: true,
+      loveLevel: 2,
       sizeLabel: "M",
       notes: "anonyme",
       pricePaidCents: 2500,
@@ -333,7 +333,7 @@ describe("anonymous -> account merge on sign-in", () => {
       userId: accountId,
       profileId: accountMoi.id,
       stage: "for_sale",
-      favorite: true,
+      loveLevel: 2,
       sizeLabel: "M",
       notes: "compte",
       pricePaidCents: 3000,
@@ -378,6 +378,88 @@ describe("anonymous -> account merge on sign-in", () => {
     expect(lists.map((l) => l.name)).toEqual(["Mes envies", "Idées"]);
 
     expect(await wardrobeOf(bystander.userId)).toEqual(bystanderBefore);
+  });
+
+  it("merging keeps the highest level, priority if either, the target's opinion else the source's, draft if either", async () => {
+    const email = `niveaux-${randomUUID()}@example.test`;
+    const accountId = await signInWithEmail(email);
+    const accountMoi = await newProfile(accountId, "Moi", day(1));
+    const products = [await newProduct(), await newProduct(), await newProduct()];
+    const [p0, p1, p2] = products.map((p) => p.id) as [string, string, string];
+    // Account side (target) / anonymous side (source), per product.
+    const accountItems = [
+      await newItem({ userId: accountId, profileId: accountMoi.id, productId: p0, loveLevel: 2, why: "À moi" }),
+      await newItem({ userId: accountId, profileId: accountMoi.id, productId: p1, priority: true, inOrderDraft: true }),
+      await newItem({ userId: accountId, profileId: accountMoi.id, productId: p2, loveLevel: 4 }),
+    ];
+    const anonymous = await signInAnonymously();
+    const anonMoi = await newProfile(anonymous.userId, "Moi", day(2));
+    const anon = (productId: string, values: Partial<typeof schema.items.$inferInsert>) =>
+      newItem({ userId: anonymous.userId, profileId: anonMoi.id, productId, ...values });
+    await anon(p0, { loveLevel: 3, priority: true, why: "Anonyme", inOrderDraft: true });
+    await anon(p1, { loveLevel: 1, why: "Seulement ici" });
+    await anon(p2, { loveLevel: null });
+
+    expect(await signInWithEmail(email, anonymous.cookie)).toBe(accountId);
+
+    await expectNothingLeftOrCrossed(anonymous.userId);
+    const rows = await handle.db
+      .select()
+      .from(schema.items)
+      .where(
+        inArray(
+          schema.items.id,
+          accountItems.map((i) => i.id),
+        ),
+      );
+    const state = Object.fromEntries(rows.map((i) => [i.productId, [i.loveLevel, i.priority, i.why, i.inOrderDraft]]));
+    expect(state).toEqual({
+      [p0]: [3, true, "À moi", true],
+      [p1]: [1, true, "Seulement ici", true],
+      [p2]: [4, false, null, false],
+    });
+    expect(await count(sql`select count(*)::int as n from items where user_id = ${accountId}`)).toBe(3);
+  });
+
+  it("moves her own level names unless the account has some, and her budgets with their profile or list", async () => {
+    const levels = (userId: string, label: string) =>
+      handle.db
+        .insert(schema.loveLevels)
+        .values([1, 2, 3, 4].map((level) => ({ userId, level, emoji: "🙂", label: `${label}${level}` })));
+    const labelsOf = async (userId: string) =>
+      (
+        await handle.db
+          .select()
+          .from(schema.loveLevels)
+          .where(eq(schema.loveLevels.userId, userId))
+          .orderBy(asc(schema.loveLevels.level))
+      ).map((l) => l.label);
+
+    const emptyAccount = await signInWithEmail(`niveaux-vide-${randomUUID()}@example.test`);
+    const first = await signInAnonymously();
+    await levels(first.userId, "anon");
+    const anonList = await newList(first.userId, "Idées");
+    const lea = await newProfile(first.userId, "Léa", day(1), 1);
+    await newProfile(first.userId, "Moi", day(1), 0);
+    await handle.db.insert(schema.budgets).values([
+      { userId: first.userId, wishlistId: anonList.id, amountCents: 5000, period: "month" },
+      { userId: first.userId, profileId: lea.id, amountCents: 3000, period: "week" },
+    ]);
+    const email = (await handle.db.select().from(schema.user).where(eq(schema.user.id, emptyAccount)))[0]?.email;
+    expect(await signInWithEmail(email ?? "", first.cookie)).toBe(emptyAccount);
+    await expectNothingLeftOrCrossed(first.userId);
+    expect(await labelsOf(emptyAccount)).toEqual(["anon1", "anon2", "anon3", "anon4"]);
+    const budgets = await handle.db.select().from(schema.budgets).where(eq(schema.budgets.userId, emptyAccount));
+    expect(budgets.map((b) => b.wishlistId ?? b.profileId).sort()).toEqual([anonList.id, lea.id].sort());
+
+    const fullEmail = `niveaux-pleins-${randomUUID()}@example.test`;
+    const fullAccount = await signInWithEmail(fullEmail);
+    await levels(fullAccount, "compte");
+    const second = await signInAnonymously();
+    await levels(second.userId, "anon");
+    expect(await signInWithEmail(fullEmail, second.cookie)).toBe(fullAccount);
+    expect(await labelsOf(fullAccount)).toEqual(["compte1", "compte2", "compte3", "compte4"]);
+    expect(await labelsOf(second.userId)).toEqual([]);
   });
 
   it("folds into the first profile by position, not the oldest one", async () => {
@@ -428,7 +510,7 @@ describe("anonymous -> account merge on sign-in", () => {
       userId: anonymous.userId,
       profileId: anonMoi.id,
       productId: trashedOnAccount.id,
-      favorite: true,
+      loveLevel: 3,
     });
     const anonTrashed = await newItem({
       userId: anonymous.userId,
@@ -445,12 +527,14 @@ describe("anonymous -> account merge on sign-in", () => {
       .from(schema.items)
       .where(eq(schema.items.userId, accountId))
       .orderBy(asc(schema.items.id));
-    const state = Object.fromEntries(rows.map((i) => [i.id, [i.productId, i.stage, i.favorite, i.deletedAt !== null]]));
+    const state = Object.fromEntries(
+      rows.map((i) => [i.id, [i.productId, i.stage, i.loveLevel, i.deletedAt !== null]]),
+    );
     expect(state).toEqual({
-      [accountTrashed.id]: [trashedOnAccount.id, "owned", false, true],
-      [accountTrashedToo.id]: [trashedOnBoth.id, "spotted", false, true],
-      [anonActive.id]: [trashedOnAccount.id, "spotted", true, false],
-      [anonTrashed.id]: [trashedOnBoth.id, "spotted", false, true],
+      [accountTrashed.id]: [trashedOnAccount.id, "owned", null, true],
+      [accountTrashedToo.id]: [trashedOnBoth.id, "spotted", null, true],
+      [anonActive.id]: [trashedOnAccount.id, "spotted", 3, false],
+      [anonTrashed.id]: [trashedOnBoth.id, "spotted", null, true],
     });
     expect(rows.find((i) => i.id === anonActive.id)?.profileId).toBe(accountMoi.id);
   });

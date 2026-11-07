@@ -76,7 +76,7 @@ async function newItem(cookie: string, images = 0) {
       sourceHash: `h${i}`,
     });
   }
-  const res = await call("POST", "/api/me/items", cookie, { productId: product.id, action: "favorite" });
+  const res = await call("POST", "/api/me/items", cookie, { productId: product.id, action: "wish" });
   expect([200, 201]).toContain(res.status);
   return ((await res.json()) as ItemResult).item;
 }
@@ -539,7 +539,7 @@ describe("/api/me/items/:id/media/imports", () => {
     const key = await simulateReady(importId, userId);
     // Into the trash, kept again (a new active item), then restored: merged into the active one.
     expect((await call("DELETE", `/api/me/items/${trashed.id}`, cookie)).status).toBe(200);
-    const again = await call("POST", "/api/me/items", cookie, { productId: trashed.product.id, action: "favorite" });
+    const again = await call("POST", "/api/me/items", cookie, { productId: trashed.product.id, action: "wish" });
     const active = ((await again.json()) as ItemResult).item;
     expect(active.id).not.toBe(trashed.id);
     const restored = await call("POST", `/api/me/items/${trashed.id}/restore`, cookie);

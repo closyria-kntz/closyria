@@ -1,6 +1,6 @@
 "use client";
 
-import type { ItemView, ProductView, WishlistView } from "@closyria/shared";
+import { DEFAULT_LOVE_LEVEL, type ItemView, type ProductView, type WishlistView } from "@closyria/shared";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Dialog } from "@/components/dialog";
@@ -56,7 +56,7 @@ export function KeepActions({ product, profileId, onKept, reload }: Props) {
   async function favorite() {
     setBusy(true);
     setError(null);
-    const result = await createItem({ ...base, action: "favorite" });
+    const result = await createItem({ ...base, action: "wish" });
     if (!result.ok) {
       fail(result.error);
       setBusy(false);
@@ -64,9 +64,9 @@ export function KeepActions({ product, profileId, onKept, reload }: Props) {
     }
     let item = result.item;
     let undo = result.undo;
-    if (!result.created && !item.favorite) {
-      // The API returned her existing item as it was: the favorite is ours to set.
-      const patched = await patchItem(item.id, { favorite: true });
+    if (!result.created && item.loveLevel === null) {
+      // The API returned her existing item as it was: the level is ours to set.
+      const patched = await patchItem(item.id, { loveLevel: DEFAULT_LOVE_LEVEL });
       if (!patched.ok) {
         fail(patched.error);
         setBusy(false);

@@ -42,7 +42,6 @@ export function viewForPath(pathname: string): ViewKey | null {
 }
 
 export type ViewFilters = {
-  favorite?: true;
   shop?: string;
   category?: string;
   color?: string;
@@ -55,7 +54,6 @@ export type ViewFilters = {
 
 /** Parameter names in the address (French, like the pages). */
 const PARAMS = {
-  favorite: "favori",
   shop: "boutique",
   category: "type",
   color: "couleur",
@@ -69,7 +67,6 @@ const uuid = (value: string | null) => (z.uuid().safeParse(value).success ? (val
 
 export function filtersFromParams(params: Pick<URLSearchParams, "get">): ViewFilters {
   const filters: ViewFilters = {};
-  if (params.get(PARAMS.favorite) === "1") filters.favorite = true;
   const shop = uuid(params.get(PARAMS.shop));
   if (shop) filters.shop = shop;
   const category = uuid(params.get(PARAMS.category));
@@ -91,7 +88,6 @@ export function filtersFromParams(params: Pick<URLSearchParams, "get">): ViewFil
 export function filtersToParams(filters: ViewFilters, into?: URLSearchParams): URLSearchParams {
   const params = new URLSearchParams(into?.toString());
   for (const name of Object.values(PARAMS)) params.delete(name);
-  if (filters.favorite) params.set(PARAMS.favorite, "1");
   if (filters.shop) params.set(PARAMS.shop, filters.shop);
   if (filters.category) params.set(PARAMS.category, filters.category);
   if (filters.color) params.set(PARAMS.color, filters.color);
@@ -110,7 +106,6 @@ export const activeFilterCount = (filters: ViewFilters): number =>
 export function toItemQuery(view: ViewKey, filters: ViewFilters, profileId: string | null): Record<string, string> {
   const query: Record<string, string> = { stage: filters.stage ?? VIEWS[view].stage };
   if (profileId) query.profile = profileId;
-  if (filters.favorite) query.favorite = "true";
   if (filters.shop) query.shop = filters.shop;
   if (filters.category) query.category = filters.category;
   if (filters.color) query.color = filters.color;

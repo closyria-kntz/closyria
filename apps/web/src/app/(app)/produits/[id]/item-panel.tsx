@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  DEFAULT_LOVE_LEVEL,
   ITEM_STAGE_ORDER,
   type ItemStage,
   type ItemView,
@@ -103,19 +104,21 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
     }
   }
 
+  // Until the level picker (task 9): the heart sets « J'aime » or clears the level.
+  const loved = item.loveLevel !== null;
   const toggleFavorite = () =>
     run(async () => {
-      if (item.favorite && isBareWish(item)) {
+      if (loved && isBareWish(item)) {
         const trashed = await trashItem(item.id);
         if (!trashed.ok) return fail(trashed.error);
         onGone();
         pushUndo(t("toast.wishRemoved"), undoWith(trashed.undo, reload));
         return;
       }
-      const result = await patchItem(item.id, { favorite: !item.favorite });
+      const result = await patchItem(item.id, { loveLevel: loved ? null : DEFAULT_LOVE_LEVEL });
       if (!result.ok) return fail(result.error);
       onChange(result.item);
-      pushUndo(t(item.favorite ? "toast.favoriteOff" : "toast.favoriteOn"), undoWith(result.undo, reload));
+      pushUndo(t(loved ? "toast.favoriteOff" : "toast.favoriteOn"), undoWith(result.undo, reload));
     });
 
   const saveDetails = (event: React.FormEvent) => {
@@ -230,11 +233,11 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
           <button
             type="button"
             disabled={busy}
-            aria-pressed={item.favorite}
+            aria-pressed={loved}
             onClick={toggleFavorite}
             className={`${buttonClass} ${touch} aria-pressed:bg-surface-strong aria-pressed:font-strong`}
           >
-            <span aria-hidden="true">{item.favorite ? "♥" : "♡"}</span> {t("panel.favorite")}
+            <span aria-hidden="true">{loved ? "♥" : "♡"}</span> {t("panel.favorite")}
           </button>
         </div>
 

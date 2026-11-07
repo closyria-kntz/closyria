@@ -33,8 +33,8 @@ describe("filters in the address", () => {
         `favori=1&boutique=${UUID}&type=${UUID}&couleur=nope&public=women&etiquette=${UUID}&tri=price_asc&etape=sold`,
       ),
     );
+    // `favori` is gone (levels replace it): ignored.
     expect(filters).toEqual({
-      favorite: true,
       shop: UUID,
       category: UUID,
       audience: "women",
@@ -51,18 +51,17 @@ describe("filters in the address", () => {
 
   it("round-trips, keeping foreign parameters such as the profile", () => {
     const params = filtersToParams(
-      { favorite: true, audience: "child", sort: "oldest", stage: "returned" },
+      { audience: "child", sort: "oldest", stage: "returned" },
       new URLSearchParams(`profil=${UUID}`),
     );
     expect(params.get("profil")).toBe(UUID);
-    expect(filtersFromParams(params)).toEqual({ favorite: true, audience: "child", sort: "oldest", stage: "returned" });
+    expect(filtersFromParams(params)).toEqual({ audience: "child", sort: "oldest", stage: "returned" });
   });
 
   it("builds the API query for a view: the stage filter replaces the view's stage", () => {
     expect(toItemQuery("envies", {}, UUID)).toEqual({ stage: "spotted", profile: UUID });
-    expect(toItemQuery("dressing", { stage: "sold", favorite: true, sort: "price_desc" }, null)).toEqual({
+    expect(toItemQuery("dressing", { stage: "sold", sort: "price_desc" }, null)).toEqual({
       stage: "sold",
-      favorite: "true",
       sort: "price_desc",
     });
   });
@@ -70,7 +69,7 @@ describe("filters in the address", () => {
 
 it("counts filters but not the sort", () => {
   expect(activeFilterCount({ sort: "name" })).toBe(0);
-  expect(activeFilterCount({ sort: "name", favorite: true, stage: "sold" })).toBe(2);
+  expect(activeFilterCount({ sort: "name", audience: "women", stage: "sold" })).toBe(2);
 });
 
 describe("toggleSelection", () => {

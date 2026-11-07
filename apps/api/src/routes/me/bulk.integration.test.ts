@@ -213,7 +213,7 @@ describe("POST /api/me/items/bulk — isolation", () => {
     const tag = await newTag(owner.cookie, "Été");
     const ids = [mine[0]?.id ?? "", theirs?.id ?? ""];
     const ops: ItemBulk[] = [
-      { op: "setFavorite", ids, favorite: true },
+      { op: "setFields", ids, fields: { loveLevel: 3 } },
       { op: "move", ids, profileId: lea.id },
       { op: "stage", ids, stage: "owned", at: AT },
       { op: "addTag", ids, tagId: tag.id },
@@ -229,7 +229,7 @@ describe("POST /api/me/items/bulk — isolation", () => {
     }
     const rows = await rowsOf(ids);
     for (const row of rows) {
-      expect(row).toMatchObject({ favorite: false, stage: "spotted", notes: null, deletedAt: null });
+      expect(row).toMatchObject({ loveLevel: null, stage: "spotted", notes: null, deletedAt: null });
     }
     expect(rows.find((r) => r.id === theirs?.id)?.profileId).toBe(otherProfile.id);
     expect(await eventsOf(ids)).toEqual([]);
@@ -267,7 +267,7 @@ describe("POST /api/me/items/bulk — isolation", () => {
   });
 });
 
-describe("POST /api/me/items/bulk — tags, lists, favorite", () => {
+describe("POST /api/me/items/bulk — tags, lists, levels", () => {
   it("adds a tag to the items that lack it; deleting the tag takes it off, the items stay", async () => {
     const { cookie, userId } = await t.signIn();
     const moi = await defaultProfile(cookie);
@@ -331,24 +331,41 @@ describe("POST /api/me/items/bulk — tags, lists, favorite", () => {
     ).toEqual([]);
   });
 
-  it("sets favorite on the items that change, and the undo resets only those", async () => {
+  it("setFields sets level and priority on many and undo restores them", async () => {
     const { cookie, userId } = await t.signIn();
     const moi = await defaultProfile(cookie);
-    const [fav] = await newItems(userId, [moi.id], { favorite: true });
+    const [loved] = await newItems(userId, [moi.id], { loveLevel: 4, priority: true });
+    const [liked] = await newItems(userId, [moi.id], { loveLevel: 2 });
     const [plain] = await newItems(userId, [moi.id]);
-    const ids = [fav?.id ?? "", plain?.id ?? ""];
-    const result = await bulk(cookie, { op: "setFavorite", ids, favorite: true });
-    expect(result).toEqual({
-      itemIds: [plain?.id],
-      undo: { ops: [{ op: "setFavorite", favorite: false, ids: [plain?.id] }], removeEventIds: [] },
+    const ids = [loved?.id ?? "", liked?.id ?? "", plain?.id ?? ""];
+    const result = await bulk(cookie, { op: "setFields", ids, fields: { loveLevel: 4, priority: true } });
+    expect(result.itemIds.toSorted()).toEqual([liked?.id, plain?.id].toSorted());
+    expect(result.undo).toEqual({
+      ops: [
+        { op: "setFields", ids: [liked?.id], fields: { loveLevel: 2, priority: false } },
+        { op: "setFields", ids: [plain?.id], fields: { loveLevel: null, priority: false } },
+      ],
+      removeEventIds: [],
     });
+    expect((await rowsOf(ids)).every((r) => r.loveLevel === 4 && r.priority)).toBe(true);
     await undo(cookie, result.undo);
-    expect((await rowsOf(ids)).map((r) => [r.id, r.favorite]).toSorted()).toEqual(
-      [
-        [fav?.id, true],
-        [plain?.id, false],
-      ].toSorted(),
-    );
+    const after = Object.fromEntries((await rowsOf(ids)).map((r) => [r.id, [r.loveLevel, r.priority]]));
+    expect(after).toEqual({
+      [loved?.id ?? ""]: [4, true],
+      [liked?.id ?? ""]: [2, false],
+      [plain?.id ?? ""]: [null, false],
+    });
+  });
+
+  it("no longer knows setFavorite", async () => {
+    const { cookie, userId } = await t.signIn();
+    const [item] = await newItems(userId, [(await defaultProfile(cookie)).id]);
+    const res = await call("POST", "/api/me/items/bulk", cookie, {
+      op: "setFavorite",
+      ids: [item?.id],
+      favorite: true,
+    });
+    expect(res.status).toBe(400);
   });
 });
 
@@ -577,7 +594,7 @@ describe("POST /api/me/items/undo", () => {
     const { cookie } = await t.signIn();
     const [product] = await newProducts(1);
     const created = (await (
-      await call("POST", "/api/me/items", cookie, { productId: product?.id, action: "favorite" })
+      await call("POST", "/api/me/items", cookie, { productId: product?.id, action: "wish" })
     ).json()) as MutationResult & { item: ItemView };
     const id = created.item.id;
     const staged = (await (
@@ -592,14 +609,14 @@ describe("POST /api/me/items/undo", () => {
     expect(await eventsOf([id])).toEqual([]);
 
     const patched = (await (
-      await call("PATCH", `/api/me/items/${id}`, cookie, { notes: "Doux", sizeLabel: "S", favorite: true })
+      await call("PATCH", `/api/me/items/${id}`, cookie, { notes: "Doux", sizeLabel: "S", loveLevel: 2 })
     ).json()) as MutationResult;
     expect(patched.undo).toEqual({
       ops: [{ ids: [id], op: "setFields", fields: { notes: null, sizeLabel: null } }],
       removeEventIds: [],
     });
     await undo(cookie, patched.undo);
-    expect((await rowsOf([id]))[0]).toMatchObject({ notes: null, sizeLabel: null, favorite: true });
+    expect((await rowsOf([id]))[0]).toMatchObject({ notes: null, sizeLabel: null, loveLevel: 2 });
 
     await undo(cookie, created.undo);
     expect((await rowsOf([id]))[0]?.deletedAt).not.toBeNull();

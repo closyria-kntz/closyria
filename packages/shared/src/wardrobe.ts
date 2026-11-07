@@ -39,6 +39,19 @@ export const MAX_SIZE_LABEL = 40;
 export const MAX_SIZE_NOTE = 200;
 export const MAX_NOTES = 2000;
 export const MAX_SALE_CHANNEL = 60;
+/** Her « Pourquoi ? » next to the level. */
+export const MAX_WHY = 200;
+
+/** How much she loves a wish: 1 Bof, 2 J'aime, 3 Mims, 4 En feu; null = no level. */
+export const loveLevelSchema = z.number().int().min(1).max(4);
+export type LoveLevel = z.infer<typeof loveLevelSchema>;
+/** The level a wish gets when none is given (and the level of the former favorites). */
+export const DEFAULT_LOVE_LEVEL: LoveLevel = 2;
+/** Longest name she can give a level. */
+export const MAX_LOVE_LEVEL_LABEL = 20;
+/** `week` Monday→Sunday, `month`, `custom` (start…end inclusive), `none` (since her last reset); Europe/Paris. */
+export const budgetPeriodSchema = z.enum(["week", "month", "custom", "none"]);
+export type BudgetPeriod = z.infer<typeof budgetPeriodSchema>;
 /** Delay of the "Undo" button, and retention of the trash. */
 export const UNDO_DELAY_MS = 8000;
 export const TRASH_RETENTION_DAYS = 30;
@@ -71,8 +84,12 @@ export const itemCreateSchema = z
   .object({
     productId: z.uuid(),
     profileId: z.uuid().optional(),
-    action: z.enum(["favorite", "list", "ordered"]),
+    action: z.enum(["wish", "list", "ordered"]),
     wishlistId: z.uuid().optional(),
+    /** `wish` only; defaults to 2 (J'aime) there. */
+    loveLevel: loveLevelSchema.optional(),
+    priority: z.boolean().optional(),
+    why: z.string().max(MAX_WHY).optional(),
   })
   .refine((v) => v.action !== "list" || v.wishlistId !== undefined, {
     error: "wishlistId is required for action list",
@@ -81,7 +98,10 @@ export const itemCreateSchema = z
 export type ItemCreate = z.infer<typeof itemCreateSchema>;
 
 export const itemPatchSchema = z.object({
-  favorite: z.boolean().optional(),
+  loveLevel: loveLevelSchema.nullable().optional(),
+  priority: z.boolean().optional(),
+  why: z.string().max(MAX_WHY).nullable().optional(),
+  inOrderDraft: z.boolean().optional(),
   sizeLabel: z.string().max(MAX_SIZE_LABEL).nullable().optional(),
   sizeNote: z.string().max(MAX_SIZE_NOTE).nullable().optional(),
   notes: z.string().max(MAX_NOTES).nullable().optional(),
@@ -133,7 +153,6 @@ export const itemBulkSchema = z.discriminatedUnion("op", [
   z.object({ ids: bulkIds, op: z.literal("removeTag"), tagId: z.uuid() }),
   z.object({ ids: bulkIds, op: z.literal("delete") }),
   z.object({ ids: bulkIds, op: z.literal("restore") }),
-  z.object({ ids: bulkIds, op: z.literal("setFavorite"), favorite: z.boolean() }),
   z.object({ ids: bulkIds, op: z.literal("setFields"), fields: itemFieldsSchema }),
 ]);
 export type ItemBulk = z.infer<typeof itemBulkSchema>;
@@ -151,7 +170,7 @@ export type TagPatch = z.infer<typeof tagPatchSchema>;
 export const wishlistInputSchema = z.object({ name: nameOf(MAX_WISHLIST_NAME) });
 export type WishlistInput = z.infer<typeof wishlistInputSchema>;
 
-export const itemSortSchema = z.enum(["recent", "oldest", "name", "price_asc", "price_desc"]);
+export const itemSortSchema = z.enum(["recent", "oldest", "name", "price_asc", "price_desc", "love"]);
 export type ItemSort = z.infer<typeof itemSortSchema>;
 
 /** Query string of `GET /api/me/items`. */
@@ -160,7 +179,16 @@ export const itemListQuerySchema = z.object({
   profile: z.uuid().optional(),
   /** Her item for one product (the product sheet asks whether she keeps it). */
   product: z.uuid().optional(),
-  favorite: z.stringbool().optional(),
+  /** Comma-separated levels, e.g. `4,3`. */
+  loveLevel: z
+    .string()
+    .max(20)
+    .regex(/^[1-4](,[1-4])*$/)
+    .transform((value) => [...new Set(value.split(",").map(Number))] as LoveLevel[])
+    .optional(),
+  priority: z.stringbool().optional(),
+  /** Only the items in (or out of) her order selection. */
+  orderDraft: z.stringbool().optional(),
   tag: z.uuid().optional(),
   shop: z.string().min(1).max(100).optional(),
   category: z.uuid().optional(),
@@ -208,7 +236,10 @@ export const itemViewSchema = z.object({
   profileId: z.uuid(),
   product: productViewSchema,
   stage: itemStageSchema,
-  favorite: z.boolean(),
+  loveLevel: loveLevelSchema.nullable(),
+  priority: z.boolean(),
+  why: z.string().nullable(),
+  inOrderDraft: z.boolean(),
   /** Override if any, else the product's. */
   name: z.string().nullable(),
   brand: z.string().nullable(),

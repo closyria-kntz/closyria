@@ -1,12 +1,13 @@
 import { and, asc, type Database, desc, eq, isNull, schema, sql } from "@closyria/db";
-import type {
-  ItemCreate,
-  ItemMove,
-  ItemPatch,
-  ItemStage,
-  ItemStageInput,
-  UndoPayload,
-  WardrobeErrorCode,
+import {
+  DEFAULT_LOVE_LEVEL,
+  type ItemCreate,
+  type ItemMove,
+  type ItemPatch,
+  type ItemStage,
+  type ItemStageInput,
+  type UndoPayload,
+  type WardrobeErrorCode,
 } from "@closyria/shared";
 import { pgCode } from "../pg-code";
 import { recordEvent, type Tx } from "./events";
@@ -54,8 +55,8 @@ async function lockActiveItemFor(tx: Tx, userId: string, productId: string): Pro
 }
 
 /**
- * Keeps a product (♡, into a list, or as ordered). One active item per user and product (G2): when she already has
- * one, it is returned as is (`created: false`, no undo), whatever the profile asked for.
+ * Keeps a product (a wish with its level, priority and opinion; into a list; or as ordered). One active item per
+ * user and product (G2): when she already has one, it is returned as is (`created: false`, no undo), whatever the profile asked for.
  * Undo of a creation: send it to the trash (task 7 may turn it into a hard delete) and drop its history row.
  */
 export async function createItem(db: Database, userId: string, input: ItemCreate, now: Date): Promise<ItemOutcome> {
@@ -102,7 +103,10 @@ export async function createItem(db: Database, userId: string, input: ItemCreate
         profileId: profile.id,
         productId: product.id,
         stage,
-        favorite: input.action === "favorite",
+        // A wish has a level (2 J'aime unless given); a list or an order has none.
+        loveLevel: input.action === "wish" ? (input.loveLevel ?? DEFAULT_LOVE_LEVEL) : null,
+        priority: input.action === "wish" ? (input.priority ?? false) : false,
+        why: input.action === "wish" ? (input.why ?? null) : null,
         createdAt: now,
         updatedAt: now,
       })

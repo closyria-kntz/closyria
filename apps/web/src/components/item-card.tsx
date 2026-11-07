@@ -66,7 +66,7 @@ export function ItemCard({ item, selected, selecting, onToggle, showStage, linke
               {t("noPhoto")}
             </span>
           )}
-          {item.favorite && (
+          {item.loveLevel !== null && (
             <span
               role="img"
               aria-label={t("favorite")}

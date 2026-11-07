@@ -4,7 +4,7 @@ import { audienceSchema, itemSortSchema, type ReferenceView, type TagView } from
 import { useTranslations } from "next-intl";
 import { useId, useMemo, useState } from "react";
 import { STAGE_FILTER_OPTIONS, type ViewFilters } from "@/lib/wardrobe-view";
-import { buttonClass, focusRing, inputClass } from "./ui";
+import { buttonClass, inputClass } from "./ui";
 
 type Props = {
   filters: ViewFilters;
@@ -42,12 +42,11 @@ function Select({
   );
 }
 
-/** Sort, and the filters (favourite, shop, type, colour, audience, tag, stage) in a panel; state lives in the address. */
+/** Sort, and the filters (shop, type, colour, audience, tag, stage) in a panel; state lives in the address. */
 export function FiltersBar({ filters, onChange, shops, tags, reference, activeCount }: Props) {
   const t = useTranslations("Views.filters");
   const [open, setOpen] = useState(activeCount > 0);
   const panel = useId();
-  const favoriteId = useId();
 
   const categories = useMemo(() => {
     if (!reference) return [];
@@ -105,21 +104,6 @@ export function FiltersBar({ filters, onChange, shops, tags, reference, activeCo
           id={panel}
           className="grid grid-cols-1 gap-space-3 rounded-card border border-line bg-surface-raised p-space-4 sm:grid-cols-2 lg:grid-cols-4"
         >
-          <div className="flex min-h-touch-target items-center gap-space-2">
-            <input
-              id={favoriteId}
-              type="checkbox"
-              checked={filters.favorite === true}
-              onChange={(event) => {
-                const { favorite: _drop, ...rest } = filters;
-                onChange(event.target.checked ? { ...rest, favorite: true } : rest);
-              }}
-              className={`size-space-5 accent-accent ${focusRing}`}
-            />
-            <label htmlFor={favoriteId} className="text-sm font-strong">
-              {t("favorite")}
-            </label>
-          </div>
           <Select label={t("shop")} value={filters.shop ?? ""} onChange={(value) => set({ shop: value })}>
             <option value="">{t("anyF")}</option>
             {shops.map((shop) => (

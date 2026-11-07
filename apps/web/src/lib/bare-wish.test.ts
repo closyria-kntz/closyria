@@ -6,7 +6,7 @@ const ID = "11111111-1111-4111-8111-111111111111";
 
 const bare = {
   stage: "spotted",
-  favorite: true,
+  loveLevel: 2,
   sizeLabel: null,
   sizeNote: null,
   notes: null,
@@ -39,7 +39,7 @@ const filled: [string, Partial<ItemView>][] = [
 ];
 
 describe("isBareWish", () => {
-  it("is true for a spotted favorite with nothing else of hers", () => {
+  it("is true for a spotted wish with nothing else of hers", () => {
     expect(isBareWish(bare)).toBe(true);
   });
 

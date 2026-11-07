@@ -5,7 +5,10 @@ type Item = typeof schema.items.$inferSelect;
 
 /** The item columns `setFields` can write, in a fixed order (stable grouping keys). */
 export const ITEM_FIELD_KEYS = [
-  "favorite",
+  "loveLevel",
+  "priority",
+  "why",
+  "inOrderDraft",
   "sizeLabel",
   "sizeNote",
   "notes",
