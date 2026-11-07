@@ -1,6 +1,6 @@
 "use client";
 
-import type { ProfileView, StageCounts, SummaryView } from "@closyria/shared";
+import type { ProfileView, SummaryView } from "@closyria/shared";
 import { useSearchParams } from "next/navigation";
 import { createContext, useContext } from "react";
 import { z } from "zod";
@@ -36,14 +36,9 @@ export type ProfilesState = {
   profiles: readonly ProfileView[];
   /** False until the first read of the profiles ended (a view waits for it to know which profile to ask). */
   ready: boolean;
-  /** Active items per stage, per profile id (empty until the first read). */
-  stageCounts: Readonly<Record<string, StageCounts>>;
+  /** Re-reads the profiles; the settings pages call it after creating, renaming or deleting one. */
   /** Who is signed in (null until the first read): her e-mail, null without an account. */
   account: SummaryView["account"] | null;
-  /**
-   * Re-reads the profiles and the counts; the settings pages call it after creating, renaming or deleting a profile,
-   * the sheet after keeping, moving, changing the stage of or deleting an item.
-   */
   refreshProfiles: () => Promise<void>;
 };
 
@@ -51,7 +46,6 @@ export type ProfilesState = {
 export const ProfilesContext = createContext<ProfilesState>({
   profiles: [],
   ready: true,
-  stageCounts: {},
   account: null,
   refreshProfiles: async () => {},
 });
@@ -71,19 +65,6 @@ export function useRefreshProfiles(): () => Promise<void> {
 export function useCurrentProfile(): CurrentProfile {
   const profiles = useProfiles();
   return resolveCurrentProfile(profiles, readProfileParam(useSearchParams()));
-}
-
-const NOTHING_YET: StageCounts = { spotted: 0, ordered: 0, owned: 0, for_sale: 0, sold: 0, returned: 0 };
-
-/**
- * The current profile's counts per stage, null until they are read (no false zero). A visitor without any profile
- * yet (nothing kept, no session) has zeros everywhere.
- */
-export function useStageCounts(): StageCounts | null {
-  const { id } = useCurrentProfile();
-  const { stageCounts, ready, profiles } = useContext(ProfilesContext);
-  if (id) return stageCounts[id] ?? null;
-  return ready && profiles.length === 0 ? NOTHING_YET : null;
 }
 
 /** Who is signed in, as the menu and « Mon compte » show it. */

@@ -31,8 +31,7 @@ test("un article gardé apparaît dans Envies, l'onglet courant est marqué, et 
   await expect(card).toContainText(PRODUCT.name);
   await expect(card.getByRole("img", { name: "Favori" })).toBeVisible();
   const nav = page.getByRole("navigation", { name: /Menu principal|Onglets/ }).filter({ visible: true });
-  // From the desktop up the side menu adds the count to the name (« Envies 1 article »).
-  await expect(nav.locator("[aria-current=page]")).toHaveAccessibleName(/^Envies( \d+ articles?)?$/);
+  await expect(nav.locator("[aria-current=page]")).toHaveText("Envies");
 
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
@@ -143,26 +142,4 @@ test("retirer le ♡ d'une envie rangée dans une liste ne retire que le favori"
   await expect(toast(page)).toContainText("Retiré des favoris");
   await expect(toast(page)).not.toContainText("Retiré de tes envies");
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
-});
-
-test("téléphone : la barre de sélection reste juste au-dessus du toast et des onglets (Passe design)", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 420 });
-  await keepFavorite(page);
-  await page.goto("/envies");
-  await page.getByRole("checkbox", { name: new RegExp(`Sélectionner ${PRODUCT.name}`) }).check();
-  const bar = page.getByRole("region", { name: "Actions sur la sélection" });
-  await expect(bar).toBeVisible();
-  await page.evaluate(() => {
-    const main = document.getElementById("app-content");
-    if (main) main.scrollTop = 0;
-  });
-  const barBox = await bar.boundingBox();
-  const tabs = await page.getByTestId("app-nav-bottom").boundingBox();
-  const gap = (tabs?.y ?? 0) - ((barBox?.y ?? 0) + (barBox?.height ?? 0));
-  // Room for the undo toast (4rem above the window's bottom, 3rem high) and no more: the content area already ends
-  // above the tabs.
-  expect(gap).toBeGreaterThanOrEqual(7 * 16 - (tabs?.height ?? 0));
-  expect(gap).toBeLessThanOrEqual(4 * 16);
 });

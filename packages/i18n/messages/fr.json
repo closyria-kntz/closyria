@@ -4,14 +4,8 @@
     "description": "Ton dressing en ligne, et le suivi de tes articles préférés."
   },
   "Home": {
-    "title": "Quel article as-tu repéré ?",
-    "summary": {
-      "title": "Mon dressing en bref",
-      "ordered": "{count, plural, one {commandé en route} other {commandés en route}}",
-      "wishes": "{count, plural, one {envie} other {envies}}",
-      "wardrobe": "dans ton dressing",
-      "forSale": "à vendre"
-    },
+    "title": "Closyria",
+    "tagline": "Ton dressing en ligne arrive bientôt.",
     "recents": {
       "title": "Derniers liens",
       "forget": "Retirer {name} de la liste"
@@ -30,10 +24,8 @@
       "forSale": "À vendre",
       "lists": "Listes",
       "settings": "Réglages",
-      "help": "Aide",
       "more": "Plus",
-      "moreMenu": "Autres pages",
-      "count": "{count, plural, one {# article} other {# articles}}"
+      "moreMenu": "Autres pages"
     },
     "profile": {
       "label": "Profil",
@@ -624,9 +616,6 @@
       "tagRemoved": "Étiquette {name} retirée",
       "failed": "Impossible d’annuler."
     },
-    "summary": {
-      "size": "Ma taille : {size}"
-    },
     "sections": {
       "mine": "Mon article",
       "shop": "La fiche de la boutique",
@@ -637,7 +626,6 @@
       "stages": "Étapes",
       "stagesHint": "Où en est cet article ?",
       "currentStage": "étape actuelle",
-      "passedStage": "étape passée",
       "changeStage": "Passer à « {stage} »",
       "paid": "Payé : {amount}",
       "salePrice": "Prix demandé : {amount}",

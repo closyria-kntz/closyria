@@ -260,7 +260,6 @@ describe("GET /api/me/summary", () => {
       account: { email: null, createdAt: expect.any(String) },
       itemCount: 1,
       profiles: [expect.objectContaining({ name: "Moi", itemCount: 1 })],
-      stageCounts: expect.any(Object),
     });
   });
 
@@ -281,29 +280,5 @@ describe("GET /api/me/summary", () => {
     };
     expect(body.isAnonymous).toBe(false);
     expect(body.account).toEqual({ email: "lea@example.com", createdAt: createdAt.toISOString() });
-  });
-
-  it("counts the active items per stage and per profile, zeros for an empty profile", async () => {
-    const { cookie, userId } = await t.signIn();
-    const moi = await ensureDefaultProfile(t.db, userId);
-    const lea = (await (
-      await call("POST", "/api/me/profiles", cookie, { name: "Léa", audience: "women", color: "plum" })
-    ).json()) as { id: string };
-    const empty = (await (
-      await call("POST", "/api/me/profiles", cookie, { name: "Vide", audience: "women", color: "plum" })
-    ).json()) as { id: string };
-    const add = async (profileId: string, stage: string, deletedAt: Date | null = null) =>
-      t.db.insert(schema.items).values({ userId, profileId, productId: (await newProduct()).id, stage, deletedAt });
-    await add(moi.id, "spotted");
-    await add(moi.id, "spotted");
-    await add(moi.id, "ordered");
-    await add(moi.id, "spotted", new Date());
-    await add(lea.id, "owned");
-    const body = (await (await call("GET", "/api/me/summary", cookie)).json()) as {
-      stageCounts: Record<string, Record<string, number>>;
-    };
-    expect(body.stageCounts[moi.id]).toEqual({ spotted: 2, ordered: 1, owned: 0, for_sale: 0, sold: 0, returned: 0 });
-    expect(body.stageCounts[lea.id]?.owned).toBe(1);
-    expect(body.stageCounts[empty.id]).toEqual({ spotted: 0, ordered: 0, owned: 0, for_sale: 0, sold: 0, returned: 0 });
   });
 });

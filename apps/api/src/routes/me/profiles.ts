@@ -1,13 +1,11 @@
 import { and, asc, count, eq, isNull, ne, schema, sql } from "@closyria/db";
 import {
   type ChildDetail,
-  itemStageSchema,
   profileInputSchema,
   profileListSchema,
   profileOrderSchema,
   profilePatchSchema,
   profileViewSchema,
-  type StageCounts,
   summaryViewSchema,
   wardrobeErrorSchema,
 } from "@closyria/shared";
@@ -274,20 +272,10 @@ export function profilesRoutes(deps: WardrobeDeps) {
       if (!user) throw new Error("summary: signed-in user not found");
       const isAnonymous = user.isAnonymous === true;
       const account = { email: isAnonymous ? null : user.email, createdAt: user.createdAt.toISOString() };
-      const rows = await db
-        .select({ profileId: schema.items.profileId, stage: schema.items.stage, n: count() })
+      const [active] = await db
+        .select({ n: count() })
         .from(schema.items)
-        .where(and(eq(schema.items.userId, userId), isNull(schema.items.deletedAt)))
-        .groupBy(schema.items.profileId, schema.items.stage);
-      const zero = (): StageCounts => ({ spotted: 0, ordered: 0, owned: 0, for_sale: 0, sold: 0, returned: 0 });
-      const stageCounts: Record<string, StageCounts> = Object.fromEntries(profiles.map((p) => [p.id, zero()]));
-      let itemCount = 0;
-      for (const row of rows) {
-        itemCount += row.n;
-        const counts = stageCounts[row.profileId];
-        const stage = itemStageSchema.safeParse(row.stage);
-        if (counts && stage.success) counts[stage.data] = row.n;
-      }
-      return c.json({ isAnonymous, account, itemCount, profiles, stageCounts }, 200);
+        .where(and(eq(schema.items.userId, userId), isNull(schema.items.deletedAt)));
+      return c.json({ isAnonymous, account, itemCount: active?.n ?? 0, profiles }, 200);
     });
 }

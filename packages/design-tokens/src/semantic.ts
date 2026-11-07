@@ -75,16 +75,12 @@ export const defaultSemanticTokens = {
   "breakpoint-sm": breakpoint.sm,
   "breakpoint-md": breakpoint.md,
   "breakpoint-lg": breakpoint.lg,
-  "breakpoint-xl": breakpoint.xl,
   "container-narrow": container.narrow,
   "container-wide": container.wide,
   "container-app": container.app,
   "container-measure": container.measure,
   "container-sidebar": container.sidebar,
-  "container-paste": container.paste,
-  "container-panel": container.panel,
   "spacing-touch-target": size.touchTarget,
-  "spacing-panel-max": size.panelMax,
 } as const;
 
 export type SemanticTokenKey = keyof typeof defaultSemanticTokens;

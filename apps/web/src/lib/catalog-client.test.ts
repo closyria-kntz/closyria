@@ -57,7 +57,6 @@ describe("fetchSummary", () => {
     account: { email: null, createdAt: "2026-11-07T08:00:00.000Z" },
     itemCount: 0,
     profiles: [],
-    stageCounts: {},
   };
 
   it("reads the validated summary, without opening a session", async () => {

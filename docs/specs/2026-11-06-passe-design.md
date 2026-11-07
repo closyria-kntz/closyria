@@ -1,5 +1,9 @@
 # Passe design — cadre fixe, fiche « D », accueil (2026-11-06)
 
+> **Statut (2026-11-07) : abandonnée.** Codée et testée en dev, l'ensemble ne plaît pas à la fondatrice. Dev est
+> revenu à la présentation de la prod ; le code reste sur la branche locale `archive/passe-design` (d455e52) pour en
+> reprendre des morceaux. Nouvelles maquettes à faire à partir de ses retours.
+
 Décisions de la fondatrice sur les maquettes `docs/design/2026-11-06-passe-design-maquettes.html`
 (https://claude.ai/artifact/AcnMvJcTE8oyTBVKtPjsD6) : **fiche D**, **accueil option 3**, **pied de page retiré**.
 Les couleurs et les polices ne changent pas (tokens actuels) ; on change la mise en page.

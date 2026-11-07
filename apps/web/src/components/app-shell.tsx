@@ -1,15 +1,14 @@
 "use client";
 
-import type { ProfileView, StageCounts, SummaryView } from "@closyria/shared";
+import type { ProfileView, SummaryView } from "@closyria/shared";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ReactNode, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
 import { fetchSummary } from "@/lib/catalog-client";
-import { ProfilesContext, profileHref, useAccount, useCurrentProfile, useStageCounts } from "@/lib/profile-context";
-import { getUndo, subscribeUndo } from "@/lib/undo";
+import { ProfilesContext, profileHref, useAccount, useCurrentProfile } from "@/lib/profile-context";
 import { AccountPrompt } from "./account-prompt";
-import { type AppNavItem, countFor, desktopNav, helpNav, isCurrent, moreNav, phoneTabs, tabletTabs } from "./app-nav";
+import { type AppNavItem, desktopNav, isCurrent, moreNav, phoneTabs, tabletTabs } from "./app-nav";
 import { CaptureForm } from "./capture-form";
 import { ProfileSwitcher } from "./profile-switcher";
 import { buttonClass, focusRing } from "./ui";
@@ -20,12 +19,10 @@ const linkBase = `${linkShape} px-space-3`;
 /** Phone tabs: five across the narrowest screens, so almost no side padding. */
 const tabBase = `${linkShape} min-w-space-0 px-space-1`;
 
-function NavLink({ item, className, counted = false }: { item: AppNavItem; className: string; counted?: boolean }) {
+function NavLink({ item, className }: { item: AppNavItem; className: string }) {
   const t = useTranslations("Shell.nav");
   const pathname = usePathname();
   const { id, isDefault } = useCurrentProfile();
-  const count = countFor(item, useStageCounts());
-  const shown = counted && count !== null;
   return (
     <Link
       href={profileHref(item.href, id, isDefault)}
@@ -33,15 +30,6 @@ function NavLink({ item, className, counted = false }: { item: AppNavItem; class
       className={className}
     >
       {t(item.key)}
-      {shown && (
-        <>
-          {/* Read as « Envies 1 article »; the bare number is for the eye. */}
-          <span className="sr-only">{t("count", { count })}</span>
-          <span aria-hidden="true" className="ml-auto text-sm text-ink-muted tabular-nums">
-            {count}
-          </span>
-        </>
-      )}
     </Link>
   );
 }
@@ -82,7 +70,7 @@ function BottomTabs({
     <nav
       aria-label={t("tabs")}
       data-testid="app-nav-bottom"
-      className="tabbar-safe relative z-20 shrink-0 border-t border-line bg-surface-raised md:hidden"
+      className="tabbar-safe fixed inset-x-space-0 bottom-space-0 z-20 border-t border-line bg-surface-raised md:hidden"
     >
       {open && (
         <ul id={panel} aria-label={t("moreMenu")} className="flex flex-col gap-space-1 border-b border-line p-space-2">
@@ -180,16 +168,8 @@ function AddLink() {
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const t = useTranslations("Shell");
-  const pathname = usePathname();
-  const onHome = pathname === "/";
-  const content = useRef<HTMLElement>(null);
-  // Only the content scrolls (Passe design §1): every new page, and a page reached back, starts at the top.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: runs on every navigation.
-  useEffect(() => {
-    content.current?.scrollTo({ top: 0 });
-  }, [pathname]);
+  const onHome = usePathname() === "/";
   const [profiles, setProfiles] = useState<readonly ProfileView[]>([]);
-  const [stageCounts, setStageCounts] = useState<Readonly<Record<string, StageCounts>>>({});
   const [account, setAccount] = useState<SummaryView["account"] | null>(null);
   const [ready, setReady] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -199,7 +179,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     const summary = await fetchSummary();
     if (summary && alive.current) {
       setProfiles(summary.profiles);
-      setStageCounts(summary.stageCounts);
       setAccount(summary.account);
     }
     if (alive.current) setReady(true);
@@ -216,28 +195,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [refreshProfiles]);
 
-  // Every action that changes her items announces itself with a toast (« … · Annuler »), and so does its undo:
-  // the counts of the menu and of the home page are read again then.
-  useEffect(() => {
-    let last = getUndo()?.id ?? null;
-    return subscribeUndo(() => {
-      const entry = getUndo();
-      if (!entry || entry.id === last) return;
-      last = entry.id;
-      void refreshProfiles();
-    });
-  }, [refreshProfiles]);
-
   return (
-    <ProfilesContext.Provider value={{ profiles, ready, stageCounts, account, refreshProfiles }}>
+    <ProfilesContext.Provider value={{ profiles, ready, account, refreshProfiles }}>
       <a
         href="#app-content"
         className={`sr-only rounded-button bg-surface-raised px-space-3 py-space-2 focus:not-sr-only focus:absolute focus:top-space-2 focus:left-space-2 focus:z-30 ${focusRing}`}
       >
         {t("skipToContent")}
       </a>
-      <div className="flex h-dvh overflow-hidden bg-surface text-ink">
-        <aside className="hidden w-sidebar shrink-0 flex-col gap-space-5 overflow-y-auto border-r border-line bg-surface-sunken p-space-4 lg:flex">
+      <div className="flex min-h-dvh bg-surface text-ink">
+        <aside className="sticky top-space-0 hidden h-dvh w-sidebar shrink-0 flex-col gap-space-5 border-r border-line bg-surface-sunken p-space-4 lg:flex">
           <Link href="/" className={`font-display text-title font-strong ${focusRing}`}>
             {t("brand")}
           </Link>
@@ -246,48 +213,33 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Suspense>
                 {desktopNav.map((item) => (
                   <li key={item.key} className="flex flex-col">
-                    <NavLink item={item} counted className={`${linkBase} justify-start`} />
+                    <NavLink item={item} className={`${linkBase} justify-start`} />
                   </li>
                 ))}
               </Suspense>
             </ul>
-            {/* « Mon compte » and « Aide » at the bottom, still inside the menu's landmark. */}
-            <ul className="flex flex-col gap-space-1">
+            {/* « Mon compte » at the bottom, still inside the menu's landmark. */}
+            <ul className="flex flex-col">
               <li className="flex flex-col">
                 <Suspense>
                   <AccountLink className={`${linkBase} justify-start py-space-1`} />
-                </Suspense>
-              </li>
-              <li className="flex flex-col">
-                <Suspense>
-                  <NavLink item={helpNav} className={`${linkBase} justify-start text-ink-muted`} />
                 </Suspense>
               </li>
             </ul>
           </nav>
         </aside>
 
-        <div className="flex min-h-space-0 min-w-space-0 flex-1 flex-col">
-          <header className="relative z-10 shrink-0 border-b border-line bg-surface-raised">
+        <div className="flex min-w-space-0 flex-1 flex-col">
+          <header className="sticky top-space-0 z-10 border-b border-line bg-surface-raised">
             <div className="relative flex items-center justify-between gap-space-3 px-space-4 py-space-2 md:px-space-5">
               <Link href="/" className={`font-display text-lead font-strong lg:invisible ${focusRing}`}>
                 {t("brand")}
               </Link>
-              {!onHome && (
-                <div className="hidden w-full max-w-paste lg:block">
-                  {/* Keyed by page: the shell stays mounted, the field starts afresh after each navigation. */}
-                  <CaptureForm key={pathname} compact />
-                </div>
-              )}
               <div className="flex items-center gap-space-2">
                 <Suspense>
                   <ProfileSwitcher />
                 </Suspense>
-                {!onHome && (
-                  <div className="lg:hidden">
-                    <AddLink />
-                  </div>
-                )}
+                {!onHome && <AddLink />}
               </div>
             </div>
             <nav
@@ -308,10 +260,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </header>
 
           <main
-            ref={content}
             id="app-content"
             tabIndex={-1}
-            className="relative min-h-space-0 flex-1 overflow-y-auto px-space-4 pt-space-5 pb-space-6 focus:outline-none md:px-space-5 lg:px-space-6"
+            className={`flex-1 px-space-4 pt-space-5 focus:outline-none md:px-space-5 lg:px-space-6 ${moreOpen ? "tabbar-clearance-open" : "tabbar-clearance"}`}
           >
             <div className="mx-auto flex w-full max-w-app flex-col gap-space-4">
               <Suspense>
@@ -320,11 +271,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               {children}
             </div>
           </main>
-          <Suspense>
-            <BottomTabs open={moreOpen} setOpen={setMoreOpen} />
-          </Suspense>
         </div>
       </div>
+      <Suspense>
+        <BottomTabs open={moreOpen} setOpen={setMoreOpen} />
+      </Suspense>
       <UndoToast />
     </ProfilesContext.Provider>
   );

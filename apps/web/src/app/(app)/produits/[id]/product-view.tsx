@@ -11,7 +11,6 @@ import { formatOptionalPrice, formatPrice } from "@/lib/price";
 import { useCurrentProfile, useProfiles } from "@/lib/profile-context";
 import { fetchItemForProduct } from "@/lib/wardrobe-client";
 import { ItemPanel } from "./item-panel";
-import { ItemSummary } from "./item-summary";
 import { KeepActions } from "./keep-actions";
 import { ManualForm } from "./manual-form";
 import { PhotoManager, PhotoPlaceholder } from "./photo-manager";
@@ -29,7 +28,7 @@ const FAILURE_KEYS = {
   robots_disallowed: "robots_disallowed",
 } as const;
 
-/** The loading placeholder: photo and text side by side from 48rem in landscape and on desktop. */
+/** One column on a phone and in portrait; photos left, details right from 48rem in landscape and on desktop. */
 const TWO_COLUMNS = "grid grid-cols-1 md:landscape:grid-cols-2 md:landscape:gap-space-6 lg:grid-cols-2 lg:gap-space-6";
 
 const touch = "min-h-touch-target";
@@ -218,60 +217,49 @@ export function ProductView({ productId, captureId }: { productId: string; captu
       </section>
     ) : null;
 
-  // Passe design §3. From 1280 px: the main column (header, photos, the shop's sheet) and a side panel that scrolls
-  // on its own (« Mon article » and « Autres actions », or the keep buttons). Below: one column, photos first; the
-  // keep buttons right after the header, her item after the shop's sheet. Only photos and header swap from 1280 px.
-  const kept = Boolean(hasName && itemLoad !== "error" && item);
-  // The side panel only when it has something to show: her item, its loading, or the keep buttons.
-  const withPanel = hasName && itemLoad !== "error";
-  // In the DOM in the one-column order (keyboard and screen readers follow it); from 1280 px the grid places it.
-  const shopPart = shopSheet && <div className="min-w-space-0 xl:col-start-1 xl:row-start-2">{shopSheet}</div>;
   return (
-    <article
-      className={`flex flex-col gap-space-5 ${withPanel ? "xl:sheet-grid xl:grid xl:items-start" : ""}`}
-      aria-busy={capturing || reloadedPending || undefined}
-    >
-      <div data-testid="product-main" className="flex min-w-space-0 flex-col gap-space-5 xl:col-start-1 xl:row-start-1">
-        <div data-testid="product-gallery" className="xl:order-2">
-          {item && itemLoad !== "error" ? (
-            <PhotoManager item={item} onChange={setItem} reload={reloadItem} />
-          ) : product.images.length > 0 ? (
-            <div className="grid grid-cols-2 gap-space-2 xl:grid-cols-4">
-              {product.images.map((image, index) => (
-                // The whole photo in a 3:4 frame on the media backdrop, never cropped (visual direction §6).
-                <button
-                  type="button"
-                  key={image.id}
-                  aria-label={tMedia("viewer.open", { n: index + 1 })}
-                  onClick={() => setViewing(index)}
-                  className={`aspect-3/4 overflow-hidden rounded-card bg-media-backdrop focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring focus-visible:outline-solid ${index === 0 && product.images.length === 1 ? "col-span-2" : index === 0 ? "col-span-2 xl:row-span-2" : ""}`}
-                >
-                  {/* biome-ignore lint/performance/noImgElement: photos come from our own /api/catalog-images, sized by the API. */}
-                  <img
-                    src={image.url}
-                    width={image.width}
-                    height={image.height}
-                    alt={product.name ?? ""}
-                    loading={index === 0 ? "eager" : "lazy"}
-                    className="size-full object-contain"
-                  />
-                </button>
-              ))}
-              <PhotoViewer
-                photos={product.images}
-                index={viewing}
-                alt={product.name ?? ""}
-                onClose={() => setViewing(null)}
-              />
-            </div>
-          ) : noPhotoYet ? (
-            <Skeleton className="aspect-3/4 w-full" />
-          ) : !waiting ? (
-            <PhotoPlaceholder label={t("product.noPhoto")} />
-          ) : null}
-        </div>
+    <article className={`${TWO_COLUMNS} gap-space-5`} aria-busy={capturing || reloadedPending || undefined}>
+      <div data-testid="product-gallery" className={item ? "lg:self-start" : "lg:sticky lg:top-space-8 lg:self-start"}>
+        {item && itemLoad !== "error" ? (
+          <PhotoManager item={item} onChange={setItem} reload={reloadItem} />
+        ) : product.images.length > 0 ? (
+          <div className="grid grid-cols-2 gap-space-2">
+            {product.images.map((image, index) => (
+              // The whole photo in a 3:4 frame on the media backdrop, never cropped (visual direction §6).
+              <button
+                type="button"
+                key={image.id}
+                aria-label={tMedia("viewer.open", { n: index + 1 })}
+                onClick={() => setViewing(index)}
+                className={`aspect-3/4 overflow-hidden rounded-card bg-media-backdrop focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring focus-visible:outline-solid ${index === 0 && product.images.length === 1 ? "col-span-2" : index === 0 ? "col-span-2 md:landscape:col-span-1 lg:col-span-1" : ""}`}
+              >
+                {/* biome-ignore lint/performance/noImgElement: photos come from our own /api/catalog-images, sized by the API. */}
+                <img
+                  src={image.url}
+                  width={image.width}
+                  height={image.height}
+                  alt={product.name ?? ""}
+                  loading={index === 0 ? "eager" : "lazy"}
+                  className="size-full object-contain"
+                />
+              </button>
+            ))}
+            <PhotoViewer
+              photos={product.images}
+              index={viewing}
+              alt={product.name ?? ""}
+              onClose={() => setViewing(null)}
+            />
+          </div>
+        ) : noPhotoYet ? (
+          <Skeleton className="aspect-3/4 w-full" />
+        ) : !waiting ? (
+          <PhotoPlaceholder label={t("product.noPhoto")} />
+        ) : null}
+      </div>
 
-        <header data-testid="product-header" className="flex flex-col gap-space-2 xl:order-1">
+      <div data-testid="product-info" className="flex flex-col gap-space-5">
+        <header data-testid="product-header" className="flex flex-col gap-space-2">
           <p className="text-sm text-ink-muted">
             {waiting ? <span role="status">{t("product.loading", { shop })}</span> : shop}
           </p>
@@ -299,7 +287,6 @@ export function ProductView({ productId, captureId }: { productId: string; captu
             </p>
           )}
           {waiting && <Skeleton className="h-space-5 w-1/3" />}
-          {hasName && item && itemLoad !== "error" && <ItemSummary item={item} />}
           {isHttpUrl(product.canonicalUrl) && (
             <a
               href={product.canonicalUrl}
@@ -311,66 +298,58 @@ export function ProductView({ productId, captureId }: { productId: string; captu
             </a>
           )}
         </header>
-        {/* Notices and the manual form: under the header at every width. */}
-        <div className="flex flex-col gap-space-5 empty:hidden xl:order-3">
-          {waiting && <Skeleton className="h-space-6 w-1/2" />}
-          {hasName && item && current.id && item.profileId !== current.id && (
-            <p role="status" className="rounded-card border border-line bg-hint px-space-3 py-space-2 text-sm">
-              {tItem("keep.alreadyIn", { name: profiles.find((p) => p.id === item.profileId)?.name ?? "" })}
-            </p>
-          )}
-          {hasName && itemLoad === "error" && (
-            <div className="flex flex-col items-start gap-space-2">
-              <p role="alert" className="text-sm text-danger">
-                {tItem("errors.itemLoad")}
-              </p>
-              <button type="button" className={`${buttonClass} min-h-touch-target`} onClick={() => void reloadItem()}>
-                {t("product.retry")}
-              </button>
-            </div>
-          )}
+        {waiting && <Skeleton className="h-space-6 w-1/2" />}
 
-          {!hasName && (failed || manualShop) && (
-            <p role="status" className="text-ink-muted">
-              {manualShop ? t("product.manualShop", { shop }) : t(`product.failure.${failureKey}`)}
+        {hasName && item && current.id && item.profileId !== current.id && (
+          <p role="status" className="rounded-card border border-line bg-hint px-space-3 py-space-2 text-sm">
+            {tItem("keep.alreadyIn", { name: profiles.find((p) => p.id === item.profileId)?.name ?? "" })}
+          </p>
+        )}
+        {hasName && itemLoad === "error" && (
+          <div className="flex flex-col items-start gap-space-2">
+            <p role="alert" className="text-sm text-danger">
+              {tItem("errors.itemLoad")}
             </p>
-          )}
-          {!hasName && slow && (capturing || reloadedPending) && (
-            <p role="status" className="text-ink-muted">
-              {t("product.slow")}
-            </p>
-          )}
-          {showForm && (
-            <ManualForm
-              productId={product.id}
-              canonicalUrl={product.canonicalUrl}
-              onSaved={(saved) => {
-                setProduct(saved);
-                setLoad("ready");
-                setFocusHeading(true);
-              }}
-            />
-          )}
-        </div>
+            <button type="button" className={`${buttonClass} min-h-touch-target`} onClick={() => void reloadItem()}>
+              {t("product.retry")}
+            </button>
+          </div>
+        )}
+        {hasName && itemLoad !== "error" && item && (
+          <ItemPanel item={item} onChange={setItem} onGone={() => setItem(null)} reload={reloadItem} shop={shopSheet} />
+        )}
+        {hasName && itemLoad === "loading" && !item && (
+          <p role="status" className="text-sm text-ink-muted">
+            {tItem("keep.working")}
+          </p>
+        )}
+        {hasName && itemLoad === "ready" && !item && (
+          <KeepActions product={product} profileId={current.id} onKept={setItem} reload={reloadItem} />
+        )}
+        {!(hasName && itemLoad !== "error" && item) && shopSheet}
+
+        {!hasName && (failed || manualShop) && (
+          <p role="status" className="text-ink-muted">
+            {manualShop ? t("product.manualShop", { shop }) : t(`product.failure.${failureKey}`)}
+          </p>
+        )}
+        {!hasName && slow && (capturing || reloadedPending) && (
+          <p role="status" className="text-ink-muted">
+            {t("product.slow")}
+          </p>
+        )}
+        {showForm && (
+          <ManualForm
+            productId={product.id}
+            canonicalUrl={product.canonicalUrl}
+            onSaved={(saved) => {
+              setProduct(saved);
+              setLoad("ready");
+              setFocusHeading(true);
+            }}
+          />
+        )}
       </div>
-      {kept ? shopPart : null}
-      {withPanel && (
-        <div
-          data-testid="product-side"
-          className="flex flex-col gap-space-5 xl:sticky xl:top-space-0 xl:col-start-2 xl:row-span-2 xl:row-start-1 xl:max-h-panel-max xl:overflow-y-auto"
-        >
-          {item && <ItemPanel item={item} onChange={setItem} onGone={() => setItem(null)} reload={reloadItem} />}
-          {hasName && itemLoad === "loading" && !item && (
-            <p role="status" className="text-sm text-ink-muted">
-              {tItem("keep.working")}
-            </p>
-          )}
-          {hasName && itemLoad === "ready" && !item && (
-            <KeepActions product={product} profileId={current.id} onKept={setItem} reload={reloadItem} />
-          )}
-        </div>
-      )}
-      {kept ? null : shopPart}
     </article>
   );
 }

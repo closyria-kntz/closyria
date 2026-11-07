@@ -69,19 +69,7 @@ export const primitives = {
     soft: "0 1px 2px rgb(46 26 42 / 0.08)",
     lifted: "0 4px 12px rgb(46 26 42 / 0.12)",
   },
-  breakpoint: { sm: "40rem", md: "48rem", lg: "64rem", xl: "80rem" },
-  container: {
-    narrow: "36rem",
-    wide: "72rem",
-    app: "90rem",
-    measure: "70ch",
-    sidebar: "15rem",
-    paste: "35rem",
-    panel: "18.75rem",
-  },
-  size: {
-    touchTarget: "44px",
-    /** The sheet's side panel (« Mon article ») scrolls on its own: the window less the header and the gaps. */
-    panelMax: "calc(100dvh - 7rem)",
-  },
+  breakpoint: { sm: "40rem", md: "48rem", lg: "64rem" },
+  container: { narrow: "36rem", wide: "72rem", app: "90rem", measure: "70ch", sidebar: "15rem" },
+  size: { touchTarget: "44px" },
 } as const;

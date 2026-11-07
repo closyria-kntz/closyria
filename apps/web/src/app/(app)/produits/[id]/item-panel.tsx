@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ITEM_STAGE_ORDER,
   type ItemStage,
   type ItemView,
   MAX_NOTES,
@@ -29,8 +30,8 @@ import {
   undoWith,
 } from "@/lib/wardrobe-client";
 import { StageDialog } from "./stage-dialog";
-import { StageStrip } from "./stage-strip";
 
+const STAGES = Object.keys(ITEM_STAGE_ORDER) as ItemStage[];
 const touch = "min-h-touch-target";
 
 type Props = {
@@ -40,10 +41,12 @@ type Props = {
   onGone: () => void;
   /** Re-reads her item (after an undo). */
   reload: () => Promise<void>;
+  /** The shop's sheet, shown between « Mon article » and « Autres actions ». */
+  shop: React.ReactNode;
 };
 
-/** HER item: « Mon article » (stage, size and amounts, notes, lists, tags) then « Autres actions » (profile, delete). The shop sheet and the photos live in the sheet's main column. */
-export function ItemPanel({ item, onChange, onGone, reload }: Props) {
+/** HER item in three parts: « Mon article » (stage, size and amounts, notes, lists, tags), the shop sheet, « Autres actions » (profile, delete). Photos live in the gallery column. */
+export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
   const t = useTranslations("Item");
   const locale = useLocale();
   const profiles = useProfiles();
@@ -245,7 +248,29 @@ export function ItemPanel({ item, onChange, onGone, reload }: Props) {
           <h3 id="stages-title" className="text-sm font-strong">
             {t("panel.stages")}
           </h3>
-          <StageStrip current={item.stage} onPick={setStage} />
+          <ol className="flex flex-wrap gap-space-2">
+            {STAGES.map((value) => {
+              const current = value === item.stage;
+              return (
+                <li key={value}>
+                  <button
+                    type="button"
+                    aria-current={current ? "step" : undefined}
+                    disabled={current}
+                    aria-label={
+                      current
+                        ? `${t(`stage.${value}`)} (${t("panel.currentStage")})`
+                        : t("panel.changeStage", { stage: t(`stage.${value}`) })
+                    }
+                    onClick={() => setStage(value)}
+                    className={`${current ? "rounded-button bg-button-bg px-space-3 text-sm font-strong text-button-ink" : buttonClass} ${touch} inline-flex items-center`}
+                  >
+                    {t(`stage.${value}`)}
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
         </section>
         <StageDialog item={item} stage={stage} onClose={() => setStage(null)} onDone={onChange} reload={reload} />
 
@@ -383,6 +408,8 @@ export function ItemPanel({ item, onChange, onGone, reload }: Props) {
           </section>
         </div>
       </section>
+
+      {shop}
 
       <section aria-labelledby="more-title" className="flex flex-col gap-space-4 border-t border-line pt-space-5">
         <h2 id="more-title" className="text-sm font-strong">

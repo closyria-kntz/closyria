@@ -388,27 +388,13 @@ export const wishlistItemInputSchema = z.object({ itemId: z.uuid() });
 export type WishlistItemInput = z.infer<typeof wishlistItemInputSchema>;
 
 /** What the app shell needs: the account proposal (anonymous session, item count) and the profiles. */
-const countSchema = z.number().int().nonnegative();
-/** Active items (not in the trash) of one profile, per stage. */
-export const stageCountsSchema = z.object({
-  spotted: countSchema,
-  ordered: countSchema,
-  owned: countSchema,
-  for_sale: countSchema,
-  sold: countSchema,
-  returned: countSchema,
-});
-export type StageCounts = z.infer<typeof stageCountsSchema>;
-
 export const summaryViewSchema = z.object({
   isAnonymous: z.boolean(),
   /** Who is signed in: her e-mail (null without an account) and when the account was created. */
   account: z.object({ email: z.string().nullable(), createdAt: z.iso.datetime() }),
   /** Active items (not in the trash). */
-  itemCount: countSchema,
+  itemCount: z.number().int().nonnegative(),
   profiles: z.array(profileViewSchema),
-  /** Per profile id (every profile of `profiles`), zeros when it has nothing. */
-  stageCounts: z.record(z.string(), stageCountsSchema),
 });
 export type SummaryView = z.infer<typeof summaryViewSchema>;
 
