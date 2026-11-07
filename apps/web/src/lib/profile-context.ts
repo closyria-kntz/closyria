@@ -1,6 +1,6 @@
 "use client";
 
-import type { ProfileView, StageCounts } from "@closyria/shared";
+import type { ProfileView, StageCounts, SummaryView } from "@closyria/shared";
 import { useSearchParams } from "next/navigation";
 import { createContext, useContext } from "react";
 import { z } from "zod";
@@ -38,6 +38,8 @@ export type ProfilesState = {
   ready: boolean;
   /** Active items per stage, per profile id (empty until the first read). */
   stageCounts: Readonly<Record<string, StageCounts>>;
+  /** Who is signed in (null until the first read): her e-mail, null without an account. */
+  account: SummaryView["account"] | null;
   /**
    * Re-reads the profiles and the counts; the settings pages call it after creating, renaming or deleting a profile,
    * the sheet after keeping, moving, changing the stage of or deleting an item.
@@ -50,6 +52,7 @@ export const ProfilesContext = createContext<ProfilesState>({
   profiles: [],
   ready: true,
   stageCounts: {},
+  account: null,
   refreshProfiles: async () => {},
 });
 
@@ -81,4 +84,17 @@ export function useStageCounts(): StageCounts | null {
   const { stageCounts, ready, profiles } = useContext(ProfilesContext);
   if (id) return stageCounts[id] ?? null;
   return ready && profiles.length === 0 ? NOTHING_YET : null;
+}
+
+/** Who is signed in, as the menu and « Mon compte » show it. */
+export type AccountState = { email: string; createdAt: string } | { email: null };
+
+/**
+ * Who is signed in, for the menu and « Mon compte »; null until the shell has read it. A visitor with no session
+ * yet (nothing kept so far) has no account either.
+ */
+export function useAccount(): AccountState | null {
+  const { account, ready } = useContext(ProfilesContext);
+  if (account?.email) return { email: account.email, createdAt: account.createdAt };
+  return account || ready ? { email: null } : null;
 }

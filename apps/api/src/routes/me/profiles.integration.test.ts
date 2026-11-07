@@ -257,10 +257,30 @@ describe("GET /api/me/summary", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       isAnonymous: true,
+      account: { email: null, createdAt: expect.any(String) },
       itemCount: 1,
       profiles: [expect.objectContaining({ name: "Moi", itemCount: 1 })],
       stageCounts: expect.any(Object),
     });
+  });
+
+  it("gives a real account's e-mail and creation date, never an anonymous placeholder address", async () => {
+    const { cookie, userId } = await t.signIn();
+    const anonymous = (await (await call("GET", "/api/me/summary", cookie)).json()) as {
+      account: { email: string | null };
+    };
+    expect(anonymous.account.email).toBeNull();
+    const createdAt = new Date("2026-10-30T09:15:00.000Z");
+    await t.db
+      .update(schema.user)
+      .set({ isAnonymous: false, email: "lea@example.com", createdAt })
+      .where(eq(schema.user.id, userId));
+    const body = (await (await call("GET", "/api/me/summary", cookie)).json()) as {
+      isAnonymous: boolean;
+      account: { email: string | null; createdAt: string };
+    };
+    expect(body.isAnonymous).toBe(false);
+    expect(body.account).toEqual({ email: "lea@example.com", createdAt: createdAt.toISOString() });
   });
 
   it("counts the active items per stage and per profile, zeros for an empty profile", async () => {

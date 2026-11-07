@@ -52,7 +52,13 @@ describe("saveManual", () => {
 });
 
 describe("fetchSummary", () => {
-  const summary = { isAnonymous: true, itemCount: 0, profiles: [], stageCounts: {} };
+  const summary = {
+    isAnonymous: true,
+    account: { email: null, createdAt: "2026-11-07T08:00:00.000Z" },
+    itemCount: 0,
+    profiles: [],
+    stageCounts: {},
+  };
 
   it("reads the validated summary, without opening a session", async () => {
     const d = deps(json(summary));

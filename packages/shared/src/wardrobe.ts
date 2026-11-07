@@ -402,6 +402,8 @@ export type StageCounts = z.infer<typeof stageCountsSchema>;
 
 export const summaryViewSchema = z.object({
   isAnonymous: z.boolean(),
+  /** Who is signed in: her e-mail (null without an account) and when the account was created. */
+  account: z.object({ email: z.string().nullable(), createdAt: z.iso.datetime() }),
   /** Active items (not in the trash). */
   itemCount: countSchema,
   profiles: z.array(profileViewSchema),

@@ -1,12 +1,12 @@
 "use client";
 
-import type { ProfileView, StageCounts } from "@closyria/shared";
+import type { ProfileView, StageCounts, SummaryView } from "@closyria/shared";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ReactNode, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
 import { fetchSummary } from "@/lib/catalog-client";
-import { ProfilesContext, profileHref, useCurrentProfile, useStageCounts } from "@/lib/profile-context";
+import { ProfilesContext, profileHref, useAccount, useCurrentProfile, useStageCounts } from "@/lib/profile-context";
 import { getUndo, subscribeUndo } from "@/lib/undo";
 import { AccountPrompt } from "./account-prompt";
 import { type AppNavItem, countFor, desktopNav, helpNav, isCurrent, moreNav, phoneTabs, tabletTabs } from "./app-nav";
@@ -46,6 +46,25 @@ function NavLink({ item, className, counted = false }: { item: AppNavItem; class
   );
 }
 
+/**
+ * Who is signed in, always in sight (bottom of the side menu, end of « Plus »): her e-mail, or « Sans compte ».
+ * Opens « Mon compte », where she signs out.
+ */
+function AccountLink({ className }: { className: string }) {
+  const t = useTranslations("Shell.account");
+  const pathname = usePathname();
+  const account = useAccount();
+  const href = "/reglages/compte";
+  return (
+    <Link href={href} aria-current={pathname === href ? "page" : undefined} className={className}>
+      <span className="flex min-w-space-0 flex-col items-start">
+        <span>{t("label")}</span>
+        {account && <span className="max-w-full truncate text-ink-muted">{account.email ?? t("anonymous")}</span>}
+      </span>
+    </Link>
+  );
+}
+
 function BottomTabs({
   open,
   setOpen,
@@ -72,6 +91,9 @@ function BottomTabs({
               <NavLink item={item} className={`${linkBase} justify-start`} />
             </li>
           ))}
+          <li className="flex flex-col">
+            <AccountLink className={`${linkBase} justify-start py-space-1`} />
+          </li>
         </ul>
       )}
       <ul className="flex">
@@ -168,6 +190,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [pathname]);
   const [profiles, setProfiles] = useState<readonly ProfileView[]>([]);
   const [stageCounts, setStageCounts] = useState<Readonly<Record<string, StageCounts>>>({});
+  const [account, setAccount] = useState<SummaryView["account"] | null>(null);
   const [ready, setReady] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const alive = useRef(true);
@@ -177,6 +200,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (summary && alive.current) {
       setProfiles(summary.profiles);
       setStageCounts(summary.stageCounts);
+      setAccount(summary.account);
     }
     if (alive.current) setReady(true);
   }, []);
@@ -205,7 +229,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [refreshProfiles]);
 
   return (
-    <ProfilesContext.Provider value={{ profiles, ready, stageCounts, refreshProfiles }}>
+    <ProfilesContext.Provider value={{ profiles, ready, stageCounts, account, refreshProfiles }}>
       <a
         href="#app-content"
         className={`sr-only rounded-button bg-surface-raised px-space-3 py-space-2 focus:not-sr-only focus:absolute focus:top-space-2 focus:left-space-2 focus:z-30 ${focusRing}`}
@@ -227,8 +251,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 ))}
               </Suspense>
             </ul>
-            {/* « Aide » at the bottom, still inside the menu's landmark. */}
-            <ul className="flex flex-col">
+            {/* « Mon compte » and « Aide » at the bottom, still inside the menu's landmark. */}
+            <ul className="flex flex-col gap-space-1">
+              <li className="flex flex-col">
+                <Suspense>
+                  <AccountLink className={`${linkBase} justify-start py-space-1`} />
+                </Suspense>
+              </li>
               <li className="flex flex-col">
                 <Suspense>
                   <NavLink item={helpNav} className={`${linkBase} justify-start text-ink-muted`} />
