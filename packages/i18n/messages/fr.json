@@ -34,6 +34,10 @@
     "add": {
       "open": "+ Ajouter",
       "close": "Fermer"
+    },
+    "account": {
+      "label": "Mon compte",
+      "anonymous": "Sans compte"
     }
   },
   "Auth": {
@@ -947,6 +951,7 @@
       "profiles": "Profils",
       "tags": "Étiquettes",
       "trash": "Corbeille",
+      "account": "Mon compte",
       "iphone": "Aide iPhone"
     },
     "colors": {
@@ -1045,6 +1050,19 @@
       "restoreFailed": "L’article n’a pas pu être restauré. Réessaie.",
       "purgeFailed": "L’article n’a pas pu être supprimé. Réessaie.",
       "alreadyGone": "Cet article n’est plus dans la corbeille."
+    },
+    "account": {
+      "title": "Mon compte",
+      "metadata": "Mon compte",
+      "loading": "Chargement…",
+      "email": "Adresse e-mail",
+      "createdAt": "Compte créé le {date}",
+      "signOut": "Se déconnecter",
+      "signingOut": "Déconnexion…",
+      "signOutFailed": "La déconnexion n’a pas abouti. Réessaie.",
+      "anonymousTitle": "Tu utilises Closyria sans compte.",
+      "anonymousBody": "Tes articles sont liés à ce navigateur. Crée ton compte avec ton e-mail pour les retrouver sur tes autres appareils et ne pas les perdre.",
+      "create": "Créer mon compte"
     }
   },
   "IphoneHelp": {

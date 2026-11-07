@@ -120,7 +120,8 @@ const summaryRoute = defineAccess(
     method: "get",
     path: "/me/summary",
     summary: "What the app shell needs",
-    description: "Whether the session is anonymous (account proposal), her active item count and her profiles.",
+    description:
+      "Whether the session is anonymous (account proposal), who is signed in, her active item count and her profiles.",
     responses: { 200: json("Summary", summaryViewSchema) },
   }),
   "user",
@@ -263,13 +264,18 @@ export function profilesRoutes(deps: WardrobeDeps) {
     .openapi(summaryRoute, async (c) => {
       const userId = userIdOf(c);
       const profiles = await listProfileViews(db, userId);
+      // Read from the table, not the session: the session may carry the anonymous placeholder address.
+      const [user] = await db
+        .select({ email: schema.user.email, isAnonymous: schema.user.isAnonymous, createdAt: schema.user.createdAt })
+        .from(schema.user)
+        .where(eq(schema.user.id, userId));
+      if (!user) throw new Error("summary: signed-in user not found");
+      const isAnonymous = user.isAnonymous === true;
+      const account = { email: isAnonymous ? null : user.email, createdAt: user.createdAt.toISOString() };
       const [active] = await db
         .select({ n: count() })
         .from(schema.items)
         .where(and(eq(schema.items.userId, userId), isNull(schema.items.deletedAt)));
-      return c.json(
-        { isAnonymous: c.var.session?.user.isAnonymous === true, itemCount: active?.n ?? 0, profiles },
-        200,
-      );
+      return c.json({ isAnonymous, account, itemCount: active?.n ?? 0, profiles }, 200);
     });
 }

@@ -36,6 +36,7 @@ test.describe("1440 px", () => {
       "À vendre",
       "Listes",
       "Réglages",
+      "Mon compteSans compte",
     ]);
     // The product sheet is not one of the menu's places: no entry claims to be the current page.
     await expect(side.locator("[aria-current=page]")).toHaveCount(0);

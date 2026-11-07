@@ -1,6 +1,6 @@
 "use client";
 
-import type { ProfileView } from "@closyria/shared";
+import type { ProfileView, SummaryView } from "@closyria/shared";
 import { useSearchParams } from "next/navigation";
 import { createContext, useContext } from "react";
 import { z } from "zod";
@@ -37,6 +37,8 @@ export type ProfilesState = {
   /** False until the first read of the profiles ended (a view waits for it to know which profile to ask). */
   ready: boolean;
   /** Re-reads the profiles; the settings pages call it after creating, renaming or deleting one. */
+  /** Who is signed in (null until the first read): her e-mail, null without an account. */
+  account: SummaryView["account"] | null;
   refreshProfiles: () => Promise<void>;
 };
 
@@ -44,6 +46,7 @@ export type ProfilesState = {
 export const ProfilesContext = createContext<ProfilesState>({
   profiles: [],
   ready: true,
+  account: null,
   refreshProfiles: async () => {},
 });
 
@@ -62,4 +65,17 @@ export function useRefreshProfiles(): () => Promise<void> {
 export function useCurrentProfile(): CurrentProfile {
   const profiles = useProfiles();
   return resolveCurrentProfile(profiles, readProfileParam(useSearchParams()));
+}
+
+/** Who is signed in, as the menu and « Mon compte » show it. */
+export type AccountState = { email: string; createdAt: string } | { email: null };
+
+/**
+ * Who is signed in, for the menu and « Mon compte »; null until the shell has read it. A visitor with no session
+ * yet (nothing kept so far) has no account either.
+ */
+export function useAccount(): AccountState | null {
+  const { account, ready } = useContext(ProfilesContext);
+  if (account?.email) return { email: account.email, createdAt: account.createdAt };
+  return account || ready ? { email: null } : null;
 }

@@ -162,6 +162,10 @@ réellement supprimé avec son compte. Les fiches produits partagées restent : 
 ### 7.5 Anonyme → compte
 Au moment du besoin : « Garde tes articles : continue avec Google, Apple ou ton e-mail ». Rien n'est perdu.
 
+**Mon compte** (ajouté le 2026-11-07, oubli de la conception, voir `docs/specs/2026-11-07-mon-compte.md`) : le menu
+montre toujours qui est connectée (e-mail, ou « Sans compte ») ; la page « Mon compte » des réglages donne l'e-mail,
+la date de création et « Se déconnecter ». Pas de déconnexion sans compte : ses articles seraient perdus.
+
 ### 7.6 Sans réseau
 Consultation du dressing, des wishlists et des photos. Bandeau « Hors ligne : modifications à la reconnexion ».
 

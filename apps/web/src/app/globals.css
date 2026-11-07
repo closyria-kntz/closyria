@@ -15,13 +15,14 @@
   }
 }
 
-/* Same, with the « Plus » panel open above the bar (three links, their gaps and padding). */
+/* Same, with the « Plus » panel open above the bar (three links and « Mon compte » on two lines, gaps and padding). */
 @utility tabbar-clearance-open {
   padding-bottom: calc(
     var(--spacing-space-8) +
-    3 *
+    4 *
     var(--spacing-touch-target) +
     var(--spacing-space-5) +
+    var(--spacing-space-3) +
     env(safe-area-inset-bottom)
   );
 
