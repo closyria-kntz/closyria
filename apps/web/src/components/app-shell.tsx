@@ -14,10 +14,10 @@ import { ProfileSwitcher } from "./profile-switcher";
 import { buttonClass, focusRing } from "./ui";
 import { UndoToast } from "./undo-toast";
 
-const linkShape = `flex min-h-touch-target items-center justify-center rounded-button text-sm hover:bg-surface-strong aria-[current=page]:bg-surface-strong aria-[current=page]:font-strong aria-[current=page]:text-accent ${focusRing}`;
-const linkBase = `${linkShape} px-space-3`;
-/** Phone tabs: five across the narrowest screens, so almost no side padding. */
-const tabBase = `${linkShape} min-w-space-0 px-space-1`;
+const linkShape = `flex min-h-touch-target items-center justify-center rounded-button hover:bg-surface-strong aria-[current=page]:bg-surface-strong aria-[current=page]:font-strong aria-[current=page]:text-accent ${focusRing}`;
+const linkBase = `${linkShape} px-space-3 text-sm`;
+/** Phone tabs: five across the narrowest screens, so no side padding. */
+const tabBase = `${linkShape} min-w-space-0 px-space-0 text-caption`;
 
 function NavLink({ item, className }: { item: AppNavItem; className: string }) {
   const t = useTranslations("Shell.nav");

@@ -95,24 +95,36 @@ describe("Équilibré themes", () => {
   });
 
   it("uses the exact validated palette", () => {
-    expect(get(equilibreLight, "color-surface")).toBe("#F7F0ED");
-    expect(get(equilibreLight, "color-accent")).toBe("#7A2E5F");
-    expect(get(equilibreLight, "color-media-backdrop")).toBe("#EFE2DF");
-    expect(get(equilibreDark, "color-surface")).toBe("#1C1219");
-    expect(get(equilibreDark, "color-accent")).toBe("#E7A6CB");
-    expect(get(equilibreDark, "color-premium-surface")).toBe("#3A3220");
+    expect(get(equilibreLight, "color-surface")).toBe("#F2EDE7");
+    expect(get(equilibreLight, "color-surface-raised")).toBe("#FFFFFF");
+    expect(get(equilibreLight, "color-surface-sunken")).toBe("#EBE3DB");
+    expect(get(equilibreLight, "color-line")).toBe("#E5D7CC");
+    expect(get(equilibreLight, "color-ink")).toBe("#2B1D17");
+    expect(get(equilibreLight, "color-ink-muted")).toBe("#6E5A50");
+    expect(get(equilibreLight, "color-accent")).toBe("#5A3A2E");
+    expect(get(equilibreLight, "color-accent-ink")).toBe("#FFFFFF");
+    expect(get(equilibreLight, "color-hint")).toBe("#EBC7C3");
+    expect(get(equilibreLight, "color-premium-surface")).toBe("#F3E3A6");
+    expect(get(equilibreLight, "color-success-surface")).toBe("#D5DCC8");
+    expect(get(equilibreLight, "color-media-backdrop")).toBe("#DCC3A6");
+    expect(get(equilibreDark, "color-surface")).toBe("#1E1612");
+    expect(get(equilibreDark, "color-surface-raised")).toBe("#2A201B");
+    expect(get(equilibreDark, "color-ink")).toBe("#F2EDE7");
+    expect(get(equilibreDark, "color-ink-muted")).toBe("#C9B8AE");
+    expect(get(equilibreDark, "color-accent")).toBe("#EBC7C3");
+    expect(get(equilibreDark, "color-accent-ink")).toBe("#2B1D17");
   });
 
   it("defines the specified shapes, durations and fonts", () => {
     const base = defaultSemanticTokens;
-    expect(base["radius-button"]).toBe("0.625rem");
-    expect(base["radius-card"]).toBe("0.75rem");
+    expect(base["radius-button"]).toBe("9999px");
+    expect(base["radius-card"]).toBe("1.625rem");
     expect(base["radius-full"]).toBe("9999px");
     expect(base["motion-duration-fast"]).toBe("150ms");
     expect(base["motion-duration-base"]).toBe("250ms");
     expect(base["motion-duration-slow"]).toBe("400ms");
-    expect(base["font-body"]).toContain("Jost");
-    expect(base["font-display"]).toContain("Cormorant Garamond");
+    expect(base["font-body"]).toContain("DM Sans");
+    expect(base["font-display"]).toContain("Fraunces");
   });
 
   const textPairs: [string, string, number][] = [

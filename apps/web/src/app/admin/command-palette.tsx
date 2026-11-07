@@ -49,7 +49,7 @@ export function CommandPalette({ items, labels }: { items: Array<{ href: string;
         onClick={() => setOpen(true)}
       >
         {labels.open}
-        <kbd className="rounded-sm border border-line px-space-1 font-body text-sm text-ink-muted">
+        <kbd className="hidden rounded-sm border border-line px-space-1 font-body text-sm text-ink-muted sm:inline-block">
           {labels.shortcut}
         </kbd>
       </button>

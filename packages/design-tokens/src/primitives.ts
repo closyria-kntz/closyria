@@ -1,38 +1,35 @@
 /**
  * Layer 1: raw values. Never referenced by the UI directly; only semantic tokens read from here.
- * Palette: "Équilibré" visual direction (docs/specs/2026-11-01-direction-visuelle.md, section 3.1);
+ * Palette C "chocolat et rose poudré" (docs/specs/2026-11-07-envies-chaleureuses.md, section 5.4);
  * `garnet` and `salmon` (danger) are derived, see theme.ts.
  */
 export const primitives = {
   palette: {
     // Light
-    blush: "#F7F0ED",
-    porcelain: "#FFFDFB",
-    prune: "#2E1A2A",
-    mauve: "#6F5A67",
-    rosewater: "#E8DCD8",
-    plum: "#7A2E5F",
-    ivory: "#FFF6F0",
+    oat: "#F2EDE7",
+    white: "#FFFFFF",
+    linen: "#EBE3DB",
+    sand: "#E5D7CC",
+    cocoa: "#2B1D17",
+    taupe: "#6E5A50",
+    chocolate: "#5A3A2E",
+    powder: "#EBC7C3",
+    butter: "#F3E3A6",
+    camel: "#DCC3A6",
+    sage: "#D5DCC8",
     pine: "#1F4A3F",
-    mint: "#DCEBE2",
     bronze: "#6A4F12",
-    champagne: "#F1E4C6",
-    cream: "#F6EAD8",
-    veil: "#EFE2DF",
     garnet: "#9B1C31",
     // Dark
-    aubergine: "#1C1219",
-    damson: "#261A23",
-    petal: "#F6EBEE",
-    heather: "#B9A3B0",
-    mulberry: "#3A2A35",
-    orchid: "#E7A6CB",
-    sage: "#A9DCBF",
+    espresso: "#1E1612",
+    mocha: "#2A201B",
+    bark: "#241A15",
+    umber: "#3D2F28",
+    clay: "#C9B8AE",
+    celadon: "#A9DCBF",
     spruce: "#1D3A31",
     gold: "#E8CF8F",
     olivewood: "#3A3220",
-    umber: "#322A22",
-    dusk: "#2F2129",
     salmon: "#F4A3A8",
   },
   space: {
@@ -46,13 +43,14 @@ export const primitives = {
     7: "3rem",
     8: "4rem",
   },
-  radius: { none: "0", sm: "0.25rem", md: "0.625rem", lg: "0.75rem", full: "9999px" },
+  radius: { none: "0", sm: "0.25rem", md: "0.625rem", lg: "1.625rem", full: "9999px" },
   font: {
-    body: '"Jost Variable", ui-sans-serif, system-ui, sans-serif',
-    display: '"Cormorant Garamond Variable", ui-serif, Georgia, serif',
+    body: '"DM Sans Variable", ui-sans-serif, system-ui, sans-serif',
+    display: '"Fraunces Variable", ui-serif, Georgia, serif',
   },
   // Fluid: each size grows linearly from the 20rem phone width to `breakpoint.lg`, then stays put.
   fontSize: {
+    caption: "0.8125rem",
     sm: "0.875rem",
     body: "clamp(1rem, 0.9432rem + 0.2841vw, 1.125rem)",
     lead: "clamp(1.25rem, 1.1364rem + 0.5682vw, 1.5rem)",
@@ -66,8 +64,8 @@ export const primitives = {
     emphasized: "cubic-bezier(0.3, 0, 0, 1.2)",
   },
   shadow: {
-    soft: "0 1px 2px rgb(46 26 42 / 0.08)",
-    lifted: "0 4px 12px rgb(46 26 42 / 0.12)",
+    soft: "0 1px 2px rgb(43 29 23 / 0.08)",
+    lifted: "0 4px 12px rgb(43 29 23 / 0.12)",
   },
   breakpoint: { sm: "40rem", md: "48rem", lg: "64rem" },
   container: { narrow: "36rem", wide: "72rem", app: "90rem", measure: "70ch", sidebar: "15rem" },
