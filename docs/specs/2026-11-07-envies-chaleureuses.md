@@ -228,3 +228,11 @@ Ce qui change par rapport au texte ci-dessus, ou qui précise un cas non prévu 
 - En mode « Sélectionner », toucher la pastille de niveau d'une carte ne la sélectionne pas (toucher ailleurs sur la carte) ; sur téléphone la barre de sélection défile sur le côté et ses actions des bords peuvent être hors écran sans indice. À valider.
 - Détails visuels à valider par la fondatrice : onglets du téléphone en 13 px, valeurs sombres du fond creux, du trait,
   des conseils et du fond des photos.
+
+### Retours de la fondatrice après les tests en dev (2026-11-07)
+
+- « Annuler » reste une seule action, la dernière (pas de pile) ; le message de la pastille et du menu « … » nomme l'article (« Robe Lina : Mims »). Pour plusieurs articles d'un coup : « Sélectionner ».
+- Revenir sur la page (autre onglet, autre appli, téléphone) relit Envies, listes et « Préparer une commande » sans rechargement ; pas pendant une sélection ni avec une fenêtre ouverte. Pas de mise à jour en direct.
+- « … au-dessus » du budget en rouge (couleur d'erreur), plus en rose poudré.
+- Réglages → Apparence : Automatique, Clair, Sombre, gardé sur l'appareil.
+- Budget sur le lien de partage et échanges avec les amies : partie 2.
