@@ -327,6 +327,66 @@ describe("sharing", () => {
     expect((await call("DELETE", `/api/me/wishlists/${list.id}/share`, cookie)).status).toBe(204);
   });
 
+  it("GET share returns the same link, or legacy when the encrypted token is missing", async () => {
+    const { cookie } = await t.signIn();
+    const list = await createList(cookie);
+    const get = async () => {
+      const res = await call("GET", `/api/me/wishlists/${list.id}/share`, cookie);
+      expect(res.status).toBe(200);
+      return (await res.json()) as { url: string | null; legacy: boolean };
+    };
+    expect(await get()).toEqual({ url: null, legacy: false });
+    const token = await share(cookie, list.id);
+    expect(await get()).toEqual({ url: `/l/${token}`, legacy: false });
+    const [row] = await t.db.select().from(schema.wishlists).where(eq(schema.wishlists.id, list.id));
+    expect(row?.shareTokenEncrypted).not.toContain(token);
+
+    await t.db.update(schema.wishlists).set({ shareTokenEncrypted: null }).where(eq(schema.wishlists.id, list.id));
+    expect(await get()).toEqual({ url: null, legacy: true });
+    expect((await getShared(token)).status).toBe(200);
+
+    expect((await call("DELETE", `/api/me/wishlists/${list.id}/share`, cookie)).status).toBe(204);
+    expect(await get()).toEqual({ url: null, legacy: false });
+  });
+
+  it("GET share answers 404 for another account's list and 401 without a session", async () => {
+    const { cookie } = await t.signIn();
+    const list = await createList(cookie);
+    const other = await t.signIn();
+    expect((await call("GET", `/api/me/wishlists/${list.id}/share`, other.cookie)).status).toBe(404);
+    expect((await call("GET", `/api/me/wishlists/${list.id}/share`, undefined)).status).toBe(401);
+    expect((await call("GET", `/api/me/wishlists/${UNKNOWN_ID}/share`, cookie)).status).toBe(404);
+  });
+
+  it("stopping the share clears the encrypted token and the list's opinions and devices", async () => {
+    const { cookie, userId } = await t.signIn();
+    const list = await createList(cookie);
+    const { item } = await newItem(cookie, userId, {}, 0);
+    await share(cookie, list.id);
+    await t.db.insert(schema.wishlistOpinions).values({
+      wishlistId: list.id,
+      itemId: item.id,
+      authorName: "Léa",
+      authorNameKey: "lea",
+      level: 3,
+    });
+    await t.db
+      .insert(schema.wishlistOpinionDevices)
+      .values({ wishlistId: list.id, authorNameKey: "lea", deviceKeyHash: "h".repeat(64) });
+    expect((await call("DELETE", `/api/me/wishlists/${list.id}/share`, cookie)).status).toBe(204);
+    const [row] = await t.db.select().from(schema.wishlists).where(eq(schema.wishlists.id, list.id));
+    expect(row?.shareTokenEncrypted).toBeNull();
+    expect(
+      await t.db.select().from(schema.wishlistOpinions).where(eq(schema.wishlistOpinions.wishlistId, list.id)),
+    ).toEqual([]);
+    expect(
+      await t.db
+        .select()
+        .from(schema.wishlistOpinionDevices)
+        .where(eq(schema.wishlistOpinionDevices.wishlistId, list.id)),
+    ).toEqual([]);
+  });
+
   it("answers 404 to a malformed or unknown token, with the noindex and no-store headers", async () => {
     for (const token of ["abc", "x".repeat(22), "x".repeat(23), "%00", "a b"]) {
       const res = await t.app.request(`/api/shared/${encodeURIComponent(token)}`);

@@ -31,6 +31,7 @@ beforeAll(async () => {
     envSchema.parse({
       DATABASE_URL: database.url,
       BETTER_AUTH_SECRET: "a".repeat(32),
+      SHARE_LINK_KEY: Buffer.alloc(32, 7).toString("base64"),
       BETTER_AUTH_URL: "http://localhost:3001",
     }),
   );

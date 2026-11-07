@@ -63,6 +63,7 @@ fixés par les unités systemd : ne pas les mettre dans ces fichiers.
 | `APP_ENV` | Environnement. **Obligatoire** : les unités tournent en `NODE_ENV=production`, et sans `APP_ENV` l'API et le worker refusent de démarrer (jamais de repli silencieux sur `development`). `test` est réservé aux tests navigateur et refusé hors adresse locale. | `prod` | `dev` |
 | `DATABASE_URL` | Base PostgreSQL, par socket Unix (authentification peer). | `postgresql:///closyria?host=/var/run/postgresql` | `postgresql:///closyria_dev?host=/var/run/postgresql` |
 | `BETTER_AUTH_SECRET` | Clé qui signe les sessions. **32 caractères au moins**, différente par environnement, à ne jamais changer sans raison (la changer déconnecte tout le monde). Générer avec `openssl rand -base64 48`. | (secret) | (secret, un autre) |
+| `SHARE_LINK_KEY` | Clé qui chiffre les liens de partage conservés en base (pour les réafficher). **32 octets en base64**, différente par environnement. Générer avec `openssl rand -base64 32`. La perdre ou la changer : les liens déjà créés ne s'affichent plus (il faut repartager). | (secret) | (secret, un autre) |
 | `BETTER_AUTH_URL` | Adresse publique du site, **en https** (les cookies sont alors `Secure`). C'est aussi la seule origine autorisée à envoyer des formulaires à l'API (protection CSRF). | `https://closyria.com` | `https://dev.closyria.com` |
 | `MAIL_TRANSPORT` | Envoi des codes de connexion. **`brevo`** en prod comme en dev (la dev envoie de vrais codes). | `brevo` | `brevo` |
 | `BREVO_API_KEY` | Clé API Brevo (Brevo → SMTP & API → Clés API). | `xkeysib-…` | `xkeysib-…` |
@@ -83,6 +84,7 @@ APP_ENV=prod
 DATABASE_URL=postgresql:///closyria?host=/var/run/postgresql
 BETTER_AUTH_SECRET=…
 BETTER_AUTH_URL=https://closyria.com
+SHARE_LINK_KEY=…
 MAIL_TRANSPORT=brevo
 BREVO_API_KEY=xkeysib-…
 MAIL_FROM=Closyria <bonjour@closyria.com>

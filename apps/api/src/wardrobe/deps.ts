@@ -11,6 +11,8 @@ export const WARDROBE_LIMITS = {
 
 export type WardrobeDeps = {
   db: Database;
+  /** AES-256 key that seals share tokens (parsed once at startup). */
+  shareLinkKey: Buffer;
   /** Clock, injectable for tests. */
   now?: () => Date;
   /** Overrides of WARDROBE_LIMITS (tests). */

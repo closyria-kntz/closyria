@@ -6,6 +6,7 @@ import { createApp } from "./app";
 import { pgBossQueue } from "./catalog/capture-queue";
 import type { Env } from "./env";
 import { registerOwnedTables } from "./owned-tables";
+import { parseShareLinkKey } from "./wardrobe/share-link";
 
 export type Api = {
   app: ReturnType<typeof createApp>;
@@ -51,7 +52,7 @@ export function bootstrap(env: Env): Api {
     events: { db },
     catalog: { db, store, queue: pgBossQueue(boss) },
     admin: { db },
-    wardrobe: { db },
+    wardrobe: { db, shareLinkKey: parseShareLinkKey(env.SHARE_LINK_KEY) },
     // R18: the browser tests read their codes here; env.ts guarantees the memory mailer with APP_ENV=test.
     ...(env.APP_ENV === "test" && memory ? { testMail: memory } : {}),
   });

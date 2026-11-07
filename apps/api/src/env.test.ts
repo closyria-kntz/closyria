@@ -5,6 +5,7 @@ const base = {
   DATABASE_URL: "postgresql:///closyria",
   BETTER_AUTH_SECRET: "a".repeat(32),
   BETTER_AUTH_URL: "http://localhost:3001",
+  SHARE_LINK_KEY: Buffer.alloc(32, 7).toString("base64"),
 };
 const s3 = {
   S3_ENDPOINT: "https://s3.gra.io.cloud.ovh.net",
@@ -35,6 +36,18 @@ describe("envSchema", () => {
     for (const url of ["https://dev.closyria.com", "https://closyria.com", "http://10.0.0.5:4000"]) {
       expect(envSchema.safeParse({ ...test, BETTER_AUTH_URL: url }).success, url).toBe(false);
     }
+  });
+
+  it("requires SHARE_LINK_KEY, exactly 32 bytes in base64", () => {
+    const { SHARE_LINK_KEY: _omitted, ...without } = base;
+    expect(envSchema.safeParse(without).success).toBe(false);
+    expect(envSchema.safeParse({ ...base, SHARE_LINK_KEY: Buffer.alloc(31, 7).toString("base64") }).success).toBe(
+      false,
+    );
+    expect(envSchema.safeParse({ ...base, SHARE_LINK_KEY: Buffer.alloc(33, 7).toString("base64") }).success).toBe(
+      false,
+    );
+    expect(envSchema.safeParse(base).success).toBe(true);
   });
 
   it("requires a secret of at least 32 characters", () => {

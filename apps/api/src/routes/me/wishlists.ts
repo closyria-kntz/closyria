@@ -1,5 +1,6 @@
 import { and, asc, eq, isNull, schema, sql } from "@closyria/db";
 import {
+  shareLinkSchema,
   shareResultSchema,
   wardrobeErrorSchema,
   wishlistInputSchema,
@@ -14,6 +15,7 @@ import type { Context } from "hono";
 import { type AccessEnv, defineAccess } from "../../access";
 import { runBulk } from "../../wardrobe/bulk";
 import { trackWishlistShared, type WardrobeDeps } from "../../wardrobe/deps";
+import { decryptShareToken, encryptShareToken } from "../../wardrobe/share-link";
 import { newShareToken } from "../../wardrobe/share-token";
 import { listWishlistViews } from "../../wardrobe/wishlists";
 
@@ -170,6 +172,23 @@ const shareRoute = defineAccess(
   "user",
 );
 
+const getShareRoute = defineAccess(
+  createRoute({
+    method: "get",
+    path: "/me/wishlists/{id}/share",
+    summary: "The link of a shared list",
+    description:
+      "`url` is `/l/<token>`; null when the list is not shared, or when it was shared before links were kept (`legacy`: share again to get a link).",
+    request: { params: idParams },
+    responses: {
+      200: json("The link", shareLinkSchema),
+      400: errorContent("Malformed id (invalid_request)"),
+      404: notFoundContent,
+    },
+  }),
+  "user",
+);
+
 const unshareRoute = defineAccess(
   createRoute({
     method: "delete",
@@ -194,7 +213,7 @@ function userIdOf(c: Context<AccessEnv>): string {
 }
 
 export function wishlistsRoutes(deps: WardrobeDeps) {
-  const { db } = deps;
+  const { db, shareLinkKey } = deps;
   const now = () => deps.now?.() ?? new Date();
   const app = new OpenAPIHono<AccessEnv>({
     defaultHook: (result, c) => (result.success ? undefined : c.json(invalidRequest, 400)),
@@ -351,19 +370,37 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
       const { token, hash } = newShareToken();
       const [shared] = await db
         .update(schema.wishlists)
-        .set({ shareTokenHash: hash, sharedAt: now() })
+        .set({ shareTokenHash: hash, shareTokenEncrypted: encryptShareToken(token, shareLinkKey), sharedAt: now() })
         .where(own(userId, id))
         .returning({ id: schema.wishlists.id });
       if (!shared) return c.json(notFound, 404);
       await trackWishlistShared(db, userId);
       return c.json({ url: `/l/${token}` }, 200);
     })
-    .openapi(unshareRoute, async (c) => {
+    .openapi(getShareRoute, async (c) => {
       const [row] = await db
-        .update(schema.wishlists)
-        .set({ shareTokenHash: null, sharedAt: null })
-        .where(own(userIdOf(c), c.req.valid("param").id))
-        .returning({ id: schema.wishlists.id });
-      return row ? c.body(null, 204) : c.json(notFound, 404);
+        .select({ hash: schema.wishlists.shareTokenHash, encrypted: schema.wishlists.shareTokenEncrypted })
+        .from(schema.wishlists)
+        .where(own(userIdOf(c), c.req.valid("param").id));
+      if (!row) return c.json(notFound, 404);
+      const token = row.encrypted ? decryptShareToken(row.encrypted, shareLinkKey) : null;
+      if (token) return c.json({ url: `/l/${token}`, legacy: false }, 200);
+      return c.json({ url: null, legacy: row.hash !== null }, 200);
+    })
+    .openapi(unshareRoute, async (c) => {
+      const userId = userIdOf(c);
+      const { id } = c.req.valid("param");
+      const found = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(schema.wishlists)
+          .set({ shareTokenHash: null, shareTokenEncrypted: null, sharedAt: null })
+          .where(own(userId, id))
+          .returning({ id: schema.wishlists.id });
+        if (!row) return false;
+        await tx.delete(schema.wishlistOpinions).where(eq(schema.wishlistOpinions.wishlistId, id));
+        await tx.delete(schema.wishlistOpinionDevices).where(eq(schema.wishlistOpinionDevices.wishlistId, id));
+        return true;
+      });
+      return found ? c.body(null, 204) : c.json(notFound, 404);
     });
 }

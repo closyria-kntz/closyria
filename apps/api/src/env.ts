@@ -1,5 +1,6 @@
 import { appEnvObject } from "@closyria/shared";
 import { z } from "zod";
+import { parseShareLinkKey } from "./wardrobe/share-link";
 
 /** "Name <address>" → { name, email }. */
 const mailSender = z
@@ -23,6 +24,15 @@ export const envSchema = appEnvObject({
   DATABASE_URL: z.string().min(1),
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.url(),
+  /** AES-256 key (base64, 32 bytes) that seals share tokens at rest. Generate with `openssl rand -base64 32`. */
+  SHARE_LINK_KEY: z.string().refine((v) => {
+    try {
+      parseShareLinkKey(v);
+      return true;
+    } catch {
+      return false;
+    }
+  }, "expected base64 of exactly 32 bytes"),
   MAIL_TRANSPORT: z.enum(["brevo", "memory"]).optional(),
   BREVO_API_KEY: z.string().min(1).optional(),
   MAIL_FROM: mailSender.prefault("Closyria <bonjour@closyria.com>"),

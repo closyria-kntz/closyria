@@ -8,6 +8,7 @@ import { envSchema } from "./env";
 const base = {
   DATABASE_URL: "postgresql:///closyria",
   BETTER_AUTH_SECRET: "a".repeat(32),
+  SHARE_LINK_KEY: Buffer.alloc(32, 7).toString("base64"),
   BETTER_AUTH_URL: "http://127.0.0.1:4310",
 };
 

@@ -23,7 +23,7 @@ const make = (dbOk: boolean) =>
     catalog,
     events,
     admin: events,
-    wardrobe: events,
+    wardrobe: { ...events, shareLinkKey: Buffer.alloc(32) },
   });
 
 describe("GET /api/health", () => {
@@ -114,7 +114,7 @@ describe("GET /api/test/emails", () => {
       catalog,
       events,
       admin: events,
-      wardrobe: events,
+      wardrobe: { ...events, shareLinkKey: Buffer.alloc(32) },
       testMail: { messages },
     });
 

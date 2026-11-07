@@ -66,6 +66,7 @@ export async function startStack(logFile: string): Promise<Stack> {
       PORT: String(apiPort),
       DATABASE_URL: database.url,
       BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
+      SHARE_LINK_KEY: randomBytes(32).toString("base64"),
       BETTER_AUTH_URL: proxy.url,
       MAIL_TRANSPORT: "memory",
       TEST_STORAGE_DIR: storageDir,

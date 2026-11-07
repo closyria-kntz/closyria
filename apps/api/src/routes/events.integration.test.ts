@@ -69,7 +69,7 @@ beforeAll(async () => {
     catalog: { db: handle.db, store: memoryStore(), queue: { enqueue: async () => {} } },
     events: { db: handle.db, now: () => NOW, rateLimit: { max: RATE_LIMIT, windowMs: 60_000 } },
     admin: { db: handle.db },
-    wardrobe: { db: handle.db },
+    wardrobe: { db: handle.db, shareLinkKey: Buffer.alloc(32) },
   });
 }, 60_000);
 
