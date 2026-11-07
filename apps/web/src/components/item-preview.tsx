@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { type PointerEvent, useEffect, useId, useRef } from "react";
 import { levelOf } from "@/lib/love-levels";
+import { SquareCheck } from "./square-check";
 import { buttonClass, focusRing } from "./ui";
 
 /** Dragging the top of the preview down by this much closes it (phone gesture, works with a mouse too). */
@@ -31,6 +32,7 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
   const tRow = useTranslations("OrderDraft.row");
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const checkId = useId();
   // The drag in progress: where it started and how far down it went; the sheet follows the finger.
   const drag = useRef<{ start: number; offset: number } | null>(null);
   const open = item !== null;
@@ -99,12 +101,8 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
             className="flex touch-none flex-col gap-space-1 border-b border-line px-space-4 pt-space-2 pb-space-2 select-none"
           >
             <span aria-hidden="true" className="mx-auto h-space-1 w-space-7 rounded-full bg-line md:hidden" />
-            <p className="text-center text-sm text-ink-muted md:hidden">{t("closeHint")}</p>
             <div className="flex items-center justify-between gap-space-3">
-              <h2 id={titleId} className="truncate font-strong">
-                <span className="sr-only">{t("titlePrefix")} </span>
-                {name}
-              </h2>
+              <p className="text-sm text-ink-muted md:invisible">{t("closeHint")}</p>
               <button
                 type="button"
                 onClick={onClose}
@@ -116,7 +114,10 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
             </div>
           </div>
 
-          <div className="grid flex-1 content-start gap-space-4 overflow-y-auto p-space-4 md:grid-cols-2">
+          <div
+            data-testid="preview-body"
+            className={`grid flex-1 content-start gap-space-4 overflow-y-auto overscroll-contain p-space-4 ${photos.length > 0 ? "md:grid-cols-2" : ""}`}
+          >
             {photos.length > 0 && (
               <div className="flex snap-x snap-mandatory gap-space-2 overflow-x-auto">
                 {photos.map((url) => (
@@ -134,8 +135,11 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
             <div className="flex flex-col gap-space-3">
               <div className="flex flex-col gap-space-1">
                 {item.brand && <p className="text-sm text-ink-muted uppercase">{item.brand}</p>}
-                <p className="font-display text-lead font-strong">{name}</p>
-                <p className="font-strong">{price === null ? tRow("unknownPrice") : money(price)}</p>
+                <h2 id={titleId} className="font-display text-lead font-strong text-balance">
+                  <span className="sr-only">{t("titlePrefix")} </span>
+                  {name}
+                </h2>
+                <p className="font-strong tabular-nums">{price === null ? tRow("unknownPrice") : money(price)}</p>
               </div>
               {(level || item.priority) && (
                 <ul className="flex flex-wrap gap-space-2 text-sm">
@@ -177,13 +181,13 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
           </div>
 
           <div className="flex flex-col gap-space-2 border-t border-line p-space-4 md:flex-row md:items-center">
-            <label className="flex min-h-touch-target flex-1 cursor-pointer items-center gap-space-3 rounded-card border-2 border-line px-space-3 font-strong has-checked:border-accent has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus-ring has-focus-visible:outline-solid">
-              <input
-                type="checkbox"
-                checked={item.inOrderDraft}
-                onChange={() => onToggle(item)}
-                className="size-space-5 cursor-pointer accent-accent"
-              />
+            <label
+              htmlFor={checkId}
+              className="flex min-h-touch-target flex-1 cursor-pointer items-center gap-space-3 rounded-card border-2 border-line px-space-3 font-strong has-checked:border-selected-line has-checked:bg-selected-surface has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus-ring has-focus-visible:outline-solid"
+            >
+              <span className="relative flex size-space-5 shrink-0">
+                <SquareCheck id={checkId} checked={item.inOrderDraft} onChange={() => onToggle(item)} />
+              </span>
               {t("take")}
               <span className="ml-auto text-sm text-ink-muted">{t("takeHint")}</span>
             </label>

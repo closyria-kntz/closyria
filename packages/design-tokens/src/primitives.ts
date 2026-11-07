@@ -16,6 +16,8 @@ export const primitives = {
     chocolate: "#5A3A2E",
     powder: "#EBC7C3",
     blush: "#F6E4E1",
+    // A ticked row in « Préparer une commande ».
+    petal: "#FBF3F1",
     rosewood: "#D8A9A3",
     milkChocolate: "#7A5444",
     butter: "#F3E3A6",
@@ -38,6 +40,7 @@ export const primitives = {
     parchment: "#DDD0C6",
     stone: "#B5A398",
     dustyRose: "#6B4A44",
+    roseBark: "#33251F",
     celadon: "#A9DCBF",
     spruce: "#1D3A31",
     gold: "#E8CF8F",

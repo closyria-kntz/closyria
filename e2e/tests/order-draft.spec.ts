@@ -60,7 +60,13 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
     const bar = await band(page).boundingBox();
     expect(message && bar && message.y + message.height <= bar.y).toBe(true);
   }).toPass();
-  // A white band with a pink edge (chosen on 2026-11-07), and over the budget in red (the danger color).
+  // A ticked row: a very light pink background and the band's pink edge, not a heavy dark outline.
+  const ticked = page.getByRole("listitem").filter({ hasText: "Robe Alma" }).locator("> div");
+  await expect(ticked).toHaveCSS("background-color", "rgb(251, 243, 241)");
+  await expect(ticked).toHaveCSS("border-top-color", "rgb(216, 169, 163)");
+  await expect(ticked.getByText(/89\s€/)).toHaveCSS("font-variant-numeric", "tabular-nums");
+  await expect(band(page).getByText(/2 articles/)).toHaveCSS("font-variant-numeric", "tabular-nums");
+  // A white band (chosen on 2026-11-07), and over the budget in red (the danger color).
   await expect(band(page)).toHaveCSS("background-color", "rgb(255, 255, 255)");
   // Buttons show the hand, like links, and « J'ai commandé » darkens on hover.
   const ordered = band(page).getByRole("button", { name: "J’ai commandé" });
@@ -84,6 +90,10 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await expect(over).toHaveCSS("color", "rgb(244, 163, 168)");
   await axe(page);
   await page.screenshot({ path: testInfo.outputPath("commande-sombre.png") });
+  // The browser knows the page is dark (scroll bars, native controls), and ticked rows keep their soft tint.
+  await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
+  await expect(ticked).toHaveCSS("background-color", "rgb(51, 37, 31)");
+  await expect(ticked).toHaveCSS("border-top-color", "rgb(107, 74, 68)");
   await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
   await page.screenshot({ path: testInfo.outputPath("commande.png") });
   await axe(page);
@@ -265,6 +275,8 @@ test("la petite case coche, et le lien de la boutique s’ouvre dans un nouvel o
   const shop = page.getByRole("link", { name: /^Voir chez / });
   await expect(shop).toHaveAttribute("target", "_blank");
   await expect(shop).toHaveAttribute("rel", /noopener/);
+  // Underlined only on hover: no stripes repeated on every row.
+  await expect(shop).toHaveCSS("text-decoration-line", "none");
 });
 
 test("l’aperçu s’ouvre sans quitter la page : « Je le prends », Fermer, Échap, retour, glisser", async ({
@@ -279,6 +291,11 @@ test("l’aperçu s’ouvre sans quitter la page : « Je le prends », Fermer, �
   await expect(preview).toBeVisible();
   await expect(page).toHaveURL(/\/envies\/commande\?.*apercu=/);
   await expect(preview).toContainText(/89\s€/);
+  // The name once, the same small square box as in the list, the content does not scroll the page behind.
+  await expect(preview.getByText(/Robe Alma/)).toHaveCount(1);
+  await expect(preview.getByTestId("order-check")).toHaveCount(1);
+  await expect(preview.getByTestId("preview-body")).toHaveCSS("overscroll-behavior-y", "contain");
+  if (testInfo.project.use.hasTouch) await expect(preview).toContainText("Glisse vers le bas pour fermer");
   await expect(preview.getByRole("link", { name: /^Voir chez / })).toHaveAttribute("target", "_blank");
   await expect(preview.getByRole("link", { name: "Ouvrir la fiche complète" })).toHaveAttribute("href", /\/produits\//);
   await axe(page);

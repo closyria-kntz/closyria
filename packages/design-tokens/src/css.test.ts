@@ -56,6 +56,9 @@ describe("renderTokensCss", () => {
   it("covers both themes and the system dark preference", () => {
     expect(css).toContain('[data-theme="equilibre-dark"]');
     expect(css).toContain("prefers-color-scheme: dark");
+    // The browser draws scroll bars and native controls in the theme's scheme.
+    expect(css).toContain("color-scheme: light;");
+    expect(css).toContain("color-scheme: dark;");
     expect(css).toContain(':root:not([data-theme="equilibre-light"])');
   });
 });
@@ -109,6 +112,11 @@ describe("Équilibré themes", () => {
     expect(get(equilibreLight, "color-media-backdrop")).toBe("#EADBC8");
     // « Préparer une commande » band: white with a pink edge, a milk-chocolate button that darkens on hover.
     expect(get(equilibreLight, "color-band")).toBe("#FFFFFF");
+    // A ticked row in « Préparer une commande »: a very light pink, the band's pink edge.
+    expect(get(equilibreLight, "color-selected-surface")).toBe("#FBF3F1");
+    expect(get(equilibreLight, "color-selected-line")).toBe("#D8A9A3");
+    expect(get(equilibreDark, "color-selected-surface")).toBe("#33251F");
+    expect(get(equilibreDark, "color-selected-line")).toBe("#6B4A44");
     expect(get(equilibreDark, "color-band")).toBe("#2A201B");
     expect(get(equilibreLight, "color-band-button-hover")).toBe("#5A3A2E");
     expect(get(equilibreDark, "color-band-button-hover")).toBe("#F6E4E1");
@@ -170,6 +178,9 @@ describe("Équilibré themes", () => {
     ["color-band-button-ink", "color-band-button-hover", 4.5],
     ["color-surface", "color-danger", 4.5],
     ["color-band-line", "color-band", 1.2],
+    ["color-ink", "color-selected-surface", 4.5],
+    ["color-ink-muted", "color-selected-surface", 4.5],
+    ["color-accent", "color-selected-surface", 4.5],
     ["color-success", "color-success-soft", 4.5],
     ["color-danger", "color-danger-soft", 4.5],
     ["color-success-edge", "color-band", 2],

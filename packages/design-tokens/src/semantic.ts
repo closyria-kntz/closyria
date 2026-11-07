@@ -39,6 +39,9 @@ export const defaultSemanticTokens = {
   "color-band-button": palette.milkChocolate,
   "color-band-button-ink": palette.white,
   "color-band-button-hover": palette.chocolate,
+  // A ticked row in « Préparer une commande »: a very light pink with the band's pink edge.
+  "color-selected-surface": palette.petal,
+  "color-selected-line": palette.rosewood,
   // Component tokens
   "color-button-bg": "var(--color-accent)",
   "color-button-ink": "var(--color-accent-ink)",

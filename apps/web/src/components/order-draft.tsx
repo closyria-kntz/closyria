@@ -24,6 +24,7 @@ import {
 } from "@/lib/wardrobe-client";
 import { BudgetDialog } from "./budget-dialog";
 import { ItemPreview } from "./item-preview";
+import { SquareCheck } from "./square-check";
 import { buttonClass, focusRing } from "./ui";
 
 const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
@@ -286,32 +287,17 @@ export function OrderDraft() {
               const price = item.product.priceCents;
               return (
                 <li key={item.id}>
-                  <div className="flex items-center gap-space-2 rounded-card border-2 border-line bg-surface-raised py-space-2 pr-space-3 has-checked:border-accent">
-                    <label className="relative flex size-touch-target shrink-0 cursor-pointer items-center justify-center rounded-button has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus-ring has-focus-visible:outline-solid">
-                      <input
-                        type="checkbox"
+                  <div className="flex items-center gap-space-2 rounded-card border-2 border-line bg-surface-raised py-space-2 pr-space-3 has-checked:border-selected-line has-checked:bg-selected-surface">
+                    <label
+                      htmlFor={`order-check-${item.id}`}
+                      className="relative flex size-touch-target shrink-0 cursor-pointer items-center justify-center rounded-button has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus-ring has-focus-visible:outline-solid"
+                    >
+                      <SquareCheck
+                        id={`order-check-${item.id}`}
                         checked={item.inOrderDraft}
                         onChange={() => void toggle(item)}
-                        aria-labelledby={`order-name-${item.id}`}
-                        className="peer absolute inset-0 size-full cursor-pointer opacity-0"
+                        labelledBy={`order-name-${item.id}`}
                       />
-                      <span
-                        data-testid="order-check"
-                        className="pointer-events-none flex size-space-5 items-center justify-center rounded-sm border-2 border-ink-muted text-accent-ink peer-checked:border-accent peer-checked:bg-accent"
-                      >
-                        {item.inOrderDraft && (
-                          <svg
-                            aria-hidden="true"
-                            viewBox="0 0 16 16"
-                            className="size-space-3"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                          >
-                            <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
-                      </span>
                     </label>
                     <button
                       type="button"
@@ -355,7 +341,7 @@ export function OrderDraft() {
                           href={item.product.canonicalUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={`inline-flex max-w-full items-center gap-space-1 rounded-sm text-sm text-ink-muted underline underline-offset-2 hover:text-ink ${focusRing}`}
+                          className={`inline-flex max-w-full items-center gap-space-1 rounded-sm text-sm text-ink-muted underline-offset-2 hover:text-ink hover:underline ${focusRing}`}
                         >
                           <span className="truncate">{t("row.viewAt", { shop: item.product.shop.name })}</span>
                           <svg
@@ -371,7 +357,9 @@ export function OrderDraft() {
                         </a>
                       )}
                     </span>
-                    <span className={`shrink-0 text-sm ${price === null ? "text-ink-muted" : "font-strong"}`}>
+                    <span
+                      className={`shrink-0 text-sm tabular-nums ${price === null ? "text-ink-muted" : "font-strong"}`}
+                    >
                       {price === null ? t("row.unknownPrice") : money(price)}
                     </span>
                   </div>
@@ -397,7 +385,7 @@ export function OrderDraft() {
           <h2 id={bandTitleId} className="sr-only">
             {t("band.label")}
           </h2>
-          <div aria-live="polite" className="flex flex-col items-start gap-space-1">
+          <div aria-live="polite" className="flex flex-col items-start gap-space-1 tabular-nums">
             <p className="font-strong">{t("band.total", { count: totals.count, amount: money(totals.totalCents) })}</p>
             {totals.unknownPrices > 0 && (
               <p className="text-sm">{t("band.unknown", { count: totals.unknownPrices })}</p>

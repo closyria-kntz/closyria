@@ -1011,7 +1011,7 @@
     "preview": {
       "titlePrefix": "Aperçu de",
       "close": "Fermer",
-      "closeHint": "Glisse vers le bas, touche « Fermer » ou la zone sombre pour revenir",
+      "closeHint": "Glisse vers le bas pour fermer",
       "size": "Taille",
       "why": "Pourquoi",
       "notes": "Notes",

@@ -73,6 +73,8 @@ export const equilibreDark: Theme = {
     "color-band-button": c.powder,
     "color-band-button-ink": c.cocoa,
     "color-band-button-hover": c.blush,
+    "color-selected-surface": c.roseBark,
+    "color-selected-line": c.dustyRose,
   },
 };
 
