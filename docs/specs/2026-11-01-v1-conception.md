@@ -82,6 +82,7 @@ boutique dans l'admin, les nouveaux articles mis en ligne, pour proposer « Nouv
 | D12 | Mesure d'audience | Événements enregistrés dans notre base, sans pisteur extérieur, conforme à l'exemption CNIL. |
 | D13 | Confidentialité admin | L'admin ne voit pas le contenu des utilisatrices par défaut ; accès sur demande d'aide, journalisé. |
 | D14 | IA et RGPD | Rester sur Bedrock en région européenne si le coût reste proche de l'API directe. |
+| D15 | Favori et budgets | Favori remplacé par 4 niveaux d'amour personnalisables (😕 Bof, 🤍 J'aime, 🥰 Mims, 🔥 En feu), Prioritaire à part, budgets par profil et par liste (2026-11-07, `docs/specs/2026-11-07-envies-chaleureuses.md`). |
 
 ## 5. Architecture
 

@@ -1,6 +1,6 @@
 # Envies chaleureuses — partie 1 : mes envies
 
-Date : 2026-11-07 · Statut : **à relire par la fondatrice**.
+Date : 2026-11-07 · Statut : **livrée en dev (branche envies-chaleureuses), à tester par la fondatrice**.
 Maquette validée (palette C) : https://claude.ai/artifact/Q6tEj3ZNKbrXbunv6B1LTQ (rangée « Palette C », 5 écrans).
 Partie 2 (avis et choix des amies sur le lien de partage) : cahier des charges séparé, après celui-ci.
 
@@ -166,9 +166,11 @@ vignettes voulues, la barre d'actions en lot existante apparaît (niveau, priori
 ### 5.4 Jetons de design
 - Nouvelles couleurs dans `primitives.ts`, mêmes noms de jetons sémantiques (l'UI ne change pas de classes) :
   - clair : fond `#F2EDE7`, carte `#FFFFFF`, encre `#2B1D17`, encre douce `#6E5A50`, trait `#E5D7CC`,
-    accent chocolat `#5A3A2E`, rose poudré `#EBC7C3`, jaune beurre `#F3E3A6`, camel `#DCC3A6`, sauge `#D5DCC8` ;
+    accent chocolat `#5A3A2E`, rose poudré `#EBC7C3` (conseils), jaune beurre `#F3E3A6`, sauge `#D5DCC8`, fond creux
+    `#EBE3DB`, fond des photos latte `#EADBC8` (le camel `#DCC3A6` a été retiré) ;
   - sombre : fond `#1E1612`, carte `#2A201B`, encre `#F2EDE7`, encre douce `#C9B8AE`, accent rose poudré `#EBC7C3`
-    (encre d'accent chocolat foncé) — valeurs ajustées pour passer les tests de contraste existants.
+    (encre d'accent chocolat foncé), fond creux `#241A15`, trait `#3D2F28`, conseils `#3D2F28`, fond des photos
+    `#241A15` — valeurs ajustées pour passer les tests de contraste existants.
 - Polices : `@fontsource-variable/fraunces` et `@fontsource-variable/dm-sans` à la place de Cormorant Garamond et
   Jost ; mise à jour de `docs/specs/2026-11-01-direction-visuelle.md`.
 
@@ -197,3 +199,27 @@ vignettes voulues, la barre d'actions en lot existante apparaît (niveau, priori
 3. « J'aime » est **présélectionné** sur la fiche d'un lien collé, pour ajouter en un toucher.
 4. Le prix compté est le **prix actuel de la boutique** (pas un prix que tu saisis).
 5. La pastille d'une vignette **tourne** d'un toucher ; le choix direct d'un niveau passe par « … ».
+
+## 9. Écarts et décisions prises pendant le code
+
+Ce qui change par rapport au texte ci-dessus, ou qui précise un cas non prévu :
+- Dans « Préparer une commande », cocher un article n'affiche pas de message « Annuler » : il suffit de le décocher.
+- « Recommencer à zéro » (budget) demande une confirmation et ne peut pas être annulé ; enregistrer ou supprimer un
+  budget affiche en revanche un message avec « Annuler ».
+- Plus de 200 articles cochés : la commande est refusée avec le message « Tu as coché plus de 200 articles :
+  décoches-en quelques-uns ».
+- Une seule coche par article : cocher un article depuis une liste le coche aussi dans « Préparer une commande » de
+  son profil, et inversement.
+- Pas d'opérations de lot dédiées (niveau, prioritaire, commande) : l'action groupée existante les porte, avec
+  l'annulation.
+- Quand deux profils sont fusionnés (profil anonyme et compte), le budget du profil anonyme est repris si le profil du
+  compte n'en a pas ; sinon celui du compte est gardé.
+- Le montant dépensé d'un budget ne descend jamais sous 0 ; l'historique remonte au plus 8 semaines ou 12 mois et
+  jamais avant la création du budget.
+- Le budget d'une liste compte les articles qui sont dans la liste maintenant (si un article y entre ou en sort, le
+  total change aussi pour les commandes passées).
+- Passer un budget en « Sans période » compte depuis sa création, pas depuis le changement.
+- Un article déjà gardé ailleurs et gardé à nouveau prend le niveau, la priorité et la raison choisis à cet instant
+  (cela peut faire passer un 🔥 en J'aime) : à revoir.
+- Détails visuels à valider par la fondatrice : onglets du téléphone en 13 px, valeurs sombres du fond creux, du trait,
+  des conseils et du fond des photos.

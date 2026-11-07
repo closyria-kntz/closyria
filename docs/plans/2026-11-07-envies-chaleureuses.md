@@ -1,6 +1,6 @@
 # Envies chaleureuses (partie 1) — plan de travail
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** remplacer « Favori » par 4 niveaux d'amour personnalisables, ajouter « Prioritaire », l'avis, le menu « … », le
 mode « Sélectionner », « Préparer une commande » avec budgets (profil et liste, par période) et la palette C.
@@ -81,7 +81,7 @@ rangée « Palette C »).
   partial indexes on `profile_id` and on `wishlist_id`.
 - `love_levels`: `user_id` fk cascade, `level smallint` 1–4, `emoji text`, `label text` ≤ 20, pk (`user_id`, `level`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - `items.integration.test.ts`: « keeps a wish with its level, priority and opinion »: `POST /api/me/items`
     `{productId, action:"wish", loveLevel:3, priority:true, why:"Trop mims"}` → 201, item `stage:"spotted"`,
     `loveLevel:3`, `priority:true`, `why:"Trop mims"`, `inOrderDraft:false`; without `loveLevel` → `loveLevel:2`.
@@ -95,17 +95,17 @@ rangée « Palette C »).
   - migration: a seeded item with `favorite=true` reads back `loveLevel:2`, a non-favorite `null`.
   - `merge.integration.test.ts`: « merging keeps the highest level, priority if either, the target's opinion
     else the source's, draft if either » (Review Focus 4).
-- [ ] **Step 2: Run them** — `pnpm --filter @closyria/api test -- items bulk merge` → FAIL (unknown action `wish`,
+- [x] **Step 2: Run them** — `pnpm --filter @closyria/api test -- items bulk merge` → FAIL (unknown action `wish`,
   missing fields).
-- [ ] **Step 3: Schema, migration, shared schemas.** Generate the migration, then add before the column drop:
+- [x] **Step 3: Schema, migration, shared schemas.** Generate the migration, then add before the column drop:
   `update items set love_level = 2 where favorite;` and drop `favorite`.
-- [ ] **Step 4: API.** `createItem` writes level (default 2 for `wish`), priority, why; `toItemView` maps the fields;
+- [x] **Step 4: API.** `createItem` writes level (default 2 for `wish`), priority, why; `toItemView` maps the fields;
   `listItems` adds the filters and the `love` keyset `[coalesce(love_level,0), priority::int, created_at, id]`
   descending; delete the `setFavorite` op and its undo; `mergeItems` per the test.
-- [ ] **Step 5: Run** — `pnpm --filter @closyria/api test` and `pnpm --filter @closyria/shared test` → PASS;
+- [x] **Step 5: Run** — `pnpm --filter @closyria/api test` and `pnpm --filter @closyria/shared test` → PASS;
   `pnpm typecheck` shows only web errors (fixed in Tasks 7–9; leave the web compiling by replacing `favorite` reads
   with `loveLevel !== null` where the build breaks, nothing more).
-- [ ] **Step 6: Commit** — `feat: niveaux d'amour, prioritaire, avis et sélection sur les articles (données et API)`
+- [x] **Step 6: Commit** — `feat: niveaux d'amour, prioritaire, avis et sélection sur les articles (données et API)`
 
 ### Task 2: Montant compté au passage à « Commandé » et « Renvoyé »
 
@@ -120,11 +120,11 @@ rangée « Palette C »).
   — `ordered`: `amountCents ?? product.priceCents ?? null`; `returned`: the `spent_cents` of the item's latest
   `ordered` event; other stages: `null`. `recordEvent` and the bulk `stage` insert write it.
 
-- [ ] **Step 1: Tests** — « an order records the amount typed, else the shop price, else nothing »; « a return records
+- [x] **Step 1: Tests** — « an order records the amount typed, else the shop price, else nothing »; « a return records
   what its order counted »; « a keep with action ordered records the shop price »; « undo of the stage change
   removes the event (nothing counted) ».
-- [ ] **Step 2: Run** → FAIL. **Step 3: Implement.** **Step 4: Run** → PASS (`pnpm --filter @closyria/api test -- spent items bulk`).
-- [ ] **Step 5: Commit** — `feat(api): montant compté au passage à Commandé et Renvoyé`
+- [x] **Step 2: Run** → FAIL. **Step 3: Implement.** **Step 4: Run** → PASS (`pnpm --filter @closyria/api test -- spent items bulk`).
+- [x] **Step 5: Commit** — `feat(api): montant compté au passage à Commandé et Renvoyé`
 
 ### Task 3: Mes niveaux (API)
 
@@ -141,12 +141,12 @@ rangée « Palette C »).
   Routes: `GET /me/love-levels` → `{levels}` (defaults when none stored); `PUT /me/love-levels` → replaces all four,
   returns `{levels}`; `DELETE /me/love-levels` → back to defaults, 204.
 
-- [ ] **Step 1: Tests** — defaults for a new account; PUT then GET returns the new ones; 400 for 3 levels, a
+- [x] **Step 1: Tests** — defaults for a new account; PUT then GET returns the new ones; 400 for 3 levels, a
   duplicated level, a 21-character label, `"😀😀"`; 200 for `"👩🏽‍🦱"` and `"🇫🇷"` (Review Focus 5); DELETE restores
   defaults; another account never sees them. Unit test of `isSingleEmoji` in `packages/shared/src/wardrobe.test.ts`.
-- [ ] **Step 2–4:** run (FAIL), implement, run `pnpm --filter @closyria/api test -- love-levels` and
+- [x] **Step 2–4:** run (FAIL), implement, run `pnpm --filter @closyria/api test -- love-levels` and
   `pnpm --filter @closyria/shared test` (PASS).
-- [ ] **Step 5: Commit** — `feat(api): niveaux personnalisés`
+- [x] **Step 5: Commit** — `feat(api): niveaux personnalisés`
 
 ### Task 4: Budgets (API)
 
@@ -169,16 +169,16 @@ rangée « Palette C »).
   (204), `GET …/budget/history` (week: 8 last, month: 12 last), `POST …/budget/reset` (`none` only, else 409
   `budget_not_resettable`).
 
-- [ ] **Step 1: Tests (unit, `budgets.test.ts`)** — `periodAt` week: Sunday 2026-11-08T22:30Z (23:30 Paris) is in
+- [x] **Step 1: Tests (unit, `budgets.test.ts`)** — `periodAt` week: Sunday 2026-11-08T22:30Z (23:30 Paris) is in
   the week starting Monday 2026-11-02 00:00 Paris; Monday 2026-11-08T23:30Z (00:30 Paris on the 9th) starts the next
   week; month across the end of daylight time (2026-10-25); custom inclusive of `endsOn` until 23:59:59 Paris; custom
   after `endsOn` → null (Review Focus 1).
-- [ ] **Step 2: Tests (integration)** — profile budget 150 € per week: an order of 89 € (typed) this week and one last
+- [x] **Step 2: Tests (integration)** — profile budget 150 € per week: an order of 89 € (typed) this week and one last
   week → `spentCents: 8900`, `remainingCents: 6100`; a return this week of an item ordered last week → credited; list
   budget counts only the list's items; history lists past weeks; reset of a `none` budget; 409 on reset of a week
   budget; another account's profile or list → 404; PUT `custom` without dates → 400.
-- [ ] **Step 3–4:** run (FAIL), implement, run `pnpm --filter @closyria/api test -- budgets` (PASS).
-- [ ] **Step 5: Commit** — `feat(api): budgets par profil et par liste, par période`
+- [x] **Step 3–4:** run (FAIL), implement, run `pnpm --filter @closyria/api test -- budgets` (PASS).
+- [x] **Step 5: Commit** — `feat(api): budgets par profil et par liste, par période`
 
 ### Task 5: « J'ai commandé » depuis la sélection
 
@@ -195,12 +195,12 @@ rangée « Palette C »).
 - Every path that takes an item out of « Repéré » or to the trash or to another profile clears `in_order_draft`
   (single and bulk stage, delete, move) and its undo restores it.
 
-- [ ] **Step 1: Tests** — two selected wishes (89 € and 65 €) → both `ordered`, `inOrderDraft:false`, profile budget
+- [x] **Step 1: Tests** — two selected wishes (89 € and 65 €) → both `ordered`, `inOrderDraft:false`, profile budget
   `spentCents: 15400`; undo → both `spotted`, `inOrderDraft:true`, `spentCents: 0` (Review Focus 2); a selected item
   moved to « Dans mon dressing », trashed, or moved to another profile is no longer selected, and its undo selects it
   again (Review Focus 3); list scope only takes the list's selected items; empty → 409.
-- [ ] **Step 2–4:** run (FAIL), implement, run `pnpm --filter @closyria/api test` (PASS, whole API suite).
-- [ ] **Step 5: Commit** — `feat(api): passer la sélection en Commandé`
+- [x] **Step 2–4:** run (FAIL), implement, run `pnpm --filter @closyria/api test` (PASS, whole API suite).
+- [x] **Step 5: Commit** — `feat(api): passer la sélection en Commandé`
 
 ### Task 6: Palette C et caractères
 
@@ -211,16 +211,16 @@ rangée « Palette C »).
 **Interfaces:**
 - Light: surface `#F2EDE7`, surface-raised `#FFFFFF`, surface-sunken `#EBE3DB`, surface-strong/line `#E5D7CC`, ink
   `#2B1D17`, ink-muted `#6E5A50`, accent `#5A3A2E`, accent-ink `#FFFFFF`, hint (rose poudré) `#EBC7C3`, premium-surface
-  (jaune beurre) `#F3E3A6`, plus primitives camel `#DCC3A6`, sage `#D5DCC8`; dark: surface `#1E1612`, raised
-  `#2A201B`, ink `#F2EDE7`, ink-muted `#C9B8AE`, accent `#EBC7C3`, accent-ink `#2B1D17`. Adjust only where a contrast
+  (jaune beurre) `#F3E3A6`, plus primitives latte `#EADBC8` (media backdrop; camel removed), sage `#D5DCC8`; dark: surface `#1E1612`, raised
+  `#2A201B`, ink `#F2EDE7`, ink-muted `#C9B8AE`, accent `#EBC7C3`, accent-ink `#2B1D17`, surface-sunken `#241A15`, line `#3D2F28`, hint `#3D2F28`, media-backdrop `#241A15`. Adjust only where a contrast
   test fails, and say so in the commit.
 - Radius: `radius-lg` `1.625rem` (cards), buttons stay `full`. Fonts: `@fontsource-variable/fraunces` (display) and
   `@fontsource-variable/dm-sans` (body) replace Cormorant Garamond and Jost.
 
-- [ ] **Step 1:** update the expected values in the design-token tests first; run `pnpm --filter @closyria/design-tokens test` → FAIL.
-- [ ] **Step 2:** change the tokens and fonts; run the token tests (PASS, contrasts included), `build:css`, `pnpm lint`.
-- [ ] **Step 3:** rebuild web and run `pnpm e2e` (axe contrast across pages) → PASS.
-- [ ] **Step 4: Commit** — `feat(design): palette chocolat et rose poudré, Fraunces et DM Sans`
+- [x] **Step 1:** update the expected values in the design-token tests first; run `pnpm --filter @closyria/design-tokens test` → FAIL.
+- [x] **Step 2:** change the tokens and fonts; run the token tests (PASS, contrasts included), `build:css`, `pnpm lint`.
+- [x] **Step 3:** rebuild web and run `pnpm e2e` (axe contrast across pages) → PASS.
+- [x] **Step 4: Commit** — `feat(design): palette chocolat et rose poudré, Fraunces et DM Sans`
 
 ### Task 7: Pastille de niveau et menu « … » sur les vignettes
 
@@ -242,11 +242,11 @@ rangée « Palette C »).
   liste », « Déplacer vers un profil », « Étiquettes », « Retirer de mes envies » or « Supprimer »). Every action
   pushes its undo toast (« Niveau : Mims », « Prioritaire », « Retiré de tes envies »…).
 
-- [ ] **Step 1: Tests** — unit `nextLoveLevel`; e2e: tapping the pill of a J'aime wish shows « Mims », the toast and
+- [x] **Step 1: Tests** — unit `nextLoveLevel`; e2e: tapping the pill of a J'aime wish shows « Mims », the toast and
   « Annuler » restores J'aime; menu → Prioritaire shows the tag on the card; menu → « Retirer de mes envies » puts it
   in the trash; no checkbox on the cards; axe clean (phone, tablet, desktop).
-- [ ] **Step 2–4:** run (FAIL), implement, rebuild web, run `pnpm e2e -- tests/love-levels.spec.ts` and unit tests (PASS).
-- [ ] **Step 5: Commit** — `feat(web): niveau et menu « … » sur les vignettes`
+- [x] **Step 2–4:** run (FAIL), implement, rebuild web, run `pnpm e2e -- tests/love-levels.spec.ts` and unit tests (PASS).
+- [x] **Step 5: Commit** — `feat(web): niveau et menu « … » sur les vignettes`
 
 ### Task 8: Mode « Sélectionner », filtres par niveau et tri
 
@@ -259,11 +259,11 @@ rangée « Palette C »).
   « Sélectionner » / « Terminé » toggle; in select mode each card is a toggle button (`aria-pressed`) with a round
   check; the existing selection bar gains « Niveau » and « Prioritaire » (bulk `setFields`).
 
-- [ ] **Step 1: Tests** — unit: params round-trip (`niveau`, `prioritaire`, `love`); e2e (adapt the selection tests
+- [x] **Step 1: Tests** — unit: params round-trip (`niveau`, `prioritaire`, `love`); e2e (adapt the selection tests
   of `views.spec.ts`): « Sélectionner » then two cards → bar « 2 sélectionnés », set « En feu » for both, undo;
   filter 🔥 shows only level 4; sort « Ce que j'aime le plus ».
-- [ ] **Step 2–4:** run (FAIL), implement, rebuild, run `pnpm e2e -- tests/views.spec.ts` (PASS).
-- [ ] **Step 5: Commit** — `feat(web): mode Sélectionner, filtres par niveau et tri`
+- [x] **Step 2–4:** run (FAIL), implement, rebuild, run `pnpm e2e -- tests/views.spec.ts` (PASS).
+- [x] **Step 5: Commit** — `feat(web): mode Sélectionner, filtres par niveau et tri`
 
 ### Task 9: Fiche — « Ajouter à mes envies », niveau, prioritaire, avis
 
@@ -279,12 +279,12 @@ rangée « Palette C »).
   primary « Ajouter à mes envies » (`action:"wish"`), « Ajouter à une liste », « Déjà commandé »; toast « Ajouté à tes
   envies »; item panel shows the picker, priority and opinion instead of the ♡.
 
-- [ ] **Step 1: Tests** — e2e: paste a link → choose Mims, Prioritaire, « Trop mims » → « Ajouter à mes envies » →
+- [x] **Step 1: Tests** — e2e: paste a link → choose Mims, Prioritaire, « Trop mims » → « Ajouter à mes envies » →
   Envies shows the card with 🥰, Prioritaire and « Trop mims »; on the kept sheet change to En feu, undo. Replace every
   `getByRole("button", { name: "Favori" })` in the e2e suite with a helper `keepWish(page)` in
   `e2e/fixtures/shops.ts`.
-- [ ] **Step 2–4:** run (FAIL), implement, rebuild, run the whole `pnpm e2e` (PASS).
-- [ ] **Step 5: Commit** — `feat(web): Ajouter à mes envies avec niveau, prioritaire et avis`
+- [x] **Step 2–4:** run (FAIL), implement, rebuild, run the whole `pnpm e2e` (PASS).
+- [x] **Step 5: Commit** — `feat(web): Ajouter à mes envies avec niveau, prioritaire et avis`
 
 ### Task 10: Préparer une commande et budgets (web)
 
@@ -305,12 +305,12 @@ rangée « Palette C »).
   « 3 articles · 187 € », « Il te resterait 13 € » / « 37 € au-dessus » ; « J'ai commandé » → toast
   « 3 articles passés en Commandé · Annuler ».
 
-- [ ] **Step 1: Tests** — unit `draftTotals` (unknown price counts 0 and is counted in `unknownPrices`, no budget →
+- [x] **Step 1: Tests** — unit `draftTotals` (unknown price counts 0 and is counted in `unknownPrices`, no budget →
   `afterCents: null`, over budget negative); e2e: set a 150 € weekly budget, tick two wishes (89 + 65 €) → « 2 articles
   · 154 € » and « 4 € au-dessus »; reload → still ticked; « J'ai commandé » → Commandé view has them, band shows
   « Déjà commandé : 154 € »; undo; list scope shows only the list's items; axe clean.
-- [ ] **Step 2–4:** run (FAIL), implement, rebuild, run `pnpm e2e -- tests/order-draft.spec.ts` (PASS).
-- [ ] **Step 5: Commit** — `feat(web): préparer une commande avec budget`
+- [x] **Step 2–4:** run (FAIL), implement, rebuild, run `pnpm e2e -- tests/order-draft.spec.ts` (PASS).
+- [x] **Step 5: Commit** — `feat(web): préparer une commande avec budget`
 
 ### Task 11: Réglages → Mes niveaux
 
@@ -323,10 +323,10 @@ rangée « Palette C »).
 - Produces: four rows (emoji button opening a grid of 24 common emojis + a one-emoji text field, label field ≤ 20),
   « Enregistrer », « Revenir aux niveaux de départ »; settings nav entry « Mes niveaux » (`/reglages/niveaux`).
 
-- [ ] **Step 1: Tests** — rename Mims to « Trop beau » with 😍 → the cards show « 😍 Trop beau »; two emojis refused
+- [x] **Step 1: Tests** — rename Mims to « Trop beau » with 😍 → the cards show « 😍 Trop beau »; two emojis refused
   with the message « Un seul émoji par niveau »; « Revenir aux niveaux de départ » restores 🥰 Mims; axe clean.
-- [ ] **Step 2–4:** run (FAIL), implement, rebuild, run the spec (PASS).
-- [ ] **Step 5: Commit** — `feat(web): personnaliser ses niveaux`
+- [x] **Step 2–4:** run (FAIL), implement, rebuild, run the spec (PASS).
+- [x] **Step 5: Commit** — `feat(web): personnaliser ses niveaux`
 
 ### Task 12: Documents et suite complète
 
@@ -334,9 +334,9 @@ rangée « Palette C »).
 - Modify: `docs/specs/2026-11-07-envies-chaleureuses.md` (statut, écarts), `docs/specs/2026-11-01-v1-conception.md`
   (décision « Favori → niveaux »), this plan (cases cochées)
 
-- [ ] **Step 1:** `pnpm lint && pnpm typecheck && pnpm test` → all green; rebuild; `pnpm e2e` → all green (rerun the
+- [x] **Step 1:** `pnpm lint && pnpm typecheck && pnpm test` → all green; rebuild; `pnpm e2e` → all green (rerun the
   known flaky viewer test once if it fails).
-- [ ] **Step 2: Commit** — `docs: Envies chaleureuses partie 1 livrée en dev`
+- [x] **Step 2: Commit** — `docs: Envies chaleureuses partie 1 livrée en dev`
 
 ## Écarts assumés par rapport au cahier des charges
 

@@ -7,8 +7,9 @@
 > **Mise à jour du 2026-11-07** : la palette (§ 3.1), les caractères (§ 4) et les coins (§ 5) ont changé, voir
 > `docs/specs/2026-11-07-envies-chaleureuses.md` (§ 3.9 et 5.4). Palette C « chocolat et rose poudré » : clair, fond
 > `#F2EDE7`, cartes `#FFFFFF`, encre `#2B1D17`, encre douce `#6E5A50`, trait `#E5D7CC`, accent `#5A3A2E`, rose poudré
-> `#EBC7C3`, jaune beurre `#F3E3A6`, camel `#DCC3A6`, sauge `#D5DCC8` ; sombre, fond `#1E1612`, cartes `#2A201B`,
-> encre `#F2EDE7`, encre douce `#C9B8AE`, accent `#EBC7C3`. Titres en **Fraunces**, texte en **DM Sans** (à la place
+> `#EBC7C3`, jaune beurre `#F3E3A6`, sauge `#D5DCC8`, fond des photos latte `#EADBC8` (plus de camel) ; sombre, fond
+> `#1E1612`, cartes `#2A201B`, encre `#F2EDE7`, encre douce `#C9B8AE`, accent `#EBC7C3`, fond creux et fond des photos
+> `#241A15`, trait et conseils `#3D2F28`. Titres en **Fraunces**, texte en **DM Sans** (à la place
 > de Cormorant Garamond et Jost). Cartes à 26 px, boutons en pilule. Les tableaux ci-dessous sont l'état d'origine.
 
 ## 1. Intention
