@@ -67,6 +67,10 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await row(page, "Gilet Brume").uncheck();
   await expect(band(page)).toContainText(/1 article · 89\s€/);
   await expect(band(page)).toContainText(/Il te resterait 61\s€/);
+  // Under the budget: a solid pine pill with light bold text, as strong as the red one.
+  const left = band(page).getByText(/Il te resterait/);
+  await expect(left).toHaveCSS("background-color", "rgb(31, 74, 63)");
+  await expect(left).toHaveCSS("color", "rgb(213, 220, 200)");
   await row(page, "Gilet Brume").check();
   await expect(band(page)).toContainText(/2 articles · 154\s€/);
 

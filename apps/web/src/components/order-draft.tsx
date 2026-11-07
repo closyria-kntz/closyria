@@ -324,7 +324,7 @@ export function OrderDraft() {
             )}
             {totals.afterCents !== null &&
               (totals.afterCents >= 0 ? (
-                <p className="rounded-button bg-success-surface px-space-2 text-sm text-success">
+                <p className="rounded-button bg-success px-space-2 font-strong text-sm text-success-surface">
                   {t("band.left", { amount: money(totals.afterCents) })}
                 </p>
               ) : (
