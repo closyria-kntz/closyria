@@ -4,6 +4,7 @@ import type { WishlistView } from "@closyria/shared";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { type FormEvent, useCallback, useEffect, useId, useState } from "react";
+import { useRefreshOnReturn } from "@/lib/refresh-on-return";
 import { moveId } from "@/lib/reorder";
 import { pushUndo } from "@/lib/undo";
 import { createWishlist, fetchWishlists, reorderWishlists } from "@/lib/wardrobe-client";
@@ -22,18 +23,20 @@ export function WishlistsView() {
   const [error, setError] = useState<string | null>(null);
   const fieldId = useId();
 
-  const load = useCallback(async () => {
-    setStatus("loading");
+  /** `quiet`: back on the page, no loading state and the lists kept when the read fails. */
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setStatus("loading");
     try {
       setLists(await fetchWishlists());
       setStatus("ready");
     } catch {
-      setStatus("error");
+      if (!quiet) setStatus("error");
     }
   }, []);
   useEffect(() => {
     void load();
   }, [load]);
+  useRefreshOnReturn(() => void load(true), status === "ready");
 
   async function create(event: FormEvent) {
     event.preventDefault();

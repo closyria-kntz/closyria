@@ -100,6 +100,8 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
     setChoice(next);
   };
 
+  // As on the card, so the message says which article « Annuler » takes back.
+  const cardName = item.name?.trim() || tCard("noName");
   const setLevel = (level: LoveLevel) =>
     act(async () => {
       const cleared = item.loveLevel === level;
@@ -107,7 +109,9 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
       if (!result.ok) return fail(result.error);
       onChanged(result.item);
       pushUndo(
-        cleared ? t("toast.levelCleared") : t("toast.level", { label: levelOf(levels, level).label }),
+        cleared
+          ? t("toast.levelClearedOf", { name: cardName })
+          : t("toast.levelOf", { name: cardName, label: levelOf(levels, level).label }),
         undoWith(result.undo, reload),
       );
     });

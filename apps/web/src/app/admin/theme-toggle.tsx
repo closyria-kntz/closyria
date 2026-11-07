@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { isThemeMode, nextThemeMode, THEME_ID, type ThemeMode } from "./theme-mode";
+import { applyThemeMode, isThemeMode, nextThemeMode, readAppThemeMode, type ThemeMode } from "@/lib/theme-mode";
 import { buttonClass } from "./ui";
 
 const STORAGE_KEY = "closyria-admin-theme";
@@ -21,14 +21,9 @@ export function ThemeToggle() {
   }, []);
 
   useEffect(() => {
-    const root = document.documentElement;
-    const id = THEME_ID[mode];
-    if (id) root.dataset.theme = id;
-    else delete root.dataset.theme;
-    // Leaving the admin gives the rest of the site its own theme back.
-    return () => {
-      delete root.dataset.theme;
-    };
+    applyThemeMode(mode);
+    // Leaving the admin gives the rest of the site its own theme back (her choice in Réglages → Apparence).
+    return () => applyThemeMode(readAppThemeMode());
   }, [mode]);
 
   const change = () => {

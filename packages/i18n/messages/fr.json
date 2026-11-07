@@ -903,6 +903,8 @@
       "toast": {
         "level": "Niveau : {label}",
         "levelCleared": "Niveau retiré",
+        "levelOf": "{name} : {label}",
+        "levelClearedOf": "{name} : niveau retiré",
         "priorityOn": "Prioritaire",
         "priorityOff": "Retiré de Prioritaire",
         "why": "Avis enregistré"
@@ -1088,6 +1090,7 @@
       "profiles": "Profils",
       "tags": "Étiquettes",
       "levels": "Mes niveaux",
+      "appearance": "Apparence",
       "trash": "Corbeille",
       "account": "Mon compte",
       "iphone": "Aide iPhone"
@@ -1106,6 +1109,16 @@
     "failed": "L’enregistrement n’a pas abouti. Réessaie.",
     "cancel": "Annuler",
     "close": "Fermer",
+    "appearance": {
+      "metadata": "Apparence",
+      "title": "Apparence",
+      "intro": "Clair ou sombre, sur cet appareil.",
+      "modes": {
+        "system": { "label": "Automatique", "hint": "Comme ton téléphone ou ton ordinateur" },
+        "light": { "label": "Clair", "hint": "Toujours en clair" },
+        "dark": { "label": "Sombre", "hint": "Toujours en sombre" }
+      }
+    },
     "levels": {
       "metadata": "Mes niveaux",
       "title": "Tes mots à toi",

@@ -2,8 +2,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { nextThemeMode } from "../../lib/theme-mode";
 import { isPaletteShortcut } from "./keyboard";
-import { nextThemeMode } from "./theme-mode";
 
 const key = (k: string, mods: { metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean } = {}) => ({
   key: k,

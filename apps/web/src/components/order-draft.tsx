@@ -9,6 +9,7 @@ import { z } from "zod";
 import { draftTotals, formatAmount, orderDraftErrorKey, sortForOrder } from "@/lib/budget";
 import { levelOf } from "@/lib/love-levels";
 import { profileHref, useCurrentProfile, useLoveLevels, useProfilesReady } from "@/lib/profile-context";
+import { useRefreshOnReturn } from "@/lib/refresh-on-return";
 import { pushUndo } from "@/lib/undo";
 import {
   type BudgetScope,
@@ -118,6 +119,8 @@ export function OrderDraft() {
   useEffect(() => {
     if (ready) void load();
   }, [ready, load]);
+  // Back on the page: ticks, prices and budget again (already without a loading state); not while ordering.
+  useRefreshOnReturn(() => void load(), ready && !ordering && items.status === "ready");
 
   const setTicked = (id: string, inOrderDraft: boolean) =>
     setItems((previous) => ({
@@ -325,7 +328,7 @@ export function OrderDraft() {
                   {t("band.left", { amount: money(totals.afterCents) })}
                 </p>
               ) : (
-                <p className="rounded-button bg-hint px-space-2 text-sm text-ink">
+                <p className="rounded-button bg-danger px-space-2 font-strong text-sm text-surface">
                   {t("band.over", { amount: money(-totals.afterCents) })}
                 </p>
               ))}

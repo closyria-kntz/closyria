@@ -257,6 +257,30 @@ test("Sélectionner : déplacer deux articles vers un profil, les ajouter à une
   await expect(cards).toHaveCount(3);
 });
 
+test("revenir sur la page montre ce qui a changé ailleurs, sans recharger", async ({ page, context }) => {
+  await pasteAndWish(page);
+  await page.goto("/envies");
+  const card = page.getByTestId("item-card").first();
+  await expect(card).toContainText("J’aime");
+
+  // Elsewhere (another tab, as on her phone): the level becomes Mims.
+  const other = await context.newPage();
+  await other.goto("/envies");
+  await other
+    .getByTestId("item-card")
+    .first()
+    .getByRole("button", { name: /niveau : J’aime/ })
+    .click();
+  await expect(other.getByTestId("item-card").first()).toContainText("Mims");
+  await other.close();
+
+  // Not before she comes back; then without a reload (two refreshes are at least 2 s apart).
+  await expect(card).toContainText("J’aime");
+  await page.waitForTimeout(2_100);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(card).toContainText("Mims");
+});
+
 test("la grille a 2, 3 ou 5 colonnes selon l'écran", async ({ page }, testInfo) => {
   await pasteAndWish(page);
   await page.goto("/envies");

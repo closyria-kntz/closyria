@@ -42,7 +42,7 @@ test("la pastille passe de J’aime à Mims, « Annuler » remet J’aime ; plus
   await card(page).getByRole("button", { name: "Niveau : J’aime. Toucher pour changer" }).click();
   await expect(card(page).getByRole("button", { name: "Niveau : Mims. Toucher pour changer" })).toBeVisible();
   await expect(card(page)).toContainText("Mims");
-  await expect(toast(page)).toContainText("Niveau : Mims");
+  await expect(toast(page)).toContainText(`${PRODUCT.name} : Mims`);
 
   await toast(page).getByRole("button", { name: "Annuler" }).click();
   await expect(card(page).getByRole("button", { name: "Niveau : J’aime. Toucher pour changer" })).toBeVisible();
@@ -50,7 +50,7 @@ test("la pastille passe de J’aime à Mims, « Annuler » remet J’aime ; plus
   // Taken back to « Bof »… then cleared from the menu: the item stays (spec §4), the pill offers « + ».
   await card(page).getByRole("button", { name: "Plus d’actions" }).click();
   await menu(page).getByRole("button", { name: "J’aime" }).click();
-  await expect(toast(page)).toContainText("Niveau retiré");
+  await expect(toast(page)).toContainText(`${PRODUCT.name} : niveau retiré`);
   await expect(
     card(page).getByRole("button", { name: `${PRODUCT.name} — donner un niveau`, exact: true }),
   ).toBeVisible();
@@ -76,7 +76,7 @@ test("menu « … » : focus, Échap, niveau, Prioritaire et Mon avis sur la vig
 
   await more.click();
   await menu(page).getByRole("button", { name: "En feu" }).click();
-  await expect(toast(page)).toContainText("Niveau : En feu");
+  await expect(toast(page)).toContainText(`${PRODUCT.name} : En feu`);
   await expect(card(page).getByRole("button", { name: "Niveau : En feu. Toucher pour changer" })).toBeVisible();
 
   await more.click();

@@ -53,6 +53,8 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await row(page, "Gilet Brume").check();
   await expect(band(page)).toContainText(/2 articles · 154\s€/);
   await expect(band(page)).toContainText(/4\s€ au-dessus/);
+  // Over the budget: in red (the danger color), not in the band's chocolate.
+  await expect(band(page).getByText(/au-dessus/)).toHaveCSS("background-color", "rgb(155, 28, 49)");
   await page.screenshot({ path: testInfo.outputPath("commande.png") });
   await axe(page);
 

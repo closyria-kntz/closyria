@@ -9,12 +9,13 @@ const LINKS = [
   { key: "profiles", href: "/reglages/profils" },
   { key: "tags", href: "/reglages/etiquettes" },
   { key: "levels", href: "/reglages/niveaux" },
+  { key: "appearance", href: "/reglages/apparence" },
   { key: "trash", href: "/reglages/corbeille" },
   { key: "account", href: "/reglages/compte" },
   { key: "iphone", href: "/aide/iphone" },
 ] as const;
 
-/** Sub-navigation of « Réglages »: profiles, tags, trash, her account and the iPhone help page. */
+/** Sub-navigation of « Réglages »: profiles, tags, levels, appearance, trash, her account and the iPhone help page. */
 export function SettingsNav() {
   const t = useTranslations("Settings.nav");
   const pathname = usePathname();

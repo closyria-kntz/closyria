@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { profileHref, useCurrentProfile, useProfilesReady } from "@/lib/profile-context";
+import { useRefreshOnReturn } from "@/lib/refresh-on-return";
 import { fetchFacets, fetchItemsPage, fetchReference, fetchTags } from "@/lib/wardrobe-client";
 import {
   activeFilterCount,
@@ -135,6 +136,20 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   };
 
   const reload = useCallback(async () => setReloadToken((value) => value + 1), []);
+
+  // Back on the page: the first page again, quietly (no loading state); never during a selection.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey stands for query.
+  const refreshQuietly = useCallback(() => {
+    const mine = ++generation.current;
+    moreController.current?.abort();
+    dispatchMore({ type: "reset", generation: mine });
+    fetchItemsPage(query, null).then(
+      (page) =>
+        mine === generation.current && setData({ items: page.items, nextCursor: page.nextCursor, status: "ready" }),
+      () => {},
+    );
+  }, [queryKey]);
+  useRefreshOnReturn(refreshQuietly, ready && !selecting && data.status === "ready");
   const gone = useCallback((ids: readonly string[]) => {
     const away = new Set(ids);
     setData((previous) => ({ ...previous, items: previous.items.filter((item) => !away.has(item.id)) }));

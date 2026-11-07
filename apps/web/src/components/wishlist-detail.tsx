@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type FormEvent, useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useRefreshOnReturn } from "@/lib/refresh-on-return";
 import { moveId } from "@/lib/reorder";
 import { pushUndo } from "@/lib/undo";
 import {
@@ -59,33 +60,45 @@ export function WishlistDetail({ id }: { id: string }) {
     void loadBudget();
   }, [loadBudget]);
 
-  const load = useCallback(async () => {
-    setState({ status: "loading" });
-    try {
-      const list = (await fetchWishlists()).find((candidate) => candidate.id === id);
-      if (!list) return setState({ status: "missing" });
-      // The list's items, in its order, page by page (the API filters and orders by the list).
-      const items: ItemView[] = [];
-      let cursor: string | null = null;
-      let failed = false;
-      do {
-        try {
-          const page = await fetchItemsPage({ wishlist: id }, cursor);
-          items.push(...page.items);
-          cursor = page.nextCursor;
-        } catch {
-          failed = true;
-          cursor = null;
-        }
-      } while (cursor);
-      setState({ status: "ready", list, items, partial: failed || items.length !== list.itemIds.length });
-    } catch {
-      setState({ status: "error" });
-    }
-  }, [id]);
+  /** `quiet`: back on the page, no loading state and the list kept when the read fails. */
+  const load = useCallback(
+    async (quiet = false) => {
+      if (!quiet) setState({ status: "loading" });
+      try {
+        const list = (await fetchWishlists()).find((candidate) => candidate.id === id);
+        if (!list) return setState({ status: "missing" });
+        // The list's items, in its order, page by page (the API filters and orders by the list).
+        const items: ItemView[] = [];
+        let cursor: string | null = null;
+        let failed = false;
+        do {
+          try {
+            const page = await fetchItemsPage({ wishlist: id }, cursor);
+            items.push(...page.items);
+            cursor = page.nextCursor;
+          } catch {
+            failed = true;
+            cursor = null;
+          }
+        } while (cursor);
+        setState({ status: "ready", list, items, partial: failed || items.length !== list.itemIds.length });
+      } catch {
+        if (!quiet) setState({ status: "error" });
+      }
+    },
+    [id],
+  );
   useEffect(() => {
     void load();
   }, [load]);
+  // Back on the page: the list and its budget again, never while she renames it.
+  useRefreshOnReturn(
+    () => {
+      void load(true);
+      void loadBudget();
+    },
+    state.status === "ready" && !renaming,
+  );
 
   /** Applies the list the API returned: the items follow its order and drop those it no longer holds. */
   const apply = useCallback((list: WishlistView) => {

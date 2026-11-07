@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
 import { fetchSummary } from "@/lib/catalog-client";
 import { ProfilesContext, profileHref, useAccount, useCurrentProfile } from "@/lib/profile-context";
+import { useRefreshOnReturn } from "@/lib/refresh-on-return";
 import { fetchLoveLevels } from "@/lib/wardrobe-client";
 import { AccountPrompt } from "./account-prompt";
 import { type AppNavItem, desktopNav, isCurrent, moreNav, phoneTabs, tabletTabs } from "./app-nav";
@@ -199,20 +200,19 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (levels && alive.current) setLoveLevels(levels);
   }, []);
 
-  // Read on arrival, and again whenever the window regains focus (profiles may have changed in another tab).
+  // Read on arrival, and again whenever she comes back to the page (changed in another tab or on her phone).
   useEffect(() => {
     alive.current = true;
-    const refresh = () => {
-      void refreshProfiles();
-      void refreshLoveLevels();
-    };
-    refresh();
-    window.addEventListener("focus", refresh);
+    void refreshProfiles();
+    void refreshLoveLevels();
     return () => {
       alive.current = false;
-      window.removeEventListener("focus", refresh);
     };
   }, [refreshProfiles, refreshLoveLevels]);
+  useRefreshOnReturn(() => {
+    void refreshProfiles();
+    void refreshLoveLevels();
+  });
 
   return (
     <ProfilesContext.Provider value={{ profiles, ready, account, refreshProfiles, loveLevels, refreshLoveLevels }}>

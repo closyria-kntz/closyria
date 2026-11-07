@@ -56,7 +56,7 @@ export function LoveLevelPill({
     setBusy(false);
     if (!result.ok) return pushUndo(tErrors(result.error as "failed"), null);
     onChange(result.item);
-    pushUndo(t("menu.toast.level", { label: levelOf(levels, level).label }), undoWith(result.undo, reload));
+    pushUndo(t("menu.toast.levelOf", { name, label: levelOf(levels, level).label }), undoWith(result.undo, reload));
   }
 
   return (

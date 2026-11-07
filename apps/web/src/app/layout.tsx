@@ -25,7 +25,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // The admin's texts are only sent inside the admin area (its layout adds them), never to the public site.
   const { Admin: _admin, ...publicMessages } = await getMessages();
   return (
-    <html lang={locale}>
+    // theme-init.js sets `data-theme` before React hydrates: the attribute is expected to differ.
+    <html lang={locale} suppressHydrationWarning>
+      <head>
+        {/* Blocking on purpose: her light / dark choice before the first paint. A file, for `script-src 'self'`. */}
+        <script src="/theme-init.js" />
+      </head>
       <body className="min-h-dvh bg-surface text-ink antialiased">
         <NextIntlClientProvider messages={publicMessages}>{children}</NextIntlClientProvider>
         <PageViewTracker />
