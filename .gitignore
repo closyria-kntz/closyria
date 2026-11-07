@@ -18,3 +18,4 @@ apps/web/src/styles/tokens.css
 
 # Browser tests: reports, traces, server log, CSP violations (CI artefacts)
 e2e/reports/
+.worktrees/
