@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { audienceSchema, childDetailSchema, currencySchema, productViewSchema, seasonSchema } from "./catalog";
+import { type LoveLevel, loveLevelSchema } from "./love-level";
+import { opinionViewSchema, wishlistSettingsSchema } from "./opinions";
 
 // Defined next to the product view (which shows them); re-exported here, where they began.
 export { audienceSchema, childDetailSchema, seasonSchema };
@@ -43,8 +45,7 @@ export const MAX_SALE_CHANNEL = 60;
 export const MAX_WHY = 200;
 
 /** How much she loves a wish: 1 Bof, 2 J'aime, 3 Mims, 4 En feu; null = no level. */
-export const loveLevelSchema = z.number().int().min(1).max(4);
-export type LoveLevel = z.infer<typeof loveLevelSchema>;
+export { type LoveLevel, loveLevelSchema };
 /** The level a wish gets when none is given (and the level of the former favorites). */
 export const DEFAULT_LOVE_LEVEL: LoveLevel = 2;
 /** Longest name she can give a level. */
@@ -361,14 +362,27 @@ export const wishlistViewSchema = z.object({
   shared: z.boolean(),
   sharedAt: dateTimeSchema.nullable(),
   position: z.number().int(),
+  ...wishlistSettingsSchema.shape,
+  /** Opinions left since she last looked. */
+  newOpinions: z.number().int().nonnegative(),
 });
 export type WishlistView = z.infer<typeof wishlistViewSchema>;
 
 /** Public content of a shared list (G4): never private photos, notes, sizes or profiles. */
 export const sharedWishlistViewSchema = z.object({
   name: z.string(),
+  ownerName: z.string().nullable(),
+  allowOpinions: z.boolean(),
+  /** Her level names, so friends see the same emojis she does. */
+  levels: z.array(loveLevelViewSchema),
+  budget: z.object({ amountCents: centsSchema, currency: currencySchema }).nullable(),
   items: z.array(
     z.object({
+      itemId: z.uuid(),
+      ownerOpinion: z
+        .object({ level: loveLevelSchema.nullable(), priority: z.boolean(), why: z.string().nullable() })
+        .nullable(),
+      opinions: z.array(opinionViewSchema),
       name: z.string().nullable(),
       brand: z.string().nullable(),
       priceCents: centsSchema.nullable(),
@@ -555,6 +569,9 @@ export const wardrobeErrorCodes = [
   "budget_not_resettable",
   "order_draft_empty",
   "order_draft_too_large",
+  "name_taken",
+  "opinions_closed",
+  "web_address",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];

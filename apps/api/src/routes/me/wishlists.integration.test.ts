@@ -379,11 +379,11 @@ describe("sharing", () => {
     expect(res.headers.get("x-robots-tag")).toBe("noindex");
     expect(res.headers.get("cache-control")).toContain("no-store");
     const raw = await res.text();
-    for (const secret of ["SECRET", mediaId, userId, made.item.id, list.id, made.item.profileId ?? "-", "private/"]) {
+    for (const secret of ["SECRET", mediaId, userId, list.id, made.item.profileId ?? "-", "private/"]) {
       expect(raw).not.toContain(secret);
     }
     const parsed = JSON.parse(raw) as SharedWishlistView;
-    expect(Object.keys(parsed).toSorted()).toEqual(["items", "name"]);
+    expect(Object.keys(parsed).toSorted()).toEqual(["allowOpinions", "budget", "items", "levels", "name", "ownerName"]);
     expect(parsed.name).toBe("Mes envies");
     expect(parsed.items).toHaveLength(1);
     expect(Object.keys(parsed.items[0] ?? {}).toSorted()).toEqual([
@@ -392,12 +392,18 @@ describe("sharing", () => {
       "imageHeight",
       "imageUrl",
       "imageWidth",
+      "itemId",
       "name",
+      "opinions",
+      "ownerOpinion",
       "priceCents",
       "shopName",
       "url",
     ]);
     expect(parsed.items[0]).toEqual({
+      itemId: made.item.id,
+      ownerOpinion: null,
+      opinions: [],
       name: "Robe rouge",
       brand: "Maison",
       priceCents: 4990,

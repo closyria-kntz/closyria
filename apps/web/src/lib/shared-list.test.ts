@@ -1,3 +1,4 @@
+import { DEFAULT_LOVE_LEVELS } from "@closyria/shared";
 import { describe, expect, it, vi } from "vitest";
 import type { InternalApi } from "./admin-api";
 import { fetchSharedList } from "./shared-list";
@@ -5,8 +6,15 @@ import { fetchSharedList } from "./shared-list";
 const TOKEN = "AbCdEfGhIjKlMnOpQrStUv";
 const view = {
   name: "Été",
+  ownerName: null,
+  allowOpinions: true,
+  levels: DEFAULT_LOVE_LEVELS,
+  budget: null,
   items: [
     {
+      itemId: "5b1f3c0e-7c1a-4d58-9a39-0a3f2f3a1b11",
+      ownerOpinion: null,
+      opinions: [],
       name: "Robe",
       brand: null,
       priceCents: 2999,

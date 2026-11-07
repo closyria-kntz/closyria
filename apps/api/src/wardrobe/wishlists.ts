@@ -1,5 +1,6 @@
 import { and, asc, type Database, eq, inArray, isNull, schema } from "@closyria/db";
-import type { SharedWishlistView, WishlistView } from "@closyria/shared";
+import { DEFAULT_LOVE_LEVELS, type SharedWishlistView, type WishlistView } from "@closyria/shared";
+
 import { catalogImageUrl } from "../catalog/product-view";
 import type { Tx } from "./events";
 
@@ -47,6 +48,12 @@ function toWishlistView(row: WishlistRow, itemIds: string[]): WishlistView {
     shared: row.shareTokenHash !== null,
     sharedAt: row.sharedAt?.toISOString() ?? null,
     position: row.position,
+    // Real values come with the opinions feature.
+    allowOpinions: true,
+    showOwnerName: true,
+    showOwnerOpinions: true,
+    showBudget: false,
+    newOpinions: 0,
   };
 }
 
@@ -61,6 +68,7 @@ export async function loadSharedView(db: Database, list: { id: string; name: str
   // Narrow: only the public columns, and the first shop photo of each product (not all images, not the sizes).
   const members = await db
     .select({
+      itemId: schema.items.id,
       productId: schema.products.id,
       name: schema.products.name,
       brand: schema.products.brand,
@@ -96,7 +104,14 @@ export async function loadSharedView(db: Database, list: { id: string; name: str
   const imageOf = new Map(firstImages.map((i) => [i.productId, i]));
   return {
     name: list.name,
+    ownerName: null,
+    allowOpinions: true,
+    levels: [...DEFAULT_LOVE_LEVELS],
+    budget: null,
     items: members.map((m) => ({
+      itemId: m.itemId,
+      ownerOpinion: null,
+      opinions: [],
       name: m.name,
       brand: m.brand,
       priceCents: m.priceCents,

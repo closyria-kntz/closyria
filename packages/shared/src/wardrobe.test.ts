@@ -253,7 +253,19 @@ describe("views", () => {
     expect(itemPageSchema.safeParse({ items: [itemView], nextCursor: null }).success).toBe(true);
   });
   it("wishlist view", () => {
-    const w = { id, name: "Été", itemIds: [id], shared: false, sharedAt: null, position: 0 };
+    const w = {
+      id,
+      name: "Été",
+      itemIds: [id],
+      shared: false,
+      sharedAt: null,
+      position: 0,
+      allowOpinions: true,
+      showOwnerName: true,
+      showOwnerOpinions: true,
+      showBudget: false,
+      newOpinions: 0,
+    };
     expect(wishlistViewSchema.safeParse(w).success).toBe(true);
     expect(wishlistViewSchema.safeParse({ ...w, shared: true, sharedAt: "2026-11-05T10:00:00.000Z" }).success).toBe(
       true,
