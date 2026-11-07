@@ -1012,8 +1012,7 @@
       "unknown": "dont {count, plural, one {# prix inconnu} other {# prix inconnus}}",
       "left": "Il te resterait {amount}",
       "over": "{amount} au-dessus",
-      "ordered": "J’ai commandé",
-      "ordering": "Un instant…"
+      "ordered": "J’ai commandé"
     },
     "ordered": "{count, plural, one {# article passé} other {# articles passés}} en Commandé",
     "errors": {
@@ -1059,7 +1058,10 @@
       "failed": "Le budget n’a pas pu être enregistré. Réessaie.",
       "saved": "Budget enregistré",
       "deleted": "Budget supprimé",
-      "resetDone": "Budget remis à zéro"
+      "resetDone": "Budget remis à zéro",
+      "resetConfirm": "Recommencer à zéro ? Ce qui est déjà commandé repartira de 0 €.",
+      "resetYes": "Recommencer",
+      "resetKeep": "Garder"
     }
   },
   "SharedList": {

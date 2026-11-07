@@ -1,6 +1,6 @@
 import type { BudgetView, ItemView } from "@closyria/shared";
 import { describe, expect, it } from "vitest";
-import { budgetInputFrom, draftTotals, formatAmount, orderDraftErrorKey, sortForOrder } from "./budget";
+import { budgetInputFrom, budgetInputOf, draftTotals, formatAmount, orderDraftErrorKey, sortForOrder } from "./budget";
 
 const item = (id: string, priceCents: number | null, extra: Partial<ItemView> = {}) =>
   ({
@@ -124,5 +124,17 @@ describe("orderDraftErrorKey", () => {
     expect(orderDraftErrorKey("order_draft_too_large")).toBe("tooLarge");
     expect(orderDraftErrorKey("failed")).toBe("failed");
     expect(orderDraftErrorKey("not_found")).toBe("failed");
+  });
+});
+
+describe("budgetInputOf", () => {
+  it("gives back the PUT body of a saved budget (for « Annuler »), dates for a custom one only", () => {
+    expect(budgetInputOf(budget(100))).toEqual({ amountCents: 15_000, period: "week" });
+    expect(budgetInputOf({ ...budget(100), period: "custom", startsOn: "2026-12-01", endsOn: "2026-12-15" })).toEqual({
+      amountCents: 15_000,
+      period: "custom",
+      startsOn: "2026-12-01",
+      endsOn: "2026-12-15",
+    });
   });
 });

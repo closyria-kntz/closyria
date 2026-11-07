@@ -129,3 +129,79 @@ test("depuis une liste, seuls ses articles et le budget de la liste", async ({ p
   await expect(card).toContainText("Pas encore de budget");
   await expect(band(page)).not.toContainText("resterait");
 });
+
+test("budget : « Annuler » après Enregistrer ou Supprimer, « Recommencer à zéro » demande confirmation", async ({
+  page,
+}) => {
+  await wishAt(page, "Sac Lune", "20");
+  await page.goto("/envies/commande");
+  const card = page.getByRole("region", { name: "Mon budget" });
+  const dialog = page.getByRole("dialog", { name: "Mon budget" });
+  const save = async (amount: string, period: string) => {
+    await page.getByRole("button", { name: "Budget", exact: true }).click();
+    await dialog.getByLabel("Montant (en euros)").fill(amount);
+    await dialog.getByRole("radio", { name: period }).check();
+    await dialog.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(dialog).toHaveCount(0);
+  };
+
+  // A new budget, undone: there is none again.
+  await save("150", "Par semaine");
+  await expect(card).toContainText(/Budget de la semaine : 150\s€/);
+  await expect(toast(page)).toContainText("Budget enregistré");
+  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await expect(card).toContainText("Pas encore de budget");
+
+  // A change, undone: the previous amount and period come back.
+  await save("150", "Par semaine");
+  await save("200", "Par mois");
+  await expect(card).toContainText(/Budget du mois : 200\s€/);
+  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await expect(card).toContainText(/Budget de la semaine : 150\s€/);
+
+  // Deleted, undone.
+  await page.getByRole("button", { name: "Budget", exact: true }).click();
+  await dialog.getByRole("button", { name: "Supprimer le budget" }).click();
+  await expect(card).toContainText("Pas encore de budget");
+  await expect(toast(page)).toContainText("Budget supprimé");
+  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await expect(card).toContainText(/Budget de la semaine : 150\s€/);
+
+  // « Recommencer à zéro » (no period only): asks first; « Garder » keeps it, « Recommencer » resets, no undo.
+  await save("100", "Sans période");
+  await page.getByRole("button", { name: "Budget", exact: true }).click();
+  await dialog.getByRole("button", { name: "Recommencer à zéro" }).click();
+  await expect(dialog).toContainText("Recommencer à zéro ? Ce qui est déjà commandé repartira de 0 €.");
+  await axe(page);
+  await dialog.getByRole("button", { name: "Garder" }).click();
+  await expect(dialog.getByRole("button", { name: "Recommencer à zéro" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Recommencer à zéro" }).click();
+  await dialog.getByRole("button", { name: "Recommencer", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(toast(page)).toContainText("Budget remis à zéro");
+  await expect(toast(page).getByRole("button", { name: "Annuler" })).toHaveCount(0);
+  await expect(card).toContainText(/Budget : 100\s€/);
+});
+
+test("le budget d’une liste se règle aussi depuis la page de la liste", async ({ page }) => {
+  await wishAt(page, "Bonnet Givre", "25");
+  await page.goto("/listes");
+  await page.getByLabel("Nom de la nouvelle liste").fill("Hiver");
+  await page.getByRole("button", { name: "Créer la liste" }).click();
+  await page.getByRole("link", { name: /Hiver/ }).click();
+  await page.getByRole("button", { name: "Budget", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Budget de la liste" });
+  await dialog.getByLabel("Montant (en euros)").fill("80");
+  await dialog.getByRole("radio", { name: "Par mois" }).check();
+  await dialog.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(toast(page)).toContainText("Budget enregistré");
+  await axe(page);
+
+  // Opened again: the saved budget is there; and « Préparer une commande » shows it.
+  await page.getByRole("button", { name: "Budget", exact: true }).click();
+  await expect(dialog.getByLabel("Montant (en euros)")).toHaveValue("80");
+  await expect(dialog.getByRole("radio", { name: "Par mois" })).toBeChecked();
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "Préparer une commande" }).click();
+  await expect(page.getByRole("region", { name: "Budget de la liste" })).toContainText(/Budget du mois : 80\s€/);
+});

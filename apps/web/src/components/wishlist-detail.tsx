@@ -1,6 +1,6 @@
 "use client";
 
-import type { ItemView, WishlistView } from "@closyria/shared";
+import type { BudgetView, ItemView, WishlistView } from "@closyria/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -9,12 +9,14 @@ import { moveId } from "@/lib/reorder";
 import { pushUndo } from "@/lib/undo";
 import {
   deleteWishlist,
+  fetchBudget,
   fetchItemsPage,
   fetchWishlists,
   removeFromWishlist,
   renameWishlist,
   reorderWishlistItems,
 } from "@/lib/wardrobe-client";
+import { BudgetDialog } from "./budget-dialog";
 import { Dialog } from "./dialog";
 import { ItemCard } from "./item-card";
 import { GRID_CLASS } from "./item-grid";
@@ -33,6 +35,7 @@ type State =
 /** One list: its items in order (move up / down, remove), rename, share, delete. */
 export function WishlistDetail({ id }: { id: string }) {
   const t = useTranslations("Lists");
+  const tBudget = useTranslations("OrderDraft.budget");
   const router = useRouter();
   const [state, setState] = useState<State>({ status: "loading" });
   const [renaming, setRenaming] = useState(false);
@@ -40,6 +43,21 @@ export function WishlistDetail({ id }: { id: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nameId = useId();
+  // The list's own budget (spec §3.7), set from here or from « Préparer une commande ».
+  const [budget, setBudget] = useState<BudgetView | null>(null);
+  const [budgetOpen, setBudgetOpen] = useState(false);
+  const [budgetFailed, setBudgetFailed] = useState(false);
+  const loadBudget = useCallback(async () => {
+    try {
+      setBudget(await fetchBudget({ wishlistId: id }));
+      setBudgetFailed(false);
+    } catch {
+      setBudgetFailed(true);
+    }
+  }, [id]);
+  useEffect(() => {
+    void loadBudget();
+  }, [loadBudget]);
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
@@ -232,6 +250,14 @@ export function WishlistDetail({ id }: { id: string }) {
               >
                 {t("detail.rename.open")}
               </button>
+              <button
+                type="button"
+                className={`${buttonClass} ${touch}`}
+                disabled={budgetFailed}
+                onClick={() => setBudgetOpen(true)}
+              >
+                {tBudget("open")}
+              </button>
               <button type="button" className={`${buttonClass} ${touch}`} onClick={() => setConfirmDelete(true)}>
                 {t("detail.delete.open")}
               </button>
@@ -281,6 +307,18 @@ export function WishlistDetail({ id }: { id: string }) {
         </ul>
       )}
 
+      <BudgetDialog
+        open={budgetOpen}
+        onClose={() => setBudgetOpen(false)}
+        title={tBudget("listTitle")}
+        scope={{ wishlistId: list.id }}
+        budget={budget}
+        onChanged={(view) => {
+          setBudgetOpen(false);
+          setBudget(view);
+        }}
+        reload={loadBudget}
+      />
       <Dialog
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}

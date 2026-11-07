@@ -3,7 +3,8 @@
 import { type BudgetPeriod, type BudgetView, budgetPeriodSchema } from "@closyria/shared";
 import { useTranslations } from "next-intl";
 import { type FormEvent, useId, useState } from "react";
-import { type BudgetForm, budgetFormOf, budgetInputFrom } from "@/lib/budget";
+import { type BudgetForm, budgetFormOf, budgetInputFrom, budgetInputOf } from "@/lib/budget";
+import { pushUndo } from "@/lib/undo";
 import { type BudgetScope, deleteBudget, resetBudget, saveBudget } from "@/lib/wardrobe-client";
 import { Dialog } from "./dialog";
 import { buttonClass, inputClass, primaryButtonClass } from "./ui";
@@ -19,14 +20,16 @@ type Props = {
   budget: BudgetView | null;
   /** The budget as it now is (null: deleted); the window closes. */
   onChanged: (budget: BudgetView | null) => void;
+  /** Reads the budget again, after an « Annuler ». */
+  reload: () => Promise<void>;
 };
 
 /** « Budget »: amount in euros, period, dates for « Dates au choix »; delete it, or start a plain one again (§3.7). */
-export function BudgetDialog({ open, onClose, title, scope, budget, onChanged }: Props) {
+export function BudgetDialog({ open, onClose, title, scope, budget, onChanged, reload }: Props) {
   const t = useTranslations("OrderDraft.dialog");
   return (
     <Dialog open={open} onClose={onClose} title={title} closeLabel={t("close")}>
-      <BudgetFields scope={scope} budget={budget} onChanged={onChanged} />
+      <BudgetFields scope={scope} budget={budget} onChanged={onChanged} reload={reload} />
     </Dialog>
   );
 }
@@ -39,23 +42,38 @@ function viewOf(result: Awaited<ReturnType<typeof saveBudget>>): { ok: true; vie
 }
 
 /** Mounted each time the window opens, so it starts from the saved budget. */
-function BudgetFields({ scope, budget, onChanged }: Pick<Props, "scope" | "budget" | "onChanged">) {
+function BudgetFields({ scope, budget, onChanged, reload }: Pick<Props, "scope" | "budget" | "onChanged" | "reload">) {
   const t = useTranslations("OrderDraft.dialog");
   const [form, setForm] = useState<BudgetForm>(() => budgetFormOf(budget));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const amountId = useId();
   const fromId = useId();
   const toId = useId();
   const errorId = useId();
   const set = (patch: Partial<BudgetForm>) => setForm((previous) => ({ ...previous, ...patch }));
 
-  async function run(action: () => Promise<{ ok: true; view: BudgetView | null } | { ok: false }>) {
+  /**
+   * « Annuler » of a save or a deletion: the budget as it was before (written again), or none when there was none.
+   * A reset has no undo: the API cannot give back the previous start.
+   */
+  const restore = (previous: BudgetView | null) => async () => {
+    const result = previous ? await saveBudget(scope, budgetInputOf(previous)) : await deleteBudget(scope);
+    await reload();
+    return result.ok;
+  };
+
+  async function run(
+    action: () => Promise<{ ok: true; view: BudgetView | null } | { ok: false }>,
+    message: "saved" | "deleted" | "resetDone",
+  ) {
     setBusy(true);
     const result = await action();
     setBusy(false);
     if (!result.ok) return setError(t("failed"));
     onChanged(result.view);
+    pushUndo(t(message), message === "resetDone" ? null : restore(budget));
   }
 
   function save(event: FormEvent) {
@@ -63,9 +81,7 @@ function BudgetFields({ scope, budget, onChanged }: Pick<Props, "scope" | "budge
     const parsed = budgetInputFrom(form);
     if (!parsed.ok) return setError(t(parsed.error === "amount" ? "amountError" : "datesError"));
     setError(null);
-    void run(async () => {
-      return viewOf(await saveBudget(scope, parsed.input));
-    });
+    void run(async () => viewOf(await saveBudget(scope, parsed.input)), "saved");
   }
 
   return (
@@ -148,11 +164,7 @@ function BudgetFields({ scope, budget, onChanged }: Pick<Props, "scope" | "budge
             type="button"
             disabled={busy}
             className={`${buttonClass} ${touch}`}
-            onClick={() =>
-              void run(async () => {
-                return viewOf(await resetBudget(scope));
-              })
-            }
+            onClick={() => setConfirmReset(true)}
           >
             {t("reset")}
           </button>
@@ -166,14 +178,34 @@ function BudgetFields({ scope, budget, onChanged }: Pick<Props, "scope" | "budge
               void run(async () => {
                 const result = await deleteBudget(scope);
                 return result.ok ? { ok: true, view: null } : { ok: false };
-              })
+              }, "deleted")
             }
           >
             {t("delete")}
           </button>
         )}
       </div>
-      {budget?.period === "none" && <p className="text-sm text-ink-muted">{t("resetHelp")}</p>}
+      {budget?.period === "none" &&
+        (confirmReset ? (
+          <div className="flex flex-col gap-space-2 rounded-card border border-line bg-surface-sunken p-space-3">
+            <p className="text-sm">{t("resetConfirm")}</p>
+            <div className="flex flex-wrap gap-space-2">
+              <button
+                type="button"
+                disabled={busy}
+                className={`${primaryButtonClass} ${touch}`}
+                onClick={() => void run(async () => viewOf(await resetBudget(scope)), "resetDone")}
+              >
+                {t("resetYes")}
+              </button>
+              <button type="button" className={`${buttonClass} ${touch}`} onClick={() => setConfirmReset(false)}>
+                {t("resetKeep")}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-ink-muted">{t("resetHelp")}</p>
+        ))}
     </form>
   );
 }

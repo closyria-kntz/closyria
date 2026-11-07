@@ -71,14 +71,17 @@ export function OrderDraft() {
   const budgetTitleId = useId();
   const bandTitleId = useId();
 
+  // Only the latest read applies: a late answer for a previous scope never overwrites the current one.
+  const budgetGeneration = useRef(0);
   const loadBudget = useCallback(async (target: BudgetScope) => {
+    const mine = ++budgetGeneration.current;
     try {
       const view = await fetchBudget(target);
       const history =
         view && (view.period === "week" || view.period === "month") ? await fetchBudgetHistory(target) : [];
-      setBudget({ status: "ready", view, history });
+      if (mine === budgetGeneration.current) setBudget({ status: "ready", view, history });
     } catch {
-      setBudget({ status: "error", view: null, history: [] });
+      if (mine === budgetGeneration.current) setBudget({ status: "error", view: null, history: [] });
     }
   }, []);
 
@@ -349,6 +352,9 @@ export function OrderDraft() {
             setDialogOpen(false);
             setBudget({ status: "ready", view, history: [] });
             void loadBudget(scope);
+          }}
+          reload={async () => {
+            await loadBudget(scope);
           }}
         />
       )}

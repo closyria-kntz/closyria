@@ -72,6 +72,13 @@ export function budgetInputFrom(
   return budgetInputSchema.safeParse(input).success ? { ok: true, input } : { ok: false, error: "dates" };
 }
 
+/** The PUT body that writes `budget` again as it was (the « Annuler » of a change or a deletion). */
+export function budgetInputOf(budget: BudgetView): BudgetInput {
+  return budget.period === "custom" && budget.startsOn && budget.endsOn
+    ? { amountCents: budget.amountCents, period: "custom", startsOn: budget.startsOn, endsOn: budget.endsOn }
+    : { amountCents: budget.amountCents, period: budget.period };
+}
+
 /** The form for an existing budget (or a new one: weekly, empty). */
 export function budgetFormOf(budget: BudgetView | null): BudgetForm {
   if (!budget) return { amount: "", period: "week", startsOn: "", endsOn: "" };
