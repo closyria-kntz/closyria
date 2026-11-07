@@ -58,3 +58,9 @@ export function setFieldsUndo(items: Item[], values: ItemFieldValues): ItemBulk[
     fields: fields as ItemFields,
   }));
 }
+
+/** Undo of taking `items` out of the order selection (spec §3.6): selects again the ones that were selected. */
+export function reselectUndo(items: Item[]): ItemBulk[] {
+  const ids = items.filter((item) => item.inOrderDraft).map((item) => item.id);
+  return ids.length > 0 ? [{ ids, op: "setFields", fields: { inOrderDraft: true } }] : [];
+}

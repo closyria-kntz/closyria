@@ -13,7 +13,7 @@ import { pgCode } from "../pg-code";
 import { recordEvent, type Tx } from "./events";
 import { mergeItemInto } from "./merge-items";
 import { ensureDefaultProfile, findOwnProfile } from "./profiles";
-import { type ItemFieldValues, setFieldsUndo } from "./undo";
+import { type ItemFieldValues, reselectUndo, setFieldsUndo } from "./undo";
 
 export type Item = typeof schema.items.$inferSelect;
 
@@ -220,6 +220,8 @@ export async function changeStage(
     if (input.channel !== undefined && (input.stage === "for_sale" || input.stage === "sold")) {
       values.saleChannel = input.channel;
     }
+    // Out of « Repéré », out of the order selection (spec §3.6); the undo selects it again.
+    if (input.stage !== "spotted") values.inOrderDraft = false;
     await tx
       .update(schema.items)
       .set({ ...values, stage: input.stage, updatedAt: now })
@@ -277,7 +279,11 @@ async function moveItemIn(tx: Tx, userId: string, itemId: string, input: ItemMov
   if (!target) return { error: "not_found" };
   if (item.deletedAt) return { error: "item_deleted" };
   if (item.profileId === target.id) return { error: "same_profile" };
-  await tx.update(schema.items).set({ profileId: target.id, updatedAt: now }).where(eq(schema.items.id, item.id));
+  // Another profile, out of this profile's order selection (spec §3.6); the undo selects it again.
+  await tx
+    .update(schema.items)
+    .set({ profileId: target.id, inOrderDraft: false, updatedAt: now })
+    .where(eq(schema.items.id, item.id));
   const eventId = await recordEvent(tx, item, {
     type: "profile",
     fromProfileId: item.profileId,
@@ -287,7 +293,10 @@ async function moveItemIn(tx: Tx, userId: string, itemId: string, input: ItemMov
   return {
     itemId: item.id,
     itemIds: [item.id],
-    undo: { ops: [{ ids: [item.id], op: "move", profileId: item.profileId }], removeEventIds: [eventId] },
+    undo: {
+      ops: [{ ids: [item.id], op: "move", profileId: item.profileId }, ...reselectUndo([item])],
+      removeEventIds: [eventId],
+    },
   };
 }
 
@@ -297,11 +306,15 @@ export async function trashItem(db: Database, userId: string, itemId: string, no
     const item = await lockOwnItem(tx, userId, itemId);
     if (!item) return { error: "not_found" };
     if (item.deletedAt) return { error: "item_deleted" };
-    await tx.update(schema.items).set({ deletedAt: now, updatedAt: now }).where(eq(schema.items.id, item.id));
+    // In the trash, out of the order selection (spec §3.6); the undo restores, then selects it again.
+    await tx
+      .update(schema.items)
+      .set({ deletedAt: now, inOrderDraft: false, updatedAt: now })
+      .where(eq(schema.items.id, item.id));
     return {
       itemId: item.id,
       itemIds: [item.id],
-      undo: { ops: [{ ids: [item.id], op: "restore" }], removeEventIds: [] },
+      undo: { ops: [{ ids: [item.id], op: "restore" }, ...reselectUndo([item])], removeEventIds: [] },
     };
   });
 }

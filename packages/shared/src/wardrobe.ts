@@ -404,6 +404,12 @@ export const undoPayloadSchema = z
   });
 export type UndoPayload = z.infer<typeof undoPayloadSchema>;
 
+/**
+ * Scope of « J'ai commandé » (`POST /me/order-draft/ordered`): the selection of a profile, or of a list (spec §3.6).
+ */
+export const orderDraftInputSchema = z.object({ profileId: z.uuid() }).or(z.object({ wishlistId: z.uuid() }));
+export type OrderDraftInput = z.infer<typeof orderDraftInputSchema>;
+
 /** Answer of every action: what changed, and how to undo it. */
 export const mutationResultSchema = z.object({
   itemIds: z.array(z.uuid()),
@@ -544,6 +550,8 @@ export const wardrobeErrorCodes = [
   "tag_limit",
   "too_many_photos",
   "budget_not_resettable",
+  "order_draft_empty",
+  "order_draft_too_large",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];

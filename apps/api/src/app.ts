@@ -19,6 +19,7 @@ import { facetsRoutes } from "./routes/me/facets";
 import { itemMediaRoutes } from "./routes/me/item-media";
 import { itemsRoutes } from "./routes/me/items";
 import { loveLevelsRoutes } from "./routes/me/love-levels";
+import { orderDraftRoutes } from "./routes/me/order-draft";
 import { profilesRoutes } from "./routes/me/profiles";
 import { recentsRoutes } from "./routes/me/recents";
 import { tagsRoutes } from "./routes/me/tags";
@@ -123,6 +124,7 @@ export function createApp(deps: AppDeps) {
     .route("/", profilesRoutes(deps.wardrobe))
     .route("/", loveLevelsRoutes(deps.wardrobe))
     .route("/", bulkRoutes(deps.wardrobe))
+    .route("/", orderDraftRoutes(deps.wardrobe))
     .route("/", itemsRoutes(deps.wardrobe, importAttacher))
     .route(
       "/",

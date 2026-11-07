@@ -1,11 +1,18 @@
 import { and, asc, type Database, eq, inArray, isNull, schema, sql } from "@closyria/db";
-import type { ItemBulk, ItemStage, UndoPayload, WardrobeErrorCode } from "@closyria/shared";
+import {
+  type ItemBulk,
+  type ItemStage,
+  MAX_BULK_ITEMS,
+  type OrderDraftInput,
+  type UndoPayload,
+  type WardrobeErrorCode,
+} from "@closyria/shared";
 import { pgCode } from "../pg-code";
 import type { Tx } from "./events";
 import { AMOUNT_COLUMN, type Item, lockProductOfUser } from "./items";
 import { mergeItemInto } from "./merge-items";
 import { spentCentsFor } from "./spent";
-import { changedFields, groupIds, type ItemFieldValues, setFieldsUndo } from "./undo";
+import { changedFields, groupIds, type ItemFieldValues, reselectUndo, setFieldsUndo } from "./undo";
 
 /** Aborts the whole transaction with a stable error code (all or nothing). */
 class BulkError extends Error {
@@ -21,7 +28,8 @@ export type BulkOutcome =
   | { itemIds: string[]; undo: UndoPayload | null; trace: BulkTrace }
   | { error: WardrobeErrorCode };
 
-type OpResult = { changed: string[]; undoOps: ItemBulk[]; eventIds: string[]; trace: BulkTrace };
+/** `merged`: items of a restore merged into an active one, gone for the ops that follow in an undo. */
+type OpResult = { changed: string[]; undoOps: ItemBulk[]; eventIds: string[]; trace: BulkTrace; merged?: string[] };
 type OpOptions = {
   now: Date /** False while replaying an undo: no new history rows (ruling R4). */;
   writeEvents: boolean;
@@ -155,6 +163,8 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
       const column = AMOUNT_COLUMN[op.stage];
       if (column && op.amountCents !== undefined) values[column] = op.amountCents;
       if (op.channel !== undefined && (op.stage === "for_sale" || op.stage === "sold")) values.saleChannel = op.channel;
+      // Out of « Repéré », out of the order selection (spec §3.6); the undo below selects them again.
+      if (op.stage !== "spotted") values.inOrderDraft = false;
       const ids = changed.map((item) => item.id);
       await setItems(tx, ids, { ...values, stage: op.stage, updatedAt: now });
       let eventIds: string[] = [];
@@ -176,8 +186,8 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
           .returning({ id: schema.itemEvents.id });
         eventIds = rows.map((r) => r.id);
       }
-      // The previous stage, then the previous amounts and channel (ruling R9). The undo writes no history row, so
-      // its `at` is only there for the schema.
+      // The previous stage, then the previous amounts, channel and selection (ruling R9). The undo writes no history
+      // row, so its `at` is only there for the schema.
       const undoOps: ItemBulk[] = [
         ...groupIds(changed.map((item) => ({ id: item.id, key: item.stage as ItemStage }))).map(
           ([stage, stageIds]): ItemBulk => ({ ids: stageIds, op: "stage", stage, at: now.toISOString() }),
@@ -194,7 +204,8 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
       const changed = items.filter((item) => item.profileId !== op.profileId);
       if (changed.length === 0) return result([]);
       const ids = changed.map((item) => item.id);
-      await setItems(tx, ids, { profileId: op.profileId, updatedAt: now });
+      // Another profile, out of this profile's order selection (spec §3.6).
+      await setItems(tx, ids, { profileId: op.profileId, inOrderDraft: false, updatedAt: now });
       let eventIds: string[] = [];
       if (options.writeEvents) {
         const rows = await tx
@@ -211,9 +222,12 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
           .returning({ id: schema.itemEvents.id });
         eventIds = rows.map((r) => r.id);
       }
-      const undoOps = groupIds(changed.map((item) => ({ id: item.id, key: item.profileId }))).map(
-        ([profileId, groupIdsOf]): ItemBulk => ({ ids: groupIdsOf, op: "move", profileId }),
-      );
+      const undoOps = [
+        ...groupIds(changed.map((item) => ({ id: item.id, key: item.profileId }))).map(
+          ([profileId, groupIdsOf]): ItemBulk => ({ ids: groupIdsOf, op: "move", profileId }),
+        ),
+        ...reselectUndo(changed),
+      ];
       return { ...result(ids, undoOps, eventIds), trace: { stageChanges: [], moves: ids.length } };
     }
     case "addToList": {
@@ -281,15 +295,18 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
       return result(ids, setFieldsUndo(changed, values));
     }
     case "delete": {
-      const ids = items.filter((item) => !item.deletedAt).map((item) => item.id);
-      await setItems(tx, ids, { deletedAt: now, updatedAt: now });
-      return result(ids, ids.length ? [{ ids, op: "restore" }] : []);
+      const trashed = items.filter((item) => !item.deletedAt);
+      const ids = trashed.map((item) => item.id);
+      // In the trash, out of the order selection (spec §3.6); the undo restores, then selects again.
+      await setItems(tx, ids, { deletedAt: now, inOrderDraft: false, updatedAt: now });
+      return result(ids, ids.length ? [{ ids, op: "restore" }, ...reselectUndo(trashed)] : []);
     }
     case "restore": {
       // As the single restore: when she keeps the same product again meanwhile, the two are merged into the active
       // item (no undo for a merge); otherwise the item comes back and its undo is the trash.
       const changed = new Set<string>();
       const restored: string[] = [];
+      const merged: string[] = [];
       for (const item of items) {
         if (!item.deletedAt) continue;
         if (!item.productId) throw new Error("items without a product come with 2b");
@@ -306,13 +323,14 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
         if (active) {
           await mergeItemInto(tx, item, active, now);
           changed.add(active.id);
+          merged.push(item.id);
         } else {
           await setItems(tx, [item.id], { deletedAt: null, updatedAt: now });
           changed.add(item.id);
           restored.push(item.id);
         }
       }
-      return result([...changed], restored.length ? [{ ids: restored, op: "delete" }] : []);
+      return { ...result([...changed], restored.length ? [{ ids: restored, op: "delete" }] : []), merged };
     }
   }
 }
@@ -367,8 +385,14 @@ export async function runUndo(db: Database, userId: string, payload: UndoPayload
   return inTransaction(db, async (tx) => {
     await lockFor(tx, userId, payload.ops);
     const changed = new Set<string>();
+    // An item merged into an active one by a restore is gone: the ops after it (selecting it again) skip it.
+    const gone = new Set<string>();
     for (const op of payload.ops) {
-      for (const id of (await applyOp(tx, userId, op, { now, writeEvents: false })).changed) changed.add(id);
+      const ids = op.ids.filter((id) => !gone.has(id));
+      if (ids.length === 0) continue;
+      const done = await applyOp(tx, userId, { ...op, ids }, { now, writeEvents: false });
+      for (const id of done.changed) changed.add(id);
+      for (const id of done.merged ?? []) gone.add(id);
     }
     const eventIds = [...new Set(payload.removeEventIds)];
     if (eventIds.length > 0) {
@@ -387,5 +411,59 @@ export async function runUndo(db: Database, userId: string, payload: UndoPayload
       if (removed.length !== eventIds.length) throw new BulkError("not_found");
     }
     return { itemIds: [...changed], undo: null, trace: emptyTrace() };
+  });
+}
+
+/**
+ * `POST /me/order-draft/ordered` (spec §3.6): her selected wishes still « Repéré » and active — of the profile, or in
+ * the list — go to « Commandé » today, in one transaction, through the bulk `stage` op (history rows with the amount
+ * counted in the budgets), which also takes them out of the selection. Undo: back to « Repéré », selected again, and
+ * the history rows deleted. 404 for a profile or list not hers; 409 `order_draft_empty` when nothing is selected;
+ * 409 `order_draft_too_large` beyond 200 items (one action, one undo: the undo payload holds at most 200 items).
+ */
+export async function runOrderDraft(
+  db: Database,
+  userId: string,
+  input: OrderDraftInput,
+  now: Date,
+): Promise<BulkOutcome> {
+  return inTransaction(db, async (tx) => {
+    // Lock order as the batches: the parent row (shared), then the item rows by id.
+    if ("profileId" in input) await shareOwn(tx, schema.profiles, userId, [input.profileId]);
+    else await shareOwn(tx, schema.wishlists, userId, [input.wishlistId]);
+    const scope =
+      "profileId" in input
+        ? eq(schema.items.profileId, input.profileId)
+        : inArray(
+            schema.items.id,
+            tx
+              .select({ id: schema.wishlistItems.itemId })
+              .from(schema.wishlistItems)
+              .where(eq(schema.wishlistItems.wishlistId, input.wishlistId)),
+          );
+    // Locked and filtered in the same statement: a row changed meanwhile is checked again once its lock is held.
+    const selected = await tx
+      .select({ id: schema.items.id })
+      .from(schema.items)
+      .where(
+        and(
+          eq(schema.items.userId, userId),
+          isNull(schema.items.deletedAt),
+          eq(schema.items.inOrderDraft, true),
+          eq(schema.items.stage, "spotted"),
+          scope,
+        ),
+      )
+      .orderBy(asc(schema.items.id))
+      .for("update");
+    if (selected.length === 0) throw new BulkError("order_draft_empty");
+    if (selected.length > MAX_BULK_ITEMS) throw new BulkError("order_draft_too_large");
+    const op: ItemBulk = { ids: selected.map((r) => r.id), op: "stage", stage: "ordered", at: now.toISOString() };
+    const done = await applyOp(tx, userId, op, { now, writeEvents: true });
+    return {
+      itemIds: done.changed,
+      undo: { ops: done.undoOps, removeEventIds: done.eventIds },
+      trace: done.trace,
+    };
   });
 }

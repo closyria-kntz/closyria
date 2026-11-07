@@ -380,17 +380,18 @@ describe("anonymous -> account merge on sign-in", () => {
     expect(await wardrobeOf(bystander.userId)).toEqual(bystanderBefore);
   });
 
-  it("merging keeps the highest level, priority if either, the target's opinion else the source's, draft if either", async () => {
+  it("merging keeps the highest level, priority if either, the target's opinion else the source's, draft if either while « Repéré »", async () => {
     const email = `niveaux-${randomUUID()}@example.test`;
     const accountId = await signInWithEmail(email);
     const accountMoi = await newProfile(accountId, "Moi", day(1));
-    const products = [await newProduct(), await newProduct(), await newProduct()];
-    const [p0, p1, p2] = products.map((p) => p.id) as [string, string, string];
+    const products = [await newProduct(), await newProduct(), await newProduct(), await newProduct()];
+    const [p0, p1, p2, p3] = products.map((p) => p.id) as [string, string, string, string];
     // Account side (target) / anonymous side (source), per product.
     const accountItems = [
       await newItem({ userId: accountId, profileId: accountMoi.id, productId: p0, loveLevel: 2, why: "À moi" }),
       await newItem({ userId: accountId, profileId: accountMoi.id, productId: p1, priority: true, inOrderDraft: true }),
       await newItem({ userId: accountId, profileId: accountMoi.id, productId: p2, loveLevel: 4 }),
+      await newItem({ userId: accountId, profileId: accountMoi.id, productId: p3, inOrderDraft: true }),
     ];
     const anonymous = await signInAnonymously();
     const anonMoi = await newProfile(anonymous.userId, "Moi", day(2));
@@ -399,6 +400,8 @@ describe("anonymous -> account merge on sign-in", () => {
     await anon(p0, { loveLevel: 3, priority: true, why: "Anonyme", inOrderDraft: true });
     await anon(p1, { loveLevel: 1, why: "Seulement ici" });
     await anon(p2, { loveLevel: null });
+    // Ordered on the anonymous side: the merged item is « Commandé », out of the selection.
+    await anon(p3, { stage: "ordered" });
 
     expect(await signInWithEmail(email, anonymous.cookie)).toBe(accountId);
 
@@ -417,8 +420,9 @@ describe("anonymous -> account merge on sign-in", () => {
       [p0]: [3, true, "À moi", true],
       [p1]: [1, true, "Seulement ici", true],
       [p2]: [4, false, null, false],
+      [p3]: [null, false, null, false],
     });
-    expect(await count(sql`select count(*)::int as n from items where user_id = ${accountId}`)).toBe(3);
+    expect(await count(sql`select count(*)::int as n from items where user_id = ${accountId}`)).toBe(4);
   });
 
   it("moves her own level names unless the account has some, and her budgets with their profile or list", async () => {
