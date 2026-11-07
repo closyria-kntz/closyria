@@ -172,6 +172,10 @@ vignettes voulues, la barre d'actions en lot existante apparaît (niveau, priori
   - sombre : fond `#1E1612`, carte `#2A201B`, encre `#F2EDE7`, encre douce `#C9B8AE`, accent rose poudré `#EBC7C3`
     (encre d'accent chocolat foncé), fond creux `#241A15`, trait `#3D2F28`, conseils `#3D2F28`, fond des photos
     `#241A15` — valeurs ajustées pour passer les tests de contraste existants.
+- Adouci le 2026-11-07 après test : encre claire `#4A332A` (au lieu de `#2B1D17`) ; encre sombre `#DDD0C6` et encre
+  douce sombre `#B5A398`. Bandeau de « Préparer une commande » (version B) : jetons `color-band` (`#F6E4E1` / sombre
+  `#33251F`), `color-band-line` (`#D8A9A3` / `#6B4A44`), `color-band-button` (`#7A5444` / rose poudré) et
+  `color-band-button-ink` (blanc / chocolat foncé).
 - Polices : `@fontsource-variable/fraunces` et `@fontsource-variable/dm-sans` à la place de Cormorant Garamond et
   Jost ; mise à jour de `docs/specs/2026-11-01-direction-visuelle.md`.
 
@@ -233,6 +237,6 @@ Ce qui change par rapport au texte ci-dessus, ou qui précise un cas non prévu 
 
 - « Annuler » reste une seule action, la dernière (pas de pile) ; le message de la pastille et du menu « … » nomme l'article (« Robe Lina : Mims »). Pour plusieurs articles d'un coup : « Sélectionner ».
 - Mise à jour automatique : une page ouverte demande toutes les 10 s une empreinte de ses données (`GET /api/me/changes`) et ne relit Envies, listes et « Préparer une commande » que si elle a changé ; aussi tout de suite au retour sur la page. En pause onglet caché, fenêtre ouverte ou sélection en cours (le changement arrive ensuite). Pas de connexion permanente.
-- « … au-dessus » du budget en rouge (couleur d'erreur). Bandeau de « Préparer une commande » en rose poudré, texte chocolat, bouton « J'ai commandé » chocolat.
+- « … au-dessus » du budget en rouge (couleur d'erreur). Bandeau de « Préparer une commande » : rose très clair avec contour rose, bouton chocolat au lait (version B). Texte adouci dans toute l'app, en clair et en sombre (§5.4).
 - Réglages → Apparence : Automatique, Clair, Sombre, gardé sur l'appareil.
 - Budget sur le lien de partage et échanges avec les amies : partie 2.

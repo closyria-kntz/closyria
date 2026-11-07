@@ -312,7 +312,7 @@ export function OrderDraft() {
       {scope && (
         <section
           aria-labelledby={bandTitleId}
-          className="sticky bottom-space-0 z-10 flex flex-wrap items-center justify-between gap-space-3 rounded-card border border-line bg-hint p-space-4 text-ink shadow-lifted"
+          className="sticky bottom-space-0 z-10 flex flex-wrap items-center justify-between gap-space-3 rounded-card border-2 border-band-line bg-band p-space-4 text-ink shadow-lifted"
         >
           <h2 id={bandTitleId} className="sr-only">
             {t("band.label")}
@@ -337,7 +337,7 @@ export function OrderDraft() {
             type="button"
             disabled={ordering}
             onClick={() => void order()}
-            className={`${touch} inline-flex items-center rounded-button bg-accent px-space-4 py-space-2 text-sm font-strong text-accent-ink disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus-ring`}
+            className={`${touch} inline-flex items-center rounded-button bg-band-button px-space-4 py-space-2 text-sm font-strong text-band-button-ink disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus-ring`}
           >
             {t("band.ordered")}
           </button>

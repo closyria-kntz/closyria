@@ -53,8 +53,9 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await row(page, "Gilet Brume").check();
   await expect(band(page)).toContainText(/2 articles · 154\s€/);
   await expect(band(page)).toContainText(/4\s€ au-dessus/);
-  // A powder-pink band (the hint color), and over the budget in red (the danger color).
-  await expect(band(page)).toHaveCSS("background-color", "rgb(235, 199, 195)");
+  // A very light pink band with a pink edge (version B), and over the budget in red (the danger color).
+  await expect(band(page)).toHaveCSS("background-color", "rgb(246, 228, 225)");
+  await expect(band(page)).toHaveCSS("border-top-color", "rgb(216, 169, 163)");
   await expect(band(page).getByText(/au-dessus/)).toHaveCSS("background-color", "rgb(155, 28, 49)");
   await page.screenshot({ path: testInfo.outputPath("commande.png") });
   await axe(page);

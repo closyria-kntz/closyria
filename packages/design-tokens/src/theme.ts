@@ -51,8 +51,9 @@ export const equilibreDark: Theme = {
     "color-surface-sunken": c.bark,
     "color-surface-strong": c.umber,
     "color-line": c.umber,
-    "color-ink": c.oat,
-    "color-ink-muted": c.clay,
+    // Softened like the light theme: a warm parchment, no longer near-white.
+    "color-ink": c.parchment,
+    "color-ink-muted": c.stone,
     "color-accent": c.powder,
     "color-accent-ink": c.cocoa,
     "color-success": c.celadon,
@@ -63,6 +64,10 @@ export const equilibreDark: Theme = {
     "color-media-backdrop": c.bark,
     "color-danger": c.salmon,
     "color-focus-ring": c.powder,
+    "color-band": c.roseBark,
+    "color-band-line": c.dustyRose,
+    "color-band-button": c.powder,
+    "color-band-button-ink": c.cocoa,
   },
 };
 

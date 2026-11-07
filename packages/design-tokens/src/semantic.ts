@@ -15,7 +15,8 @@ export const defaultSemanticTokens = {
   "color-surface-sunken": palette.linen,
   "color-surface-strong": palette.sand,
   "color-line": palette.sand,
-  "color-ink": palette.cocoa,
+  // Softened on 2026-11-07 (« le contraste en clair trop prononcé »): a dark chocolate, no longer near-black.
+  "color-ink": palette.ganache,
   "color-ink-muted": palette.taupe,
   "color-accent": palette.chocolate,
   "color-accent-ink": palette.white,
@@ -27,6 +28,11 @@ export const defaultSemanticTokens = {
   "color-media-backdrop": palette.latte,
   "color-danger": palette.garnet,
   "color-focus-ring": palette.chocolate,
+  // « Préparer une commande » band (version B chosen on 2026-11-07).
+  "color-band": palette.blush,
+  "color-band-line": palette.rosewood,
+  "color-band-button": palette.milkChocolate,
+  "color-band-button-ink": palette.white,
   // Component tokens
   "color-button-bg": "var(--color-accent)",
   "color-button-ink": "var(--color-accent-ink)",

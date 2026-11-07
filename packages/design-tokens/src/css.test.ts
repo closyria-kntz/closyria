@@ -99,7 +99,7 @@ describe("Équilibré themes", () => {
     expect(get(equilibreLight, "color-surface-raised")).toBe("#FFFFFF");
     expect(get(equilibreLight, "color-surface-sunken")).toBe("#EBE3DB");
     expect(get(equilibreLight, "color-line")).toBe("#E5D7CC");
-    expect(get(equilibreLight, "color-ink")).toBe("#2B1D17");
+    expect(get(equilibreLight, "color-ink")).toBe("#4A332A");
     expect(get(equilibreLight, "color-ink-muted")).toBe("#6E5A50");
     expect(get(equilibreLight, "color-accent")).toBe("#5A3A2E");
     expect(get(equilibreLight, "color-accent-ink")).toBe("#FFFFFF");
@@ -107,10 +107,15 @@ describe("Équilibré themes", () => {
     expect(get(equilibreLight, "color-premium-surface")).toBe("#F3E3A6");
     expect(get(equilibreLight, "color-success-surface")).toBe("#D5DCC8");
     expect(get(equilibreLight, "color-media-backdrop")).toBe("#EADBC8");
+    // « Préparer une commande » band (version B): very light pink, a pink edge, a milk-chocolate button.
+    expect(get(equilibreLight, "color-band")).toBe("#F6E4E1");
+    expect(get(equilibreLight, "color-band-line")).toBe("#D8A9A3");
+    expect(get(equilibreLight, "color-band-button")).toBe("#7A5444");
+    expect(get(equilibreLight, "color-band-button-ink")).toBe("#FFFFFF");
     expect(get(equilibreDark, "color-surface")).toBe("#1E1612");
     expect(get(equilibreDark, "color-surface-raised")).toBe("#2A201B");
-    expect(get(equilibreDark, "color-ink")).toBe("#F2EDE7");
-    expect(get(equilibreDark, "color-ink-muted")).toBe("#C9B8AE");
+    expect(get(equilibreDark, "color-ink")).toBe("#DDD0C6");
+    expect(get(equilibreDark, "color-ink-muted")).toBe("#B5A398");
     expect(get(equilibreDark, "color-accent")).toBe("#EBC7C3");
     expect(get(equilibreDark, "color-accent-ink")).toBe("#2B1D17");
   });
@@ -148,6 +153,10 @@ describe("Équilibré themes", () => {
     ["color-focus-ring", "color-surface-raised", 4.5],
     ["color-focus-ring", "color-surface-sunken", 3],
     ["color-line", "color-surface", 1],
+    ["color-ink", "color-band", 4.5],
+    ["color-band-button-ink", "color-band-button", 4.5],
+    ["color-surface", "color-danger", 4.5],
+    ["color-band-line", "color-band", 1.2],
   ];
 
   describe.each(themes)("$id", (theme) => {
