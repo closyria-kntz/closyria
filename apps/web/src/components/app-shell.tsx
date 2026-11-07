@@ -6,8 +6,8 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ReactNode, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
 import { fetchSummary } from "@/lib/catalog-client";
+import { useChangesPoller, useLiveRefresh } from "@/lib/live-changes";
 import { ProfilesContext, profileHref, useAccount, useCurrentProfile } from "@/lib/profile-context";
-import { useRefreshOnReturn } from "@/lib/refresh-on-return";
 import { fetchLoveLevels } from "@/lib/wardrobe-client";
 import { AccountPrompt } from "./account-prompt";
 import { type AppNavItem, desktopNav, isCurrent, moreNav, phoneTabs, tabletTabs } from "./app-nav";
@@ -200,7 +200,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (levels && alive.current) setLoveLevels(levels);
   }, []);
 
-  // Read on arrival, and again whenever she comes back to the page (changed in another tab or on her phone).
+  // Read on arrival, and again whenever something changed elsewhere (another tab, her phone).
+  useChangesPoller();
   useEffect(() => {
     alive.current = true;
     void refreshProfiles();
@@ -209,7 +210,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       alive.current = false;
     };
   }, [refreshProfiles, refreshLoveLevels]);
-  useRefreshOnReturn(() => {
+  useLiveRefresh(() => {
     void refreshProfiles();
     void refreshLoveLevels();
   });

@@ -15,6 +15,7 @@ import { capturesRoutes } from "./routes/captures";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
 import { budgetsRoutes } from "./routes/me/budgets";
 import { bulkRoutes } from "./routes/me/bulk";
+import { changesRoutes } from "./routes/me/changes";
 import { facetsRoutes } from "./routes/me/facets";
 import { itemMediaRoutes } from "./routes/me/item-media";
 import { itemsRoutes } from "./routes/me/items";
@@ -123,6 +124,7 @@ export function createApp(deps: AppDeps) {
     .route("/", eventsRoutes(deps.events))
     .route("/", profilesRoutes(deps.wardrobe))
     .route("/", loveLevelsRoutes(deps.wardrobe))
+    .route("/", changesRoutes(deps.wardrobe))
     .route("/", bulkRoutes(deps.wardrobe))
     .route("/", orderDraftRoutes(deps.wardrobe))
     .route("/", itemsRoutes(deps.wardrobe, importAttacher))

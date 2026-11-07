@@ -4,7 +4,7 @@ import type { WishlistView } from "@closyria/shared";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { type FormEvent, useCallback, useEffect, useId, useState } from "react";
-import { useRefreshOnReturn } from "@/lib/refresh-on-return";
+import { useLiveRefresh } from "@/lib/live-changes";
 import { moveId } from "@/lib/reorder";
 import { pushUndo } from "@/lib/undo";
 import { createWishlist, fetchWishlists, reorderWishlists } from "@/lib/wardrobe-client";
@@ -36,7 +36,7 @@ export function WishlistsView() {
   useEffect(() => {
     void load();
   }, [load]);
-  useRefreshOnReturn(() => void load(true), status === "ready");
+  useLiveRefresh(() => void load(true), status === "ready");
 
   async function create(event: FormEvent) {
     event.preventDefault();

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type FormEvent, useCallback, useEffect, useId, useMemo, useState } from "react";
-import { useRefreshOnReturn } from "@/lib/refresh-on-return";
+import { useLiveRefresh } from "@/lib/live-changes";
 import { moveId } from "@/lib/reorder";
 import { pushUndo } from "@/lib/undo";
 import {
@@ -91,8 +91,8 @@ export function WishlistDetail({ id }: { id: string }) {
   useEffect(() => {
     void load();
   }, [load]);
-  // Back on the page: the list and its budget again, never while she renames it.
-  useRefreshOnReturn(
+  // Changed elsewhere (her phone, another tab): the list and its budget again, never while she renames it.
+  useLiveRefresh(
     () => {
       void load(true);
       void loadBudget();

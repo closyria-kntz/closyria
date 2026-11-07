@@ -64,6 +64,9 @@ export const loveLevelsSchema = z.object({
     .refine((levels) => [1, 2, 3, 4].every((n) => levels.filter((l) => l.level === n).length === 1), "levels 1 to 4"),
 });
 export type LoveLevels = z.infer<typeof loveLevelsSchema>;
+/** A fingerprint of everything she keeps: it changes as soon as anything does, from any device. */
+export const changesSchema = z.object({ stamp: z.string().regex(/^[0-9a-f]{32}$/) });
+export type ChangesView = z.infer<typeof changesSchema>;
 /** The names and emojis every account starts with. */
 export const DEFAULT_LOVE_LEVELS: readonly LoveLevelView[] = [
   { level: 1, emoji: "😕", label: "Bof" },

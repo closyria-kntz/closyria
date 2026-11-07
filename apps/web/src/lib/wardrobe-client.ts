@@ -5,6 +5,7 @@ import {
   type BudgetView,
   budgetHistorySchema,
   budgetViewSchema,
+  changesSchema,
   DEFAULT_LOVE_LEVELS,
   type FacetsView,
   facetsViewSchema,
@@ -358,6 +359,14 @@ export async function fetchLoveLevels(deps: ClientDeps = defaultDeps): Promise<L
   if (response.status === 401) return [...DEFAULT_LOVE_LEVELS];
   if (!response.ok) throw new Error(`love levels ${response.status}`);
   return loveLevelsSchema.parse(await response.json()).levels;
+}
+
+/** The fingerprint of her data (null without a session): a new one means something changed elsewhere. */
+export async function fetchChangesStamp(deps: ClientDeps = defaultDeps): Promise<string | null> {
+  const response = await deps.fetch("/api/me/changes", { cache: "no-store" });
+  if (response.status === 401) return null;
+  if (!response.ok) throw new Error(`changes ${response.status}`);
+  return changesSchema.parse(await response.json()).stamp;
 }
 
 /** Replaces her 4 levels (Réglages → Mes niveaux). */

@@ -5,8 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useLiveRefresh } from "@/lib/live-changes";
 import { profileHref, useCurrentProfile, useProfilesReady } from "@/lib/profile-context";
-import { useRefreshOnReturn } from "@/lib/refresh-on-return";
 import { fetchFacets, fetchItemsPage, fetchReference, fetchTags } from "@/lib/wardrobe-client";
 import {
   activeFilterCount,
@@ -137,19 +137,31 @@ export function WardrobeView({ view }: { view: ViewKey }) {
 
   const reload = useCallback(async () => setReloadToken((value) => value + 1), []);
 
-  // Back on the page: the first page again, quietly (no loading state); never during a selection.
+  // Changed elsewhere (her phone, another tab): read again, quietly (no loading state), as many items as she has
+  // scrolled through so the page does not jump; never during a selection.
+  const loadedCount = useRef(0);
+  loadedCount.current = data.items.length;
   // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey stands for query.
-  const refreshQuietly = useCallback(() => {
+  const refreshQuietly = useCallback(async () => {
     const mine = ++generation.current;
     moreController.current?.abort();
     dispatchMore({ type: "reset", generation: mine });
-    fetchItemsPage(query, null).then(
-      (page) =>
-        mine === generation.current && setData({ items: page.items, nextCursor: page.nextCursor, status: "ready" }),
-      () => {},
-    );
+    const wanted = loadedCount.current;
+    const items: ItemView[] = [];
+    let cursor: string | null = null;
+    try {
+      do {
+        const page = await fetchItemsPage(query, cursor);
+        if (mine !== generation.current) return;
+        items.push(...page.items);
+        cursor = page.nextCursor;
+      } while (cursor && items.length < wanted);
+      setData({ items, nextCursor: cursor, status: "ready" });
+    } catch {
+      // Kept as it is: the next change tries again.
+    }
   }, [queryKey]);
-  useRefreshOnReturn(refreshQuietly, ready && !selecting && data.status === "ready");
+  useLiveRefresh(() => void refreshQuietly(), ready && !selecting && data.status === "ready");
   const gone = useCallback((ids: readonly string[]) => {
     const away = new Set(ids);
     setData((previous) => ({ ...previous, items: previous.items.filter((item) => !away.has(item.id)) }));

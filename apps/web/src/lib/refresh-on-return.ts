@@ -1,7 +1,3 @@
-"use client";
-
-import { useEffect, useRef } from "react";
-
 /** Two refreshes are at least this far apart: `focus` and `visibilitychange` often fire together. */
 export const RETURN_REFRESH_GAP_MS = 2000;
 
@@ -18,33 +14,4 @@ export function createReturnGate(since: number, gap: number = RETURN_REFRESH_GAP
     last = now;
     return true;
   };
-}
-
-/**
- * Calls `refresh` when she comes back to the page (another tab, another app, the phone out of her pocket):
- * what she changed elsewhere shows up without reloading. Off while `enabled` is false (a selection in progress).
- */
-export function useRefreshOnReturn(refresh: () => void, enabled = true) {
-  const latest = useRef(refresh);
-  useEffect(() => {
-    latest.current = refresh;
-  });
-  useEffect(() => {
-    if (!enabled) return;
-    const gate = createReturnGate(Date.now());
-    const onReturn = () => {
-      const state = {
-        visible: document.visibilityState === "visible",
-        dialogOpen: document.querySelector("dialog[open]") !== null,
-        now: Date.now(),
-      };
-      if (gate(state)) latest.current();
-    };
-    window.addEventListener("focus", onReturn);
-    document.addEventListener("visibilitychange", onReturn);
-    return () => {
-      window.removeEventListener("focus", onReturn);
-      document.removeEventListener("visibilitychange", onReturn);
-    };
-  }, [enabled]);
 }

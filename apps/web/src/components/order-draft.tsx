@@ -7,9 +7,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { draftTotals, formatAmount, orderDraftErrorKey, sortForOrder } from "@/lib/budget";
+import { useLiveRefresh } from "@/lib/live-changes";
 import { levelOf } from "@/lib/love-levels";
 import { profileHref, useCurrentProfile, useLoveLevels, useProfilesReady } from "@/lib/profile-context";
-import { useRefreshOnReturn } from "@/lib/refresh-on-return";
 import { pushUndo } from "@/lib/undo";
 import {
   type BudgetScope,
@@ -119,8 +119,8 @@ export function OrderDraft() {
   useEffect(() => {
     if (ready) void load();
   }, [ready, load]);
-  // Back on the page: ticks, prices and budget again (already without a loading state); not while ordering.
-  useRefreshOnReturn(() => void load(), ready && !ordering && items.status === "ready");
+  // Changed elsewhere (her phone, another tab): ticks, prices and budget again (already without a loading state); not while ordering.
+  useLiveRefresh(() => void load(), ready && !ordering && items.status === "ready");
 
   const setTicked = (id: string, inOrderDraft: boolean) =>
     setItems((previous) => ({
@@ -312,7 +312,7 @@ export function OrderDraft() {
       {scope && (
         <section
           aria-labelledby={bandTitleId}
-          className="sticky bottom-space-0 z-10 flex flex-wrap items-center justify-between gap-space-3 rounded-card bg-ink p-space-4 text-surface shadow-lifted"
+          className="sticky bottom-space-0 z-10 flex flex-wrap items-center justify-between gap-space-3 rounded-card border border-line bg-hint p-space-4 text-ink shadow-lifted"
         >
           <h2 id={bandTitleId} className="sr-only">
             {t("band.label")}
@@ -337,7 +337,7 @@ export function OrderDraft() {
             type="button"
             disabled={ordering}
             onClick={() => void order()}
-            className={`${touch} inline-flex items-center rounded-button bg-premium-surface px-space-4 py-space-2 text-sm font-strong text-ink disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-surface`}
+            className={`${touch} inline-flex items-center rounded-button bg-accent px-space-4 py-space-2 text-sm font-strong text-accent-ink disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus-ring`}
           >
             {t("band.ordered")}
           </button>

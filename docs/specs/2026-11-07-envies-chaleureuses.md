@@ -232,7 +232,7 @@ Ce qui change par rapport au texte ci-dessus, ou qui précise un cas non prévu 
 ### Retours de la fondatrice après les tests en dev (2026-11-07)
 
 - « Annuler » reste une seule action, la dernière (pas de pile) ; le message de la pastille et du menu « … » nomme l'article (« Robe Lina : Mims »). Pour plusieurs articles d'un coup : « Sélectionner ».
-- Revenir sur la page (autre onglet, autre appli, téléphone) relit Envies, listes et « Préparer une commande » sans rechargement ; pas pendant une sélection ni avec une fenêtre ouverte. Pas de mise à jour en direct.
-- « … au-dessus » du budget en rouge (couleur d'erreur), plus en rose poudré.
+- Mise à jour automatique : une page ouverte demande toutes les 10 s une empreinte de ses données (`GET /api/me/changes`) et ne relit Envies, listes et « Préparer une commande » que si elle a changé ; aussi tout de suite au retour sur la page. En pause onglet caché, fenêtre ouverte ou sélection en cours (le changement arrive ensuite). Pas de connexion permanente.
+- « … au-dessus » du budget en rouge (couleur d'erreur). Bandeau de « Préparer une commande » en rose poudré, texte chocolat, bouton « J'ai commandé » chocolat.
 - Réglages → Apparence : Automatique, Clair, Sombre, gardé sur l'appareil.
 - Budget sur le lien de partage et échanges avec les amies : partie 2.
