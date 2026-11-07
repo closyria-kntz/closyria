@@ -17,6 +17,7 @@ import { bulkRoutes } from "./routes/me/bulk";
 import { facetsRoutes } from "./routes/me/facets";
 import { itemMediaRoutes } from "./routes/me/item-media";
 import { itemsRoutes } from "./routes/me/items";
+import { loveLevelsRoutes } from "./routes/me/love-levels";
 import { profilesRoutes } from "./routes/me/profiles";
 import { recentsRoutes } from "./routes/me/recents";
 import { tagsRoutes } from "./routes/me/tags";
@@ -119,6 +120,7 @@ export function createApp(deps: AppDeps) {
     .route("/", productsRoutes(deps.catalog, captureLimiter))
     .route("/", eventsRoutes(deps.events))
     .route("/", profilesRoutes(deps.wardrobe))
+    .route("/", loveLevelsRoutes(deps.wardrobe))
     .route("/", bulkRoutes(deps.wardrobe))
     .route("/", itemsRoutes(deps.wardrobe, importAttacher))
     .route(

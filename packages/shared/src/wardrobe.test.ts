@@ -3,8 +3,10 @@ import {
   audienceSchema,
   childDetailSchema,
   classifiedBySchema,
+  DEFAULT_LOVE_LEVELS,
   ITEM_STAGE_ORDER,
   ITEMS_PAGE_SIZE,
+  isSingleEmoji,
   itemBulkSchema,
   itemCreateSchema,
   itemEventTypeSchema,
@@ -17,6 +19,7 @@ import {
   itemStageSchema,
   itemViewSchema,
   loveLevelSchema,
+  loveLevelsSchema,
   MAX_BULK_ITEMS,
   MAX_ITEM_PHOTOS,
   MAX_WHY,
@@ -290,5 +293,34 @@ describe("views", () => {
     expect(
       undoPayloadSchema.safeParse({ ops: [...ops(0), { ids: [id], op: "restore" }], removeEventIds: [] }).success,
     ).toBe(false);
+  });
+});
+
+describe("isSingleEmoji", () => {
+  it.each(["😀", "🤍", "👩🏽‍🦱", "🇫🇷", "1️⃣", "❤️"])("accepts %s", (value) => {
+    expect(isSingleEmoji(value)).toBe(true);
+  });
+  it.each(["", "a", "1", "😀😀", "😀a", " 😀", "🇫🇷🇫🇷", "ab"])("refuses %j", (value) => {
+    expect(isSingleEmoji(value)).toBe(false);
+  });
+  it("refuses more than 16 bytes", () => {
+    expect(isSingleEmoji("👨‍👩‍👧‍👦")).toBe(false); // 25 bytes
+  });
+});
+
+describe("loveLevelsSchema", () => {
+  it("accepts the defaults", () => {
+    expect(loveLevelsSchema.safeParse({ levels: DEFAULT_LOVE_LEVELS }).success).toBe(true);
+  });
+  it("refuses a duplicated level, 3 levels and a long label", () => {
+    const [a, b, c, d] = DEFAULT_LOVE_LEVELS;
+    expect(loveLevelsSchema.safeParse({ levels: [a, b, c, { ...c, level: 3 }] }).success).toBe(false);
+    expect(loveLevelsSchema.safeParse({ levels: [a, b, c] }).success).toBe(false);
+    expect(loveLevelsSchema.safeParse({ levels: [a, b, c, { ...d, label: "x".repeat(21) }] }).success).toBe(false);
+  });
+  it("trims labels", () => {
+    const [a, b, c, d] = DEFAULT_LOVE_LEVELS;
+    const out = loveLevelsSchema.parse({ levels: [{ ...a, label: "  Bof  " }, b, c, d] });
+    expect(out.levels[0]?.label).toBe("Bof");
   });
 });

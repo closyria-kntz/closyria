@@ -49,6 +49,38 @@ export type LoveLevel = z.infer<typeof loveLevelSchema>;
 export const DEFAULT_LOVE_LEVEL: LoveLevel = 2;
 /** Longest name she can give a level. */
 export const MAX_LOVE_LEVEL_LABEL = 20;
+
+export const loveLevelViewSchema = z.object({
+  level: loveLevelSchema,
+  emoji: z.string().refine((value) => isSingleEmoji(value), "one emoji"),
+  label: z.string().trim().min(1).max(MAX_LOVE_LEVEL_LABEL),
+});
+export type LoveLevelView = z.infer<typeof loveLevelViewSchema>;
+/** Her four levels: exactly 1, 2, 3 and 4, once each. */
+export const loveLevelsSchema = z.object({
+  levels: z
+    .array(loveLevelViewSchema)
+    .length(4)
+    .refine((levels) => [1, 2, 3, 4].every((n) => levels.filter((l) => l.level === n).length === 1), "levels 1 to 4"),
+});
+export type LoveLevels = z.infer<typeof loveLevelsSchema>;
+/** The names and emojis every account starts with. */
+export const DEFAULT_LOVE_LEVELS: readonly LoveLevelView[] = [
+  { level: 1, emoji: "😕", label: "Bof" },
+  { level: 2, emoji: "🤍", label: "J’aime" },
+  { level: 3, emoji: "🥰", label: "Mims" },
+  { level: 4, emoji: "🔥", label: "En feu" },
+];
+
+const graphemes = new Intl.Segmenter("en", { granularity: "grapheme" });
+const EMOJI_GRAPHEME = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}{2}|[0-9#*]\uFE0F?\u20E3)/u;
+/** One emoji (a single grapheme: flag, keycap or pictograph sequence), at most 16 bytes. */
+export function isSingleEmoji(value: string): boolean {
+  if (new TextEncoder().encode(value).length > 16) return false;
+  const parts = [...graphemes.segment(value)];
+  const [only] = parts;
+  return parts.length === 1 && only !== undefined && EMOJI_GRAPHEME.test(only.segment);
+}
 /** `week` Monday→Sunday, `month`, `custom` (start…end inclusive), `none` (since her last reset); Europe/Paris. */
 export const budgetPeriodSchema = z.enum(["week", "month", "custom", "none"]);
 export type BudgetPeriod = z.infer<typeof budgetPeriodSchema>;
