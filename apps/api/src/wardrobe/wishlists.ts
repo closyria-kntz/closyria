@@ -1,8 +1,10 @@
 import { and, asc, type Database, eq, inArray, isNull, schema } from "@closyria/db";
-import { DEFAULT_LOVE_LEVELS, type SharedWishlistView, type WishlistView } from "@closyria/shared";
+import type { SharedWishlistView, WishlistView } from "@closyria/shared";
 
 import { catalogImageUrl } from "../catalog/product-view";
 import type { Tx } from "./events";
+import { readLoveLevels } from "./love-levels";
+import { opinionsByItem } from "./opinions";
 
 type WishlistRow = typeof schema.wishlists.$inferSelect;
 
@@ -64,7 +66,12 @@ const imageUrlOf = (image: { id: string } | undefined) => (image ? catalogImageU
  * image is the product's first shop photo, never one of her private photos or her cover. Items in the trash are
  * left out; every other stage (sold included) stays.
  */
-export async function loadSharedView(db: Database, list: { id: string; name: string }): Promise<SharedWishlistView> {
+export type SharedList = Pick<
+  WishlistRow,
+  "id" | "name" | "userId" | "allowOpinions" | "showOwnerName" | "showOwnerOpinions" | "showBudget"
+>;
+
+export async function loadSharedView(db: Database, list: SharedList): Promise<SharedWishlistView> {
   // Narrow: only the public columns, and the first shop photo of each product (not all images, not the sizes).
   const members = await db
     .select({
@@ -76,6 +83,9 @@ export async function loadSharedView(db: Database, list: { id: string; name: str
       currency: schema.products.currency,
       url: schema.products.canonicalUrl,
       shopName: schema.shops.name,
+      loveLevel: schema.items.loveLevel,
+      priority: schema.items.priority,
+      why: schema.items.why,
     })
     .from(schema.wishlistItems)
     .innerJoin(schema.items, eq(schema.items.id, schema.wishlistItems.itemId))
@@ -102,16 +112,39 @@ export async function loadSharedView(db: Database, list: { id: string; name: str
             asc(schema.productImages.id),
           );
   const imageOf = new Map(firstImages.map((i) => [i.productId, i]));
+  const opinions = await opinionsByItem(db, list.id, null);
+  const levels = await readLoveLevels(db, list.userId);
+  let ownerName: string | null = null;
+  if (list.showOwnerName) {
+    const [owner] = await db
+      .select({ name: schema.user.name })
+      .from(schema.user)
+      .where(eq(schema.user.id, list.userId));
+    ownerName = owner?.name.trim().split(/\s+/)[0] || null;
+  }
+  let budget: SharedWishlistView["budget"] = null;
+  if (list.showBudget) {
+    const [row] = await db
+      .select({ amountCents: schema.budgets.amountCents })
+      .from(schema.budgets)
+      .where(eq(schema.budgets.wishlistId, list.id));
+    // Budgets carry no currency of their own: amounts are in euros everywhere in the app.
+    budget = row ? { amountCents: row.amountCents, currency: "EUR" } : null;
+  }
   return {
     name: list.name,
-    ownerName: null,
-    allowOpinions: true,
-    levels: [...DEFAULT_LOVE_LEVELS],
-    budget: null,
+    ownerName,
+    allowOpinions: list.allowOpinions,
+    levels,
+    budget,
     items: members.map((m) => ({
       itemId: m.itemId,
-      ownerOpinion: null,
-      opinions: [],
+      ownerOpinion:
+        list.showOwnerOpinions && (m.loveLevel !== null || m.priority || m.why)
+          ? { level: m.loveLevel, priority: m.priority, why: m.why }
+          : null,
+      // The public view never says what is new: that is for her.
+      opinions: (opinions.get(m.itemId) ?? []).map((o) => ({ ...o, isNew: false })),
       name: m.name,
       brand: m.brand,
       priceCents: m.priceCents,

@@ -1,9 +1,10 @@
-import { asc, eq, schema } from "@closyria/db";
-import { DEFAULT_LOVE_LEVELS, type LoveLevelView, loveLevelsSchema, wardrobeErrorSchema } from "@closyria/shared";
+import { eq, schema } from "@closyria/db";
+import { type LoveLevelView, loveLevelsSchema, wardrobeErrorSchema } from "@closyria/shared";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { type AccessEnv, defineAccess } from "../../access";
 import type { WardrobeDeps } from "../../wardrobe/deps";
+import { readLoveLevels } from "../../wardrobe/love-levels";
 
 const invalidRequest = { error: "invalid_request" } as const;
 const levelsResponse = {
@@ -64,12 +65,7 @@ export function loveLevelsRoutes(deps: WardrobeDeps) {
   });
 
   async function read(userId: string): Promise<{ levels: LoveLevelView[] }> {
-    const rows = await db
-      .select({ level: schema.loveLevels.level, emoji: schema.loveLevels.emoji, label: schema.loveLevels.label })
-      .from(schema.loveLevels)
-      .where(eq(schema.loveLevels.userId, userId))
-      .orderBy(asc(schema.loveLevels.level));
-    return { levels: rows.length === 4 ? rows : [...DEFAULT_LOVE_LEVELS] };
+    return { levels: await readLoveLevels(db, userId) };
   }
 
   return app

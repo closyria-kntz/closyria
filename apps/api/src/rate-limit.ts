@@ -6,7 +6,7 @@ export type RateLimitOptions<E extends Env = Env> = {
   max: number;
   windowMs: number;
   /** What is counted. Default: the client address (see the trust assumption below). */
-  key?: (c: Context<E>) => string;
+  key?: (c: Context<E>) => string | Promise<string>;
   /** Cap on tracked clients (default 10 000); the oldest are evicted first. */
   maxClients?: number;
 };
@@ -37,7 +37,7 @@ export function rateLimit<E extends Env = Env>(
     const t = now();
     const key = createHash("sha256")
       .update(salt)
-      .update(options.key ? options.key(c) : clientAddress(c.req.raw.headers))
+      .update(options.key ? await options.key(c) : clientAddress(c.req.raw.headers))
       .digest("base64");
     let w = windows.get(key);
     if (!w || w.resetAt <= t) {
@@ -61,6 +61,6 @@ export function rateLimit<E extends Env = Env>(
 }
 
 /** The last `X-Forwarded-For` entry, set by Caddy (see the trust assumption above). Without it: one shared bucket. */
-function clientAddress(headers: Headers): string {
+export function clientAddress(headers: Headers): string {
   return lastForwardedAddress(headers.get("x-forwarded-for")) ?? "unknown";
 }

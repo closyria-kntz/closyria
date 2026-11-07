@@ -323,6 +323,10 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
         await tx
           .delete(schema.wishlistItems)
           .where(and(eq(schema.wishlistItems.wishlistId, id), eq(schema.wishlistItems.itemId, itemId)));
+        // Her friends' opinions on this item belong to this list only.
+        await tx
+          .delete(schema.wishlistOpinions)
+          .where(and(eq(schema.wishlistOpinions.wishlistId, id), eq(schema.wishlistOpinions.itemId, itemId)));
         return true;
       });
       const view = found ? await viewOf(userId, id) : undefined;
