@@ -89,8 +89,14 @@ test("Sélectionner : deux articles passent En feu, Annuler ; filtres par niveau
   await page.getByRole("button", { name: "Sélectionner", exact: true }).click();
   // A tap toggles the selection: no pill nor « … » to catch it.
   await expect(cards.first().getByRole("button", { name: "Plus d’actions" })).toHaveCount(0);
-  await expect(cards.first().getByRole("button", { name: /^Niveau/ })).toHaveCount(0);
+  await expect(cards.first().getByRole("button", { name: /niveau/i })).toHaveCount(0);
   await expect(cards.first().getByRole("link")).toHaveCount(0);
+  // The level badge is display-only: a tap on it goes through to the card.
+  const badge = cards.nth(2).getByText("J’aime", { exact: true });
+  await badge.click({ force: true });
+  await expect(pick(page, 2)).toHaveAttribute("aria-pressed", "true");
+  await badge.click({ force: true });
+  await expect(pick(page, 2)).toHaveAttribute("aria-pressed", "false");
   await pick(page, 0).click();
   await pick(page, 1).click();
   await expect(pick(page, 0)).toHaveAttribute("aria-pressed", "true");

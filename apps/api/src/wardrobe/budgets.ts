@@ -138,7 +138,7 @@ export async function spentInPeriod(db: Database | Tx, scope: BudgetScope, start
       as spent
     from ${schema.itemEvents} e
     join ${schema.items} i on i.id = e.item_id
-    where e.type = 'stage' and e.stage in ('ordered', 'returned')
+    where e.type = 'stage' and e.stage in ('ordered', 'returned', 'spotted')
       and e.at >= ${start.toISOString()} and e.at < ${end.toISOString()}
       and ${inScope}`);
   return Math.max(0, Number(result.rows[0]?.spent ?? 0));

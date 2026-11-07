@@ -122,6 +122,41 @@ describe("/api/me/{profiles,wishlists}/{id}/budget", () => {
     expect(after.current).toMatchObject({ spentCents: 5900, remainingCents: 9100 });
   });
 
+  it("an ordered item put back in the wishes is credited; an owned one put back changes nothing", async () => {
+    const { cookie } = await t.signIn();
+    const moi = await moiOf(cookie);
+    const ordered = await wish(cookie);
+    const owned = await wish(cookie);
+    await stage(cookie, ordered, { stage: "ordered", at: thisWeekAt(), amountCents: 8900 });
+    await stage(cookie, owned, { stage: "ordered", at: thisWeekAt(), amountCents: 2000 });
+    await stage(cookie, owned, { stage: "owned", at: thisWeekAt() });
+    expect((await call("PUT", `/api/me/profiles/${moi}/budget`, cookie, weekly)).status).toBe(200);
+    const spent = async () =>
+      ((await (await call("GET", `/api/me/profiles/${moi}/budget`, cookie)).json()) as BudgetView).current?.spentCents;
+    expect(await spent()).toBe(10900);
+    await stage(cookie, owned, { stage: "spotted", at: thisWeekAt() });
+    expect(await spent()).toBe(10900);
+    await stage(cookie, ordered, { stage: "spotted", at: thisWeekAt() });
+    expect(await spent()).toBe(2000);
+  });
+
+  it("the bulk stage change from ordered to spotted credits too", async () => {
+    const { cookie } = await t.signIn();
+    const moi = await moiOf(cookie);
+    const item = await wish(cookie);
+    await stage(cookie, item, { stage: "ordered", at: thisWeekAt(), amountCents: 4000 });
+    expect((await call("PUT", `/api/me/profiles/${moi}/budget`, cookie, weekly)).status).toBe(200);
+    const res = await call("POST", "/api/me/items/bulk", cookie, {
+      ids: [item],
+      op: "stage",
+      stage: "spotted",
+      at: thisWeekAt(),
+    });
+    expect(res.status).toBe(200);
+    const view = (await (await call("GET", `/api/me/profiles/${moi}/budget`, cookie)).json()) as BudgetView;
+    expect(view.current?.spentCents).toBe(0);
+  });
+
   it("PUT updates the one budget in place; DELETE removes it", async () => {
     const { cookie } = await t.signIn();
     const moi = await moiOf(cookie);

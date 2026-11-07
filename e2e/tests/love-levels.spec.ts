@@ -31,6 +31,13 @@ test("la pastille passe de J’aime à Mims, « Annuler » remet J’aime ; plus
   await expect(card(page).getByRole("checkbox")).toHaveCount(0);
   await expect(card(page).getByRole("img", { name: "Favori" })).toHaveCount(0);
   await axe(page);
+  // The names carry the article's name, so two cards are told apart.
+  await expect(
+    card(page).getByRole("button", { name: `${PRODUCT.name} — niveau : J’aime. Toucher pour changer`, exact: true }),
+  ).toBeVisible();
+  await expect(
+    card(page).getByRole("button", { name: `Plus d’actions pour ${PRODUCT.name}`, exact: true }),
+  ).toBeVisible();
 
   await card(page).getByRole("button", { name: "Niveau : J’aime. Toucher pour changer" }).click();
   await expect(card(page).getByRole("button", { name: "Niveau : Mims. Toucher pour changer" })).toBeVisible();
@@ -44,7 +51,9 @@ test("la pastille passe de J’aime à Mims, « Annuler » remet J’aime ; plus
   await card(page).getByRole("button", { name: "Plus d’actions" }).click();
   await menu(page).getByRole("button", { name: "J’aime" }).click();
   await expect(toast(page)).toContainText("Niveau retiré");
-  await expect(card(page).getByRole("button", { name: "Donner un niveau" })).toBeVisible();
+  await expect(
+    card(page).getByRole("button", { name: `${PRODUCT.name} — donner un niveau`, exact: true }),
+  ).toBeVisible();
   await card(page).getByRole("button", { name: "Donner un niveau" }).click();
   await expect(card(page).getByRole("button", { name: "Niveau : J’aime. Toucher pour changer" })).toBeVisible();
 });

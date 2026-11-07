@@ -785,8 +785,8 @@
       "noName": "Article sans nom",
       "noPhoto": "Pas de photo",
       "open": "Ouvrir {name}",
-      "level": "Niveau : {label}. Toucher pour changer",
-      "levelAdd": "Donner un niveau",
+      "level": "{name} — niveau : {label}. Toucher pour changer",
+      "levelAdd": "{name} — donner un niveau",
       "priority": "Prioritaire",
       "why": "« {why} »"
     },
@@ -871,7 +871,7 @@
       "priorityOff": "Retirer de Prioritaire"
     },
     "menu": {
-      "open": "Plus d’actions",
+      "open": "Plus d’actions pour {name}",
       "panel": "Actions sur {name}",
       "levels": "Niveau",
       "priorityOn": "Prioritaire",
@@ -1109,7 +1109,7 @@
     "levels": {
       "metadata": "Mes niveaux",
       "title": "Tes mots à toi",
-      "intro": "Change l’émoji et le nom de chaque niveau. Tes amies verront les mêmes sur tes listes partagées.",
+      "intro": "Change l’émoji et le nom de chaque niveau : ils s’affichent partout dans l’app.",
       "listLabel": "Tes quatre niveaux",
       "caption": "Niveau {level}",
       "captionLeast": "Niveau 1 · le moins",

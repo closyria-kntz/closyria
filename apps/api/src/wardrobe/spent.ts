@@ -5,13 +5,15 @@ import type { Tx } from "./events";
 /**
  * What a stage change counts in the budgets (`item_events.spent_cents`), per item.
  * `ordered`: the amount typed in that change, else the product's current price, else null (counts as 0).
- * `returned`: what the item's latest `ordered` event counted, null when it has none. Any other stage: null.
+ * `returned`: what the item's latest `ordered` event counted, null when it has none.
+ * `spotted`, from `ordered` only (put back in the wishes): the same credit as a return. Any other stage: null.
  */
 export async function spentCentsFor(
   tx: Tx,
   itemIds: string[],
   stage: ItemStage,
   amountCents: number | null | undefined,
+  previousStages: Map<string, ItemStage> = new Map(),
 ): Promise<Map<string, number | null>> {
   const spent = new Map<string, number | null>(itemIds.map((id) => [id, null]));
   if (itemIds.length === 0) return spent;
@@ -23,13 +25,15 @@ export async function spentCentsFor(
       .innerJoin(schema.products, eq(schema.products.id, schema.items.productId))
       .where(inArray(schema.items.id, itemIds));
     for (const row of rows) spent.set(row.id, row.priceCents);
-  } else if (stage === "returned") {
+  } else if (stage === "returned" || stage === "spotted") {
+    const creditIds = stage === "returned" ? itemIds : itemIds.filter((id) => previousStages.get(id) === "ordered");
+    if (creditIds.length === 0) return spent;
     const rows = await tx
       .select({ itemId: schema.itemEvents.itemId, spentCents: schema.itemEvents.spentCents })
       .from(schema.itemEvents)
       .where(
         and(
-          inArray(schema.itemEvents.itemId, itemIds),
+          inArray(schema.itemEvents.itemId, creditIds),
           eq(schema.itemEvents.type, "stage"),
           eq(schema.itemEvents.stage, "ordered"),
         ),

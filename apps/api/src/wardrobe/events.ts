@@ -10,10 +10,22 @@ export type ItemEventInput =
   | { type: "profile"; fromProfileId: string; toProfileId: string; at: Date };
 
 /** Writes one history row (`item_events`) for the item and returns its id (undo deletes it, ruling R4). */
-export async function recordEvent(tx: Tx, item: { id: string }, event: ItemEventInput): Promise<string> {
+export async function recordEvent(
+  tx: Tx,
+  item: { id: string; stage?: string },
+  event: ItemEventInput,
+): Promise<string> {
   const spentCents =
     event.type === "stage"
-      ? ((await spentCentsFor(tx, [item.id], event.stage, event.amountCents)).get(item.id) ?? null)
+      ? ((
+          await spentCentsFor(
+            tx,
+            [item.id],
+            event.stage,
+            event.amountCents,
+            new Map(item.stage ? [[item.id, item.stage as ItemStage]] : []),
+          )
+        ).get(item.id) ?? null)
       : null;
   const [row] = await tx
     .insert(schema.itemEvents)

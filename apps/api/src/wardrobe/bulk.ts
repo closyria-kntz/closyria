@@ -170,7 +170,13 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
       let eventIds: string[] = [];
       if (options.writeEvents) {
         const at = new Date(op.at);
-        const spent = await spentCentsFor(tx, ids, op.stage, op.amountCents);
+        const spent = await spentCentsFor(
+          tx,
+          ids,
+          op.stage,
+          op.amountCents,
+          new Map(changed.map((item) => [item.id, item.stage as ItemStage])),
+        );
         const rows = await tx
           .insert(schema.itemEvents)
           .values(

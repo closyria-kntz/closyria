@@ -19,7 +19,7 @@ export function LoveLevelBadge({ item }: { item: ItemView }) {
   if (item.loveLevel === null) return null;
   const { emoji, label } = levelOf(levels, item.loveLevel);
   return (
-    <span className={`${pillClass} absolute top-space-2 left-space-2 max-w-3/4`}>
+    <span className={`${pillClass} pointer-events-none absolute top-space-2 left-space-2 max-w-3/4`}>
       <span aria-hidden="true">{emoji}</span>
       <span className="min-w-space-0 truncate">{label}</span>
     </span>
@@ -41,10 +41,12 @@ export function LoveLevelPill({
   reload: () => Promise<void>;
 }) {
   const t = useTranslations("Views");
+  const tCard = useTranslations("Views.card");
   const tErrors = useTranslations("Item.errors");
   const levels = useLoveLevels();
   const [busy, setBusy] = useState(false);
   const current = item.loveLevel === null ? null : levelOf(levels, item.loveLevel);
+  const name = item.name?.trim() || tCard("noName");
 
   async function next() {
     if (busy) return;
@@ -60,7 +62,7 @@ export function LoveLevelPill({
   return (
     <button
       type="button"
-      aria-label={current ? t("card.level", { label: current.label }) : t("card.levelAdd")}
+      aria-label={current ? t("card.level", { name, label: current.label }) : t("card.levelAdd", { name })}
       aria-busy={busy || undefined}
       onClick={() => void next()}
       className={`absolute top-space-0 left-space-0 z-10 flex min-h-touch-target min-w-touch-target max-w-3/4 items-center rounded-card p-space-2 ${focusRing}`}

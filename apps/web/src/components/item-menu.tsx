@@ -42,6 +42,7 @@ type Props = {
 export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
   const t = useTranslations("Views.menu");
   const tItem = useTranslations("Item");
+  const tCard = useTranslations("Views.card");
   const levels = useLoveLevels();
   const profiles = useProfiles();
   const [open, setOpen] = useState(false);
@@ -132,7 +133,7 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
       <button
         ref={button}
         type="button"
-        aria-label={t("open")}
+        aria-label={t("open", { name: item.name?.trim() || tCard("noName") })}
         aria-expanded={open}
         aria-controls={panelId}
         aria-busy={busy || undefined}

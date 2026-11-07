@@ -94,7 +94,8 @@ vignettes voulues, la barre d'actions en lot existante apparaît (niveau, priori
 - **Ce qui est déduit (« Déjà commandé »)** : chaque article du profil (ou de la liste) passé à « Commandé » pendant
   la période, quelle que soit la façon (« J'ai commandé », fiche, lot). Montant : le prix payé s'il est noté, sinon le
   prix de la boutique au moment du passage à « Commandé » (enregistré à ce moment-là). Un article **renvoyé**
-  pendant la période est recrédité ; un passage à « Commandé » annulé (« Annuler ») ne compte pas.
+  pendant la période est recrédité, de même qu'un article « Commandé » remis dans « Repéré » (« Remettre dans mes
+  envies », seul ou en lot) ; un passage à « Commandé » annulé (« Annuler ») ne compte pas.
 - **Pas de découpage par jour** : le budget d'une période est une enveloppe dépensée quand on veut.
 - **Historique** : pour les budgets par semaine et par mois, les périodes passées restent visibles
   (« octobre : 230 € sur 200 € »).
@@ -221,6 +222,8 @@ Ce qui change par rapport au texte ci-dessus, ou qui précise un cas non prévu 
 - Passer un budget en « Sans période » compte depuis sa création, pas depuis le changement.
 - Un article déjà gardé ailleurs et gardé à nouveau prend le niveau, la priorité et la raison choisis à cet instant
   (cela peut faire passer un 🔥 en J'aime) : à revoir.
+- Un article « Commandé » remis dans « Repéré » est recrédité comme un renvoi (même montant que sa dernière commande) ;
+  un article d'un autre stade remis dans « Repéré » ne change rien.
 - Le montant compté dans le budget est enregistré à part (`spent_cents`) ; le montant saisi reste dans `amount_cents`.
 - En mode « Sélectionner », toucher la pastille de niveau d'une carte ne la sélectionne pas (toucher ailleurs sur la carte) ; sur téléphone la barre de sélection défile sur le côté et ses actions des bords peuvent être hors écran sans indice. À valider.
 - Détails visuels à valider par la fondatrice : onglets du téléphone en 13 px, valeurs sombres du fond creux, du trait,
