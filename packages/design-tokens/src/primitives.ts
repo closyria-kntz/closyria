@@ -83,6 +83,6 @@ export const primitives = {
     lifted: "0 4px 12px rgb(43 29 23 / 0.12)",
   },
   breakpoint: { sm: "40rem", md: "48rem", lg: "64rem" },
-  container: { narrow: "36rem", wide: "72rem", app: "90rem", measure: "70ch", sidebar: "15rem" },
+  container: { narrow: "36rem", wide: "72rem", app: "90rem", measure: "70ch", sidebar: "15rem", panel: "42.5rem" },
   size: { touchTarget: "44px" },
 } as const;

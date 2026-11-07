@@ -243,7 +243,7 @@ test("le budget d’une liste se règle aussi depuis la page de la liste", async
   await expect(page.getByRole("region", { name: "Budget de la liste" })).toContainText(/Budget du mois : 80\s€/);
 });
 
-test("chaque ligne ouvre la fiche de l’article et la boutique, la petite case coche", async ({ page }) => {
+test("la petite case coche, et le lien de la boutique s’ouvre dans un nouvel onglet", async ({ page }) => {
   await wishAt(page, "Robe Alma", "89");
   await page.goto("/envies/commande");
   const box = row(page, "Robe Alma");
@@ -258,7 +258,69 @@ test("chaque ligne ouvre la fiche de l’article et la boutique, la petite case 
   const shop = page.getByRole("link", { name: /^Voir chez / });
   await expect(shop).toHaveAttribute("target", "_blank");
   await expect(shop).toHaveAttribute("rel", /noopener/);
-  await page.getByRole("link", { name: /Robe Alma/ }).click();
-  await expect(page).toHaveURL(/\/produits\//);
+});
+
+test("l’aperçu s’ouvre sans quitter la page : « Je le prends », Fermer, Échap, retour, glisser", async ({
+  page,
+}, testInfo) => {
+  await wishAt(page, "Robe Alma", "89");
+  await page.goto("/envies/commande");
+  const preview = page.getByRole("dialog", { name: "Aperçu de Robe Alma" });
+
+  // Open from the name: the page stays, the preview shows the item.
+  await page.getByRole("button", { name: /Robe Alma/ }).click();
+  await expect(preview).toBeVisible();
+  await expect(page).toHaveURL(/\/envies\/commande\?.*apercu=/);
+  await expect(preview).toContainText(/89\s€/);
+  await expect(preview.getByRole("link", { name: /^Voir chez / })).toHaveAttribute("target", "_blank");
+  await expect(preview.getByRole("link", { name: "Ouvrir la fiche complète" })).toHaveAttribute("href", /\/produits\//);
+  await axe(page);
+  await page.screenshot({ path: testInfo.outputPath("apercu.png") });
+  if (!testInfo.project.use.hasTouch) {
+    // On a computer, a large panel: at least 560 px wide.
+    const box = await preview.boundingBox();
+    expect(box?.width).toBeGreaterThanOrEqual(560);
+  }
+
+  // « Je le prends » ticks it in the order without closing.
+  await preview.getByRole("checkbox", { name: /Je le prends/ }).check();
+  await expect(preview).toBeVisible();
+  await expect(band(page)).toContainText(/1 article · 89\s€/);
+
+  // « Fermer »: back on the list, the box ticked.
+  await preview.getByRole("button", { name: "Fermer" }).click();
+  await expect(preview).toHaveCount(0);
+  await expect(page).toHaveURL(/\/envies\/commande$/);
+  await expect(row(page, "Robe Alma")).toBeChecked();
+
+  // Escape closes it too.
+  await page.getByRole("button", { name: /Robe Alma/ }).click();
+  await expect(preview).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expect(page).toHaveURL(/\/envies\/commande$/);
+
+  // The phone's back button closes it and stays on the page.
+  await page.getByRole("button", { name: /Robe Alma/ }).click();
+  await expect(preview).toBeVisible();
+  await page.goBack();
+  await expect(preview).toHaveCount(0);
+  await expect(page).toHaveURL(/\/envies\/commande$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Préparer une commande" })).toBeVisible();
+
+  // Dragging the top of the preview down closes it.
+  await page.getByRole("button", { name: /Robe Alma/ }).click();
+  await expect(preview).toBeVisible();
+  const handle = await page.getByTestId("preview-handle").boundingBox();
+  if (!handle) throw new Error("no handle");
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + 200, { steps: 8 });
+  await page.mouse.up();
+  await expect(preview).toHaveCount(0);
+
+  // « Ouvrir la fiche complète » goes to the item.
+  await page.getByRole("button", { name: /Robe Alma/ }).click();
+  await preview.getByRole("link", { name: "Ouvrir la fiche complète" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Robe Alma" })).toBeVisible();
 });

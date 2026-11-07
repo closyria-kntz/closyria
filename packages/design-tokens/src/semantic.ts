@@ -93,6 +93,7 @@ export const defaultSemanticTokens = {
   "container-app": container.app,
   "container-measure": container.measure,
   "container-sidebar": container.sidebar,
+  "container-panel": container.panel,
   "spacing-touch-target": size.touchTarget,
 } as const;
 

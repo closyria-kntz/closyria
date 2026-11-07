@@ -1008,6 +1008,17 @@
       "noName": "Sans nom",
       "viewAt": "Voir chez {shop}"
     },
+    "preview": {
+      "titlePrefix": "Aperçu de",
+      "close": "Fermer",
+      "closeHint": "Glisse vers le bas, touche « Fermer » ou la zone sombre pour revenir",
+      "size": "Taille",
+      "why": "Pourquoi",
+      "notes": "Notes",
+      "full": "Ouvrir la fiche complète",
+      "take": "Je le prends",
+      "takeHint": "dans la commande"
+    },
     "toggleFailed": "La sélection n’a pas pu être enregistrée. Réessaie.",
     "band": {
       "label": "Ma commande",

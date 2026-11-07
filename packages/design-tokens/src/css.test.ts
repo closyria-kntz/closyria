@@ -188,6 +188,8 @@ describe("adaptive layout tokens", () => {
 
   it("lets the content grow up to 90rem, with a 70ch reading measure and 44px touch targets", () => {
     expect(base["container-app"]).toBe("90rem");
+    // The item preview panel on a computer (« Préparer une commande »): up to 680 px.
+    expect(base["container-panel"]).toBe("42.5rem");
     expect(base["container-measure"]).toBe("70ch");
     expect(base["spacing-touch-target"]).toBe("44px");
   });

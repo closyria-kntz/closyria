@@ -2,7 +2,7 @@
 
 import type { BudgetHistory, BudgetView, ItemView } from "@closyria/shared";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { z } from "zod";
@@ -22,6 +22,7 @@ import {
   undoWith,
 } from "@/lib/wardrobe-client";
 import { BudgetDialog } from "./budget-dialog";
+import { ItemPreview } from "./item-preview";
 import { buttonClass, focusRing } from "./ui";
 
 const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
@@ -29,6 +30,8 @@ const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
 const touch = "min-h-touch-target";
 /** The list scope lives in the address: `/envies/commande?liste=<id>`. */
 export const LIST_PARAM = "liste";
+/** The item shown in the quick preview, kept in the address so the back button closes it. */
+export const PREVIEW_PARAM = "apercu";
 
 type Items = { status: "loading" | "ready" | "error" | "missing"; items: ItemView[]; listName: string | null };
 type Budget = { status: "loading" | "ready" | "error"; view: BudgetView | null; history: BudgetHistory["periods"] };
@@ -140,6 +143,32 @@ export function OrderDraft() {
       setError(t("toggleFailed"));
     }
   }
+
+  // The preview lives in the address (?apercu=<item>): the back button closes it and the page stays put.
+  const router = useRouter();
+  const pathname = usePathname();
+  const previewId = search.get(PREVIEW_PARAM);
+  const previewItem = items.items.find((candidate) => candidate.id === previewId) ?? null;
+  const pushedPreview = useRef(false);
+  const addressWith = (id: string | null) => {
+    const params = new URLSearchParams(search.toString());
+    if (id) params.set(PREVIEW_PARAM, id);
+    else params.delete(PREVIEW_PARAM);
+    const query = params.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  };
+  const openPreview = (id: string) => {
+    pushedPreview.current = true;
+    router.push(addressWith(id), { scroll: false });
+  };
+  const closePreview = () => {
+    // Already gone from the address (back button): nothing to do.
+    if (!new URLSearchParams(window.location.search).has(PREVIEW_PARAM)) return;
+    if (pushedPreview.current) {
+      pushedPreview.current = false;
+      router.back();
+    } else router.replace(addressWith(null), { scroll: false });
+  };
 
   async function order() {
     if (!scope || ordering) return;
@@ -280,10 +309,11 @@ export function OrderDraft() {
                         )}
                       </span>
                     </label>
-                    <Link
-                      href={`/produits/${item.product.id}`}
+                    <button
+                      type="button"
                       tabIndex={-1}
                       aria-hidden="true"
+                      onClick={() => openPreview(item.id)}
                       className="size-space-7 shrink-0 overflow-hidden rounded-md bg-media-backdrop"
                     >
                       {item.coverUrl && (
@@ -296,18 +326,19 @@ export function OrderDraft() {
                           className="size-full object-cover"
                         />
                       )}
-                    </Link>
+                    </button>
                     <span className="flex min-w-space-0 flex-1 flex-col items-start">
-                      <Link
-                        href={`/produits/${item.product.id}`}
-                        className={`max-w-full truncate rounded-sm font-strong ${focusRing}`}
+                      <button
+                        type="button"
+                        onClick={() => openPreview(item.id)}
+                        className={`max-w-full truncate rounded-sm text-left font-strong ${focusRing}`}
                       >
                         <span id={`order-name-${item.id}`}>{item.name?.trim() || t("row.noName")}</span>
                         <span aria-hidden="true" className="text-ink-muted">
                           {" "}
                           ›
                         </span>
-                      </Link>
+                      </button>
                       {(level || item.priority) && (
                         <span className="text-sm text-ink-muted">
                           {[level && `${level.emoji} ${level.label}`, item.priority && t("row.priority")]
@@ -405,6 +436,13 @@ export function OrderDraft() {
           }}
         />
       )}
+      <ItemPreview
+        item={previewItem}
+        levels={levels}
+        money={money}
+        onClose={closePreview}
+        onToggle={(item) => void toggle(item)}
+      />
     </div>
   );
 }
