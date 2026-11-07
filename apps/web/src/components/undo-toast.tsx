@@ -23,6 +23,7 @@ export function UndoToast() {
       role="status"
       aria-live="polite"
       aria-label={t("label")}
+      data-undo-toast=""
       className="pointer-events-none fixed inset-x-space-4 bottom-space-8 z-40 flex justify-center md:bottom-space-5"
     >
       {entry && (

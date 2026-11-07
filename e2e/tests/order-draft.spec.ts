@@ -53,6 +53,13 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await row(page, "Gilet Brume").check();
   await expect(band(page)).toContainText(/2 articles · 154\s€/);
   await expect(band(page)).toContainText(/4\s€ au-dessus/);
+  // The toast (« Budget enregistré · Annuler ») sits above the band, never over the totals.
+  await expect(toast(page)).toContainText("Budget enregistré");
+  await expect(async () => {
+    const message = await toast(page).locator("p").boundingBox();
+    const bar = await band(page).boundingBox();
+    expect(message && bar && message.y + message.height <= bar.y).toBe(true);
+  }).toPass();
   // A white band with a pink edge (chosen on 2026-11-07), and over the budget in red (the danger color).
   await expect(band(page)).toHaveCSS("background-color", "rgb(255, 255, 255)");
   // Buttons show the hand, like links, and « J'ai commandé » darkens on hover.

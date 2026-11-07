@@ -10,6 +10,7 @@ import { draftTotals, formatAmount, orderDraftErrorKey, sortForOrder } from "@/l
 import { useLiveRefresh } from "@/lib/live-changes";
 import { levelOf } from "@/lib/love-levels";
 import { profileHref, useCurrentProfile, useLoveLevels, useProfilesReady } from "@/lib/profile-context";
+import { useToastLift } from "@/lib/toast-lift";
 import { pushUndo } from "@/lib/undo";
 import {
   type BudgetScope,
@@ -76,6 +77,9 @@ export function OrderDraft() {
   const generation = useRef(0);
   const budgetTitleId = useId();
   const bandTitleId = useId();
+  const [band, setBand] = useState<HTMLElement | null>(null);
+  // The undo toast rises above the band instead of covering the totals.
+  useToastLift(band);
 
   // Only the latest read applies: a late answer for a previous scope never overwrites the current one.
   const budgetGeneration = useRef(0);
@@ -386,6 +390,7 @@ export function OrderDraft() {
 
       {scope && (
         <section
+          ref={setBand}
           aria-labelledby={bandTitleId}
           className="sticky bottom-space-0 z-10 flex flex-wrap items-center justify-between gap-space-3 rounded-card border-2 border-band-line bg-band p-space-4 text-ink shadow-lifted"
         >

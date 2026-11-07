@@ -22,6 +22,11 @@ html:has(dialog:modal),
   }
 }
 
+/* A page with a bar stuck to the bottom (« Préparer une commande ») lifts the undo toast above it (lib/toast-lift.ts). */
+html[data-toast-lift] [data-undo-toast] {
+  bottom: var(--toast-bottom);
+}
+
 body {
   background: var(--color-surface);
   color: var(--color-ink);
