@@ -1,7 +1,7 @@
 import { DEFAULT_LOVE_LEVELS } from "@closyria/shared";
 import { describe, expect, it, vi } from "vitest";
 import type { InternalApi } from "./admin-api";
-import { fetchSharedList } from "./shared-list";
+import { deleteOpinion, fetchSharedList, fetchSharedView, putOpinion } from "./shared-list";
 
 const TOKEN = "AbCdEfGhIjKlMnOpQrStUv";
 const view = {
@@ -58,5 +58,76 @@ describe("fetchSharedList", () => {
 
   it("throws when the API fails", async () => {
     await expect(fetchSharedList(api(new Response("", { status: 500 })), TOKEN)).rejects.toThrow();
+  });
+});
+
+const ITEM = "5b1f3c0e-7c1a-4d58-9a39-0a3f2f3a1b11";
+const KEY = "AAAAAAAAAAAAAAAAAAAAAA";
+const opinion = {
+  id: "6c2f3c0e-7c1a-4d58-9a39-0a3f2f3a1b12",
+  name: "Léa",
+  level: 4,
+  note: null,
+  createdAt: "2026-11-08T10:00:00.000Z",
+  updatedAt: "2026-11-08T10:00:00.000Z",
+  isNew: false,
+};
+const browserFetch = (response: Response) => vi.fn(async (_url: string, _init?: RequestInit) => response);
+
+describe("the friend's calls", () => {
+  it("reads the list again, without credentials; null once the link stopped", async () => {
+    const fetcher = browserFetch(Response.json(view));
+    expect(await fetchSharedView(TOKEN, fetcher as unknown as typeof fetch)).toEqual(view);
+    expect(fetcher.mock.calls[0]?.[0]).toBe(`/api/shared/${TOKEN}`);
+    expect(fetcher.mock.calls[0]?.[1]?.credentials).toBe("omit");
+    const gone = browserFetch(Response.json({ error: "not_found" }, { status: 404 }));
+    expect(await fetchSharedView(TOKEN, gone as unknown as typeof fetch)).toBeNull();
+  });
+
+  it("puts an opinion and reads back the saved one", async () => {
+    const fetcher = browserFetch(Response.json(opinion));
+    const input = { name: "Léa", level: 4, note: null, deviceKey: KEY };
+    expect(await putOpinion(TOKEN, ITEM, input, fetcher as unknown as typeof fetch)).toEqual({ ok: true, opinion });
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`/api/shared/${TOKEN}/items/${ITEM}/opinion`);
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(String(init.body))).toEqual(input);
+  });
+
+  it("names the API's refusals, anything else is « failed »", async () => {
+    const input = { name: "Léa", level: 4, note: null, deviceKey: KEY };
+    for (const [status, error] of [
+      [409, "name_taken"],
+      [422, "web_address"],
+      [429, "rate_limited"],
+      [403, "opinions_closed"],
+    ] as const) {
+      const fetcher = browserFetch(Response.json({ error }, { status }));
+      expect(await putOpinion(TOKEN, ITEM, input, fetcher as unknown as typeof fetch)).toEqual({ ok: false, error });
+    }
+    const odd = browserFetch(Response.json({ error: "invalid_request" }, { status: 400 }));
+    expect(await putOpinion(TOKEN, ITEM, input, odd as unknown as typeof fetch)).toEqual({
+      ok: false,
+      error: "failed",
+    });
+    const offline = vi.fn(async () => {
+      throw new TypeError("offline");
+    });
+    expect(await putOpinion(TOKEN, ITEM, input, offline as unknown as typeof fetch)).toEqual({
+      ok: false,
+      error: "failed",
+    });
+  });
+
+  it("erases an opinion; a key that did not write it is « forbidden »", async () => {
+    const done = browserFetch(new Response(null, { status: 204 }));
+    const input = { name: "Léa", deviceKey: KEY };
+    expect(await deleteOpinion(TOKEN, ITEM, input, done as unknown as typeof fetch)).toEqual({ ok: true });
+    expect(done.mock.calls[0]?.[1]?.method).toBe("DELETE");
+    const other = browserFetch(Response.json({ error: "forbidden" }, { status: 403 }));
+    expect(await deleteOpinion(TOKEN, ITEM, input, other as unknown as typeof fetch)).toEqual({
+      ok: false,
+      error: "forbidden",
+    });
   });
 });

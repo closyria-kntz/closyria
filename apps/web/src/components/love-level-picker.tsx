@@ -3,9 +3,7 @@
 import type { LoveLevel } from "@closyria/shared";
 import { useTranslations } from "next-intl";
 import { useLoveLevels } from "@/lib/profile-context";
-import { focusRing } from "./ui";
-
-const levelClass = `flex min-h-touch-target flex-col items-center justify-center gap-space-1 rounded-card border border-line bg-surface-raised px-space-1 py-space-3 text-sm text-ink hover:bg-surface-strong disabled:opacity-60 aria-pressed:border-accent aria-pressed:bg-hint aria-pressed:font-strong ${focusRing}`;
+import { levelButtonClass } from "./ui";
 
 type Props = {
   /** Her level; null when the item has none. */
@@ -30,7 +28,7 @@ export function LoveLevelPicker({ value, onChange, disabled = false }: Props) {
             disabled={disabled}
             aria-pressed={value === level.level}
             onClick={() => onChange(level.level)}
-            className={levelClass}
+            className={levelButtonClass}
           >
             <span aria-hidden="true" className="text-lead">
               {level.emoji}

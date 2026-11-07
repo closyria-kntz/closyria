@@ -1093,7 +1093,51 @@
       "body": "La personne a arrêté de partager cette liste, ou le lien est incomplet.",
       "home": "Découvrir Closyria"
     },
-    "visitFor": "{name}, s’ouvre dans un nouvel onglet"
+    "visitFor": "{name}, s’ouvre dans un nouvel onglet",
+    "ownerList": "La liste de {name}",
+    "invite": "Dis-lui ce que tu en penses 💬",
+    "budget": "Budget de la liste : {amount}",
+    "opinions": {
+      "closed": "Les avis sont fermés sur cette liste.",
+      "give": "Donner mon avis",
+      "edit": "Modifier mon avis",
+      "forItem": "sur {name}",
+      "listLabel": "Avis des amies",
+      "ownerFallback": "Son avis",
+      "priority": "Prioritaire",
+      "sheetTitle": "Ton avis sur {name}",
+      "close": "Fermer",
+      "closeHint": "Glisse vers le bas pour fermer",
+      "nameLabel": "Ton prénom (retenu sur cet appareil)",
+      "nameKnown": "Ton prénom",
+      "notMe": "Ce n'est pas moi",
+      "levels": "Tu en penses quoi ?",
+      "noteLabel": "Un petit mot (facultatif)",
+      "counter": "{count} / {max}",
+      "send": "Envoyer mon avis",
+      "visible": "Visible par toutes celles qui ont le lien.",
+      "erase": "Effacer mon avis",
+      "nameTaken": "Une {name} a déjà donné son avis sur cette liste. C'est toi ?",
+      "itsMe": "Oui, c'est moi",
+      "notHer": "Non",
+      "errors": {
+        "name": "Écris ton prénom (40 caractères au plus).",
+        "level": "Choisis un niveau.",
+        "webAddress": "Les liens ne sont pas acceptés dans les avis.",
+        "rateLimited": "Tu as donné beaucoup d'avis d'un coup. Réessaie dans un moment.",
+        "closed": "Les avis sont fermés sur cette liste.",
+        "gone": "Cet article n'est plus dans la liste.",
+        "failed": "L'avis n'a pas pu être envoyé. Réessaie.",
+        "eraseFailed": "L'avis n'a pas pu être effacé. Réessaie."
+      },
+      "toast": {
+        "label": "Notifications",
+        "sent": "Avis envoyé",
+        "erased": "Avis effacé",
+        "undo": "Annuler",
+        "undoFailed": "L'annulation n'a pas marché. Réessaie."
+      }
+    }
   },
   "Settings": {
     "title": "Réglages",
@@ -1126,9 +1170,18 @@
       "title": "Apparence",
       "intro": "Clair ou sombre, sur cet appareil.",
       "modes": {
-        "system": { "label": "Automatique", "hint": "Comme ton téléphone ou ton ordinateur" },
-        "light": { "label": "Clair", "hint": "Toujours en clair" },
-        "dark": { "label": "Sombre", "hint": "Toujours en sombre" }
+        "system": {
+          "label": "Automatique",
+          "hint": "Comme ton téléphone ou ton ordinateur"
+        },
+        "light": {
+          "label": "Clair",
+          "hint": "Toujours en clair"
+        },
+        "dark": {
+          "label": "Sombre",
+          "hint": "Toujours en sombre"
+        }
       }
     },
     "levels": {

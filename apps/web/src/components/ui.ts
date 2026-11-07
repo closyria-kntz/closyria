@@ -10,3 +10,6 @@ export const inputClass = `w-full rounded-button border border-line bg-surface-r
 
 /** A pill that stays pressed (« Prioritaire »): accent border and a soft fill when on. */
 export const toggleButtonClass = `${buttonClass} min-h-touch-target aria-pressed:border-accent aria-pressed:bg-hint aria-pressed:font-strong`;
+
+/** A big level button: her emoji over her name, pressed when chosen (the picker, the shared link). */
+export const levelButtonClass = `flex min-h-touch-target flex-col items-center justify-center gap-space-1 rounded-card border border-line bg-surface-raised px-space-1 py-space-3 text-sm text-ink hover:bg-surface-strong disabled:opacity-60 aria-pressed:border-accent aria-pressed:bg-hint aria-pressed:font-strong ${focusRing}`;
