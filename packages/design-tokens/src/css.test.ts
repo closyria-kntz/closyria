@@ -107,8 +107,11 @@ describe("Équilibré themes", () => {
     expect(get(equilibreLight, "color-premium-surface")).toBe("#F3E3A6");
     expect(get(equilibreLight, "color-success-surface")).toBe("#D5DCC8");
     expect(get(equilibreLight, "color-media-backdrop")).toBe("#EADBC8");
-    // « Préparer une commande » band (version B): very light pink, a pink edge, a milk-chocolate button.
-    expect(get(equilibreLight, "color-band")).toBe("#F6E4E1");
+    // « Préparer une commande » band: white with a pink edge, a milk-chocolate button that darkens on hover.
+    expect(get(equilibreLight, "color-band")).toBe("#FFFFFF");
+    expect(get(equilibreDark, "color-band")).toBe("#2A201B");
+    expect(get(equilibreLight, "color-band-button-hover")).toBe("#5A3A2E");
+    expect(get(equilibreDark, "color-band-button-hover")).toBe("#F6E4E1");
     expect(get(equilibreLight, "color-band-line")).toBe("#D8A9A3");
     expect(get(equilibreLight, "color-band-button")).toBe("#7A5444");
     expect(get(equilibreLight, "color-band-button-ink")).toBe("#FFFFFF");
@@ -164,6 +167,7 @@ describe("Équilibré themes", () => {
     ["color-line", "color-surface", 1],
     ["color-ink", "color-band", 4.5],
     ["color-band-button-ink", "color-band-button", 4.5],
+    ["color-band-button-ink", "color-band-button-hover", 4.5],
     ["color-surface", "color-danger", 4.5],
     ["color-band-line", "color-band", 1.2],
     ["color-success", "color-success-soft", 4.5],

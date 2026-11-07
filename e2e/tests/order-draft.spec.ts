@@ -53,8 +53,17 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await row(page, "Gilet Brume").check();
   await expect(band(page)).toContainText(/2 articles · 154\s€/);
   await expect(band(page)).toContainText(/4\s€ au-dessus/);
-  // A very light pink band with a pink edge (version B), and over the budget in red (the danger color).
-  await expect(band(page)).toHaveCSS("background-color", "rgb(246, 228, 225)");
+  // A white band with a pink edge (chosen on 2026-11-07), and over the budget in red (the danger color).
+  await expect(band(page)).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  // Buttons show the hand, like links, and « J'ai commandé » darkens on hover.
+  const ordered = band(page).getByRole("button", { name: "J’ai commandé" });
+  await expect(ordered).toHaveCSS("cursor", "pointer");
+  await expect(page.getByRole("button", { name: "Budget", exact: true })).toHaveCSS("cursor", "pointer");
+  if (!testInfo.project.use.hasTouch) {
+    // Only with a mouse: phones and tablets have no hover.
+    await ordered.hover();
+    await expect(ordered).toHaveCSS("background-color", "rgb(90, 58, 46)");
+  }
   await expect(band(page)).toHaveCSS("border-top-color", "rgb(216, 169, 163)");
   // Over the budget: a soft red fill, a red edge and red text (version B, same style as the green one).
   const over = band(page).getByText(/au-dessus/);
@@ -67,6 +76,7 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await expect(over).toHaveCSS("border-top-color", "rgb(180, 100, 108)");
   await expect(over).toHaveCSS("color", "rgb(244, 163, 168)");
   await axe(page);
+  await page.screenshot({ path: testInfo.outputPath("commande-sombre.png") });
   await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
   await page.screenshot({ path: testInfo.outputPath("commande.png") });
   await axe(page);
@@ -231,4 +241,24 @@ test("le budget d’une liste se règle aussi depuis la page de la liste", async
   await page.keyboard.press("Escape");
   await page.getByRole("link", { name: "Préparer une commande" }).click();
   await expect(page.getByRole("region", { name: "Budget de la liste" })).toContainText(/Budget du mois : 80\s€/);
+});
+
+test("chaque ligne ouvre la fiche de l’article et la boutique, la petite case coche", async ({ page }) => {
+  await wishAt(page, "Robe Alma", "89");
+  await page.goto("/envies/commande");
+  const box = row(page, "Robe Alma");
+  await expect(box).not.toBeChecked();
+  // A small square box, still easy to touch.
+  const mark = page.getByTestId("order-check").first();
+  const size = await mark.boundingBox();
+  expect(size?.width).toBeLessThanOrEqual(24);
+  await expect(mark).not.toHaveCSS("border-top-left-radius", "9999px");
+  await box.check();
+  await expect(band(page)).toContainText(/1 article · 89\s€/);
+  const shop = page.getByRole("link", { name: /^Voir chez / });
+  await expect(shop).toHaveAttribute("target", "_blank");
+  await expect(shop).toHaveAttribute("rel", /noopener/);
+  await page.getByRole("link", { name: /Robe Alma/ }).click();
+  await expect(page).toHaveURL(/\/produits\//);
+  await expect(page.getByRole("heading", { level: 1, name: "Robe Alma" })).toBeVisible();
 });

@@ -68,10 +68,11 @@ export const equilibreDark: Theme = {
     "color-danger-soft": c.wine,
     "color-danger-edge": c.oldRose,
     "color-focus-ring": c.powder,
-    "color-band": c.roseBark,
+    "color-band": c.mocha,
     "color-band-line": c.dustyRose,
     "color-band-button": c.powder,
     "color-band-button-ink": c.cocoa,
+    "color-band-button-hover": c.blush,
   },
 };
 

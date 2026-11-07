@@ -33,11 +33,12 @@ export const defaultSemanticTokens = {
   "color-danger-soft": palette.rosePetal,
   "color-danger-edge": palette.coral,
   "color-focus-ring": palette.chocolate,
-  // « Préparer une commande » band (version B chosen on 2026-11-07).
-  "color-band": palette.blush,
+  // « Préparer une commande » band: white with a pink edge (chosen on 2026-11-07, after version B in pink).
+  "color-band": palette.white,
   "color-band-line": palette.rosewood,
   "color-band-button": palette.milkChocolate,
   "color-band-button-ink": palette.white,
+  "color-band-button-hover": palette.chocolate,
   // Component tokens
   "color-button-bg": "var(--color-accent)",
   "color-button-ink": "var(--color-accent-ink)",

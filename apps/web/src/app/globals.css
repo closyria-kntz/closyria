@@ -13,6 +13,15 @@ html:has(dialog:modal),
   overflow: hidden;
 }
 
+/* Tailwind 4 leaves buttons on the arrow: everything clickable shows the hand, like links. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary {
+    cursor: pointer;
+  }
+}
+
 body {
   background: var(--color-surface);
   color: var(--color-ink);

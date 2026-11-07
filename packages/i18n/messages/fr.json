@@ -1005,7 +1005,8 @@
     "row": {
       "priority": "Prioritaire",
       "unknownPrice": "prix inconnu",
-      "noName": "Sans nom"
+      "noName": "Sans nom",
+      "viewAt": "Voir chez {shop}"
     },
     "toggleFailed": "La sélection n’a pas pu être enregistrée. Réessaie.",
     "band": {

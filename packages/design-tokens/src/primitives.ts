@@ -37,7 +37,6 @@ export const primitives = {
     clay: "#C9B8AE",
     parchment: "#DDD0C6",
     stone: "#B5A398",
-    roseBark: "#33251F",
     dustyRose: "#6B4A44",
     celadon: "#A9DCBF",
     spruce: "#1D3A31",

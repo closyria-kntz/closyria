@@ -24,6 +24,8 @@ import {
 import { BudgetDialog } from "./budget-dialog";
 import { buttonClass, focusRing } from "./ui";
 
+const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
+
 const touch = "min-h-touch-target";
 /** The list scope lives in the address: `/envies/commande?liste=<id>`. */
 export const LIST_PARAM = "liste";
@@ -251,26 +253,39 @@ export function OrderDraft() {
               const price = item.product.priceCents;
               return (
                 <li key={item.id}>
-                  <label className="flex cursor-pointer items-center gap-space-3 rounded-card border-2 border-line bg-surface-raised p-space-2 has-checked:border-accent has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus-ring has-focus-visible:outline-solid">
-                    <span className="relative flex size-space-6 shrink-0 items-center justify-center rounded-full border-2 border-ink-muted text-accent-ink has-checked:border-accent has-checked:bg-accent">
+                  <div className="flex items-center gap-space-2 rounded-card border-2 border-line bg-surface-raised py-space-2 pr-space-3 has-checked:border-accent">
+                    <label className="relative flex size-touch-target shrink-0 cursor-pointer items-center justify-center rounded-button has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus-ring has-focus-visible:outline-solid">
                       <input
                         type="checkbox"
                         checked={item.inOrderDraft}
                         onChange={() => void toggle(item)}
+                        aria-labelledby={`order-name-${item.id}`}
                         className="peer absolute inset-0 size-full cursor-pointer opacity-0"
                       />
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 16 16"
-                        className="invisible size-space-4 peer-checked:visible"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
+                      <span
+                        data-testid="order-check"
+                        className="pointer-events-none flex size-space-5 items-center justify-center rounded-sm border-2 border-ink-muted text-accent-ink peer-checked:border-accent peer-checked:bg-accent"
                       >
-                        <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </span>
-                    <span className="size-space-7 shrink-0 overflow-hidden rounded-md bg-media-backdrop">
+                        {item.inOrderDraft && (
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 16 16"
+                            className="size-space-3"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                          >
+                            <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </span>
+                    </label>
+                    <Link
+                      href={`/produits/${item.product.id}`}
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      className="size-space-7 shrink-0 overflow-hidden rounded-md bg-media-backdrop"
+                    >
                       {item.coverUrl && (
                         // biome-ignore lint/performance/noImgElement: photos come from our own API, already resized.
                         <img
@@ -281,9 +296,18 @@ export function OrderDraft() {
                           className="size-full object-cover"
                         />
                       )}
-                    </span>
-                    <span className="flex min-w-space-0 flex-1 flex-col">
-                      <span className="truncate font-strong">{item.name?.trim() || t("row.noName")}</span>
+                    </Link>
+                    <span className="flex min-w-space-0 flex-1 flex-col items-start">
+                      <Link
+                        href={`/produits/${item.product.id}`}
+                        className={`max-w-full truncate rounded-sm font-strong ${focusRing}`}
+                      >
+                        <span id={`order-name-${item.id}`}>{item.name?.trim() || t("row.noName")}</span>
+                        <span aria-hidden="true" className="text-ink-muted">
+                          {" "}
+                          ›
+                        </span>
+                      </Link>
                       {(level || item.priority) && (
                         <span className="text-sm text-ink-muted">
                           {[level && `${level.emoji} ${level.label}`, item.priority && t("row.priority")]
@@ -291,11 +315,31 @@ export function OrderDraft() {
                             .join(" · ")}
                         </span>
                       )}
+                      {isHttpUrl(item.product.canonicalUrl) && (
+                        <a
+                          href={item.product.canonicalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`inline-flex max-w-full items-center gap-space-1 rounded-sm text-sm text-ink-muted underline underline-offset-2 hover:text-ink ${focusRing}`}
+                        >
+                          <span className="truncate">{t("row.viewAt", { shop: item.product.shop.name })}</span>
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 16 16"
+                            className="size-space-3 shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <path d="M5 11l6-6M6 5h5v5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </a>
+                      )}
                     </span>
                     <span className={`shrink-0 text-sm ${price === null ? "text-ink-muted" : "font-strong"}`}>
                       {price === null ? t("row.unknownPrice") : money(price)}
                     </span>
-                  </label>
+                  </div>
                 </li>
               );
             })}
@@ -337,7 +381,7 @@ export function OrderDraft() {
             type="button"
             disabled={ordering}
             onClick={() => void order()}
-            className={`${touch} inline-flex items-center rounded-button bg-band-button px-space-4 py-space-2 text-sm font-strong text-band-button-ink disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus-ring`}
+            className={`${touch} inline-flex items-center rounded-button bg-band-button px-space-4 py-space-2 text-sm font-strong text-band-button-ink hover:bg-band-button-hover disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus-ring`}
           >
             {t("band.ordered")}
           </button>
