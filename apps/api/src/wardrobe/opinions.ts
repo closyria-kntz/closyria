@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import { and, asc, type Database, eq, isNull, schema, sql } from "@closyria/db";
-import { type OpinionDelete, type OpinionInput, type OpinionView, opinionNameKey } from "@closyria/shared";
+import {
+  type ErasedOpinion,
+  type OpinionDelete,
+  type OpinionInput,
+  type OpinionView,
+  opinionNameKey,
+} from "@closyria/shared";
 
 const hashDeviceKey = (deviceKey: string) => createHash("sha256").update(deviceKey).digest("hex");
 
@@ -145,4 +151,54 @@ export async function deleteOpinion(
       ),
     );
   return "deleted";
+}
+
+/** Her side: erases one opinion of her list. Returns it (for « Annuler »), or null when there is none. */
+export async function eraseOpinion(db: Database, wishlistId: string, opinionId: string): Promise<ErasedOpinion | null> {
+  const [row] = await db
+    .delete(schema.wishlistOpinions)
+    .where(and(eq(schema.wishlistOpinions.wishlistId, wishlistId), eq(schema.wishlistOpinions.id, opinionId)))
+    .returning();
+  return row ? { ...toOpinionView(row, new Date(0)), itemId: row.itemId, isNew: false } : null;
+}
+
+/** Puts an erased opinion back as it was (same id and dates). Never overwrites another opinion of the same name. */
+export async function restoreOpinion(
+  db: Database,
+  wishlistId: string,
+  opinion: ErasedOpinion,
+): Promise<"restored" | "not_found" | "exists"> {
+  const nameKey = opinionNameKey(opinion.name);
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${wishlistId}:${nameKey}`}, 0))`);
+    const [member] = await tx
+      .select({ itemId: schema.wishlistItems.itemId })
+      .from(schema.wishlistItems)
+      .innerJoin(schema.items, eq(schema.items.id, schema.wishlistItems.itemId))
+      .where(
+        and(
+          eq(schema.wishlistItems.wishlistId, wishlistId),
+          eq(schema.wishlistItems.itemId, opinion.itemId),
+          isNull(schema.items.deletedAt),
+        ),
+      )
+      .for("share", { of: schema.wishlistItems });
+    if (!member) return "not_found" as const;
+    const inserted = await tx
+      .insert(schema.wishlistOpinions)
+      .values({
+        id: opinion.id,
+        wishlistId,
+        itemId: opinion.itemId,
+        authorName: opinion.name,
+        authorNameKey: nameKey,
+        level: opinion.level,
+        note: opinion.note,
+        createdAt: new Date(opinion.createdAt),
+        updatedAt: new Date(opinion.updatedAt),
+      })
+      .onConflictDoNothing()
+      .returning({ id: schema.wishlistOpinions.id });
+    return inserted.length > 0 ? ("restored" as const) : ("exists" as const);
+  });
 }

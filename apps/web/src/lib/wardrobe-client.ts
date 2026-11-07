@@ -7,6 +7,8 @@ import {
   budgetViewSchema,
   changesSchema,
   DEFAULT_LOVE_LEVELS,
+  type ErasedOpinion,
+  erasedOpinionSchema,
   type FacetsView,
   facetsViewSchema,
   type ItemBulk,
@@ -16,6 +18,7 @@ import {
   type ItemStageInput,
   type ItemView,
   itemMutationResultSchema,
+  itemOpinionsSchema,
   itemPageSchema,
   type LoveLevel,
   type LoveLevelView,
@@ -33,18 +36,21 @@ import {
   type ReferenceView,
   recentListSchema,
   referenceViewSchema,
+  shareLinkSchema,
   shareResultSchema,
   type TagPatch,
   type TagView,
   tagListSchema,
   tagViewSchema,
   type UndoPayload,
+  type WishlistSettings,
   type WishlistView,
   wardrobeErrorCodes,
   wishlistListSchema,
+  wishlistOpinionsSchema,
   wishlistViewSchema,
 } from "@closyria/shared";
-import type { ZodType } from "zod";
+import { type ZodType, z } from "zod";
 import type { ClientDeps } from "./catalog-client";
 
 /** Browser calls to `/api/me/…`; every answer is validated with the shared schemas. */
@@ -421,4 +427,56 @@ export async function fetchBudgetHistory(
 /** « J'ai commandé »: the ticked wishes of the profile or the list go to « Commandé », with their undo. */
 export async function orderDraftOrdered(scope: BudgetScope, deps: ClientDeps = defaultDeps) {
   return await call(deps, "/api/me/order-draft/ordered", jsonInit("POST", scope), mutationResultSchema);
+}
+
+/** Changes how a list is shared (any of the four settings). */
+export async function patchWishlistSettings(
+  id: string,
+  patch: Partial<WishlistSettings>,
+  deps: ClientDeps = defaultDeps,
+) {
+  return await call(deps, `/api/me/wishlists/${id}`, jsonInit("PATCH", patch), wishlistViewSchema);
+}
+
+/** The link of a shared list (`url` null: not shared, or shared before links were kept). */
+export async function fetchShareLink(id: string, deps: ClientDeps = defaultDeps) {
+  return await call(deps, `/api/me/wishlists/${id}/share`, { method: "GET" }, shareLinkSchema);
+}
+
+export async function fetchWishlistOpinions(id: string, deps: ClientDeps = defaultDeps) {
+  return await call(
+    deps,
+    `/api/me/wishlists/${id}/opinions`,
+    { method: "GET", cache: "no-store" },
+    wishlistOpinionsSchema,
+  );
+}
+
+export async function markOpinionsSeen(id: string, deps: ClientDeps = defaultDeps) {
+  return await callNoContent(deps, `/api/me/wishlists/${id}/opinions/seen`, { method: "POST" });
+}
+
+const erasedResultSchema = z.object({ opinion: erasedOpinionSchema });
+
+/** Erases a friend's opinion; the result carries it for « Annuler ». */
+export async function deleteOpinion(listId: string, opinionId: string, deps: ClientDeps = defaultDeps) {
+  return await call(
+    deps,
+    `/api/me/wishlists/${listId}/opinions/${opinionId}`,
+    { method: "DELETE" },
+    erasedResultSchema,
+  );
+}
+
+export async function restoreOpinion(listId: string, opinion: ErasedOpinion, deps: ClientDeps = defaultDeps) {
+  return await call(
+    deps,
+    `/api/me/wishlists/${listId}/opinions/restore`,
+    jsonInit("POST", { opinion }),
+    erasedResultSchema,
+  );
+}
+
+export async function fetchItemOpinions(itemId: string, deps: ClientDeps = defaultDeps) {
+  return await call(deps, `/api/me/items/${itemId}/opinions`, { method: "GET", cache: "no-store" }, itemOpinionsSchema);
 }

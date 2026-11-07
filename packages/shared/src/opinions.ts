@@ -62,6 +62,17 @@ export const opinionViewSchema = z.object({
 });
 export type OpinionView = z.infer<typeof opinionViewSchema>;
 
+/** An opinion she erased, with its list item: what « Annuler » sends back to restore it as it was. */
+export const erasedOpinionSchema = opinionViewSchema.extend({
+  itemId: z.uuid(),
+  name: opinionNameSchema,
+  note: z
+    .string()
+    .refine((value) => textLength(value) <= OPINION_NOTE_MAX, "note length")
+    .nullable(),
+});
+export type ErasedOpinion = z.infer<typeof erasedOpinionSchema>;
+
 export const wishlistSettingsSchema = z.object({
   allowOpinions: z.boolean(),
   showOwnerName: z.boolean(),

@@ -1,12 +1,17 @@
-import { and, asc, eq, isNull, schema, sql } from "@closyria/db";
+import { and, asc, eq, isNotNull, isNull, schema, sql } from "@closyria/db";
 import {
+  erasedOpinionSchema,
+  itemOpinionsSchema,
+  type OpinionView,
   shareLinkSchema,
   shareResultSchema,
   wardrobeErrorSchema,
   wishlistInputSchema,
   wishlistItemInputSchema,
   wishlistListSchema,
+  wishlistOpinionsSchema,
   wishlistOrderSchema,
+  wishlistSettingsSchema,
   wishlistsOrderSchema,
   wishlistViewSchema,
 } from "@closyria/shared";
@@ -15,6 +20,7 @@ import type { Context } from "hono";
 import { type AccessEnv, defineAccess } from "../../access";
 import { runBulk } from "../../wardrobe/bulk";
 import { trackWishlistShared, type WardrobeDeps } from "../../wardrobe/deps";
+import { eraseOpinion, opinionsByItem, restoreOpinion } from "../../wardrobe/opinions";
 import { decryptShareToken, encryptShareToken } from "../../wardrobe/share-link";
 import { newShareToken } from "../../wardrobe/share-token";
 import { listWishlistViews } from "../../wardrobe/wishlists";
@@ -32,6 +38,10 @@ const json = <S extends z.ZodType>(description: string, schema: S) => ({
 const body = <S extends z.ZodType>(schema: S) => ({
   body: { required: true, content: { "application/json": { schema } } },
 });
+const wishlistPatchSchema = wishlistInputSchema
+  .partial()
+  .extend(wishlistSettingsSchema.partial().shape)
+  .refine((patch) => Object.values(patch).some((v) => v !== undefined), "empty patch");
 const idParams = z.object({ id: z.uuid() });
 const itemParams = z.object({ id: z.uuid(), itemId: z.uuid() });
 const notFoundContent = errorContent("Unknown or another account's list or item (not_found)");
@@ -63,8 +73,10 @@ const patchListRoute = defineAccess(
   createRoute({
     method: "patch",
     path: "/me/wishlists/{id}",
-    summary: "Rename a list",
-    request: { params: idParams, ...body(wishlistInputSchema) },
+    summary: "Rename a list or change how it is shared",
+    description:
+      "`name` and/or the sharing settings (`allowOpinions`, `showOwnerName`, `showOwnerOpinions`, `showBudget`); at least one.",
+    request: { params: idParams, ...body(wishlistPatchSchema) },
     responses: {
       200: json("Changed", wishlistViewSchema),
       400: errorContent("Invalid body (invalid_request)"),
@@ -205,6 +217,87 @@ const unshareRoute = defineAccess(
   "user",
 );
 
+const opinionParams = z.object({ id: z.uuid(), opinionId: z.uuid() });
+
+const opinionsRoute = defineAccess(
+  createRoute({
+    method: "get",
+    path: "/me/wishlists/{id}/opinions",
+    summary: "Her friends' opinions of a list",
+    description: "By item, oldest first. `isNew`: written or changed since she last marked them seen.",
+    request: { params: idParams },
+    responses: {
+      200: json("The opinions", wishlistOpinionsSchema),
+      400: errorContent("Malformed id (invalid_request)"),
+      404: notFoundContent,
+    },
+  }),
+  "user",
+);
+
+const opinionsSeenRoute = defineAccess(
+  createRoute({
+    method: "post",
+    path: "/me/wishlists/{id}/opinions/seen",
+    summary: "Mark the opinions of a list as seen",
+    request: { params: idParams },
+    responses: {
+      204: { description: "Marked" },
+      400: errorContent("Malformed id (invalid_request)"),
+      404: notFoundContent,
+    },
+  }),
+  "user",
+);
+
+const opinionRestoreRoute = defineAccess(
+  createRoute({
+    method: "post",
+    path: "/me/wishlists/{id}/opinions/restore",
+    summary: "Put back an opinion she erased",
+    description: "Body: the erased opinion as `DELETE` returned it. Same id and dates.",
+    request: { params: idParams, ...body(z.object({ opinion: erasedOpinionSchema }).or(erasedOpinionSchema)) },
+    responses: {
+      201: json("Restored", z.object({ opinion: erasedOpinionSchema })),
+      400: errorContent("Invalid body (invalid_request)"),
+      404: errorContent("Unknown list, or the item is no longer in it (not_found)"),
+      409: errorContent("Another opinion has the same name on that item meanwhile (opinion_exists)"),
+    },
+  }),
+  "user",
+);
+
+const opinionDeleteRoute = defineAccess(
+  createRoute({
+    method: "delete",
+    path: "/me/wishlists/{id}/opinions/{opinionId}",
+    summary: "Erase a friend's opinion",
+    request: { params: opinionParams },
+    responses: {
+      200: json("The erased opinion", z.object({ opinion: erasedOpinionSchema })),
+      400: errorContent("Malformed id (invalid_request)"),
+      404: notFoundContent,
+    },
+  }),
+  "user",
+);
+
+const itemOpinionsRoute = defineAccess(
+  createRoute({
+    method: "get",
+    path: "/me/items/{id}/opinions",
+    summary: "Friends' opinions of an item",
+    description: "In her shared lists that hold it, by list name; lists without opinion are left out.",
+    request: { params: idParams },
+    responses: {
+      200: json("The opinions", itemOpinionsSchema),
+      400: errorContent("Malformed id (invalid_request)"),
+      404: notFoundContent,
+    },
+  }),
+  "user",
+);
+
 /** `user` access ran first: the session is there. */
 function userIdOf(c: Context<AccessEnv>): string {
   const id = c.var.session?.user.id;
@@ -275,11 +368,74 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
       const { id } = c.req.valid("param");
       const [row] = await db
         .update(schema.wishlists)
-        .set({ name: c.req.valid("json").name })
+        .set(c.req.valid("json"))
         .where(own(userId, id))
         .returning({ id: schema.wishlists.id });
       const view = row ? await viewOf(userId, id) : undefined;
       return view ? c.json(view, 200) : c.json(notFound, 404);
+    })
+    .openapi(opinionsRoute, async (c) => {
+      const [list] = await db
+        .select({ seenAt: schema.wishlists.opinionsSeenAt })
+        .from(schema.wishlists)
+        .where(own(userIdOf(c), c.req.valid("param").id));
+      if (!list) return c.json(notFound, 404);
+      const byItem = await opinionsByItem(db, c.req.valid("param").id, list.seenAt);
+      return c.json({ items: [...byItem].map(([itemId, opinions]) => ({ itemId, opinions })) }, 200);
+    })
+    .openapi(opinionsSeenRoute, async (c) => {
+      const [row] = await db
+        .update(schema.wishlists)
+        .set({ opinionsSeenAt: sql`now()` })
+        .where(own(userIdOf(c), c.req.valid("param").id))
+        .returning({ id: schema.wishlists.id });
+      return row ? c.body(null, 204) : c.json(notFound, 404);
+    })
+    .openapi(opinionRestoreRoute, async (c) => {
+      const { id } = c.req.valid("param");
+      const sent = c.req.valid("json");
+      const opinion = "opinion" in sent ? sent.opinion : sent;
+      const [list] = await db
+        .select({ id: schema.wishlists.id })
+        .from(schema.wishlists)
+        .where(own(userIdOf(c), id));
+      if (!list) return c.json(notFound, 404);
+      const outcome = await restoreOpinion(db, id, opinion);
+      if (outcome === "not_found") return c.json(notFound, 404);
+      if (outcome === "exists") return c.json({ error: "opinion_exists" } as const, 409);
+      return c.json({ opinion }, 201);
+    })
+    .openapi(opinionDeleteRoute, async (c) => {
+      const { id, opinionId } = c.req.valid("param");
+      const [list] = await db
+        .select({ id: schema.wishlists.id })
+        .from(schema.wishlists)
+        .where(own(userIdOf(c), id));
+      const opinion = list ? await eraseOpinion(db, id, opinionId) : null;
+      return opinion ? c.json({ opinion }, 200) : c.json(notFound, 404);
+    })
+    .openapi(itemOpinionsRoute, async (c) => {
+      const userId = userIdOf(c);
+      const { id } = c.req.valid("param");
+      const [item] = await db
+        .select({ id: schema.items.id })
+        .from(schema.items)
+        .where(and(eq(schema.items.id, id), eq(schema.items.userId, userId)));
+      if (!item) return c.json(notFound, 404);
+      const lists = await db
+        .select({ id: schema.wishlists.id, name: schema.wishlists.name, seenAt: schema.wishlists.opinionsSeenAt })
+        .from(schema.wishlists)
+        .where(and(eq(schema.wishlists.userId, userId), isNotNull(schema.wishlists.shareTokenHash)))
+        .orderBy(asc(schema.wishlists.id));
+      const out: { wishlistId: string; wishlistName: string; opinions: OpinionView[] }[] = [];
+      for (const list of lists) {
+        const opinions = (await opinionsByItem(db, list.id, list.seenAt)).get(id);
+        if (opinions?.length) out.push({ wishlistId: list.id, wishlistName: list.name, opinions });
+      }
+      out.sort(
+        (a, b) => a.wishlistName.localeCompare(b.wishlistName, "fr") || a.wishlistId.localeCompare(b.wishlistId),
+      );
+      return c.json({ lists: out }, 200);
     })
     .openapi(deleteListRoute, async (c) => {
       // wishlist_items rows go with the list (cascade); the items stay.

@@ -49,6 +49,8 @@ export async function changesStamp(db: WardrobeDeps["db"], userId: string): Prom
       (select ${rowsOf("w")} from ${schema.wishlists} w where w.user_id = ${userId}),
       (select ${rowsOf("wi")} from ${schema.wishlistItems} wi
          join ${schema.wishlists} w on w.id = wi.wishlist_id where w.user_id = ${userId}),
+      (select ${rowsOf("wo")} from ${schema.wishlistOpinions} wo
+         join ${schema.wishlists} w on w.id = wo.wishlist_id where w.user_id = ${userId}),
       (select ${rowsOf("t")} from ${schema.tags} t where t.user_id = ${userId}),
       (select ${rowsOf("l")} from ${schema.loveLevels} l where l.user_id = ${userId}),
       (select ${rowsOf("b")} from ${schema.budgets} b where b.user_id = ${userId})

@@ -1,4 +1,4 @@
-import { and, asc, type Database, eq, inArray, isNull, schema } from "@closyria/db";
+import { and, asc, type Database, eq, gt, inArray, isNull, or, schema, sql } from "@closyria/db";
 import type { SharedWishlistView, WishlistView } from "@closyria/shared";
 
 import { catalogImageUrl } from "../catalog/product-view";
@@ -34,15 +34,33 @@ export async function listWishlistViews(db: Database | Tx, userId: string, onlyI
       ),
     )
     .orderBy(asc(schema.wishlistItems.position), asc(schema.wishlistItems.addedAt), asc(schema.wishlistItems.itemId));
+  const ids = rows.map((r) => r.id);
+  // New = written or changed after she last looked (all of them when she never did).
+  const counts = await db
+    .select({ wishlistId: schema.wishlistOpinions.wishlistId, count: sql<number>`count(*)::int` })
+    .from(schema.wishlistOpinions)
+    .innerJoin(schema.wishlists, eq(schema.wishlists.id, schema.wishlistOpinions.wishlistId))
+    .where(
+      and(
+        inArray(schema.wishlistOpinions.wishlistId, ids),
+        or(
+          isNull(schema.wishlists.opinionsSeenAt),
+          gt(schema.wishlistOpinions.updatedAt, schema.wishlists.opinionsSeenAt),
+        ),
+      ),
+    )
+    .groupBy(schema.wishlistOpinions.wishlistId);
+  const newCount = new Map(counts.map((c) => [c.wishlistId, c.count]));
   return rows.map((row) =>
     toWishlistView(
       row,
       members.filter((m) => m.wishlistId === row.id).map((m) => m.itemId),
+      newCount.get(row.id) ?? 0,
     ),
   );
 }
 
-function toWishlistView(row: WishlistRow, itemIds: string[]): WishlistView {
+function toWishlistView(row: WishlistRow, itemIds: string[], newOpinions: number): WishlistView {
   return {
     id: row.id,
     name: row.name,
@@ -50,12 +68,11 @@ function toWishlistView(row: WishlistRow, itemIds: string[]): WishlistView {
     shared: row.shareTokenHash !== null,
     sharedAt: row.sharedAt?.toISOString() ?? null,
     position: row.position,
-    // Real values come with the opinions feature.
-    allowOpinions: true,
-    showOwnerName: true,
-    showOwnerOpinions: true,
-    showBudget: false,
-    newOpinions: 0,
+    allowOpinions: row.allowOpinions,
+    showOwnerName: row.showOwnerName,
+    showOwnerOpinions: row.showOwnerOpinions,
+    showBudget: row.showBudget,
+    newOpinions,
   };
 }
 

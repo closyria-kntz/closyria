@@ -3,22 +3,29 @@ import {
   changeStage,
   createItem,
   deleteBudget,
+  deleteOpinion,
   deleteProfile,
   fetchBudget,
   fetchBudgetHistory,
   fetchFacets,
   fetchItemForProduct,
+  fetchItemOpinions,
   fetchItemsPage,
   fetchLoveLevels,
   fetchPhotoImport,
   fetchRecents,
   fetchReference,
+  fetchShareLink,
+  fetchWishlistOpinions,
   forgetRecent,
   importPhoto,
+  markOpinionsSeen,
   orderDraftOrdered,
+  patchWishlistSettings,
   purgeItem,
   reorderWishlists,
   resetBudget,
+  restoreOpinion,
   saveBudget,
   saveLoveLevels,
   shareWishlist,
@@ -384,6 +391,61 @@ describe("orderDraftOrdered", () => {
     expect(await orderDraftOrdered({ profileId: id }, deps(json({ error: "order_draft_empty" }, 409)))).toEqual({
       ok: false,
       error: "order_draft_empty",
+    });
+  });
+});
+
+describe("opinions of her friends", () => {
+  const listId = "00000000-0000-4000-8000-000000000002";
+  const opinion = {
+    id,
+    itemId: id,
+    name: "Léa",
+    level: 3,
+    note: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    isNew: false,
+  };
+
+  it("patchWishlistSettings sends only the given settings", async () => {
+    const d = deps(json({ error: "not_found" }, 404));
+    expect(await patchWishlistSettings(listId, { showBudget: true }, d)).toEqual({ ok: false, error: "not_found" });
+    expect(d.fetch).toHaveBeenCalledWith(
+      `/api/me/wishlists/${listId}`,
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ showBudget: true }) }),
+    );
+  });
+
+  it("fetchShareLink, fetchWishlistOpinions and fetchItemOpinions validate their answers", async () => {
+    expect(await fetchShareLink(listId, deps(json({ url: "/l/x", legacy: false })))).toMatchObject({
+      ok: true,
+      url: "/l/x",
+    });
+    expect(await fetchShareLink(listId, deps(json({ nope: 1 })))).toEqual({ ok: false, error: "failed" });
+    expect(
+      await fetchWishlistOpinions(listId, deps(json({ items: [{ itemId: id, opinions: [opinion] }] }))),
+    ).toMatchObject({ ok: true });
+    expect(await fetchItemOpinions(id, deps(json({ lists: [] })))).toMatchObject({ ok: true, lists: [] });
+  });
+
+  it("markOpinionsSeen succeeds on 204", async () => {
+    const d = deps(new Response(null, { status: 204 }));
+    expect(await markOpinionsSeen(listId, d)).toEqual({ ok: true });
+    expect(d.fetch).toHaveBeenCalledWith(`/api/me/wishlists/${listId}/opinions/seen`, { method: "POST" });
+  });
+
+  it("deleteOpinion returns the erased opinion and restoreOpinion posts it back", async () => {
+    expect(await deleteOpinion(listId, id, deps(json({ opinion })))).toMatchObject({ ok: true, opinion });
+    const d = deps(json({ opinion }, 201));
+    expect(await restoreOpinion(listId, opinion, d)).toMatchObject({ ok: true });
+    expect(d.fetch).toHaveBeenCalledWith(
+      `/api/me/wishlists/${listId}/opinions/restore`,
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ opinion }) }),
+    );
+    expect(await restoreOpinion(listId, opinion, deps(json({ error: "opinion_exists" }, 409)))).toEqual({
+      ok: false,
+      error: "opinion_exists",
     });
   });
 });
