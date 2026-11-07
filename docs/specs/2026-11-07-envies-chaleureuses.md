@@ -23,7 +23,8 @@ Retours de la fondatrice (2026-11-07) :
 | E2 | Personnaliser | Chaque utilisatrice change l'émoji et le nom de chacun des 4 niveaux (Réglages). Le nombre reste 4. |
 | E3 | Prioritaire | Une étiquette à part, sur n'importe quel niveau. |
 | E4 | Avis | Un « Pourquoi ? » en une phrase à côté du niveau (pour elle ; les avis des amies sont la partie 2). |
-| E5 | Préparer une commande | Une sélection **enregistrée**, avec un **budget** enregistré, total et écart affichés en direct. |
+| E5 | Préparer une commande | Une sélection **enregistrée**, total et écart au budget affichés en direct. |
+| E5b | Budget | Par **profil** et par **liste**, sur une période : semaine, mois, dates au choix ou sans période ; ce qui est déjà commandé dans la période est déduit (§ 3.7). |
 | E6 | Vignettes | Niveau touchable sur la vignette, menu « … » ; plus de case à cocher hors du mode « Sélectionner ». |
 | E7 | Palette | C · chocolat et rose poudré, caractères Fraunces (titres) et DM Sans (texte), coins plus ronds. |
 | E8 | Cadre fixe | Gardé (déjà en dev). |
@@ -69,23 +70,46 @@ vignettes voulues, la barre d'actions en lot existante apparaît (niveau, priori
 
 ### 3.6 Préparer une commande (Envies)
 - Bouton « Préparer une commande » en haut d'Envies → page dédiée (`/envies/commande`).
-- **Mon budget** en haut (montant en euros, facultatif), enregistré.
+- En haut, le **budget du profil** (§ 3.7) : « Budget de la semaine : 150 € · Déjà commandé : 89 € ».
 - La liste des envies du profil courant, triée « Ce que j'aime le plus » ; chaque ligne se coche d'un toucher.
 - La sélection est **enregistrée** : on la retrouve en revenant, sur tous ses appareils.
-- Bandeau du bas, en direct : « 3 articles · 187 € » et « Il te reste 13 € » ou « 37 € au-dessus de ton budget »
-  (rien sur l'écart sans budget). Prix pris : le prix actuel de la boutique ; un article sans prix compte pour 0 et
+- Bandeau du bas, en direct : « 3 articles · 187 € » et, avec un budget, ce qui resterait après la sélection :
+  « Il te resterait 13 € » ou « 37 € au-dessus » (en rose). Prix pris : le prix actuel de la boutique ; un article sans prix compte pour 0 et
   porte « prix inconnu ».
 - **« J'ai commandé »** : les articles cochés passent à « Commandé » (date du jour), la sélection se vide,
-  message « 3 articles passés en Commandé · Annuler ». Le budget reste.
+  message « 3 articles passés en Commandé · Annuler ». Ils comptent aussitôt dans « Déjà commandé ».
+- Depuis une **liste**, le même bouton « Préparer une commande » ne montre que les articles de la liste et le budget
+  de la liste.
 - Un article qui quitte les Envies (autre étape, supprimé) sort de la sélection.
 
-### 3.7 Réglages → Mes niveaux
+### 3.7 Les budgets
+- **Où** : un budget par **profil** (Moi, Léa…) et, en plus, un budget par **liste** (« Noël : 300 € »). Les deux sont
+  facultatifs et indépendants : un article de la liste « Noël » du profil Moi compte dans les deux.
+- **Période** :
+  - **par semaine** (du lundi au dimanche) ou **par mois** (du 1er au dernier jour) : remise à zéro automatique au
+    début de chaque période ;
+  - **dates au choix** (« du 1er au 15 décembre ») : rien n'est compté hors de ces dates ; à la fin, le budget reste
+    affiché comme terminé jusqu'à ce qu'elle en crée un autre ;
+  - **sans période** : une enveloppe qui compte tout depuis sa création, remise à zéro par « Recommencer à zéro ».
+- **Ce qui est déduit (« Déjà commandé »)** : chaque article du profil (ou de la liste) passé à « Commandé » pendant
+  la période, quelle que soit la façon (« J'ai commandé », fiche, lot). Montant : le prix payé s'il est noté, sinon le
+  prix de la boutique au moment du passage à « Commandé » (enregistré à ce moment-là). Un article **renvoyé**
+  pendant la période est recrédité ; un passage à « Commandé » annulé (« Annuler ») ne compte pas.
+- **Pas de découpage par jour** : le budget d'une période est une enveloppe dépensée quand on veut.
+- **Historique** : pour les budgets par semaine et par mois, les périodes passées restent visibles
+  (« octobre : 230 € sur 200 € »).
+- **Où le régler** : un bouton « Budget » sur la page « Préparer une commande » (budget du profil) et dans le menu
+  d'une liste (budget de la liste) ; montant, période, dates.
+- Le budget d'une liste est **privé** : les amies qui ouvrent le lien de partage ne le voient pas (à revoir en
+  partie 2 si besoin).
+
+### 3.8 Réglages → Mes niveaux
 - 4 lignes : émoji (choix dans une grille d'émojis courants, ou saisie libre d'un seul émoji) et nom (20 caractères
   au plus).
 - « Enregistrer » ; « Revenir aux niveaux de départ ».
 - Ses noms et émojis s'affichent partout dans l'app (et, en partie 2, sur ses listes partagées).
 
-### 3.8 Nouvelle palette et ton
+### 3.9 Nouvelle palette et ton
 - Palette C, en clair et en sombre (§ 5.4), appliquée à toute l'app (l'admin suit les mêmes jetons).
 - Caractères : Fraunces pour les titres, DM Sans pour le texte, hébergés avec l'app (pas d'appel à Google).
 - Coins plus ronds (cartes 26 px, boutons en pilule).
@@ -106,7 +130,13 @@ vignettes voulues, la barre d'actions en lot existante apparaît (niveau, priori
 - `items.why` : texte, 200 caractères au plus, `null` par défaut.
 - `items.in_order_draft` : booléen, `false` par défaut (la sélection « Préparer une commande »), index partiel
   `(user_id, profile_id) where in_order_draft`.
-- Budget : `profiles.order_budget_cents` (entier ≥ 0 ou `null`), un budget par profil (Moi, Léa…).
+- Budgets : table `budgets` (`id`, `user_id`, `profile_id` **ou** `wishlist_id` — exactement l'un des deux,
+  `amount_cents` > 0, `period` `week`|`month`|`custom`|`none`, `starts_on`/`ends_on` pour `custom`, `reset_at`
+  pour `none`, `created_at`) ; au plus un budget par profil et un par liste (index uniques partiels).
+- Montant au passage à « Commandé » : `item_events.amount_cents` (déjà là pour les changements d'étape) rempli avec
+  le prix payé, sinon le prix courant de la boutique ; « Déjà commandé » = somme des événements `ordered` de la
+  période, moins les événements `returned` de la période, sans les événements annulés.
+- Périodes : calculées en heure de Paris (lundi 00:00, le 1er 00:00).
 - Niveaux personnalisés : table `love_levels` (`user_id`, `level` 1–4, `emoji`, `label`), clé (`user_id`, `level`) ;
   absente = niveaux de départ.
 - Reprise : `love_level = 2 where favorite`, puis suppression de la colonne `favorite` dans la même migration
@@ -121,7 +151,10 @@ vignettes voulues, la barre d'actions en lot existante apparaît (niveau, priori
 - `PATCH /me/items/{id}` accepte `loveLevel`, `priority`, `why`, `inOrderDraft`.
 - Lots : opérations `setLoveLevel`, `setPriority`, `setOrderDraft`, avec annulation comme les autres.
 - Vues : filtres `loveLevel` (plusieurs valeurs) et `priority`, tri `love`.
-- `GET/PUT /me/love-levels` (4 niveaux), `PATCH /me/profiles/{id}` accepte `orderBudgetCents`.
+- `GET/PUT /me/love-levels` (4 niveaux).
+- `GET/PUT/DELETE /me/profiles/{id}/budget` et `/me/wishlists/{id}/budget` : réglage, et lecture avec la période en
+  cours (`spentCents`, `remainingCents`, dates) ; `GET …/budget/history` (périodes passées) ;
+  `POST …/budget/reset` (sans période).
 - `POST /me/order-draft/ordered` : passe la sélection du profil à « Commandé » et la vide, en une transaction,
   annulable.
 
@@ -143,8 +176,9 @@ vignettes voulues, la barre d'actions en lot existante apparaît (niveau, priori
 
 - Unitaires : niveau suivant (cycle), tri « Ce que j'aime le plus », calcul total / écart au budget (prix inconnus,
   sans budget), contrastes de la palette (tests existants).
-- Intégration API : reprise des favoris en J'aime, garder avec `wish`, filtres et tri, lots et annulation, budget par
-  profil, « J'ai commandé » (transaction, annulation), fusion anonyme → compte, niveaux personnalisés (4 exactement,
+- Intégration API : reprise des favoris en J'aime, garder avec `wish`, filtres et tri, lots et annulation, budgets
+  (profil et liste ; semaine, mois, dates, sans période ; changement de semaine et de mois en heure de Paris ;
+  prix payé ou prix boutique ; renvoyé recrédité ; passage annulé non compté), « J'ai commandé » (transaction, annulation), fusion anonyme → compte, niveaux personnalisés (4 exactement,
   un émoji, 20 caractères).
 - Parcours navigateur (téléphone, tablette, ordinateur, axe sans violation) : lien collé → « Ajouter à mes envies »
   en Mims ; toucher la pastille d'une vignette ; menu « … » → Prioritaire puis Retirer ; mode « Sélectionner » ;
@@ -159,7 +193,7 @@ vignettes voulues, la barre d'actions en lot existante apparaît (niveau, priori
 ## 8. Points supposés, à confirmer
 
 1. Les anciens favoris deviennent **🤍 J'aime** (et non 🥰 Mims).
-2. Un **budget par profil** (le tien, celui de ta fille…), plutôt qu'un seul budget.
+2. Le budget d'une liste reste **privé** (les amies ne le voient pas sur le lien de partage).
 3. « J'aime » est **présélectionné** sur la fiche d'un lien collé, pour ajouter en un toucher.
 4. Le prix compté est le **prix actuel de la boutique** (pas un prix que tu saisis).
 5. La pastille d'une vignette **tourne** d'un toucher ; le choix direct d'un niveau passe par « … ».
