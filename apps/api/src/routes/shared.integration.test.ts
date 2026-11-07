@@ -3,6 +3,8 @@ import { eq, schema } from "@closyria/db";
 import type { OpinionView, SharedWishlistView, WishlistView } from "@closyria/shared";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { BASE_URL, createCatalogHarness } from "../catalog/test-app";
+import { upsertOpinion } from "../wardrobe/opinions";
+import { hashShareToken } from "../wardrobe/share-token";
 
 type Harness = Awaited<ReturnType<typeof createCatalogHarness>>;
 let t: Harness;
@@ -111,7 +113,9 @@ describe("public opinions", () => {
   it("deletes only with a key attached to the name", async () => {
     const s = await setup();
     await putOpinion(s.token, s.item.id, opinion());
-    expect((await delOpinion(s.token, s.item.id, { name: "Camille", deviceKey: keyB })).status).toBe(403);
+    const refused = await delOpinion(s.token, s.item.id, { name: "Camille", deviceKey: keyB });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({ error: "forbidden" });
     expect((await view(s.token)).items[0]?.opinions).toHaveLength(1);
     expect((await delOpinion(s.token, s.item.id, { name: "Camille", deviceKey: keyA })).status).toBe(204);
     expect((await view(s.token)).items[0]?.opinions).toHaveLength(0);
@@ -179,6 +183,38 @@ describe("public opinions", () => {
   });
 });
 
+describe("races and hidden items", () => {
+  const input = (token: string, list: { id: string }, itemId: string) => ({
+    ...opinion(),
+    wishlistId: list.id,
+    shareTokenHash: hashShareToken(token),
+    itemId,
+  });
+  const rowsOf = (listId: string) =>
+    t.db.select().from(schema.wishlistOpinions).where(eq(schema.wishlistOpinions.wishlistId, listId));
+
+  it("writes nothing when the share stopped after the token was resolved", async () => {
+    const s = await setup();
+    await call("DELETE", `/api/me/wishlists/${s.list.id}/share`, s.cookie);
+    expect(await upsertOpinion(t.db, input(s.token, s.list, s.item.id))).toEqual({ ok: false, error: "not_found" });
+    expect(await rowsOf(s.list.id)).toHaveLength(0);
+  });
+
+  it("writes nothing when the item left the list after the token was resolved", async () => {
+    const s = await setup();
+    await call("DELETE", `/api/me/wishlists/${s.list.id}/items/${s.item.id}`, s.cookie);
+    expect(await upsertOpinion(t.db, input(s.token, s.list, s.item.id))).toEqual({ ok: false, error: "not_found" });
+    expect(await rowsOf(s.list.id)).toHaveLength(0);
+  });
+
+  it("answers 404 for an item in the trash", async () => {
+    const s = await setup();
+    await t.db.update(schema.items).set({ deletedAt: new Date() }).where(eq(schema.items.id, s.item.id));
+    expect((await putOpinion(s.token, s.item.id, opinion())).status).toBe(404);
+    expect(await rowsOf(s.list.id)).toHaveLength(0);
+  });
+});
+
 describe("public view", () => {
   it("shows the first name, owner opinion and budget amount only when allowed", async () => {
     const s = await setup({ showOwnerName: false, showOwnerOpinions: false, showBudget: false });
@@ -187,6 +223,17 @@ describe("public view", () => {
       .update(schema.items)
       .set({ loveLevel: 4, priority: true, why: "Pour l'été", notes: "secret", sizeLabel: "M" })
       .where(eq(schema.items.id, s.item.id));
+    const mediaId = randomUUID();
+    await t.db.insert(schema.media).values({
+      id: mediaId,
+      userId: s.userId,
+      key: `private-${mediaId}`,
+      contentType: "image/jpeg",
+      sizeBytes: 10,
+      width: 5,
+      height: 5,
+    });
+    await t.db.insert(schema.itemMedia).values({ itemId: s.item.id, mediaId });
     await t.db
       .insert(schema.budgets)
       .values({ userId: s.userId, wishlistId: s.list.id, amountCents: 20000, period: "month" });
@@ -205,7 +252,12 @@ describe("public view", () => {
     expect(open.ownerName).toBe("Amina");
     expect(open.budget).toEqual({ amountCents: 20000, currency: "EUR" });
     expect(open.items[0]?.ownerOpinion).toEqual({ level: 4, priority: true, why: "Pour l'été" });
-    expect(Object.keys(open.items[0] ?? {}).sort()).not.toEqual(expect.arrayContaining(["notes", "sizeLabel"]));
+    for (const key of ["notes", "sizeLabel", "sizeNote", "profileId", "photos", "media", "mediaId"])
+      expect(Object.keys(open.items[0] ?? {})).not.toContain(key);
+    for (const key of ["period", "startsOn", "endsOn", "spentCents", "spent", "remainingCents", "current"])
+      expect(Object.keys(open.budget ?? {})).not.toContain(key);
+    for (const key of ["userId", "email", "profiles", "notes"]) expect(Object.keys(open)).not.toContain(key);
+    expect(text).not.toContain(mediaId);
     expect(text).not.toContain("secret");
     expect(text).not.toContain("period");
   });

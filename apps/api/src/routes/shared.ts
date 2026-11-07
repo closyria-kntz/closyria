@@ -117,7 +117,7 @@ const deleteOpinionRoute = defineAccess(
     },
     responses: {
       204: { description: "Erased" },
-      403: errorContent("The device is not attached to the name (name_taken)"),
+      403: errorContent("The device is not attached to the name (forbidden)"),
       404: errorContent("Unknown or stopped share (not_found)"),
     },
   }),
@@ -168,11 +168,16 @@ export function sharedRoutes(deps: WardrobeDeps) {
       if (!list) return c.json({ error: "not_found" } as const, 404);
       if (!list.allowOpinions) return c.json({ error: "opinions_closed" } as const, 403);
       if (input.note !== null && containsWebAddress(input.note)) return c.json({ error: "web_address" } as const, 422);
-      const result = await upsertOpinion(db, { ...input, wishlistId: list.id, itemId });
+      const result = await upsertOpinion(db, {
+        ...input,
+        wishlistId: list.id,
+        shareTokenHash: hashShareToken(token),
+        itemId,
+      });
       if (!result.ok) {
-        return result.error === "not_found"
-          ? c.json({ error: "not_found" } as const, 404)
-          : c.json({ error: "name_taken" } as const, 409);
+        if (result.error === "not_found") return c.json({ error: "not_found" } as const, 404);
+        if (result.error === "opinions_closed") return c.json({ error: "opinions_closed" } as const, 403);
+        return c.json({ error: "name_taken" } as const, 409);
       }
       return c.json(result.opinion, 200);
     })
@@ -182,6 +187,6 @@ export function sharedRoutes(deps: WardrobeDeps) {
       const list = await findList(token);
       if (!list) return c.json({ error: "not_found" } as const, 404);
       const outcome = await deleteOpinion(db, { ...c.req.valid("json"), wishlistId: list.id, itemId });
-      return outcome === "forbidden" ? c.json({ error: "name_taken" } as const, 403) : c.body(null, 204);
+      return outcome === "forbidden" ? c.json({ error: "forbidden" } as const, 403) : c.body(null, 204);
     });
 }

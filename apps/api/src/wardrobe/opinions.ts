@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, type Database, eq, schema, sql } from "@closyria/db";
+import { and, asc, type Database, eq, isNull, schema, sql } from "@closyria/db";
 import { type OpinionDelete, type OpinionInput, type OpinionView, opinionNameKey } from "@closyria/shared";
 
 const hashDeviceKey = (deviceKey: string) => createHash("sha256").update(deviceKey).digest("hex");
@@ -38,7 +38,9 @@ export async function opinionsByItem(
   return byItem;
 }
 
-export type UpsertResult = { ok: true; opinion: OpinionView } | { ok: false; error: "not_found" | "name_taken" };
+export type UpsertResult =
+  | { ok: true; opinion: OpinionView }
+  | { ok: false; error: "not_found" | "name_taken" | "opinions_closed" };
 
 /**
  * Writes (or replaces) one friend's opinion. The first device to use a name owns it; another device gets
@@ -47,16 +49,33 @@ export type UpsertResult = { ok: true; opinion: OpinionView } | { ok: false; err
  */
 export async function upsertOpinion(
   db: Database,
-  input: OpinionInput & { wishlistId: string; itemId: string },
+  input: OpinionInput & { wishlistId: string; shareTokenHash: string; itemId: string },
 ): Promise<UpsertResult> {
   const nameKey = opinionNameKey(input.name);
   const deviceKeyHash = hashDeviceKey(input.deviceKey);
   return db.transaction(async (tx): Promise<UpsertResult> => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${input.wishlistId}:${nameKey}`}, 0))`);
+    // Lock the list and the item's membership until we commit: stopping the share or taking the item out waits for
+    // us (and then erases what we wrote), or we find them gone. Opinions cannot outlive either.
+    const [list] = await tx
+      .select({ allowOpinions: schema.wishlists.allowOpinions })
+      .from(schema.wishlists)
+      .where(and(eq(schema.wishlists.id, input.wishlistId), eq(schema.wishlists.shareTokenHash, input.shareTokenHash)))
+      .for("share");
+    if (!list) return { ok: false, error: "not_found" };
+    if (!list.allowOpinions) return { ok: false, error: "opinions_closed" };
     const [member] = await tx
       .select({ itemId: schema.wishlistItems.itemId })
       .from(schema.wishlistItems)
-      .where(and(eq(schema.wishlistItems.wishlistId, input.wishlistId), eq(schema.wishlistItems.itemId, input.itemId)));
+      .innerJoin(schema.items, eq(schema.items.id, schema.wishlistItems.itemId))
+      .where(
+        and(
+          eq(schema.wishlistItems.wishlistId, input.wishlistId),
+          eq(schema.wishlistItems.itemId, input.itemId),
+          isNull(schema.items.deletedAt),
+        ),
+      )
+      .for("share", { of: schema.wishlistItems });
     if (!member) return { ok: false, error: "not_found" };
     const devices = await tx
       .select({ hash: schema.wishlistOpinionDevices.deviceKeyHash })
@@ -75,7 +94,6 @@ export async function upsertOpinion(
         .values({ wishlistId: input.wishlistId, authorNameKey: nameKey, deviceKeyHash })
         .onConflictDoNothing();
     }
-    const now = new Date();
     const [row] = await tx
       .insert(schema.wishlistOpinions)
       .values({
@@ -92,11 +110,11 @@ export async function upsertOpinion(
           schema.wishlistOpinions.itemId,
           schema.wishlistOpinions.authorNameKey,
         ],
-        set: { authorName: input.name, level: input.level, note: input.note, updatedAt: now },
+        set: { authorName: input.name, level: input.level, note: input.note, updatedAt: sql`now()` },
       })
       .returning();
     if (!row) throw new Error("opinion not written");
-    return { ok: true, opinion: toOpinionView(row, now) };
+    return { ok: true, opinion: { ...toOpinionView(row, new Date(0)), isNew: false } };
   });
 }
 
