@@ -122,3 +122,54 @@ test("menu « … » → « Retirer de mes envies » met l’article à la corbe
   await page.goto("/reglages/corbeille");
   await expect(page.getByTestId("item-card")).toHaveCount(1);
 });
+
+// Task 11: Réglages → Mes niveaux (spec §3.8).
+
+test("Mes niveaux : renommer Mims, refuser deux émojis, revenir aux niveaux de départ", async ({ page }) => {
+  await wishInEnvies(page);
+  await card(page).getByRole("button", { name: "Niveau : J’aime. Toucher pour changer" }).click();
+  await expect(card(page)).toContainText("Mims");
+
+  await page.goto("/reglages/niveaux");
+  await expect(page.getByRole("heading", { level: 2, name: "Tes mots à toi" })).toBeVisible();
+  await expect(page.getByLabel("Nom du niveau 3")).toHaveValue("Mims");
+  await axe(page);
+
+  // Two emojis in the picker's field: refused at the field.
+  await page.getByRole("button", { name: /Changer l’émoji du niveau 3/ }).click();
+  const picker = page.getByRole("dialog", { name: "Choisis un émoji" });
+  await expect(picker.getByRole("button", { name: "😍" })).toBeVisible();
+  await picker.getByLabel("Ou tape le tien").fill("😍😍");
+  await picker.getByRole("button", { name: "Utiliser" }).click();
+  await expect(picker.getByText("Un seul émoji par niveau")).toBeVisible();
+  await expect(picker.getByLabel("Ou tape le tien")).toHaveAttribute("aria-invalid", "true");
+  await axe(page);
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Changer l’émoji du niveau 3/ }).click();
+  await page.getByRole("dialog", { name: "Choisis un émoji" }).getByRole("button", { name: "😍" }).click();
+  await page.getByLabel("Nom du niveau 3").fill("Trop beau");
+  await page.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(toast(page)).toContainText("Niveaux enregistrés");
+
+  await page.goto("/envies");
+  await expect(card(page)).toContainText("😍");
+  await expect(card(page)).toContainText("Trop beau");
+
+  await page.goto("/reglages/niveaux");
+  await page.getByRole("button", { name: "Revenir aux niveaux de départ" }).click();
+  await expect(toast(page)).toContainText("Niveaux de départ rétablis");
+  await expect(page.getByLabel("Nom du niveau 3")).toHaveValue("Mims");
+  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await expect(page.getByLabel("Nom du niveau 3")).toHaveValue("Trop beau");
+  await page.goto("/envies");
+  await expect(card(page)).toContainText("Trop beau");
+
+  await page.goto("/reglages/niveaux");
+  await page.getByRole("button", { name: "Revenir aux niveaux de départ" }).click();
+  await expect(page.getByLabel("Nom du niveau 3")).toHaveValue("Mims");
+  await page.goto("/envies");
+  await expect(card(page)).toContainText("🥰");
+  await expect(card(page)).toContainText("Mims");
+});

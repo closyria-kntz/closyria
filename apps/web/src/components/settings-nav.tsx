@@ -8,6 +8,7 @@ import { focusRing } from "./ui";
 const LINKS = [
   { key: "profiles", href: "/reglages/profils" },
   { key: "tags", href: "/reglages/etiquettes" },
+  { key: "levels", href: "/reglages/niveaux" },
   { key: "trash", href: "/reglages/corbeille" },
   { key: "account", href: "/reglages/compte" },
   { key: "iphone", href: "/aide/iphone" },
