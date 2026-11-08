@@ -141,6 +141,17 @@ test("une amie donne son avis", async ({ page, browser, baseURL, db, userAgentTa
   await lea.screenshot({ path: testInfo.outputPath("page-dark.png"), fullPage: true });
   await axe(lea);
 
+  // « Ce n'est pas moi »: someone else on this device starts blank and cannot erase Léa's opinion.
+  await item.getByRole("button", { name: "Modifier mon avis" }).click();
+  await sheet.getByRole("button", { name: "Ce n'est pas moi" }).click();
+  await expect(sheet.getByLabel("Ton prénom")).toBeFocused();
+  await expect(sheet.getByLabel("Ton prénom")).toHaveValue("");
+  await expect(sheet.getByLabel("Un petit mot")).toHaveValue("");
+  await expect(sheet.locator('button[aria-pressed="true"]')).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Effacer mon avis" })).toHaveCount(0);
+  await sheet.getByRole("button", { name: "Fermer" }).click();
+  await expect(sheet).toBeHidden();
+
   // Another device with the same name (any case): « C'est toi ? », « Non » proposes « Léa M. ».
   const other = await friend(browser, baseURL, `10.202.${testInfo.workerIndex % 250}.1`);
   await other.goto(shareUrl);
@@ -151,7 +162,9 @@ test("une amie donne son avis", async ({ page, browser, baseURL, db, userAgentTa
   await otherSheet.getByRole("button", { name: "Mims" }).click();
   await otherSheet.getByRole("button", { name: "Envoyer mon avis" }).click();
   await expect(otherSheet.getByText("Une Léa a déjà donné son avis sur cette liste. C'est toi ?")).toBeVisible();
-  await expect(otherSheet.getByRole("button", { name: "Oui, c'est moi" })).toBeVisible();
+  // The question is announced and takes the focus from the send button it replaces.
+  await expect(otherSheet.getByRole("alert")).toContainText("C'est toi ?");
+  await expect(otherSheet.getByRole("button", { name: "Oui, c'est moi" })).toBeFocused();
   await otherSheet.getByRole("button", { name: "Non", exact: true }).click();
   await expect(otherSheet.getByLabel("Ton prénom")).toHaveValue("Léa M.");
   await otherSheet.getByLabel("Ton prénom").fill("Léa Martin");
@@ -165,6 +178,39 @@ test("une amie donne son avis", async ({ page, browser, baseURL, db, userAgentTa
   await expect(otherOpinions).toHaveCount(1);
   await expect(otherOpinions.first()).toContainText("Léa");
 
+  // « Oui, c'est moi »: a third device takes the name; Léa's opinion is replaced, not doubled.
+  const again = await friend(browser, baseURL, `10.203.${testInfo.workerIndex % 250}.1`);
+  await again.goto(shareUrl);
+  const againItem = again.getByRole("list", { name: "Articles" }).getByRole("listitem").first();
+  await againItem.getByRole("button", { name: "Donner mon avis" }).click();
+  const againSheet = again.getByRole("dialog", { name: `Ton avis sur ${PRODUCT.name}` });
+  await againSheet.getByLabel("Ton prénom").fill("Léa");
+  await againSheet.getByRole("button", { name: "Mims" }).click();
+  await againSheet.getByLabel("Un petit mot").fill("finalement plutôt Mims");
+  await againSheet.getByRole("button", { name: "Envoyer mon avis" }).click();
+  await expect(againSheet.getByRole("button", { name: "Oui, c'est moi" })).toBeFocused();
+  await againSheet.getByRole("button", { name: "Oui, c'est moi" }).click();
+  await expect(again.getByRole("status", { name: "Notifications" })).toContainText("Avis envoyé");
+  const againOpinions = againItem.getByRole("list", { name: "Avis des amies" }).getByRole("listitem");
+  await expect(againOpinions).toHaveCount(1);
+  await expect(againOpinions.first()).toContainText("Léa");
+  await expect(againOpinions.first()).toContainText("Mims");
+  await expect(againOpinions.first()).toContainText("finalement plutôt Mims");
+  await expect(againOpinions.first()).not.toContainText("elle t'irait trop bien");
+  await expect(againItem.getByRole("button", { name: "Modifier mon avis" })).toBeVisible();
+
+  // The owner stops sharing while the page is open: sending shows that the link no longer works.
+  await page.getByRole("button", { name: "Arrêter le partage" }).click();
+  await expect(appToast(page)).toContainText("Partage arrêté");
+  await againItem.getByRole("button", { name: "Modifier mon avis" }).click();
+  await againSheet.getByLabel("Un petit mot").fill("toujours Mims");
+  await againSheet.getByRole("button", { name: "Envoyer mon avis" }).click();
+  await expect(again.getByRole("heading", { level: 1, name: "Ce lien ne marche plus" })).toBeFocused();
+  await expect(again.getByText("La personne a arrêté de partager cette liste")).toBeVisible();
+  await expect(againSheet).toHaveCount(0);
+  await axe(again);
+
   await lea.context().close();
   await other.context().close();
+  await again.context().close();
 });

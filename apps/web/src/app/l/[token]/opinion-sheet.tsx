@@ -11,7 +11,7 @@ import {
   textLength,
 } from "@closyria/shared";
 import { useTranslations } from "next-intl";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Sheet } from "@/components/sheet";
 import { buttonClass, focusRing, inputClass, levelButtonClass, primaryButtonClass } from "@/components/ui";
 import type { FriendDevice } from "@/lib/friend-device";
@@ -38,6 +38,8 @@ type Props = {
   levels: LoveLevelView[];
   device: FriendDevice;
   onDone: (outcome: SheetOutcome) => void;
+  /** A write was refused (other than « name taken »): the page reads the list again. */
+  onFailed: () => void;
 };
 
 /** The first `max` characters (graphemes) of `value`. */
@@ -66,25 +68,33 @@ const findByName = (opinions: OpinionView[], name: string) =>
  * « Ton avis sur {article} »: her first name (asked once per device), one of the owner's 4 levels, a short note.
  * Opened filled (with « Effacer mon avis ») when this device already gave one on the item.
  */
-export function OpinionSheet({ open, onClose, token, item, listOpinions, levels, device, onDone }: Props) {
+export function OpinionSheet({ open, onClose, token, item, listOpinions, levels, device, onDone, onFailed }: Props) {
   const t = useTranslations("SharedList.opinions");
   const titleId = useId();
   const nameId = useId();
   const noteId = useId();
   const counterId = useId();
   const nameInput = useRef<HTMLInputElement>(null);
-  const mine = device.name ? findByName(item.opinions, device.name) : undefined;
+  const itsMeButton = useRef<HTMLButtonElement>(null);
+  // This device's opinion on the item, under the name it remembers.
+  const own = device.name ? findByName(item.opinions, device.name) : undefined;
 
   const [askName, setAskName] = useState(device.name === null);
   const [name, setName] = useState("");
-  const [level, setLevel] = useState<LoveLevel | null>(mine?.level ?? null);
-  const [note, setNote] = useState(mine?.note ?? "");
+  const [level, setLevel] = useState<LoveLevel | null>(own?.level ?? null);
+  const [note, setNote] = useState(own?.note ?? "");
   const [error, setError] = useState<string | null>(null);
   // The name another device already uses on the list, as it is written there.
   const [taken, setTaken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // « Ce n'est pas moi »: someone else on this device, who must not edit or erase that opinion.
+  const mine = askName ? undefined : own;
   const noteLength = textLength(note);
+
+  useEffect(() => {
+    if (taken) itsMeButton.current?.focus();
+  }, [taken]);
 
   function focusName() {
     requestAnimationFrame(() => nameInput.current?.focus());
@@ -121,6 +131,7 @@ export function OpinionSheet({ open, onClose, token, item, listOpinions, levels,
       return;
     }
     setError(t(`errors.${errorKey[result.error]}`));
+    onFailed();
   }
 
   async function erase() {
@@ -129,7 +140,10 @@ export function OpinionSheet({ open, onClose, token, item, listOpinions, levels,
     const result = await deleteOpinion(token, item.itemId, { name: device.name, deviceKey: device.key });
     setBusy(false);
     if (result.ok) onDone({ kind: "erased", previous: mine });
-    else setError(t(result.error === "opinions_closed" ? "errors.closed" : "errors.eraseFailed"));
+    else {
+      setError(t(result.error === "opinions_closed" ? "errors.closed" : "errors.eraseFailed"));
+      onFailed();
+    }
   }
 
   function notHer() {
@@ -143,6 +157,8 @@ export function OpinionSheet({ open, onClose, token, item, listOpinions, levels,
   function notMe() {
     setAskName(true);
     setName("");
+    setLevel(null);
+    setNote("");
     setError(null);
     focusName();
   }
@@ -158,11 +174,12 @@ export function OpinionSheet({ open, onClose, token, item, listOpinions, levels,
         <div className="flex flex-col gap-space-2 border-t border-line p-space-4">
           {taken ? (
             <fieldset className="flex min-w-space-0 flex-col gap-space-2" aria-labelledby={`${titleId}-taken`}>
-              <p id={`${titleId}-taken`} className="font-strong">
+              <p id={`${titleId}-taken`} role="alert" className="font-strong">
                 {t("nameTaken", { name: taken })}
               </p>
               <div className="grid grid-cols-2 gap-space-2">
                 <button
+                  ref={itsMeButton}
                   type="button"
                   disabled={busy}
                   onClick={() => void send(true)}

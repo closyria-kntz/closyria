@@ -45,6 +45,7 @@ const newestFirst = (opinions: OpinionView[]) =>
 export function SharedListView({ token, initial }: { token: string; initial: SharedWishlistView }) {
   const t = useTranslations("SharedList");
   const tOpinions = useTranslations("SharedList.opinions");
+  const tGone = useTranslations("SharedList.notFound");
   const locale = useLocale();
   const [view, setView] = useState(initial);
   // Made in the browser only (local storage): before that, no « Modifier mon avis ».
@@ -54,6 +55,9 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastCounter = useRef(0);
+  // The link stopped working while she was on the page.
+  const [gone, setGone] = useState(false);
+  const goneTitle = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     const made = friendDevice(localStorageOrNull());
@@ -68,14 +72,41 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
     [],
   );
 
-  const reload = useCallback(async () => {
+  /** Reads the list again: the view, null once the link stopped working, undefined when it could not be read. */
+  const reload = useCallback(async (): Promise<SharedWishlistView | null | undefined> => {
     try {
       const next = await fetchSharedView(token);
       if (next) setView(next);
+      else {
+        setGone(true);
+        setSheet(null);
+        setToast(null);
+      }
+      return next;
     } catch {
       // The page keeps what it shows; the next change reads it again.
+      return undefined;
     }
   }, [token]);
+
+  useEffect(() => {
+    if (gone) goneTitle.current?.focus();
+  }, [gone]);
+
+  const closeSheet = () => setSheet((current) => current && { ...current, open: false });
+
+  /** A write was refused: what the page shows may be out of date (link stopped, opinions closed, item gone). */
+  async function failed(itemId: string) {
+    const next = await reload();
+    if (!next) return;
+    if (!next.allowOpinions) {
+      closeSheet();
+      show(tOpinions("closed"), null);
+    } else if (!next.items.some((item) => item.itemId === itemId)) {
+      closeSheet();
+      show(tOpinions("errors.gone"), null);
+    }
+  }
 
   function show(label: string, undo: Toast["undo"]) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -96,7 +127,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
   function done(itemId: string, outcome: SheetOutcome) {
     if (!device) return;
     setDeviceName(device.name);
-    setSheet((current) => current && { ...current, open: false });
+    closeSheet();
     const putBack = (previous: OpinionView) => async () =>
       (
         await putOpinion(token, itemId, {
@@ -121,6 +152,17 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
   }
 
   const sheetItem = sheet ? view.items.find((item) => item.itemId === sheet.itemId) : undefined;
+
+  if (gone) {
+    return (
+      <section className="flex flex-col gap-space-4 py-space-6">
+        <h1 ref={goneTitle} tabIndex={-1} className="font-display text-title font-strong focus:outline-none">
+          {tGone("title")}
+        </h1>
+        <p className="text-ink-muted">{tGone("body")}</p>
+      </section>
+    );
+  }
 
   return (
     <>
@@ -164,7 +206,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
         <OpinionSheet
           key={sheet.session}
           open={sheet.open}
-          onClose={() => setSheet((current) => current && { ...current, open: false })}
+          onClose={closeSheet}
           token={token}
           item={{
             itemId: sheetItem.itemId,
@@ -175,6 +217,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
           levels={view.levels}
           device={device}
           onDone={(outcome) => done(sheetItem.itemId, outcome)}
+          onFailed={() => void failed(sheetItem.itemId)}
         />
       )}
 
