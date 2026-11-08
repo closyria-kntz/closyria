@@ -124,9 +124,15 @@ test("« Je le prends » : le bandeau est là aussitôt, une arche y vole puis d
   await page.getByTestId("item-card").first().hover();
   await page.getByTestId("card-take").first().click();
   await expect(page.getByTestId("order-band")).toBeVisible();
-  await expect(page.locator(".fly-arch"))
-    .toHaveCount(1, { timeout: 2_000 })
-    .catch(() => {});
+  // Right after the take: the arch flies and nothing else moves (one effect per moment).
+  const right = await page.evaluate(() => ({
+    arches: document.querySelectorAll(".fly-arch").length,
+    running: document
+      .getAnimations()
+      .map((a) => (a as CSSAnimation).animationName)
+      .filter((n) => n === "count-roll" || n === "chip-check-draw"),
+  }));
+  expect(right).toEqual({ arches: 1, running: [] });
   await expect(page.locator(".fly-arch")).toHaveCount(0, { timeout: 5_000 });
   await expect(page.getByTestId("card-take").first()).toHaveAttribute("aria-pressed", "true");
 });

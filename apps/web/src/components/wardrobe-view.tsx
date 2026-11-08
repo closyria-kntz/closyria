@@ -300,6 +300,11 @@ export function WardrobeView({ view }: { view: ViewKey }) {
       ticks.current?.set(item.id, next, item.inOrderDraft);
       const band = document.querySelector("[data-testid=order-band]");
       if (next && photo && band) {
+        // One effect per moment: the flight is it, so the count's roll and the checks' draw stand still.
+        for (const animation of document.getAnimations()) {
+          const name = (animation as CSSAnimation).animationName;
+          if (name === "count-roll" || name === "chip-check-draw") animation.cancel();
+        }
         void flyTo(photo, band, "var(--color-accent)");
       }
     },

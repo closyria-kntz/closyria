@@ -176,7 +176,9 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               data-testid="card-take"
               aria-pressed={item.inOrderDraft}
               aria-label={t(item.inOrderDraft ? "removeOf" : "takeOf", { name })}
-              onClick={(event) => quick.onTake?.(item, event.currentTarget.closest("[data-photo]"))}
+              onClick={(event) =>
+                quick.onTake?.(item, event.currentTarget.closest("li")?.querySelector("[data-photo]"))
+              }
               className={`pointer-events-auto min-h-touch-target flex-1 rounded-button px-space-2 text-sm font-strong ${focusRing} ${
                 item.inOrderDraft ? "glass text-ink" : "bg-button-bg text-button-ink"
               }`}

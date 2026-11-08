@@ -150,7 +150,7 @@ body::before {
    at once). The end state is the card's own style (visible), so nothing waits at opacity 0; the durations are zero
    under reduced motion, and the animation is dropped there too. */
 .card {
-  animation: card-rise var(--motion-duration-slow) var(--ease-emphasized) both;
+  animation: card-rise var(--motion-duration-slow) var(--ease-emphasized) backwards;
 }
 @keyframes card-rise {
   from {
