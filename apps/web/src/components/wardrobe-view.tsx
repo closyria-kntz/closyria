@@ -3,12 +3,13 @@
 import type { ItemView, ReferenceView, TagView, WishlistView } from "@closyria/shared";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { z } from "zod";
-import { draftTotals } from "@/lib/budget";
+import { draftTotals, formatAmount } from "@/lib/budget";
 import { useLiveRefresh } from "@/lib/live-changes";
-import { profileHref, useCurrentProfile, useProfilesReady } from "@/lib/profile-context";
+import { profileHref, useCurrentProfile, useLoveLevels, useProfilesReady } from "@/lib/profile-context";
+import { pushUndo } from "@/lib/undo";
 import {
   type BudgetScope,
   fetchAllWishes,
@@ -17,6 +18,7 @@ import {
   fetchReference,
   fetchTags,
   fetchWishlists,
+  patchItem,
 } from "@/lib/wardrobe-client";
 import {
   activeFilterCount,
@@ -35,8 +37,9 @@ import {
 import { BudgetCard } from "./budget-card";
 import { FiltersBar } from "./filters-bar";
 import { ItemGrid } from "./item-grid";
+import { ItemPreview } from "./item-preview";
 import { ListTabs } from "./list-tabs";
-import { LIST_PARAM } from "./order-draft";
+import { LIST_PARAM, PREVIEW_PARAM } from "./order-draft";
 import { SelectionBar } from "./selection-bar";
 import { buttonClass, primaryButtonClass } from "./ui";
 
@@ -252,7 +255,61 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     [viewStage, current.id, tag, levelsKey, priority],
   );
   const trashed = useCallback((id: string) => gone([id]), [gone]);
-  const actions = useMemo(() => ({ onChanged: changed, onTrashed: trashed, reload }), [changed, trashed, reload]);
+
+  // « Mes envies »: « Je le prends » / « Retirer » on a card, and the quick look (?apercu=<item>, the back button closes it).
+  const tItem = useTranslations("Item");
+  const locale = useLocale();
+  const loveLevels = useLoveLevels();
+  const taking = useRef(new Set<string>());
+  const take = useCallback(
+    async (item: ItemView) => {
+      if (taking.current.has(item.id)) return;
+      taking.current.add(item.id);
+      const result = await patchItem(item.id, { inOrderDraft: !item.inOrderDraft });
+      taking.current.delete(item.id);
+      if (!result.ok) return pushUndo(tItem(`errors.${result.error}` as "errors.failed"), null);
+      changed(result.item);
+    },
+    [changed, tItem],
+  );
+  const previewId = view === "envies" ? search.get(PREVIEW_PARAM) : null;
+  const previewItem = previewId ? (data.items.find((item) => item.id === previewId) ?? null) : null;
+  const pushedPreview = useRef(false);
+  // The address is read when she acts (not at render), so the callbacks stay still and the cards do not redraw.
+  const addressWith = useCallback(
+    (id: string | null) => {
+      const params = new URLSearchParams(window.location.search);
+      if (id) params.set(PREVIEW_PARAM, id);
+      else params.delete(PREVIEW_PARAM);
+      const text = paramsText(params);
+      return text ? `${pathname}?${text}` : pathname;
+    },
+    [pathname],
+  );
+  const openPreview = useCallback(
+    (item: ItemView) => {
+      pushedPreview.current = true;
+      router.push(addressWith(item.id), { scroll: false });
+    },
+    [router, addressWith],
+  );
+  const closePreview = () => {
+    // Already gone from the address (back button): nothing to do.
+    if (!new URLSearchParams(window.location.search).has(PREVIEW_PARAM)) return;
+    if (pushedPreview.current) {
+      pushedPreview.current = false;
+      router.back();
+    } else router.replace(addressWith(null), { scroll: false });
+  };
+  const actions = useMemo(
+    () => ({
+      onChanged: changed,
+      onTrashed: trashed,
+      reload,
+      ...(view === "envies" ? { onTake: (item: ItemView) => void take(item), onPreview: openPreview } : {}),
+    }),
+    [changed, trashed, reload, view, take, openPreview],
+  );
 
   useEffect(() => () => moreController.current?.abort(), []);
 
@@ -470,6 +527,15 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           onSelectAll={() => setSelected(new Set(data.items.slice(0, 200).map((item) => item.id)))}
           onGone={gone}
           reload={reload}
+        />
+      )}
+      {view === "envies" && (
+        <ItemPreview
+          item={previewItem}
+          levels={loveLevels}
+          money={(cents) => formatAmount(locale, cents)}
+          onClose={closePreview}
+          onToggle={(item) => void take(item)}
         />
       )}
     </div>

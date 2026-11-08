@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatOptionalPrice, formatPrice, parsePriceCents, parseSizes } from "./price";
+import { formatOptionalPrice, formatPrice, parsePriceCents, parseSizes, priceDropCents } from "./price";
 
 describe("parsePriceCents", () => {
   it.each([
@@ -46,5 +46,20 @@ describe("formatOptionalPrice", () => {
     expect(formatOptionalPrice("fr", null, "EUR", "Prix non renseigné")).toBe("Prix non renseigné");
     expect(formatOptionalPrice("fr", Number.NaN, "EUR", "Prix non renseigné")).toBe("Prix non renseigné");
     expect(formatOptionalPrice("fr", 2999, "EUR", "x")).toMatch(/^29,99\s€$/);
+  });
+});
+
+describe("priceDropCents", () => {
+  it("is the gap to the shop's crossed price when the price is lower", () => {
+    expect(priceDropCents(2300, 4300)).toBe(2000);
+  });
+  it.each([
+    [2300, 2300],
+    [2300, 1000],
+    [2300, null],
+    [null, 4300],
+    [Number.NaN, 4300],
+  ])("is null for %s / %s", (price, compareAt) => {
+    expect(priceDropCents(price, compareAt)).toBeNull();
   });
 });

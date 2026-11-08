@@ -139,6 +139,29 @@ body::before {
   }
 }
 
+/* The arch of an item photo: one smooth dome on top (half the width, half the height), small corners at the bottom. */
+@utility arch {
+  border-radius:
+    var(--radius-arch) var(--radius-arch) var(--radius-card) var(--radius-card) / var(--radius-arch) var(--radius-arch)
+    var(--radius-card) var(--radius-card);
+}
+
+/* « Aperçu » and « Je le prends » on a card: under a mouse they show when the card is hovered or has the focus (the
+   keyboard reaches them); on a touch screen they are always there. */
+.card-quick {
+  transition: opacity var(--motion-duration-fast) var(--ease-standard);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card-quick {
+    opacity: 0;
+  }
+  .card:hover .card-quick,
+  .card:focus-within .card-quick {
+    opacity: 1;
+  }
+}
+
 /* Item cards: the photo grows very slightly inside its frame under a mouse only (visual direction §6.1). */
 .card-photo {
   transition: transform var(--motion-duration-slow) var(--ease-standard);

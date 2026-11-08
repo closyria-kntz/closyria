@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
-import { formatOptionalPrice } from "@/lib/price";
+import { formatAmount } from "@/lib/budget";
+import { formatOptionalPrice, priceDropCents } from "@/lib/price";
 import { ItemMenu } from "./item-menu";
 import { PHOTO_CLICK_DELAY_MS, photoClickPlan } from "./level-picker-logic";
 import { LoveLevelBadge, LoveLevelPill } from "./love-level-pill";
@@ -18,6 +19,10 @@ export type CardActions = {
   onTrashed: (id: string) => void;
   /** Re-reads what changed (after « Annuler »). */
   reload: () => Promise<void>;
+  /** « Je le prends » / « Retirer » on the card (« Mes envies » only; without it the button does not show). */
+  onTake?: (item: ItemView) => void;
+  /** « Aperçu » on the card (« Mes envies » only). */
+  onPreview?: (item: ItemView) => void;
 };
 
 /** « Sélectionner » mode: the whole card toggles the item in the selection. */
@@ -66,12 +71,11 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
       : undefined;
   const name = item.name?.trim() || t("noName");
   const asked = item.stage === "for_sale" || item.stage === "sold" ? item.salePriceCents : null;
-  const price = formatOptionalPrice(
-    locale,
-    asked ?? item.product.priceCents,
-    item.product.currency ?? "EUR",
-    t("noPrice"),
-  );
+  const currency = item.product.currency ?? "EUR";
+  const price = formatOptionalPrice(locale, asked ?? item.product.priceCents, currency, t("noPrice"));
+  // The shop's crossed price, only while the card shows the shop's price (not the price she asks).
+  const drop = asked === null ? priceDropCents(item.product.priceCents, item.product.compareAtCents) : null;
+  const quick = actions && !selection && actions.onTake && actions.onPreview ? actions : null;
   return (
     <li className="card group relative flex flex-col" data-testid="item-card">
       <Wrapper
@@ -81,7 +85,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
         selection={selection}
         onToggle={() => selection?.onToggle(item.id)}
       >
-        <div data-photo className="relative aspect-3/4 overflow-hidden rounded-card bg-media-backdrop">
+        <div data-photo className="arch relative aspect-3/4 overflow-hidden bg-media-backdrop">
           {item.coverUrl ? (
             // biome-ignore lint/performance/noImgElement: photos come from our own API, already resized.
             <img
@@ -99,32 +103,6 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               {t("noPhoto")}
             </span>
           )}
-          {item.priority && (
-            <span className="absolute bottom-space-2 left-space-2 rounded-full bg-accent px-space-2 py-space-1 text-caption font-strong text-accent-ink">
-              {t("priority")}
-            </span>
-          )}
-          {selection && (
-            <span
-              aria-hidden="true"
-              className={`absolute top-space-2 right-space-2 flex size-space-6 items-center justify-center rounded-full border-2 ${
-                selection.selected ? "border-accent bg-accent text-accent-ink" : "border-surface-raised bg-ink/20"
-              }`}
-            >
-              {selection.selected && (
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 16 16"
-                  className="size-space-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                >
-                  <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-            </span>
-          )}
           {showStage && (item.stage === "sold" || item.stage === "returned") && (
             <span className="absolute right-space-2 bottom-space-2 rounded-full bg-ink px-space-2 py-space-1 text-sm text-surface-raised">
               {tStage(item.stage)}
@@ -132,12 +110,81 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
           )}
         </div>
         <div className="flex min-w-space-0 flex-col px-space-1">
-          <span className="truncate text-sm font-strong">{name}</span>
+          <span className="truncate font-display text-body font-strong">{name}</span>
           <span className="truncate text-sm text-ink-muted">{item.product.shop.name}</span>
-          <span className="text-sm">{price}</span>
+          <span className="flex items-baseline gap-space-2 text-sm tabular-nums">
+            {price}
+            {drop !== null && item.product.compareAtCents !== null && (
+              <s className="text-ink-muted">{formatAmount(locale, item.product.compareAtCents, currency)}</s>
+            )}
+          </span>
           {item.why && <span className="truncate text-sm text-ink-muted italic">{t("why", { why: item.why })}</span>}
         </div>
       </Wrapper>
+      <div className="pointer-events-none absolute inset-x-space-0 top-space-0 aspect-3/4">
+        <div className="absolute top-space-7 left-space-0 flex flex-col items-start gap-space-1">
+          {drop !== null && (
+            <span
+              data-testid="card-drop"
+              className="rounded-full bg-success-soft px-space-3 py-space-1 text-sm font-strong text-success tabular-nums"
+            >
+              −{formatAmount(locale, drop, currency)}
+            </span>
+          )}
+          {item.priority && (
+            <span className="rounded-full bg-accent px-space-2 py-space-1 text-caption font-strong text-accent-ink">
+              {t("priority")}
+            </span>
+          )}
+        </div>
+        {selection ? (
+          <span
+            aria-hidden="true"
+            className={`absolute top-space-5 right-space-1 flex size-space-6 items-center justify-center rounded-full border-2 ${
+              selection.selected ? "border-accent bg-accent text-accent-ink" : "border-surface-raised bg-ink/20"
+            }`}
+          >
+            {selection.selected && <Tick />}
+          </span>
+        ) : (
+          quick &&
+          item.inOrderDraft && (
+            <span
+              data-testid="card-taken"
+              role="img"
+              aria-label={t("taken")}
+              className="absolute top-space-5 right-space-1 flex size-space-6 items-center justify-center rounded-md bg-button-bg text-button-ink"
+            >
+              <Tick draw />
+            </span>
+          )
+        )}
+        {quick && (
+          <div className="card-quick pointer-events-none absolute inset-x-space-2 bottom-space-2 flex gap-space-2">
+            <button
+              type="button"
+              data-testid="card-preview"
+              aria-label={t("previewOf", { name })}
+              onClick={() => quick.onPreview?.(item)}
+              className={`glass pointer-events-auto min-h-touch-target flex-1 rounded-button px-space-2 text-sm font-strong text-ink ${focusRing}`}
+            >
+              {t("preview")}
+            </button>
+            <button
+              type="button"
+              data-testid="card-take"
+              aria-pressed={item.inOrderDraft}
+              aria-label={t(item.inOrderDraft ? "removeOf" : "takeOf", { name })}
+              onClick={() => quick.onTake?.(item)}
+              className={`pointer-events-auto min-h-touch-target flex-1 rounded-button px-space-2 text-sm font-strong ${focusRing} ${
+                item.inOrderDraft ? "glass text-ink" : "bg-button-bg text-button-ink"
+              }`}
+            >
+              {t(item.inOrderDraft ? "remove" : "take")}
+            </button>
+          </div>
+        )}
+      </div>
       {actions && !selection ? (
         <>
           <LoveLevelPill
@@ -193,5 +240,27 @@ function Wrapper({
     >
       {children}
     </Link>
+  );
+}
+
+/** The check mark; `draw` strokes it once (the « chip-check » animation, none under reduced motion). */
+function Tick({ draw = false }: { draw?: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="size-space-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+    >
+      <path
+        d="M3.5 8.5l3 3 6-7"
+        pathLength={1}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={draw ? "chip-check" : ""}
+      />
+    </svg>
   );
 }

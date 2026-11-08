@@ -785,7 +785,7 @@
       "action": "Coller un lien"
     },
     "card": {
-      "noPrice": "Prix non renseigné",
+      "noPrice": "prix inconnu",
       "noName": "Article sans nom",
       "noPhoto": "Pas de photo",
       "open": "Ouvrir {name}",
@@ -793,7 +793,14 @@
       "levelAdd": "{name} — donner un niveau",
       "pickerLabel": "Ton niveau d’envie pour {name}",
       "priority": "Prioritaire",
-      "why": "« {why} »"
+      "why": "« {why} »",
+      "preview": "Aperçu",
+      "previewOf": "Aperçu de {name}",
+      "take": "Je le prends",
+      "takeOf": "Je le prends : {name}",
+      "remove": "Retirer",
+      "removeOf": "Retirer de ma commande : {name}",
+      "taken": "Dans ma commande"
     },
     "filters": {
       "title": "Filtres",

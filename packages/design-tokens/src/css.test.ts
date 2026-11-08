@@ -143,6 +143,7 @@ describe("Équilibré themes", () => {
     expect(base["radius-button"]).toBe("9999px");
     expect(base["radius-card"]).toBe("1.625rem");
     expect(base["radius-full"]).toBe("9999px");
+    expect(base["radius-arch"]).toBe("50%");
     expect(base["motion-duration-fast"]).toBe("150ms");
     expect(base["motion-duration-base"]).toBe("250ms");
     expect(base["motion-duration-slow"]).toBe("400ms");

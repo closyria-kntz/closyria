@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useId } from "react";
 import { levelOf } from "@/lib/love-levels";
+import { priceDropCents } from "@/lib/price";
 import { ItemOpinionsSection } from "./item-opinions-section";
 import { Sheet } from "./sheet";
 import { SquareCheck } from "./square-check";
@@ -42,6 +43,7 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
         : []
     : [];
   const price = item?.product.priceCents ?? null;
+  const drop = item ? priceDropCents(price, item.product.compareAtCents) : null;
   const size = item ? [item.sizeLabel, item.sizeNote && `« ${item.sizeNote} »`].filter(Boolean).join(" · ") : "";
 
   return (
@@ -106,7 +108,7 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
                   src={url}
                   alt=""
                   decoding="async"
-                  className={`aspect-3/4 shrink-0 snap-start rounded-card bg-media-backdrop object-cover ${photos.length > 1 ? "w-4/5" : "w-full"}`}
+                  className={`arch aspect-3/4 shrink-0 snap-start bg-media-backdrop object-cover ${photos.length > 1 ? "w-4/5" : "w-full"}`}
                 />
               ))}
             </section>
@@ -118,7 +120,15 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
                 <span className="sr-only">{t("titlePrefix")} </span>
                 {name}
               </h2>
-              <p className="font-strong tabular-nums">{price === null ? tRow("unknownPrice") : money(price)}</p>
+              <p className="flex flex-wrap items-baseline gap-space-2 font-strong tabular-nums">
+                {price === null ? tRow("unknownPrice") : money(price)}
+                {drop !== null && item?.product.compareAtCents != null && (
+                  <>
+                    <s className="font-normal text-ink-muted">{money(item.product.compareAtCents)}</s>
+                    <span className="rounded-full bg-success-soft px-space-2 text-sm text-success">−{money(drop)}</span>
+                  </>
+                )}
+              </p>
             </div>
             {(level || item.priority) && (
               <ul className="flex flex-wrap gap-space-2 text-sm">

@@ -35,3 +35,10 @@ export function formatOptionalPrice(
 ): string {
   return typeof cents === "number" && Number.isFinite(cents) ? formatPrice(locale, cents, currency) : fallback;
 }
+
+/** The drop shown on a card: the shop's crossed price minus the price, or null when there is no real drop. */
+export function priceDropCents(priceCents: number | null, compareAtCents: number | null): number | null {
+  if (priceCents === null || compareAtCents === null) return null;
+  if (!Number.isFinite(priceCents) || !Number.isFinite(compareAtCents)) return null;
+  return compareAtCents > priceCents ? compareAtCents - priceCents : null;
+}

@@ -74,6 +74,8 @@ export const defaultSemanticTokens = {
   "radius-full": radius.full,
   "radius-button": radius.full,
   "radius-card": radius.lg,
+  // Top of an arch (item photos): half the width and half the height, so the top is one smooth dome.
+  "radius-arch": radius.arch,
   // Typography
   "font-body": font.body,
   "font-display": font.display,

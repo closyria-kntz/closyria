@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
+import { autoProductUrl, keepWish, manualProductUrl, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Chantier 2a, task 15: the four views, filters in the address, multi-select with « Annuler », account prompt.
@@ -519,4 +519,121 @@ test("filtres : la coche se dessine dans la pastille active, « Effacer » vide 
   await expect(page).not.toHaveURL(/niveau=|prioritaire=/);
   await expect(page).toHaveURL(/tri=price_asc/);
   await expect(page.getByRole("button", { name: /^Effacer/ })).toHaveCount(0);
+});
+
+// Refonte « Cocon lumineux », task 9: arch cards, « Aperçu », « Je le prends ».
+
+const card = (page: Page) => page.getByTestId("item-card").first();
+
+test("la carte est en arche, montre « −20 € » quand la boutique barre un prix plus haut, et garde le prix barré", async ({
+  page,
+  db,
+}) => {
+  await pasteAndWish(page);
+  await page.goto("/envies");
+  const href = await card(page).getByRole("link").first().getAttribute("href");
+  const productId = href?.split("/").pop();
+  await db.query("UPDATE products SET compare_at_cents = NULL WHERE id = $1", [productId]);
+  await page.reload();
+  const first = card(page);
+  // Elliptical top (50 % of the width), small bottom corners: an arch, not a rounded rectangle.
+  const photo = first.locator("[data-photo]");
+  await expect(photo).toHaveCSS("border-top-left-radius", "50%");
+  await expect(photo).toHaveCSS("border-top-right-radius", "50%");
+  await expect(photo).not.toHaveCSS("border-bottom-left-radius", "50%");
+  // No drop yet: nothing crossed.
+  await expect(first.getByTestId("card-drop")).toHaveCount(0);
+
+  await db.query("UPDATE products SET compare_at_cents = 4300 WHERE id = $1", [productId]);
+  await page.reload();
+  await expect(card(page).getByTestId("card-drop")).toHaveText(/^−20\s€$/);
+  await expect(card(page).locator("s")).toHaveText(/43\s€/);
+  // Equal or lower crossed price: no badge.
+  await db.query("UPDATE products SET compare_at_cents = 2300 WHERE id = $1", [productId]);
+  await page.reload();
+  await expect(card(page).getByTestId("card-drop")).toHaveCount(0);
+});
+
+test("« Aperçu » ouvre le panneau sans quitter la page ; « Je le prends » coche la carte et met le budget à jour", async ({
+  page,
+}, testInfo) => {
+  await pasteAndWish(page);
+  await page.goto("/envies");
+  // A budget, so the card has a bar to move.
+  await page.getByTestId("budget-card").getByRole("button", { name: "Ajouter un budget" }).click();
+  const budgetDialog = page.getByRole("dialog", { name: "Mon budget" });
+  await budgetDialog.getByLabel("Montant (en euros)").fill("100");
+  await budgetDialog.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(budgetDialog).toHaveCount(0);
+  await expect(page.getByTestId("budget-card")).toContainText(/Ma commande en cours : 0\s€/);
+  await page.mouse.move(0, 0);
+  const first = card(page);
+  const touch = testInfo.project.use.hasTouch === true;
+  const quick = first.locator(".card-quick");
+  const take = first.getByTestId("card-take");
+  const preview = first.getByTestId("card-preview");
+  if (touch) {
+    // Always visible on a touch screen, and big enough to tap.
+    await expect(quick).toHaveCSS("opacity", "1");
+  } else {
+    // A mouse: hidden until the card is hovered or focused.
+    await expect(quick).toHaveCSS("opacity", "0");
+    await first.hover();
+    await expect(quick).toHaveCSS("opacity", "1");
+  }
+  for (const button of [take, preview]) {
+    const box = await button.boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+  }
+  await expect(take).toHaveAttribute("aria-pressed", "false");
+  await expect(first.getByTestId("card-taken")).toHaveCount(0);
+
+  await preview.click();
+  const panel = page.getByRole("dialog", { name: `Aperçu de ${PRODUCT.name}` });
+  await expect(panel).toBeVisible();
+  await expect(page).toHaveURL(/\/envies\?.*apercu=/);
+  await expect(panel).toContainText(/23\s€/);
+  await expect(panel.getByRole("region", { name: "Photos de l’article" })).toBeVisible();
+  await expect(panel.getByText("J’aime")).toBeVisible();
+  await expect(panel.getByRole("link", { name: "Ouvrir la fiche complète" })).toHaveAttribute("href", /\/produits\//);
+  await axe(page);
+  // « Je le prends » from the panel, then the back button closes it and the page stays.
+  await panel.getByRole("checkbox", { name: /Je le prends/ }).click();
+  await expect(panel.getByRole("checkbox", { name: /Je le prends/ })).toBeChecked();
+  await page.goBack();
+  await expect(panel).toHaveCount(0);
+  await expect(page).toHaveURL(/\/envies$/);
+  await expect(card(page).getByTestId("card-taken")).toBeVisible();
+  await expect(card(page).getByTestId("card-take")).toHaveAttribute("aria-pressed", "true");
+  await expect(card(page).getByTestId("card-take")).toHaveText("Retirer");
+
+  // Put it back from the card.
+  await card(page).getByTestId("card-take").click();
+  await expect(card(page).getByTestId("card-taken")).toHaveCount(0);
+  await expect(card(page).getByTestId("card-take")).toHaveText("Je le prends");
+  // And take it from the card: the budget card counts it in the order in progress.
+  await card(page).getByTestId("card-take").click();
+  await expect(card(page).getByTestId("card-taken")).toBeVisible();
+  await expect(page.getByTestId("budget-card")).toContainText(/23\s€/);
+  await card(page).getByTestId("card-take").click();
+  await expect(page.getByTestId("budget-card")).not.toContainText(/23\s€/);
+  await card(page).getByTestId("card-take").click();
+  await expect(page.getByTestId("budget-card")).toContainText(/23\s€/);
+});
+
+test("prix inconnu : la carte dit « prix inconnu » ; en sélection, plus de boutons rapides", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Coller un lien").fill(manualProductUrl());
+  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByLabel("Nom de l’article").fill("Robe sans prix");
+  await page.getByRole("button", { name: "Enregistrer la fiche" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Robe sans prix" })).toBeVisible();
+  await keepWish(page);
+  await page.goto("/envies");
+  await expect(card(page)).toContainText("prix inconnu");
+  await expect(card(page).getByTestId("card-drop")).toHaveCount(0);
+  await expect(card(page).getByTestId("card-take")).toHaveCount(1);
+  await page.getByRole("button", { name: "Sélectionner" }).click();
+  await expect(card(page).getByTestId("card-take")).toHaveCount(0);
+  await expect(card(page).getByTestId("card-preview")).toHaveCount(0);
 });
