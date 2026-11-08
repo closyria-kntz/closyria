@@ -14,10 +14,10 @@ const touch = "min-h-touch-target";
 const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
 
 /**
- * The sheet's buttons (spec §6): « Voir chez {boutique} » (always, even while the capture runs or failed: she needs
- * the shop's page to fill the form), « Je le prends » (her wish only: ticks it in « Ma commande », with « Annuler »),
- * « Partager » (once the sheet is read). The sheet itself needs an account, so « Partager » gives the SHOP's address:
- * the phone's share menu when there is one, else the clipboard (« Lien de la boutique copié »).
+ * The sheet's buttons (spec §6), on one row: « Je le prends » (her wish only: ticks it in « Ma commande », with
+ * « Annuler »), « Voir chez {boutique} » (always, even while the capture runs or failed: she needs the shop's page to
+ * fill the form), « Partager » (once the sheet is read). The sheet itself needs an account, so « Partager » gives the
+ * SHOP's address: the phone's share menu when there is one, else the clipboard (« Lien de la boutique copié »).
  */
 export function ProductActions({
   shop,
@@ -75,34 +75,35 @@ export function ProductActions({
 
   return (
     <div data-testid="product-actions" className="flex flex-col gap-space-2">
+      {/* One row under the blocks: « Je le prends », « Voir chez {boutique} », « Partager » (it wraps on a narrow phone). */}
       <div className="flex flex-wrap items-center gap-space-2">
-        {isHttpUrl(url) && (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${primaryButtonClass} ${touch} flex-1 basis-full sm:basis-auto`}
-          >
-            {t("viewAt", { shop })}
-          </a>
-        )}
         {item && item.stage === "spotted" && (
           <button
             type="button"
             disabled={busy}
             aria-pressed={item.inOrderDraft}
             onClick={() => void take(item)}
-            className={`${toggleButtonClass} flex-1 justify-center`}
+            className={`${toggleButtonClass} justify-center px-space-5`}
           >
             {item.inOrderDraft && <Tick draw />}
             {t("take")}
           </button>
         )}
+        {isHttpUrl(url) && (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`${primaryButtonClass} ${touch} px-space-5`}
+          >
+            {t("viewAt", { shop })}
+          </a>
+        )}
         {title !== null && isHttpUrl(url) && (
           <button
             type="button"
             onClick={() => void share(title)}
-            className={`${buttonClass} ${touch} flex-1 justify-center`}
+            className={`${buttonClass} ${touch} justify-center px-space-5`}
           >
             {t("share")}
           </button>

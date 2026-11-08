@@ -3,7 +3,8 @@ import type { Locator, Page } from "@playwright/test";
 import { autoProductUrl, keepWish, MANUAL_SHOP, manualProductUrl, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
-// Refonte « Cocon lumineux », task 13: the product sheet is an arch gallery and separate blocks, with the price curve.
+// Refonte « Cocon lumineux », task 13 and palier 3 bis: the product sheet is a gallery in shape C and separate blocks,
+// with the price curve.
 
 const PIXEL = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
@@ -72,14 +73,21 @@ const boxOf = async (locator: Locator) => {
   return found;
 };
 
-test("la galerie : une grande arche, des vignettes en arches dessous, des points qui s'étirent", async ({ page }) => {
+test("la galerie : une grande photo en forme C, des vignettes de même forme dessous, des points qui s'étirent", async ({
+  page,
+}) => {
   await keptWithPhoto(page);
   const main = gallery(page).getByTestId("gallery-main");
-  await expect(main).toHaveClass(/\barch\b/);
+  await expect(main).toHaveCSS("border-top-left-radius", "44px");
+  await expect(main).toHaveCSS("border-bottom-right-radius", "14px");
+  await expect(gallery(page).getByTestId("gallery-photo").locator("img")).toHaveCSS("object-fit", "cover");
   const thumbs = gallery(page).getByTestId("gallery-thumbs").getByRole("button");
   const count = await thumbs.count();
   expect(count).toBeGreaterThanOrEqual(2);
-  for (const thumb of await thumbs.all()) await expect(thumb).toHaveClass(/\barch\b/);
+  for (const thumb of await thumbs.all()) {
+    await expect(thumb).toHaveCSS("border-top-left-radius", "20px");
+    await expect(thumb).toHaveCSS("border-bottom-left-radius", "8px");
+  }
   // Below the big photo, not beside it.
   const mainBox = await boxOf(main);
   expect((await boxOf(thumbs.first())).y).toBeGreaterThan(mainBox.y + mainBox.height - 1);
@@ -110,7 +118,7 @@ test("la galerie : une grande arche, des vignettes en arches dessous, des points
   await axe(page);
 });
 
-test("la photo qu'elle vient d'ajouter s'affiche dans la grande arche", async ({ page }) => {
+test("la photo qu'elle vient d'ajouter s'affiche en grand", async ({ page }) => {
   await keptWithPhoto(page);
   const photo = gallery(page).getByTestId("gallery-photo");
   await expect(photo).toHaveAccessibleName("Agrandir ta photo 1");
@@ -189,7 +197,9 @@ test("sans historique, ni courbe ni mention de baisse", async ({ page }) => {
   await expect(page.getByText(/depuis/)).toHaveCount(0);
 });
 
-test("ton envie : niveaux au style de l'app, « Prioritaire » avec coche, pourquoi en italique", async ({ page }) => {
+test("ton envie : niveaux en tuiles, « Prioritaire » en petite pastille cochée, pourquoi en citation", async ({
+  page,
+}) => {
   await openSheet(page);
   await keepWish(page);
   const levels = wish(page).getByRole("group", { name: "Tu l’aimes comment ?" });
@@ -206,10 +216,33 @@ test("ton envie : niveaux au style de l'app, « Prioritaire » avec coche, pourq
   await priority.click();
   await expect(priority).toHaveAttribute("aria-pressed", "true");
   await expect(priority.locator("svg path")).toHaveCount(1);
+  // A small pill beside the title, its button still a finger high.
+  const title = await boxOf(wish(page).getByRole("heading", { name: "Ton envie" }));
+  const pill = await boxOf(priority);
+  expect(pill.height).toBeGreaterThanOrEqual(44);
+  expect(Math.abs(pill.y + pill.height / 2 - (title.y + title.height / 2))).toBeLessThan(8);
+  await expect(priority.locator("span").first()).toHaveCSS("background-color", await tokenColor(page, "--color-hint"));
 
+  // No field until she asks for it; once saved, the « pourquoi » is a quote in italic Fraunces.
+  await expect(wish(page).getByLabel("Pourquoi ? (facultatif)")).toHaveCount(0);
+  await wish(page).getByRole("button", { name: "Dire pourquoi" }).click();
   const why = wish(page).getByLabel("Pourquoi ? (facultatif)");
+  await expect(why).toBeFocused();
   await expect(why).toHaveCSS("font-style", "italic");
-  expect(await why.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/Fraunces/i);
+  await why.fill("Pour le mariage de Claire");
+  await wish(page).getByRole("button", { name: "Enregistrer l’avis" }).click();
+  await expect(toast(page)).toContainText("Avis enregistré");
+  const quote = wish(page).getByTestId("item-why");
+  await expect(quote).toHaveText("« Pour le mariage de Claire »");
+  await expect(quote).toHaveCSS("font-style", "italic");
+  expect(await quote.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/Fraunces/i);
+  await expect(wish(page).getByLabel("Pourquoi ? (facultatif)")).toHaveCount(0);
+  // « Modifier », then Escape: the field goes, nothing changed.
+  await wish(page).getByRole("button", { name: "Modifier le pourquoi" }).click();
+  await expect(why).toHaveValue("Pour le mariage de Claire");
+  await page.keyboard.press("Escape");
+  await expect(quote).toHaveText("« Pour le mariage de Claire »");
+  await axe(page);
 });
 
 test("« Voir chez », « Je le prends » et « Partager » (l'adresse de la boutique, copiée)", async ({
@@ -233,6 +266,12 @@ test("« Voir chez », « Je le prends » et « Partager » (l'adresse de la bou
   const shopLink = actions.getByRole("link", { name: "Voir chez Fausse boutique" });
   await expect(shopLink).toHaveAttribute("target", "_blank");
   await expect(page.getByRole("link", { name: /Voir chez/ })).toHaveCount(1);
+  // « Je le prends », « Voir chez … », « Partager », in this order, on one row once there is room for it.
+  await expect(actions.locator("a, button")).toHaveText(["Je le prends", "Voir chez Fausse boutique", "Partager"]);
+  if ((page.viewportSize()?.width ?? 0) >= 640) {
+    const tops = await Promise.all((await actions.locator("a, button").all()).map(async (el) => (await boxOf(el)).y));
+    expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(2);
+  }
 
   const take = actions.getByRole("button", { name: "Je le prends" });
   await expect(take).toHaveAttribute("aria-pressed", "false");

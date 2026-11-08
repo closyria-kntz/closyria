@@ -69,16 +69,22 @@ test("Mims, Prioritaire et « Trop mims » avant d'ajouter ; sur la fiche gardé
   const kept = wish.getByRole("group", { name: "Tu l’aimes comment ?" });
   await expect(kept.getByRole("button", { name: "Mims" })).toHaveAttribute("aria-pressed", "true");
   await expect(wish.getByRole("button", { name: "Prioritaire" })).toHaveAttribute("aria-pressed", "true");
-  await expect(wish.getByLabel("Pourquoi ? (facultatif)")).toHaveValue("Trop mims");
+  // The saved « pourquoi » reads as a quote; the field only shows to edit it.
+  await expect(wish.getByTestId("item-why")).toHaveText("« Trop mims »");
+  await expect(wish.getByLabel("Pourquoi ? (facultatif)")).toHaveCount(0);
   await kept.getByRole("button", { name: "En feu" }).click();
   await expect(toast).toContainText("Niveau : En feu");
   await expect(kept.getByRole("button", { name: "En feu" })).toHaveAttribute("aria-pressed", "true");
   await toast.getByRole("button", { name: "Annuler" }).last().click();
   await expect(kept.getByRole("button", { name: "Mims" })).toHaveAttribute("aria-pressed", "true");
 
+  await wish.getByRole("button", { name: "Modifier le pourquoi" }).click();
+  await expect(wish.getByLabel("Pourquoi ? (facultatif)")).toHaveValue("Trop mims");
   await wish.getByLabel("Pourquoi ? (facultatif)").fill("Trop trop mims");
   await wish.getByRole("button", { name: "Enregistrer l’avis" }).click();
   await expect(toast).toContainText("Avis enregistré");
+  await expect(wish.getByTestId("item-why")).toHaveText("« Trop trop mims »");
+  await expect(wish.getByRole("button", { name: "Modifier le pourquoi" })).toBeFocused();
   await mine.screenshot({ path: testInfo.outputPath("kept-level.png") });
   expect((await new AxeBuilder({ page }).analyze()).violations.map((v) => v.id)).toEqual([]);
 
