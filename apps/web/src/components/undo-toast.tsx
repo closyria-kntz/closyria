@@ -2,8 +2,10 @@
 
 import { useTranslations } from "next-intl";
 import { useSyncExternalStore } from "react";
-import { getUndo, pushUndo, runUndo, subscribeUndo } from "@/lib/undo";
+import { getUndoStack, pushUndo, runUndo, subscribeUndo } from "@/lib/undo";
 import { buttonClass } from "./ui";
+
+const EMPTY: ReturnType<typeof getUndoStack> = [];
 
 /**
  * The toast of the last action: « message · Annuler » for 8 s (Annuler only when the API gave an undo).
@@ -11,10 +13,10 @@ import { buttonClass } from "./ui";
  */
 export function UndoToast() {
   const t = useTranslations("Item.toast");
-  const entry = useSyncExternalStore(subscribeUndo, getUndo, () => null);
+  const stack = useSyncExternalStore(subscribeUndo, getUndoStack, () => EMPTY);
 
-  async function undo() {
-    const ok = await runUndo();
+  async function undo(id: number) {
+    const ok = await runUndo(id);
     pushUndo(ok ? t("undone") : t("failed"), null);
   }
 
@@ -22,26 +24,28 @@ export function UndoToast() {
     <div
       role="status"
       aria-live="polite"
+      aria-relevant="additions"
       aria-label={t("label")}
       data-undo-toast=""
-      className="pointer-events-none fixed inset-x-space-4 bottom-space-8 z-40 flex justify-center md:bottom-space-5"
+      className="pointer-events-none fixed inset-x-space-4 bottom-space-8 z-40 grid justify-items-center md:bottom-space-5"
     >
-      {entry && (
+      {stack.map((entry, index) => (
         <p
           key={entry.id}
+          data-toast-rank={stack.length - 1 - index}
           className="pointer-events-auto flex items-center gap-space-3 rounded-card bg-ink px-space-4 py-space-2 text-sm text-surface-raised shadow-lifted"
         >
           <span>{entry.label}</span>
           {entry.undoable && (
             <>
               <span aria-hidden="true">·</span>
-              <button type="button" onClick={undo} className={`${buttonClass} min-h-touch-target`}>
+              <button type="button" onClick={() => undo(entry.id)} className={`${buttonClass} min-h-touch-target`}>
                 {t("undo")}
               </button>
             </>
           )}
         </p>
-      )}
+      ))}
     </div>
   );
 }

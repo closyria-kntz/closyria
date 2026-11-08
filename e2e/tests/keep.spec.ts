@@ -26,7 +26,7 @@ test("« Ajouter à mes envies » garde l'article, Annuler le retire, et la fich
   const toast = page.getByRole("status", { name: "Notifications" });
   await expect(toast).toContainText("Ajouté à tes envies");
 
-  await toast.getByRole("button", { name: "Annuler" }).click();
+  await toast.getByRole("button", { name: "Annuler" }).last().click();
   await expect(page.getByRole("button", { name: "Déjà commandé" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mon article" })).toHaveCount(0);
 
@@ -72,7 +72,7 @@ test("Mims, Prioritaire et « Trop mims » avant d'ajouter ; sur la fiche gardé
   await kept.getByRole("button", { name: "En feu" }).click();
   await expect(toast).toContainText("Niveau : En feu");
   await expect(kept.getByRole("button", { name: "En feu" })).toHaveAttribute("aria-pressed", "true");
-  await toast.getByRole("button", { name: "Annuler" }).click();
+  await toast.getByRole("button", { name: "Annuler" }).last().click();
   await expect(kept.getByRole("button", { name: "Mims" })).toHaveAttribute("aria-pressed", "true");
 
   await mine.getByLabel("Pourquoi ? (facultatif)").fill("Trop trop mims");
@@ -192,7 +192,7 @@ test("passer à « Reçu » avec le prix payé : l'article est dans Dressing, pu
   await dressing.goto("/dressing");
   await expect(dressing.getByTestId("item-card")).toHaveCount(1);
   await dressing.close();
-  await toast.getByRole("button", { name: "Annuler" }).click();
+  await toast.getByRole("button", { name: "Annuler" }).last().click();
   await expect(page.getByText("Payé : 19,90")).toHaveCount(0);
   await page.goto("/dressing");
   await expect(page.getByRole("heading", { name: "Ton dressing est vide" })).toBeVisible();

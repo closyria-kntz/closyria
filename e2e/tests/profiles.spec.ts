@@ -47,7 +47,7 @@ test("créer « Léa », y déplacer deux articles, filtrer par profil, suppress
   await expect(page.getByTestId("item-card")).toHaveCount(2);
 
   // « Annuler » brings it back.
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(page.getByTestId("item-card")).toHaveCount(3);
   await moveFirst();
   await expect(page.getByTestId("item-card")).toHaveCount(2);

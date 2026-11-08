@@ -154,7 +154,7 @@ test("une amie donne son avis", async ({ page, browser, baseURL, db, userAgentTa
   await expect(toast).toContainText("Avis effacé");
   await expect(opinions).toHaveCount(0);
   await expect(item.getByRole("button", { name: "Donner mon avis" })).toBeVisible();
-  await toast.getByRole("button", { name: "Annuler" }).click();
+  await toast.getByRole("button", { name: "Annuler" }).last().click();
   await expect(opinions).toHaveCount(1);
   await expect(opinions.first()).toContainText("elle t'irait trop bien");
   await expect(item.getByRole("button", { name: "Modifier mon avis" })).toBeVisible();
@@ -194,7 +194,7 @@ test("une amie donne son avis", async ({ page, browser, baseURL, db, userAgentTa
   const otherOpinions = otherItem.getByRole("list", { name: "Avis des amies" }).getByRole("listitem");
   await expect(otherOpinions).toHaveCount(2);
   // « Annuler » right after a first opinion takes it back.
-  await otherToast.getByRole("button", { name: "Annuler" }).click();
+  await otherToast.getByRole("button", { name: "Annuler" }).last().click();
   await expect(otherOpinions).toHaveCount(1);
   await expect(otherOpinions.first()).toContainText("Léa");
 
@@ -326,7 +326,7 @@ test("la fondatrice voit la pastille, l'avis « nouveau », l'efface et l'annule
   await opinions.first().getByRole("button", { name: "Effacer l'avis de Léa" }).click();
   await expect(appToast(page)).toContainText("Avis de Léa effacé");
   await expect(opinions).toHaveCount(0);
-  await appToast(page).getByRole("button", { name: "Annuler" }).click();
+  await appToast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(opinions).toHaveCount(1);
   await expect(opinions.first()).toContainText("elle t'irait trop bien");
   await lea.reload();

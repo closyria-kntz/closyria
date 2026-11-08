@@ -63,6 +63,9 @@ export const defaultSemanticTokens = {
   "spacing-space-6": space[6],
   "spacing-space-7": space[7],
   "spacing-space-8": space[8],
+  // Undo toast stack: each older message sits one step higher and one step smaller than the next.
+  "spacing-toast-stack": "0.75rem",
+  "scale-toast-stack": "0.05",
   // Radii
   "radius-none": radius.none,
   "radius-sm": radius.sm,

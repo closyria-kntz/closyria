@@ -44,7 +44,7 @@ test("la pastille passe de J’aime à Mims, « Annuler » remet J’aime ; plus
   await expect(card(page)).toContainText("Mims");
   await expect(toast(page)).toContainText(`${PRODUCT.name} : Mims`);
 
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(card(page).getByRole("button", { name: "Niveau : J’aime. Toucher pour changer" })).toBeVisible();
 
   // Taken back to « Bof »… then cleared from the menu: the item stays (spec §4), the pill offers « + ».
@@ -122,7 +122,7 @@ test("menu « … » → « Retirer de mes envies » met l’article à la corbe
   await menu(page).getByRole("button", { name: "Retirer de mes envies" }).click();
   await expect(toast(page)).toContainText("Retiré de tes envies");
   await expect(page.getByTestId("item-card")).toHaveCount(0);
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(page.getByTestId("item-card")).toHaveCount(1);
 
   await card(page).getByRole("button", { name: "Plus d’actions" }).click();
@@ -170,7 +170,7 @@ test("Mes niveaux : renommer Mims, refuser deux émojis, revenir aux niveaux de 
   await page.getByRole("button", { name: "Revenir aux niveaux de départ" }).click();
   await expect(toast(page)).toContainText("Niveaux de départ rétablis");
   await expect(page.getByLabel("Nom du niveau 3")).toHaveValue("Mims");
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(page.getByLabel("Nom du niveau 3")).toHaveValue("Trop beau");
   await page.goto("/envies");
   await expect(card(page)).toContainText("Trop beau");

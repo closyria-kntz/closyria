@@ -114,7 +114,7 @@ test("Sélectionner : deux articles passent En feu, Annuler ; filtres par niveau
   };
   await setFire();
   await expect(cards.filter({ hasText: "En feu" })).toHaveCount(2);
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(cards.filter({ hasText: "En feu" })).toHaveCount(0);
   await expect(cards.filter({ hasText: "J’aime" })).toHaveCount(3);
 
@@ -176,7 +176,7 @@ test("Sélectionner : changer l'étape puis Annuler ; Échap quitte le mode", as
   await expect(toast(page)).toContainText("passé à « Reçu »");
   await expect(page.getByTestId("item-card")).toHaveCount(0);
 
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(page.getByTestId("item-card")).toHaveCount(1);
   await pick(page, 0).click();
   await expect(bar(page)).toBeVisible();
@@ -227,7 +227,7 @@ test("Sélectionner : déplacer deux articles vers un profil, les ajouter à une
   await page.getByRole("dialog", { name: "Déplacer vers un profil" }).getByRole("button", { name: "Léa" }).click();
   await expect(toast(page)).toContainText("2 articles déplacés vers Léa");
   await expect(cards).toHaveCount(1);
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(cards).toHaveCount(3);
 
   // List.
@@ -235,8 +235,9 @@ test("Sélectionner : déplacer deux articles vers un profil, les ajouter à une
   await bar(page).getByRole("button", { name: "Liste", exact: true }).click();
   await page.getByRole("dialog", { name: "Ajouter à une liste" }).getByRole("button", { name: "Été" }).click();
   await expect(toast(page)).toContainText("2 articles ajoutés à Été");
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
-  await expect(toast(page)).toContainText("C’est annulé.");
+  await toast(page).getByRole("button", { name: "Annuler" }).last().click();
+  // The earlier « C’est annulé. » is still stacked: wait for the second one.
+  await expect(toast(page).getByText("C’est annulé.")).toHaveCount(2);
   await listHolds(0);
   await page.goto("/envies");
   await page.getByRole("button", { name: "Sélectionner", exact: true }).click();
@@ -253,7 +254,7 @@ test("Sélectionner : déplacer deux articles vers un profil, les ajouter à une
   await bar(page).getByRole("button", { name: "Supprimer" }).click();
   await expect(toast(page)).toContainText("2 articles supprimés");
   await expect(cards).toHaveCount(1);
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(cards).toHaveCount(3);
 });
 

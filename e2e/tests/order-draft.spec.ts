@@ -133,7 +133,7 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await expect(other.getByTestId("item-card")).toHaveCount(2);
   await other.close();
 
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(row(page, "Robe Alma")).toBeChecked();
   await expect(row(page, "Gilet Brume")).toBeChecked();
   await expect(card).toContainText(/Déjà commandé : 0\s€/);
@@ -203,14 +203,14 @@ test("budget : « Annuler » après Enregistrer ou Supprimer, « Recommencer à 
   await save("150", "Par semaine");
   await expect(card).toContainText(/Budget de la semaine : 150\s€/);
   await expect(toast(page)).toContainText("Budget enregistré");
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(card).toContainText("Pas encore de budget");
 
   // A change, undone: the previous amount and period come back.
   await save("150", "Par semaine");
   await save("200", "Par mois");
   await expect(card).toContainText(/Budget du mois : 200\s€/);
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(card).toContainText(/Budget de la semaine : 150\s€/);
 
   // Deleted, undone.
@@ -218,7 +218,7 @@ test("budget : « Annuler » après Enregistrer ou Supprimer, « Recommencer à 
   await dialog.getByRole("button", { name: "Supprimer le budget" }).click();
   await expect(card).toContainText("Pas encore de budget");
   await expect(toast(page)).toContainText("Budget supprimé");
-  await toast(page).getByRole("button", { name: "Annuler" }).click();
+  await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(card).toContainText(/Budget de la semaine : 150\s€/);
 
   // « Recommencer à zéro » (no period only): asks first; « Garder » keeps it, « Recommencer » resets, no undo.
@@ -233,7 +233,8 @@ test("budget : « Annuler » après Enregistrer ou Supprimer, « Recommencer à 
   await dialog.getByRole("button", { name: "Recommencer", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(toast(page)).toContainText("Budget remis à zéro");
-  await expect(toast(page).getByRole("button", { name: "Annuler" })).toHaveCount(0);
+  // Older bubbles keep their own Annuler: only the newest one (this message) has none.
+  await expect(toast(page).locator('[data-toast-rank="0"]').getByRole("button", { name: "Annuler" })).toHaveCount(0);
   await expect(card).toContainText(/Budget : 100\s€/);
 });
 
