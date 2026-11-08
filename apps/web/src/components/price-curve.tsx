@@ -5,8 +5,14 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatAmount } from "@/lib/budget";
 import { curveGeometry } from "@/lib/price-history";
 
-/** Drawing width, in SVG units; the height is the caller's (`height`), the size on screen comes from the classes. */
+/** Drawing width, in SVG units (one unit is one CSS pixel at the chosen height). */
 const WIDTH = 170;
+
+/** The heights on offer: a spacing token, and the same height in SVG units so the line keeps its thickness. */
+const HEIGHTS = {
+  "space-7": { className: "h-space-7", units: 48 },
+  "space-8": { className: "h-space-8", units: 64 },
+} as const;
 
 /**
  * The price over 3 months (spec §5, n° 13): a champagne line that draws itself once, its last point in green;
@@ -14,16 +20,18 @@ const WIDTH = 170;
  */
 export function PriceCurve({
   points,
-  height = 60,
+  height = "space-8",
   currency = "EUR",
 }: {
   points: PriceHistory["points"];
-  height?: number;
+  /** The curve's height on screen, a spacing token. */
+  height?: keyof typeof HEIGHTS;
   currency?: string;
 }) {
   const t = useTranslations("Capture.product");
   const locale = useLocale();
-  const geometry = curveGeometry(points, WIDTH, height);
+  const size = HEIGHTS[height];
+  const geometry = curveGeometry(points, WIDTH, size.units);
   const first = points[0];
   const last = points.at(-1);
   if (!geometry || !first || !last) return null;
@@ -34,8 +42,8 @@ export function PriceCurve({
         from: formatAmount(locale, first.priceCents, currency),
         to: formatAmount(locale, last.priceCents, currency),
       })}
-      viewBox={`0 0 ${WIDTH} ${height}`}
-      className="h-space-8 w-auto shrink-0 overflow-visible"
+      viewBox={`0 0 ${WIDTH} ${size.units}`}
+      className={`${size.className} w-auto shrink-0 overflow-visible`}
     >
       <polyline
         points={geometry.points}

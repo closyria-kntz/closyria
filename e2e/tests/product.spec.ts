@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Locator, Page } from "@playwright/test";
-import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
+import { autoProductUrl, keepWish, MANUAL_SHOP, manualProductUrl, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Refonte « Cocon lumineux », task 13: the product sheet is an arch gallery and separate blocks, with the price curve.
@@ -90,6 +90,8 @@ test("la galerie : une grande arche, des vignettes en arches dessous, des points
   await expect(thumbs.first()).toHaveAttribute("aria-pressed", "true");
   await expect.poll(async () => (await boxOf(dots.first())).width).toBeGreaterThan((await boxOf(dots.nth(1))).width);
 
+  // Thumbnails change photo without a motion of their own: the dot is the one that moves.
+  await expect(thumbs.first()).toHaveCSS("transform", "none");
   await gallery(page).getByRole("button", { name: "Photo suivante" }).click();
   await expect(dots.nth(1)).toHaveAttribute("data-current", "true");
   await expect(dots.first()).toHaveAttribute("data-current", "false");
@@ -106,6 +108,19 @@ test("la galerie : une grande arche, des vignettes en arches dessous, des points
     expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(44);
   }
   await axe(page);
+});
+
+test("la photo qu'elle vient d'ajouter s'affiche dans la grande arche", async ({ page }) => {
+  await keptWithPhoto(page);
+  const photo = gallery(page).getByTestId("gallery-photo");
+  await expect(photo).toHaveAccessibleName("Agrandir ta photo 1");
+  await gallery(page).getByRole("button", { name: "Voir la photo 1 de la boutique" }).click();
+  await expect(photo).toHaveAccessibleName("Agrandir la photo 1 de la boutique");
+  await page.getByRole("button", { name: "Ajouter une photo" }).click();
+  await page.getByTestId("photo-input").setInputFiles({ name: "p2.png", mimeType: "image/png", buffer: PIXEL });
+  await expect(page.getByRole("list", { name: "Mes photos" }).getByRole("listitem")).toHaveCount(2);
+  await expect(photo).toHaveAccessibleName("Agrandir ta photo 2");
+  await expect(gallery(page).getByRole("button", { name: "Voir ta photo 2" })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("un clic sur la grande photo l'agrandit ; un double-tap ouvre les 4 niveaux sur le niveau actuel", async ({
@@ -197,17 +212,26 @@ test("ton envie : niveaux au style de l'app, « Prioritaire » avec coche, pourq
   expect(await why.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/Fraunces/i);
 });
 
-test("« Voir chez », « Je le prends » et « Partager »", async ({ page, context, baseURL }) => {
+test("« Voir chez », « Je le prends » et « Partager » (l'adresse de la boutique, copiée)", async ({
+  page,
+  context,
+  baseURL,
+}) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(baseURL ?? "").origin });
+  // No share menu (a computer): « Partager » copies.
+  await page.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, "share", { value: undefined, configurable: true });
+  });
   await openSheet(page);
-  // Not kept yet: no order to take it in, the shop and the link are there.
+  // Not kept yet: no order to take it in, the shop and « Partager » are there.
   await expect(page.getByRole("button", { name: "Je le prends" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Voir chez Fausse boutique" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Partager" })).toBeVisible();
   await keepWish(page);
 
   const actions = page.getByTestId("product-actions");
-  await expect(actions.getByRole("link", { name: "Voir chez Fausse boutique" })).toHaveAttribute("target", "_blank");
+  const shopLink = actions.getByRole("link", { name: "Voir chez Fausse boutique" });
+  await expect(shopLink).toHaveAttribute("target", "_blank");
   await expect(page.getByRole("link", { name: /Voir chez/ })).toHaveCount(1);
 
   const take = actions.getByRole("button", { name: "Je le prends" });
@@ -226,13 +250,57 @@ test("« Voir chez », « Je le prends » et « Partager »", async ({ page, con
   await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(take).toHaveAttribute("aria-pressed", "false");
 
+  // The sheet needs an account: a friend gets the shop's page, never /produits/….
   await actions.getByRole("button", { name: "Partager" }).click();
-  await expect(actions.getByText("Lien copié")).toBeVisible();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(page.url().split("?")[0]);
+  await expect(actions.getByText("Lien de la boutique copié")).toBeVisible();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toBe(await shopLink.getAttribute("href"));
+  expect(copied).not.toContain("/produits/");
   for (const target of await actions.locator("a, button").all()) {
     expect((await boxOf(target)).height).toBeGreaterThanOrEqual(44);
   }
   await axe(page);
+});
+
+test("« Partager » ouvre le menu de partage du téléphone quand il existe ; le fermer ne dit rien", async ({ page }) => {
+  await page.addInitScript(() => {
+    const calls: unknown[] = [];
+    (window as unknown as { shareCalls: unknown[] }).shareCalls = calls;
+    Object.defineProperty(Navigator.prototype, "share", {
+      configurable: true,
+      value: (data: unknown) => {
+        calls.push(data);
+        return calls.length === 1 ? Promise.resolve() : Promise.reject(new DOMException("closed", "AbortError"));
+      },
+    });
+  });
+  await openSheet(page);
+  const href = await page.getByRole("link", { name: "Voir chez Fausse boutique" }).getAttribute("href");
+  const share = page.getByRole("button", { name: "Partager" });
+  await share.click();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { shareCalls: unknown[] }).shareCalls))
+    .toEqual([{ title: PRODUCT.name, url: href }]);
+  await share.click();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { shareCalls: unknown[] }).shareCalls.length))
+    .toBe(2);
+  await expect(page.getByText(/copié|Copie impossible/)).toHaveCount(0);
+});
+
+test("fiche d'une boutique non lisible, pas encore remplie : « Voir chez » reste là, pas de « Partager »", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByLabel("Coller un lien").fill(manualProductUrl());
+  await page.getByRole("button", { name: "Ajouter" }).click();
+  await expect(page.getByLabel("Nom de l’article")).toBeVisible();
+  const link = page.getByRole("link", { name: `Voir chez ${MANUAL_SHOP.name}` });
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute("href", /^http:\/\/manuelle\.e2e\.test\//);
+  await expect(page.getByRole("button", { name: "Partager" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Je le prends" })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: /^Prix sur 3 mois/ })).toHaveCount(0);
 });
 
 test("téléphone ou ordinateur : la galerie puis les blocs, ou côte à côte", async ({ page }) => {

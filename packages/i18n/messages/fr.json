@@ -582,7 +582,7 @@
       "sinceDate": "le {date}",
       "take": "Je le prends",
       "share": "Partager",
-      "copied": "Lien copié",
+      "copied": "Lien de la boutique copié",
       "copyFailed": "Copie impossible. Voici le lien : {url}"
     },
     "manual": {

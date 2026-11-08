@@ -29,6 +29,8 @@ type Props = {
   footer?: (current: GalleryPhoto | null) => ReactNode;
   /** In place of the big photo when there is none. */
   empty?: ReactNode;
+  /** Shows this photo in the big arch whenever it changes (her photo just added). */
+  selectId?: string | null;
 };
 
 const roundButton = `glass flex size-touch-target items-center justify-center rounded-full text-ink ${focusRing}`;
@@ -65,12 +67,19 @@ export function ProductGallery({
   onDoubleTap,
   footer,
   empty,
+  selectId = null,
 }: Props) {
   const t = useTranslations("Media");
   const [index, setIndex] = useState(0);
   const [viewing, setViewing] = useState<number | null>(null);
   const openTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(openTimer.current), []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a new `selectId` moves the big photo, not every render.
+  useEffect(() => {
+    if (selectId === null) return;
+    const found = photos.findIndex((photo) => photo.id === selectId);
+    if (found >= 0) setIndex(found);
+  }, [selectId]);
   const shown = Math.min(index, Math.max(0, photos.length - 1));
   const current = photos[shown] ?? null;
   const group = current ? photos.filter((photo) => photo.group === current.group) : [];
@@ -145,8 +154,8 @@ export function ProductGallery({
                     key={photo.id}
                     data-dot
                     data-current={n === shown}
-                    className={`h-space-2 rounded-full bg-ink transition-all duration-slow ease-emphasized ${
-                      n === shown ? "w-space-5" : "w-space-2 opacity-40"
+                    className={`h-space-2 rounded-full transition-all duration-slow ease-emphasized ${
+                      n === shown ? "w-space-5 bg-ink" : "w-space-2 bg-ink-muted"
                     }`}
                   />
                 ))}
@@ -171,7 +180,7 @@ export function ProductGallery({
                     aria-label={label(photo, n + 1, "show")}
                     aria-pressed={photo === current}
                     onClick={() => setIndex(photos.indexOf(photo))}
-                    className={`arch block aspect-3/4 w-space-8 overflow-hidden bg-media-backdrop transition-transform duration-base ease-emphasized aria-pressed:scale-110 aria-pressed:outline-2 aria-pressed:outline-offset-2 aria-pressed:outline-ink aria-pressed:outline-solid ${focusRing}`}
+                    className={`arch block aspect-3/4 w-space-8 overflow-hidden bg-media-backdrop aria-pressed:outline-2 aria-pressed:outline-offset-2 aria-pressed:outline-ink aria-pressed:outline-solid ${focusRing}`}
                   >
                     {/* biome-ignore lint/performance/noImgElement: photos come from our own API, sized by it. */}
                     <img

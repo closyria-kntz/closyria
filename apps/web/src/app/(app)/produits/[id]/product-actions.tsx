@@ -5,22 +5,24 @@ import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { Tick } from "@/components/tick";
 import { buttonClass, primaryButtonClass, toggleButtonClass } from "@/components/ui";
+import { COPIED_FEEDBACK_MS } from "@/lib/timing";
 import { pushUndo } from "@/lib/undo";
 import { patchItem, undoWith } from "@/lib/wardrobe-client";
 
 const touch = "min-h-touch-target";
-const COPIED_MS = 3000;
 
 const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
 
 /**
- * The sheet's buttons (spec §6): « Voir chez {boutique} », « Je le prends » (her wish only: ticks it in « Ma commande »,
- * with « Annuler »), « Partager » (copies the sheet's address, « Lien copié »). No item has a share link of its own:
- * only lists are shared, so « Partager » gives the page's address.
+ * The sheet's buttons (spec §6): « Voir chez {boutique} » (always, even while the capture runs or failed: she needs
+ * the shop's page to fill the form), « Je le prends » (her wish only: ticks it in « Ma commande », with « Annuler »),
+ * « Partager » (once the sheet is read). The sheet itself needs an account, so « Partager » gives the SHOP's address:
+ * the phone's share menu when there is one, else the clipboard (« Lien de la boutique copié »).
  */
 export function ProductActions({
   shop,
   url,
+  title,
   item,
   onChange,
   reload,
@@ -28,6 +30,8 @@ export function ProductActions({
   shop: string;
   /** The shop's page. */
   url: string;
+  /** The product's name, for the share menu; null while the sheet is not read (no « Partager »). */
+  title: string | null;
   item: ItemView | null;
   onChange: (item: ItemView) => void;
   reload: () => Promise<void>;
@@ -48,15 +52,24 @@ export function ProductActions({
     pushUndo(tItem(result.item.inOrderDraft ? "toast.taken" : "toast.untaken"), undoWith(result.undo, reload));
   }
 
-  async function share() {
-    const address = `${window.location.origin}${window.location.pathname}`;
+  async function share(name: string) {
     clearTimeout(clear.current);
+    setShared(null);
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: name, url });
+        return;
+      } catch (error) {
+        // She closed the share menu: nothing to say.
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
     try {
-      await navigator.clipboard.writeText(address);
+      await navigator.clipboard.writeText(url);
       setShared({ ok: true });
-      clear.current = setTimeout(() => setShared(null), COPIED_MS);
+      clear.current = setTimeout(() => setShared(null), COPIED_FEEDBACK_MS);
     } catch {
-      setShared({ ok: false, url: address });
+      setShared({ ok: false, url });
     }
   }
 
@@ -85,9 +98,15 @@ export function ProductActions({
             {t("take")}
           </button>
         )}
-        <button type="button" onClick={() => void share()} className={`${buttonClass} ${touch} flex-1 justify-center`}>
-          {t("share")}
-        </button>
+        {title !== null && isHttpUrl(url) && (
+          <button
+            type="button"
+            onClick={() => void share(title)}
+            className={`${buttonClass} ${touch} flex-1 justify-center`}
+          >
+            {t("share")}
+          </button>
+        )}
       </div>
       <p role="status" className="min-h-space-5 text-sm text-ink-muted">
         {shared?.ok ? (

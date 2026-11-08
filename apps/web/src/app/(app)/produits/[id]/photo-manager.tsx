@@ -46,6 +46,7 @@ export function PhotoManager({
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<ItemPhotoView | null>(null);
   const [picker, setPicker] = useState(false);
+  const [added, setAdded] = useState<string | null>(null);
   const name = item.name ?? item.product.shop.name;
   const mine = item.photos.filter((photo) => photo.source === "private");
   const shop = item.photos.filter((photo) => photo.source === "shop");
@@ -142,9 +143,22 @@ export function PhotoManager({
         onDoubleTap={() => setPicker(true)}
         footer={footer}
         empty={<PhotoPlaceholder label={t("photos.empty")} />}
+        selectId={added}
       />
 
-      <AddPhotoDialog open={adding} onClose={() => setAdding(false)} itemId={item.id} onChange={onChange} />
+      <AddPhotoDialog
+        open={adding}
+        onClose={() => setAdding(false)}
+        itemId={item.id}
+        onChange={(next) => {
+          // The photo she just added shows in the big arch.
+          const fresh = next.photos.find(
+            (photo) => photo.source === "private" && !item.photos.some((p) => p.id === photo.id),
+          );
+          onChange(next);
+          if (fresh) setAdded(fresh.id);
+        }}
+      />
 
       <Dialog
         open={confirming !== null}

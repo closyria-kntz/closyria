@@ -67,7 +67,8 @@ const bigPhoto = (page: Page) => page.getByTestId("product-gallery").getByTestId
 test("la visionneuse s'ouvre sur la photo cliquée, navigue, zoome et rend le focus", async ({ page }, testInfo) => {
   await keepWithPhotos(page, 3);
   // Her photos and the shop's are told apart by name; a thumbnail shows its photo in the big arch, which opens it.
-  await expect(page.getByRole("button", { name: "Agrandir ta photo 1", exact: true })).toHaveCount(1);
+  // The last photo she added is the one on show.
+  await expect(page.getByRole("button", { name: "Agrandir ta photo 3", exact: true })).toHaveCount(1);
   await expect(
     page
       .getByRole("list", { name: "Photos de la boutique" })

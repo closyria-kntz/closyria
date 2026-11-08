@@ -225,15 +225,16 @@ export function ProductView({ productId, captureId }: { productId: string; captu
       </section>
     ) : null;
 
-  const actions = hasName ? (
+  const actions = (
     <ProductActions
       shop={shop}
       url={product.canonicalUrl}
+      title={hasName ? product.name : null}
       item={kept ? item : null}
       onChange={setItem}
       reload={reloadItem}
     />
-  ) : null;
+  );
 
   const shopSheet = hasName ? (
     <section aria-labelledby="shop-title" data-block className={blockClass}>
@@ -306,7 +307,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
                   </s>
                 )}
               </p>
-              {history && (
+              {history && history.points.length >= 2 && (
                 <div className="ml-auto">
                   <PriceCurve points={history.points} currency={currency} />
                 </div>
