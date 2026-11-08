@@ -283,6 +283,8 @@ export const itemListQuerySchema = z.object({
   color: z.uuid().optional(),
   audience: audienceSchema.optional(),
   sort: itemSortSchema.optional(),
+  /** Words to find in the item's name, its brand or its shop's name (case-insensitive). */
+  q: z.string().trim().min(1).max(100).optional(),
   /** Only the items of one of her lists, in the list's order (`sort` is ignored). */
   wishlist: z.uuid().optional(),
   /** Trash view: only deleted items. */

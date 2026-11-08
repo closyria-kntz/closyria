@@ -268,6 +268,13 @@ export async function listItems(db: Database, userId: string, query: ItemListQue
   }
   if (query.color) conditions.push(sql`coalesce(${schema.items.colorId}, ${schema.products.colorId}) = ${query.color}`);
   if (query.audience) conditions.push(eq(schema.products.audience, query.audience));
+  if (query.q) {
+    // `%`, `_` and `\` she types are looked for as they are.
+    const pattern = `%${query.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    conditions.push(
+      sql`(coalesce(${effectiveName}, '') ilike ${pattern} or coalesce(${schema.items.brandOverride}, ${schema.products.brand}, '') ilike ${pattern} or ${schema.shops.name} ilike ${pattern})`,
+    );
+  }
   if (query.cursor) {
     const values = decodeCursor(sort, query.cursor);
     const left = sql.join(

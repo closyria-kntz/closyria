@@ -643,6 +643,41 @@ describe("GET /api/me/items", () => {
     expect((await call("GET", "/api/me/items?cursor=garbage", cookie)).status).toBe(400);
   });
 
+  it("searches her items by name, brand or shop, case-insensitively, wildcards taken literally", async () => {
+    const { cookie } = await t.signIn();
+    const dress = await keep(cookie, {
+      productId: (await newProduct({ name: "Robe portefeuille Lina", brand: "Sézane" })).id,
+      action: "wish",
+    });
+    const jeans = await keep(cookie, {
+      productId: (await newProduct({ name: "Jean droit 501", brand: "Levi’s" })).id,
+      action: "wish",
+    });
+    const odd = await keep(cookie, { productId: (await newProduct({ name: "Remise 50%_off" })).id, action: "wish" });
+    const ids = async (q: string) =>
+      (
+        (await (await call("GET", `/api/me/items?q=${encodeURIComponent(q)}`, cookie)).json()) as {
+          items: ItemView[];
+        }
+      ).items
+        .map((i) => i.id)
+        .sort();
+    expect(await ids("portefeuille")).toEqual([dress.item.id]);
+    expect(await ids("LINA")).toEqual([dress.item.id]);
+    expect(await ids("sézane")).toEqual([dress.item.id]);
+    expect(await ids("levi")).toEqual([jeans.item.id]);
+    // The shop's name: every product of this test has its own « Boutique I… ».
+    const shopName = dress.item.product.shop.name;
+    expect(await ids(shopName)).toEqual([dress.item.id]);
+    expect(await ids("%")).toEqual([odd.item.id]);
+    expect(await ids("0%_")).toEqual([odd.item.id]);
+    expect(await ids("introuvable")).toEqual([]);
+    // Spaces around are ignored; an empty search is refused.
+    expect(await ids("  droit  ")).toEqual([jeans.item.id]);
+    expect((await call("GET", "/api/me/items?q=%20", cookie)).status).toBe(400);
+    expect((await call("GET", `/api/me/items?q=${"a".repeat(101)}`, cookie)).status).toBe(400);
+  });
+
   it("answers 400 invalid_cursor for a forged cursor", async () => {
     const { cookie } = await t.signIn();
     const forge = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
