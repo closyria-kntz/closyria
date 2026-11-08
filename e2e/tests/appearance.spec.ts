@@ -33,3 +33,25 @@ test("Apparence : Sombre puis Clair restent après un rechargement, Automatique 
   await page.reload();
   await expect(html).not.toHaveAttribute("data-theme");
 });
+
+test("Le bouton de la barre du haut bascule clair ↔ sombre et le choix survit au rechargement", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/envies");
+  const html = page.locator("html");
+  const bar = page.locator("header");
+  await bar.getByRole("button", { name: "Passer en mode sombre" }).click();
+  await expect(html).toHaveAttribute("data-theme", "equilibre-dark");
+  await page.reload();
+  await expect(html).toHaveAttribute("data-theme", "equilibre-dark");
+  await expect(bar.getByRole("button", { name: "Passer en mode clair" })).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+  // Same storage as Réglages → Apparence.
+  await page.goto("/reglages/apparence");
+  await expect(page.getByRole("radio", { name: /Sombre/ })).toBeChecked();
+  await page.getByRole("radio", { name: /Clair/ }).check();
+  await expect(bar.getByRole("button", { name: "Passer en mode sombre" })).toBeVisible();
+  await bar.getByRole("button", { name: "Passer en mode sombre" }).click();
+  await expect(page.getByRole("radio", { name: /Sombre/ })).toBeChecked();
+});

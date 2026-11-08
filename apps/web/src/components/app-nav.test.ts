@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { desktopNav, isCurrent, moreNav, phoneTabs, tabletTabs } from "./app-nav";
+import { desktopNav, isCurrent, moreNav, phoneTabs, pillMoreNav, pillNav, tabletTabs } from "./app-nav";
 
 describe("app navigation", () => {
   it("shows five tabs on a phone, the rest behind « Plus »", () => {
@@ -18,6 +18,12 @@ describe("app navigation", () => {
       "settings",
     ]);
     expect(tabletTabs.map((item) => item.key)).toEqual(desktopNav.map((item) => item.key));
+  });
+
+  it("splits the desktop pill between five places and « Plus », without losing any", () => {
+    expect(pillNav.map((item) => item.key)).toEqual(["home", "wishes", "ordered", "wardrobe", "forSale"]);
+    expect(pillMoreNav.map((item) => item.key)).toEqual(["lists", "settings"]);
+    expect([...pillNav, ...pillMoreNav]).toEqual([...desktopNav]);
   });
 
   it("marks the current page, including its sub-pages", () => {

@@ -38,6 +38,10 @@
     "account": {
       "label": "Mon compte",
       "anonymous": "Sans compte"
+    },
+    "theme": {
+      "toDark": "Passer en mode sombre",
+      "toLight": "Passer en mode clair"
     }
   },
   "Auth": {

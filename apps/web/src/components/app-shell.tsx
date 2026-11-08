@@ -10,9 +10,11 @@ import { useChangesPoller, useLiveRefresh } from "@/lib/live-changes";
 import { ProfilesContext, profileHref, useAccount, useCurrentProfile } from "@/lib/profile-context";
 import { fetchLoveLevels } from "@/lib/wardrobe-client";
 import { AccountPrompt } from "./account-prompt";
-import { type AppNavItem, desktopNav, isCurrent, moreNav, phoneTabs, tabletTabs } from "./app-nav";
+import { type AppNavItem, isCurrent, moreNav, phoneTabs, pillMoreNav, pillNav, tabletTabs } from "./app-nav";
 import { CaptureForm } from "./capture-form";
+import { NavUnderline } from "./nav-underline";
 import { ProfileSwitcher } from "./profile-switcher";
+import { ThemeButton } from "./theme-button";
 import { buttonClass, focusRing } from "./ui";
 import { UndoToast } from "./undo-toast";
 
@@ -52,6 +54,82 @@ function AccountLink({ className }: { className: string }) {
         {account && <span className="max-w-full truncate text-ink-muted">{account.email ?? t("anonymous")}</span>}
       </span>
     </Link>
+  );
+}
+
+/** Links of the top pill: quiet text, the current one darker and bolder; the sliding line marks it. */
+const pillLink = `flex min-h-touch-target items-center rounded-button px-space-3 text-sm text-ink-muted hover:text-ink aria-[current=page]:font-strong aria-[current=page]:text-ink ${focusRing}`;
+
+/** The desktop menu inside the glass pill: five places, then « Plus » (Listes, Réglages, Mon compte). */
+function PillNav() {
+  const t = useTranslations("Shell");
+  const pathname = usePathname();
+  const list = useRef<HTMLUListElement>(null);
+  const more = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const panel = useId();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the « Plus » panel closes on every navigation.
+  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      more.current?.focus();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (!list.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [open]);
+  const moreCurrent = pillMoreNav.some((item) => isCurrent(item, pathname)) || pathname === "/reglages/compte";
+  return (
+    <nav aria-label={t("nav.desktop")} data-testid="app-nav-top" className="hidden lg:block">
+      <ul ref={list} className="relative flex items-center gap-space-1">
+        <Suspense>
+          {pillNav.map((item) => (
+            <li key={item.key} className="flex flex-col">
+              <NavLink item={item} className={pillLink} />
+            </li>
+          ))}
+          <li className="relative flex flex-col">
+            <button
+              ref={more}
+              type="button"
+              aria-expanded={open}
+              aria-controls={panel}
+              aria-current={moreCurrent ? "true" : undefined}
+              onClick={() => setOpen((value) => !value)}
+              className={`${pillLink} aria-[current=true]:font-strong aria-[current=true]:text-ink`}
+            >
+              {t("nav.more")}
+            </button>
+            {open && (
+              <ul
+                id={panel}
+                aria-label={t("nav.moreMenu")}
+                className="glass absolute top-full right-space-0 z-20 mt-space-2 flex min-w-sidebar flex-col gap-space-1 rounded-card p-space-2"
+              >
+                {pillMoreNav.map((item) => (
+                  <li key={item.key} className="flex flex-col">
+                    <NavLink item={item} className={`${linkBase} justify-start`} />
+                  </li>
+                ))}
+                <li className="flex flex-col">
+                  <AccountLink className={`${linkBase} justify-start py-space-1`} />
+                </li>
+              </ul>
+            )}
+          </li>
+        </Suspense>
+        <NavUnderline containerRef={list} activeSelector=":scope > li > [aria-current]" />
+      </ul>
+    </nav>
   );
 }
 
@@ -150,7 +228,7 @@ function AddLink() {
         <div
           id={panel}
           ref={field}
-          className="absolute inset-x-space-0 top-full border-b border-line bg-surface-raised px-space-4 py-space-4 shadow-lifted"
+          className="absolute inset-x-space-0 top-full z-20 border-b border-line bg-surface-raised px-space-4 py-space-4 shadow-lifted lg:mt-space-2 lg:rounded-card lg:border"
         >
           <div className="mx-auto flex max-w-measure flex-col items-end gap-space-2">
             <CaptureForm />
@@ -173,6 +251,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const onHome = pathname === "/";
   const content = useRef<HTMLElement>(null);
+  const tabs = useRef<HTMLUListElement>(null);
   // Only the content scrolls (Passe design §1): every new page, and a page reached back, starts at the top.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs on every navigation.
   useEffect(() => {
@@ -224,50 +303,29 @@ export function AppShell({ children }: { children: ReactNode }) {
         {t("skipToContent")}
       </a>
       <div className="flex h-dvh overflow-hidden text-ink">
-        <aside className="hidden w-sidebar shrink-0 flex-col gap-space-5 overflow-y-auto border-r border-line bg-surface-sunken p-space-4 lg:flex">
-          <Link href="/" className={`font-display text-title font-strong ${focusRing}`}>
-            {t("brand")}
-          </Link>
-          <nav aria-label={t("nav.desktop")} className="flex flex-1 flex-col justify-between gap-space-5">
-            <ul className="flex flex-col gap-space-1">
-              <Suspense>
-                {desktopNav.map((item) => (
-                  <li key={item.key} className="flex flex-col">
-                    <NavLink item={item} className={`${linkBase} justify-start`} />
-                  </li>
-                ))}
-              </Suspense>
-            </ul>
-            {/* « Mon compte » at the bottom, still inside the menu's landmark. */}
-            <ul className="flex flex-col">
-              <li className="flex flex-col">
-                <Suspense>
-                  <AccountLink className={`${linkBase} justify-start py-space-1`} />
-                </Suspense>
-              </li>
-            </ul>
-          </nav>
-        </aside>
-
         <div className="flex min-h-space-0 min-w-space-0 flex-1 flex-col">
-          <header className="glass relative z-10 shrink-0">
+          <header className="glass relative z-10 shrink-0 lg:mx-space-5 lg:mt-space-3 lg:rounded-full">
             <div className="relative flex items-center justify-between gap-space-3 px-space-4 py-space-2 md:px-space-5">
-              <Link href="/" className={`font-display text-lead font-strong lg:invisible ${focusRing}`}>
+              <Link href="/" className={`font-display text-lead font-strong ${focusRing}`}>
                 {t("brand")}
               </Link>
+              <PillNav />
               <div className="flex items-center gap-space-2">
                 <Suspense>
                   <ProfileSwitcher />
                 </Suspense>
                 {!onHome && <AddLink />}
+                <span className="hidden md:inline-flex">
+                  <ThemeButton />
+                </span>
               </div>
             </div>
             <nav
               aria-label={t("nav.tabs")}
-              data-testid="app-nav-top"
+              data-testid="app-nav-tabs"
               className="hidden border-t border-line px-space-4 md:block lg:hidden"
             >
-              <ul className="flex gap-space-1 py-space-1">
+              <ul ref={tabs} className="relative flex gap-space-1 py-space-1">
                 <Suspense>
                   {tabletTabs.map((item) => (
                     <li key={item.key} className="flex flex-col">
@@ -275,6 +333,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     </li>
                   ))}
                 </Suspense>
+                <NavUnderline containerRef={tabs} activeSelector=":scope > li > [aria-current=page]" />
               </ul>
             </nav>
           </header>

@@ -354,3 +354,44 @@ test("téléphone : la barre de sélection reste juste au-dessus du toast et des
   expect(gap).toBeGreaterThanOrEqual(7 * 16 - (tabs?.height ?? 0));
   expect(gap).toBeLessThanOrEqual(4 * 16);
 });
+
+test.describe("barre du haut sur ordinateur", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("pilule en haut, sans menu latéral, le trait suit la page courante", async ({ page }) => {
+    await page.goto("/envies");
+    const bar = page.getByTestId("app-nav-top");
+    await expect(bar).toBeVisible();
+    await expect(page.locator("aside")).toHaveCount(0);
+    const current = bar.locator("a[aria-current=page]");
+    await expect(current).toHaveText("Envies");
+    const underline = bar.getByTestId("nav-underline");
+    const under = async () => {
+      const link = await current.boundingBox();
+      const line = await underline.boundingBox();
+      if (!link || !line) throw new Error("no box");
+      expect(Math.abs(line.x + line.width / 2 - (link.x + link.width / 2))).toBeLessThan(2);
+      expect(line.y).toBeGreaterThan(link.y + link.height / 2);
+      expect(line.y + line.height).toBeLessThanOrEqual(link.y + link.height + 1);
+    };
+    await expect(async () => under()).toPass();
+    await bar.getByRole("link", { name: "Dressing" }).click();
+    await expect(current).toHaveText("Dressing");
+    await expect(async () => under()).toPass();
+    await axe(page);
+  });
+
+  test("« Plus » garde Listes, Réglages et Mon compte, et le trait passe sous « Plus » quand on y est", async ({
+    page,
+  }) => {
+    await page.goto("/listes");
+    const bar = page.getByTestId("app-nav-top");
+    const more = bar.getByRole("button", { name: "Plus" });
+    await expect(more).toHaveAttribute("aria-current", "true");
+    await more.click();
+    await expect(more).toHaveAttribute("aria-expanded", "true");
+    await bar.getByRole("link", { name: "Réglages" }).click();
+    await expect(page).toHaveURL(/\/reglages\//);
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+  });
+});

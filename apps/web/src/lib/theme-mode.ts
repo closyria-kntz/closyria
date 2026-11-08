@@ -48,4 +48,14 @@ export function saveAppThemeMode(mode: ThemeMode): void {
     // Private browsing: applied for this visit only.
   }
   applyThemeMode(mode);
+  window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+}
+
+/** Fired after every saved choice, so the top bar button and Réglages → Apparence stay in step. */
+export const THEME_CHANGE_EVENT = "closyria-theme-change";
+
+/** The theme really shown now: her explicit choice, else what the device prefers. */
+export function shownTheme(mode: ThemeMode): "light" | "dark" {
+  if (mode !== "system") return mode;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }

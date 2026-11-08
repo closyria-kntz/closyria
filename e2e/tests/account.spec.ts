@@ -10,6 +10,7 @@ test.describe("sur ordinateur", () => {
   test("sans compte : le menu le dit, la page propose de créer un compte, pas de déconnexion", async ({ page }) => {
     await page.goto("/");
     const menu = page.getByRole("navigation", { name: "Menu principal" });
+    await menu.getByRole("button", { name: "Plus" }).click();
     const link = menu.getByRole("link", { name: /Mon compte/ });
     await expect(link).toContainText("Sans compte");
     await link.click();
@@ -29,9 +30,9 @@ test.describe("sur ordinateur", () => {
     await page.goto("/");
     await signInWithEmailCode(page, request, email);
     await page.goto("/reglages/compte");
-    await expect(
-      page.getByRole("navigation", { name: "Menu principal" }).getByRole("link", { name: /Mon compte/ }),
-    ).toContainText(email);
+    const menu = page.getByRole("navigation", { name: "Menu principal" });
+    await menu.getByRole("button", { name: "Plus" }).click();
+    await expect(menu.getByRole("link", { name: /Mon compte/ })).toContainText(email);
     await expect(page.getByRole("main").getByText(email)).toBeVisible();
     await expect(page.getByText(/^Compte créé le \d{1,2} \S+ \d{4}$/)).toBeVisible();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);

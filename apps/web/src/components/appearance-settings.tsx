@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { readAppThemeMode, saveAppThemeMode, type ThemeMode } from "@/lib/theme-mode";
+import { readAppThemeMode, saveAppThemeMode, THEME_CHANGE_EVENT, type ThemeMode } from "@/lib/theme-mode";
 
 const MODES: readonly ThemeMode[] = ["system", "light", "dark"];
 
@@ -11,7 +11,13 @@ export function AppearanceSettings() {
   const t = useTranslations("Settings.appearance");
   // Read after mounting: the server does not know her device's choice.
   const [mode, setMode] = useState<ThemeMode | null>(null);
-  useEffect(() => setMode(readAppThemeMode()), []);
+  useEffect(() => {
+    const read = () => setMode(readAppThemeMode());
+    read();
+    // The top bar button changes the same choice.
+    window.addEventListener(THEME_CHANGE_EVENT, read);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, read);
+  }, []);
 
   const choose = (next: ThemeMode) => {
     saveAppThemeMode(next);

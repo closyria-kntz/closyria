@@ -21,6 +21,10 @@ export const tabletTabs: readonly AppNavItem[] = desktopNav;
 export const moreNav: readonly AppNavItem[] = desktopNav.slice(4);
 export const phoneTabs: readonly PhoneTab[] = [...desktopNav.slice(0, 4), { key: "more", href: null }];
 
+/** Desktop pill: five places across the top, the rest (and « Mon compte ») behind « Plus ». */
+export const pillNav: readonly AppNavItem[] = desktopNav.slice(0, 5);
+export const pillMoreNav: readonly AppNavItem[] = desktopNav.slice(5);
+
 const section = (item: AppNavItem): string => `/${item.href.split("/")[1]}`;
 
 export function isCurrent(item: AppNavItem, pathname: string): boolean {

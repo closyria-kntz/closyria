@@ -44,16 +44,16 @@ test.describe("1440 px", () => {
 
     const side = page.getByRole("navigation", { name: "Menu principal" });
     await expect(side).toBeVisible();
-    await expect(side.getByRole("link")).toHaveText([
-      "Accueil",
-      "Envies",
-      "Commandé",
-      "Dressing",
-      "À vendre",
+    await expect(page.locator("aside")).toHaveCount(0);
+    await expect(side.getByRole("link")).toHaveText(["Accueil", "Envies", "Commandé", "Dressing", "À vendre"]);
+    // The rest of the places sit behind « Plus ».
+    await side.getByRole("button", { name: "Plus" }).click();
+    await expect(side.getByRole("list", { name: "Autres pages" }).getByRole("link")).toHaveText([
       "Listes",
       "Réglages",
       "Mon compteSans compte",
     ]);
+    await page.keyboard.press("Escape");
     // The product sheet is not one of the menu's places: no entry claims to be the current page.
     await expect(side.locator("[aria-current=page]")).toHaveCount(0);
     await expect(page.getByTestId("app-nav-bottom")).toBeHidden();
@@ -197,7 +197,7 @@ test.describe("820 px", () => {
     const tabs = page.getByRole("navigation", { name: "Onglets" });
     await expect(tabs).toBeVisible();
     await expect(tabs.getByRole("link")).toHaveCount(7);
-    expect((await box(page, "[data-testid=app-nav-top]")).y).toBeLessThan(6 * REM);
+    expect((await box(page, "[data-testid=app-nav-tabs]")).y).toBeLessThan(6 * REM);
     await expect(page.getByTestId("app-nav-bottom")).toBeHidden();
     await expect(page.getByRole("navigation", { name: "Menu principal" })).toBeHidden();
   });
@@ -282,14 +282,12 @@ test.describe("structure de la fiche", () => {
 
 // Passe design §1: the frame stays, only the content scrolls.
 test.describe("cadre fixe", () => {
-  test("ordinateur : le menu et l'en-tête restent en place quand le contenu défile", async ({ page }) => {
+  test("ordinateur : la barre du haut reste en place quand le contenu défile", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 600 });
     await openSheet(page);
-    const aside = await box(page, "aside");
     const header = await box(page, "header");
     expect(await scrollContentToBottom(page)).toBeGreaterThan(0);
     expect(await windowScroll(page)).toEqual({ y: 0, overflow: 0 });
-    expect(await box(page, "aside")).toEqual(aside);
     expect(await box(page, "header")).toEqual(header);
   });
 
