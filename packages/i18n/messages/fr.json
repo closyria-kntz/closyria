@@ -1095,7 +1095,6 @@
     },
     "toggleFailed": "La sélection n’a pas pu être enregistrée. Réessaie.",
     "band": {
-      "label": "Ma commande",
       "title": "Ma commande",
       "titleList": "Ma commande, liste « {name} »",
       "see": "Voir",

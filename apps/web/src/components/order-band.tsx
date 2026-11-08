@@ -2,7 +2,7 @@
 
 import type { BudgetView, ItemView } from "@closyria/shared";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { budgetCardState, draftTotals, formatAmount, orderDraftErrorKey } from "@/lib/budget";
 import { useToastLift } from "@/lib/toast-lift";
 import { pushUndo } from "@/lib/undo";
@@ -12,8 +12,6 @@ import { SquareCheck } from "./square-check";
 import { focusRing } from "./ui";
 
 const touch = "min-h-touch-target";
-/** How long the button shakes (a little over the token duration, so reduced motion lets go of the flag too). */
-const SHAKE_MS = 450;
 
 /**
  * « Ma commande »: the band stuck at the bottom of « Mes envies » and of « Préparer une commande ». The ticked wishes
@@ -28,6 +26,7 @@ export function OrderBand({
   budget,
   listName,
   showWhenEmpty = false,
+  settle,
   onOrdered,
   onToggle,
 }: {
@@ -36,6 +35,8 @@ export function OrderBand({
   budget: BudgetView | null;
   listName?: string | null | undefined;
   showWhenEmpty?: boolean;
+  /** Resolves when every tick or untick has been saved: the order waits for it. */
+  settle?: () => Promise<void>;
   /** The ticked ones went to « Commandé » (or the order was undone): read the page again. */
   onOrdered(): void | Promise<void>;
   onToggle(item: ItemView): void;
@@ -49,11 +50,9 @@ export function OrderBand({
   const [kept, setKept] = useState<ReadonlySet<string>>(new Set());
   const [ordering, setOrdering] = useState(false);
   const [shaking, setShaking] = useState(false);
-  const shakeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [element, setElement] = useState<HTMLElement | null>(null);
   // The undo toast rises above the band instead of covering the totals.
   useToastLift(element);
-  useEffect(() => () => void (shakeTimer.current && clearTimeout(shakeTimer.current)), []);
 
   const totals = draftTotals(items, budget);
   useEffect(() => {
@@ -71,12 +70,12 @@ export function OrderBand({
   async function order() {
     if (ordering) return;
     if (totals.count === 0) {
-      setShaking(true);
-      if (shakeTimer.current) clearTimeout(shakeTimer.current);
-      shakeTimer.current = setTimeout(() => setShaking(false), SHAKE_MS);
+      // Ends on `animationend`; nothing to wait for (and no flag left on) when motion is reduced.
+      setShaking(!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
       return pushUndo(t("errors.empty"), null);
     }
     setOrdering(true);
+    await settle?.();
     const result = await orderDraftOrdered(scope);
     setOrdering(false);
     if (!result.ok) return pushUndo(t(`errors.${orderDraftErrorKey(result.error)}`), null);
@@ -132,6 +131,7 @@ export function OrderBand({
           type="button"
           disabled={ordering}
           data-shaking={shaking}
+          onAnimationEnd={() => setShaking(false)}
           onClick={() => void order()}
           className={`band-shake ${touch} inline-flex items-center rounded-button bg-band-button px-space-4 py-space-2 text-sm font-strong text-band-button-ink hover:bg-band-button-hover disabled:opacity-60 ${focusRing}`}
         >

@@ -545,3 +545,30 @@ test("Mes envies : une envie sans prix cochée, 1 article, 0 €, « dont 1 prix
   await expect(envBand(page)).toContainText(/1 article · 0\s€/);
   await expect(envBand(page)).toContainText("dont 1 prix inconnu");
 });
+
+test("Mes envies : décocher puis commander aussitôt, l’envie décochée n’est pas commandée", async ({ page }) => {
+  await wishAt(page, "Robe Alma", "89");
+  await wishAt(page, "Gilet Brume", "65");
+  await page.goto("/envies");
+  await takeCard(page, "Robe Alma").click();
+  await takeCard(page, "Gilet Brume").click();
+  const bar = envBand(page);
+  await expect(bar).toContainText(/2 articles · 154\s€/);
+  await bar.getByRole("button", { name: "Voir" }).click();
+  // The saves are slow: the order must wait for them instead of overtaking the untick.
+  await page.route("**/api/me/items/*", async (route) => {
+    if (route.request().method() === "PATCH") await new Promise((done) => setTimeout(done, 800));
+    await route.continue();
+  });
+  await bar.getByRole("checkbox", { name: /Gilet Brume/ }).uncheck();
+  await bar.getByRole("button", { name: "J’ai commandé (1)" }).click();
+  await expect(toast(page)).toContainText("1 article passé en Commandé");
+  await expect(page.getByTestId("item-card")).toHaveCount(1);
+  await expect(page.getByTestId("item-card")).toContainText("Gilet Brume");
+  // Untick then tick again quickly: the last tap wins.
+  await page.getByTestId("item-card").getByTestId("card-take").click();
+  await page.getByTestId("item-card").getByTestId("card-take").click();
+  await expect(page.getByTestId("item-card").getByTestId("card-take")).toHaveAttribute("aria-pressed", "false");
+  await page.reload();
+  await expect(page.getByTestId("item-card").getByTestId("card-take")).toHaveAttribute("aria-pressed", "false");
+});

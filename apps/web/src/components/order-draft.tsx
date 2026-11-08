@@ -10,6 +10,7 @@ import { formatAmount, sortForOrder } from "@/lib/budget";
 import { useLiveRefresh } from "@/lib/live-changes";
 import { levelOf } from "@/lib/love-levels";
 import { profileHref, useCurrentProfile, useLoveLevels, useProfilesReady } from "@/lib/profile-context";
+import { createTickQueue, type TickQueue } from "@/lib/tick-queue";
 import {
   type BudgetScope,
   fetchAllWishes,
@@ -109,7 +110,7 @@ export function OrderDraft() {
   useEffect(() => {
     if (ready) void load();
   }, [ready, load]);
-  // Changed elsewhere (her phone, another tab): ticks, prices and budget again (already without a loading state);
+  // Changed elsewhere (her phone, another tab): ticks, prices and budget again (already without a loading state).
   useLiveRefresh(() => void load(), ready && items.status === "ready");
 
   const setTicked = (id: string, inOrderDraft: boolean) =>
@@ -118,15 +119,29 @@ export function OrderDraft() {
       items: previous.items.map((item) => (item.id === id ? { ...item, inOrderDraft } : item)),
     }));
 
-  async function toggle(item: ItemView) {
+  // Ticks are saved one request at a time per row, last wins; « J'ai commandé » waits for them all.
+  const setTickedRef = useRef(setTicked);
+  setTickedRef.current = setTicked;
+  const toggleFailed = useRef(() => {});
+  toggleFailed.current = () => setError(t("toggleFailed"));
+  const ticks = useRef<TickQueue | null>(null);
+  if (!ticks.current) {
+    ticks.current = createTickQueue<null>(
+      async (id, wanted) =>
+        (await patchItem(id, { inOrderDraft: wanted })).ok ? { ok: true, value: null } : { ok: false },
+      (id, outcome) => {
+        if (outcome.ok) return;
+        setTickedRef.current(id, outcome.confirmed);
+        toggleFailed.current();
+      },
+    );
+  }
+
+  function toggle(item: ItemView) {
     const next = !item.inOrderDraft;
     setError(null);
     setTicked(item.id, next);
-    const result = await patchItem(item.id, { inOrderDraft: next });
-    if (!result.ok) {
-      setTicked(item.id, !next);
-      setError(t("toggleFailed"));
-    }
+    ticks.current?.set(item.id, next, item.inOrderDraft);
   }
 
   // The preview lives in the address (?apercu=<item>): the back button closes it and the page stays put.
@@ -351,6 +366,7 @@ export function OrderDraft() {
           budget={budget.view}
           listName={isList ? items.listName : null}
           showWhenEmpty
+          settle={() => ticks.current?.idle() ?? Promise.resolve()}
           onOrdered={load}
           onToggle={(item) => void toggle(item)}
         />

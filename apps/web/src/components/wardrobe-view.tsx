@@ -9,6 +9,7 @@ import { z } from "zod";
 import { draftTotals, formatAmount } from "@/lib/budget";
 import { useLiveRefresh } from "@/lib/live-changes";
 import { profileHref, useCurrentProfile, useLoveLevels, useProfilesReady } from "@/lib/profile-context";
+import { createTickQueue, type TickQueue } from "@/lib/tick-queue";
 import { pushUndo } from "@/lib/undo";
 import {
   type BudgetScope,
@@ -261,22 +262,40 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   const tItem = useTranslations("Item");
   const locale = useLocale();
   const loveLevels = useLoveLevels();
-  const taking = useRef(new Set<string>());
+  // Ticks are saved one request at a time per wish, last wins; « J'ai commandé » waits for them all (`idle`).
+  const setTick = useCallback((id: string, inOrderDraft: boolean) => {
+    const apply = (item: ItemView) => (item.id === id ? { ...item, inOrderDraft } : item);
+    setWishes((previous) => previous.map(apply));
+    setData((previous) => ({ ...previous, items: previous.items.map(apply) }));
+  }, []);
+  const ticks = useRef<TickQueue | null>(null);
+  if (!ticks.current) {
+    ticks.current = createTickQueue<ItemView>(
+      async (id, wanted) => {
+        const result = await patchItem(id, { inOrderDraft: wanted });
+        if (result.ok) return { ok: true, value: result.item };
+        failure.current = result.error;
+        return { ok: false };
+      },
+      (id, outcome) => {
+        if (outcome.ok) return changedRef.current?.(outcome.value);
+        setTick(id, outcome.confirmed);
+        pushUndo(tItemRef.current(`errors.${failure.current}` as "errors.failed"), null);
+      },
+    );
+  }
+  const failure = useRef("failed");
+  const changedRef = useRef<((item: ItemView) => void) | null>(null);
+  changedRef.current = changed;
+  const tItemRef = useRef(tItem);
+  tItemRef.current = tItem;
   const take = useCallback(
     async (item: ItemView) => {
-      if (taking.current.has(item.id)) return;
-      taking.current.add(item.id);
-      // Ticked at once (a checklist), put back if the save fails.
-      changed({ ...item, inOrderDraft: !item.inOrderDraft });
-      const result = await patchItem(item.id, { inOrderDraft: !item.inOrderDraft });
-      taking.current.delete(item.id);
-      if (!result.ok) {
-        changed(item);
-        return pushUndo(tItem(`errors.${result.error}` as "errors.failed"), null);
-      }
-      changed(result.item);
+      const next = !item.inOrderDraft;
+      setTick(item.id, next);
+      ticks.current?.set(item.id, next, item.inOrderDraft);
     },
-    [changed, tItem],
+    [setTick],
   );
   const previewId = view === "envies" ? search.get(PREVIEW_PARAM) : null;
   const previewItem = previewId ? (data.items.find((item) => item.id === previewId) ?? null) : null;
@@ -546,6 +565,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           items={scopeWishes}
           budget={budgetOfScope}
           listName={activeList?.name}
+          settle={() => ticks.current?.idle() ?? Promise.resolve()}
           onOrdered={async () => {
             setScopeToken((value) => value + 1);
             await reload();
