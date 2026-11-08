@@ -1,0 +1,810 @@
+<title>Catalogue Closyria</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400..600&family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..700,0..100;1,9..144,300..700,0..100&display=swap">
+<style>
+/* Layout: a single scrolling catalogue, sections of live tiles in an auto-filling grid. Closyria's light palette, on purpose (one look). */
+:root{
+  --petal:#FBF3F1; --white:#FFFFFF; --cocoa:#2B1D17; --taupe:#6E5A50; --blush:#F6E4E1; --powder:#EBC7C3;
+  --rose:#B4646C; --rosewood:#D8A9A3; --sage:#D5DCC8; --butter:#F3E3A6; --latte:#EADBC8; --mint:#E3F1E7; --pine:#1F4A3F; --fern:#4E8A6E; --garnet:#9B1C31; --line:#E5D2CC;
+  --serif:"Fraunces",Georgia,"Times New Roman",serif; --sans:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+body{background:var(--petal);color:var(--cocoa);font-family:var(--sans);font-size:16px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1240px;margin:0 auto;padding-block:32px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:28px}
+.serif{font-family:var(--serif);font-variation-settings:"SOFT" 100}
+h1{margin:0;font-family:var(--serif);font-variation-settings:"SOFT" 100;font-weight:400;font-size:clamp(36px,6vw,60px);line-height:1;text-wrap:balance}
+.lead{margin:0;color:var(--taupe);max-width:62ch;line-height:1.5}
+.jump{display:flex;flex-wrap:wrap;gap:8px}
+.jump a{padding:8px 14px;border-radius:999px;background:var(--white);color:var(--cocoa);text-decoration:none;font-size:14px;font-weight:600}
+.jump a:hover{background:var(--blush)}
+.motion-note{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 18px;border-radius:18px;background:var(--butter);color:#6A4F12;font-weight:600}
+.motion-note button{height:40px;padding:0 16px;border-radius:999px;border:none;background:var(--cocoa);color:var(--petal);font:inherit;font-weight:600;cursor:pointer}
+section{display:flex;flex-direction:column;gap:18px;scroll-margin-top:16px}
+h2{margin:12px 0 0;font-family:var(--serif);font-variation-settings:"SOFT" 100;font-weight:500;font-size:30px;text-wrap:balance}
+h3{margin:6px 0 -4px;font-family:var(--serif);font-variation-settings:"SOFT" 100;font-weight:500;font-size:22px;color:var(--taupe)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:24px 20px}
+.grid.big{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}
+.tile{display:flex;flex-direction:column;gap:10px;min-width:0}
+.stage{position:relative;height:190px;border-radius:22px;background:var(--white);overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgb(43 29 23 / .06)}
+.big .stage{height:290px}
+.lab{display:flex;gap:10px;align-items:baseline}
+.num{font-family:var(--serif);font-size:26px;font-weight:600;color:var(--rose);min-width:42px;font-variant-numeric:tabular-nums}
+.nm{font-weight:600}
+.ds{font-size:14px;color:var(--taupe);line-height:1.45}
+.hint{position:absolute;left:12px;bottom:10px;font-size:12px;color:var(--taupe);pointer-events:none}
+.hint.r{left:auto;right:12px}
+.hint.t{top:10px;bottom:auto}
+button{font:inherit;color:inherit}
+.btn{border:none;background:transparent;cursor:pointer;padding:0}
+:focus-visible{outline:2px solid var(--rose);outline-offset:3px}
+.ph{display:flex;align-items:center;justify-content:center;color:var(--taupe);flex-shrink:0}
+.dress{width:44px}
+
+/* ---------- Styles S1-S12 ---------- */
+.mini{display:flex;flex-direction:column;gap:6px}
+.mini .b{font-size:12px;color:var(--taupe)}
+.mini .n{font-family:var(--serif);font-variation-settings:"SOFT" 100;font-size:22px;line-height:1.1}
+.mini .p{font-weight:600;font-variant-numeric:tabular-nums}
+.chip{align-self:flex-start;font-size:12px;padding:4px 10px;border-radius:999px}
+.cta{align-self:flex-start;margin-top:6px;height:36px;padding:0 16px;border-radius:999px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:transform 160ms cubic-bezier(.2,0,0,1)}
+.cta:active{transform:scale(.95)}
+.aurora{background:radial-gradient(40% 50% at 20% 30%,#F4A3A8 0,transparent 70%),radial-gradient(45% 55% at 80% 20%,#F3E3A6 0,transparent 70%),radial-gradient(50% 60% at 60% 90%,#D5DCC8 0,transparent 70%),var(--petal);background-size:160% 160%;animation:aur 9s ease-in-out infinite alternate}
+@keyframes aur{from{background-position:0% 0%}to{background-position:100% 100%}}
+.clay{box-shadow:inset -6px -8px 14px rgb(180 100 108 / .14),inset 6px 6px 12px rgb(255 255 255 / .9),10px 16px 28px rgb(180 100 108 / .22)}
+.clay-btn{box-shadow:inset -3px -4px 8px rgb(0 0 0 / .18),inset 3px 3px 6px rgb(255 255 255 / .25),4px 8px 14px rgb(43 29 23 / .2)}
+.clay-btn:active{transform:scale(.94,.9)}
+.neu{background:#F3E7E3;box-shadow:9px 9px 18px #DCC9C3,-9px -9px 18px #FFFFFF}
+.neu-in{background:#F3E7E3;box-shadow:inset 4px 4px 8px #DCC9C3,inset -4px -4px 8px #FFFFFF}
+.brut{border:2px solid var(--cocoa);box-shadow:5px 5px 0 var(--cocoa);transition:transform 140ms,box-shadow 140ms}
+.brut:hover{transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--cocoa)}
+.brut:active{transform:translate(4px,4px);box-shadow:1px 1px 0 var(--cocoa)}
+.blob{border-radius:62% 38% 55% 45% / 48% 60% 40% 52%;animation:blob 8s ease-in-out infinite alternate}
+@keyframes blob{to{border-radius:40% 60% 38% 62% / 60% 42% 58% 40%;transform:rotate(12deg)}}
+.marq{display:flex;gap:28px;white-space:nowrap;width:max-content;animation:marq 9s linear infinite}
+@keyframes marq{to{transform:translateX(-50%)}}
+.wave span{display:inline-block;animation:wave 2.4s ease-in-out infinite}
+@keyframes wave{0%,60%,100%{transform:none}30%{transform:translateY(-8px)}}
+.stack .c{transition:transform 300ms cubic-bezier(.3,0,0,1.2)}
+.stack .c1{transform:rotate(-8deg) translate(-26px,8px)}
+.stack .c2{transform:rotate(7deg) translate(24px,6px)}
+.stack:hover .c1{transform:rotate(-14deg) translate(-40px,6px)}
+.stack:hover .c2{transform:rotate(12deg) translate(38px,4px)}
+.film{filter:sepia(.35) saturate(1.1) contrast(1.05)}
+
+/* ---------- Animations ---------- */
+.spark{position:absolute;left:50%;top:50%;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;animation:burst 600ms cubic-bezier(.2,0,0,1) forwards;pointer-events:none}
+@keyframes burst{from{transform:rotate(var(--a)) translateY(0) scale(1);opacity:1}to{transform:rotate(var(--a)) translateY(-58px) scale(.2);opacity:0}}
+.pop{animation:popk 500ms cubic-bezier(.3,0,0,1.4)}
+@keyframes popk{0%{transform:scale(1)}35%{transform:scale(.7)}70%{transform:scale(1.25)}100%{transform:scale(1)}}
+.bigheart{position:absolute;font-size:72px;animation:bh 900ms cubic-bezier(.3,0,0,1.3) forwards;pointer-events:none}
+@keyframes bh{0%{transform:scale(0);opacity:0}25%{transform:scale(1.2);opacity:1}45%{transform:scale(.95)}75%{transform:scale(1) translateY(0);opacity:1}100%{transform:translateY(-50px) scale(.8);opacity:0}}
+.scale span{display:inline-block;transition:transform 220ms cubic-bezier(.3,0,0,1.5);cursor:pointer}
+.scale span:hover{transform:translateY(-10px) scale(1.5)}
+.roll{display:inline-block;height:1em;overflow:hidden;vertical-align:top;line-height:1}
+.roll i{display:block;font-style:normal;animation:roll 3s cubic-bezier(.3,0,0,1.2) infinite}
+@keyframes roll{0%,30%{transform:translateY(0)}45%,90%{transform:translateY(-1em)}100%{transform:translateY(0)}}
+.plus{position:absolute;font-weight:600;color:var(--pine);animation:plus 3s infinite}
+@keyframes plus{0%,32%{opacity:0;transform:translateY(0)}40%{opacity:1}70%,100%{opacity:0;transform:translateY(-26px)}}
+.jelly{display:inline-block;font-size:64px;animation:jel 2.6s cubic-bezier(.3,0,0,1.3) infinite}
+@keyframes jel{0%,60%,100%{transform:scale(1)}68%{transform:scale(1.3,.75)}76%{transform:scale(.85,1.2)}84%{transform:scale(1.08,.94)}92%{transform:scale(1)}}
+.grow{height:48px;border-radius:999px;background:var(--cocoa);color:var(--petal);display:flex;align-items:center;overflow:hidden;animation:grw 4s cubic-bezier(.3,0,0,1.15) infinite}
+@keyframes grw{0%,20%{width:48px}35%,80%{width:230px}95%,100%{width:48px}}
+.grow .t{white-space:nowrap;opacity:0;animation:grt 4s infinite}
+@keyframes grt{0%,30%{opacity:0}40%,78%{opacity:1}85%,100%{opacity:0}}
+.sk{background:linear-gradient(90deg,#F2E6E2 0,#FBF3F1 40%,#F2E6E2 80%);background-size:200% 100%;animation:shim 1.2s linear infinite}
+@keyframes shim{to{background-position:-200% 0}}
+.layA{animation:la 4s infinite}.layB{animation:lb 4s infinite}
+@keyframes la{0%,45%{opacity:1}55%,95%{opacity:0}100%{opacity:1}}
+@keyframes lb{0%,45%{opacity:0;transform:translateY(8px)}55%,95%{opacity:1;transform:none}100%{opacity:0}}
+.dots span{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--rose);margin:0 3px;animation:dot 1.1s ease-in-out infinite}
+.dots span:nth-child(2){animation-delay:.15s;background:var(--rosewood)}.dots span:nth-child(3){animation-delay:.3s;background:var(--powder)}
+@keyframes dot{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-12px)}}
+.fl{position:relative;width:220px}
+.fl input{width:100%;box-sizing:border-box;height:54px;padding:18px 16px 6px;border-radius:16px;border:1.5px solid var(--line);font:inherit;outline:none;transition:border-color 200ms;background:var(--white)}
+.fl input:focus{border-color:var(--rose)}
+.fl label{position:absolute;left:17px;top:17px;color:var(--taupe);pointer-events:none;transition:transform 200ms cubic-bezier(.2,0,0,1),font-size 200ms;transform-origin:left top}
+.fl input:focus+label,.fl input:not(:placeholder-shown)+label{transform:translateY(-11px);font-size:12px;color:var(--rose)}
+.conf{position:absolute;top:-10px;width:8px;height:12px;border-radius:2px;animation:fall 1.4s cubic-bezier(.2,0,.6,1) forwards;pointer-events:none}
+@keyframes fall{to{transform:translateY(220px) rotate(var(--r));opacity:0}}
+.odo{display:inline-block;height:1em;overflow:hidden;line-height:1;vertical-align:top}
+.odo i{display:block;font-style:normal;animation:odo 3.4s cubic-bezier(.2,0,0,1) infinite}
+@keyframes odo{0%,25%{transform:translateY(0)}55%,90%{transform:translateY(-2em)}100%{transform:translateY(0)}}
+.line{stroke-dasharray:240;animation:ln 3.4s cubic-bezier(.2,0,0,1) infinite}
+@keyframes ln{0%{stroke-dashoffset:240}50%,90%{stroke-dashoffset:0}100%{stroke-dashoffset:240}}
+.ldot{transform-box:fill-box;transform-origin:center;animation:ld 3.4s infinite}
+@keyframes ld{0%,45%{opacity:0;transform:scale(0)}55%,90%{opacity:1;transform:scale(1)}100%{opacity:0}}
+.ring{position:absolute;inset:-6px;border-radius:999px;border:2px solid var(--fern);animation:ring 1.8s ease-out infinite}
+@keyframes ring{from{transform:scale(.9);opacity:.8}to{transform:scale(1.35);opacity:0}}
+.strike{position:absolute;left:-4px;top:52%;height:3px;background:var(--rose);border-radius:2px;animation:st 3.2s cubic-bezier(.2,0,0,1) infinite}
+@keyframes st{0%,15%{width:0}40%,90%{width:calc(100% + 8px)}100%{width:0}}
+.newp{animation:np 3.2s cubic-bezier(.3,0,0,1.3) infinite}
+@keyframes np{0%,35%{opacity:0;transform:translateY(14px) scale(.8)}50%,90%{opacity:1;transform:none}100%{opacity:0}}
+.rng{width:220px;accent-color:var(--cocoa)}
+.bubble{padding:6px 12px;border-radius:999px;background:var(--cocoa);color:var(--petal);font-weight:600;font-variant-numeric:tabular-nums;transition:transform 80ms}
+.flyer{position:absolute;left:40px;top:80px;width:40px;height:50px;border-radius:20px 20px 6px 6px;background:var(--powder);animation:fly 3s cubic-bezier(.5,0,.3,1) infinite}
+@keyframes fly{0%,15%{transform:translate(0,0) scale(1);opacity:1}55%{transform:translate(90px,-60px) scale(.7)}80%{transform:translate(170px,-10px) scale(.3);opacity:.8}81%,100%{opacity:0;transform:translate(170px,-10px) scale(.3)}}
+.bag{animation:bump 3s infinite}
+@keyframes bump{0%,78%,100%{transform:none}84%{transform:translateY(4px) scale(1.1,.9)}90%{transform:translateY(-4px)}}
+.badge{animation:bp 3s infinite}
+@keyframes bp{0%,80%{transform:scale(0)}88%{transform:scale(1.3)}95%,100%{transform:scale(1)}}
+.hop{display:block;animation:hop 2.6s cubic-bezier(.3,0,0,1.3) infinite}
+@keyframes hop{0%,40%{transform:translateY(0)}50%{transform:translateY(-12px)}60%,100%{transform:translateY(0)}}
+.hopn{display:block;animation:hn 2.6s cubic-bezier(.3,0,0,1.2) infinite}
+@keyframes hn{0%,45%{transform:translateY(0)}55%,95%{transform:translateY(-1em)}100%{transform:translateY(0)}}
+.morph{height:48px;border-radius:999px;background:var(--cocoa);color:var(--petal);display:flex;align-items:center;justify-content:center;overflow:hidden;font-weight:600;animation:mw 4s cubic-bezier(.3,0,0,1.15) infinite;position:relative}
+@keyframes mw{0%,25%{width:150px}40%,85%{width:130px}100%{width:150px}}
+.m1{position:absolute;animation:m1 4s infinite}.m2{position:absolute;display:flex;gap:22px;animation:m2 4s infinite}
+@keyframes m1{0%,25%{opacity:1}35%,90%{opacity:0}100%{opacity:1}}
+@keyframes m2{0%,30%{opacity:0;transform:scale(.6)}40%,85%{opacity:1;transform:none}95%,100%{opacity:0}}
+.spin{width:20px;height:20px;border-radius:50%;border:2.5px solid rgb(251 243 241 / .35);border-top-color:var(--petal);animation:sp 700ms linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.order{height:48px;width:170px;border-radius:999px;background:var(--cocoa);color:var(--petal);font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;transition:width 300ms cubic-bezier(.3,0,0,1.2),background-color 300ms}
+.order.busy{width:48px}.order.done{background:var(--fern)}
+.draw{stroke-dasharray:14;animation:dr 320ms cubic-bezier(.2,0,0,1) both}
+@keyframes dr{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+.sq{width:34px;height:34px;border-radius:9px;border:2px solid var(--cocoa);display:flex;align-items:center;justify-content:center;transition:background-color 200ms,transform 160ms;color:var(--petal)}
+.sq:active{transform:scale(.9)}
+.sq[aria-checked="true"]{background:var(--cocoa)}
+.sqname{transition:color 250ms}
+.sq[aria-checked="true"]+.sqname{color:var(--taupe);text-decoration:line-through}
+.fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#A9DCBF,var(--fern));animation:fl 3.6s cubic-bezier(.2,0,0,1) infinite}
+@keyframes fl{0%,10%{width:0}55%,92%{width:73%}100%{width:0}}
+.copy{height:48px;padding:0 20px;border-radius:999px;background:var(--cocoa);color:var(--petal);font-weight:600;transition:transform 450ms cubic-bezier(.3,0,0,1.2),background-color 300ms,color 300ms}
+.copy.ok{transform:rotateX(360deg);background:var(--mint);color:var(--pine)}
+.sw{width:64px;height:36px;border-radius:999px;padding:4px;box-sizing:border-box;display:flex;background:#D9C6C0;transition:background-color 250ms}
+.sw .knob{width:28px;height:28px;border-radius:999px;background:var(--white);box-shadow:0 2px 6px rgb(43 29 23 / .25);transition:width 160ms cubic-bezier(.2,0,0,1),margin-left 300ms cubic-bezier(.3,0,0,1.3)}
+.sw[aria-checked="true"]{background:var(--fern)}
+.sw[aria-checked="true"] .knob{margin-left:28px}
+.sw.stretch .knob{width:40px}
+.sw.stretch[aria-checked="true"] .knob{margin-left:16px}
+.deal{position:absolute;width:90px;height:110px;border-radius:16px;box-shadow:0 6px 16px rgb(43 29 23 / .14);display:flex;align-items:flex-end;padding:10px;box-sizing:border-box;font-size:13px;font-weight:600}
+.d1{animation:d1 3.6s cubic-bezier(.3,0,0,1.2) infinite}.d2{animation:d2 3.6s cubic-bezier(.3,0,0,1.2) infinite}.d3{animation:d3 3.6s cubic-bezier(.3,0,0,1.2) infinite}
+@keyframes d1{0%,15%{transform:none}40%,85%{transform:translateX(-96px) rotate(-8deg)}100%{transform:none}}
+@keyframes d2{0%,20%{transform:none}45%,85%{transform:translateY(-6px)}100%{transform:none}}
+@keyframes d3{0%,25%{transform:none}50%,85%{transform:translateX(96px) rotate(8deg)}100%{transform:none}}
+.plane{position:absolute;animation:pl 3s cubic-bezier(.5,0,.5,1) infinite}
+@keyframes pl{0%,20%{transform:translate(0,0) rotate(0);opacity:1}70%{transform:translate(120px,-70px) rotate(-12deg);opacity:1}71%,100%{opacity:0;transform:translate(120px,-70px)}}
+.sheet{position:absolute;left:10px;right:10px;bottom:0;border-radius:22px 22px 0 0;background:var(--cocoa);color:var(--petal);padding:10px 16px 18px;transform:translateY(110%);transition:transform 380ms cubic-bezier(.3,0,0,1.1)}
+.sheet.open{transform:none}
+.bub{animation:bub 3.2s cubic-bezier(.3,0,0,1.3) infinite;transform-origin:bottom left}
+@keyframes bub{0%,10%{opacity:0;transform:translateY(20px) scale(.6)}25%,80%{opacity:1;transform:none}95%,100%{opacity:0;transform:translateY(-12px)}}
+.glow{animation:glow 1.8s ease-in-out infinite}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 rgb(180 100 108 / .5)}50%{box-shadow:0 0 0 10px rgb(180 100 108 / 0)}}
+.av{width:46px;height:46px;border-radius:50%;border:3px solid var(--white);display:flex;align-items:center;justify-content:center;font-weight:600;margin-left:-12px}
+.a1{animation:a1 3s cubic-bezier(.3,0,0,1.2) infinite}.a3{animation:a3 3s cubic-bezier(.3,0,0,1.2) infinite}
+@keyframes a1{0%,15%{transform:translateX(-50px)}45%,85%{transform:none}100%{transform:translateX(-50px)}}
+@keyframes a3{0%,15%{transform:translateX(50px)}45%,85%{transform:none}100%{transform:translateX(50px)}}
+.island{background:var(--cocoa);color:var(--petal);overflow:hidden;display:flex;align-items:center;gap:12px;animation:isl 4s cubic-bezier(.3,0,0,1.15) infinite}
+@keyframes isl{0%,15%{width:120px;height:36px;border-radius:999px;padding:0 14px}35%,80%{width:240px;height:70px;border-radius:24px;padding:0 16px}95%,100%{width:120px;height:36px;border-radius:999px;padding:0 14px}}
+.isl-t{white-space:nowrap;animation:islt 4s infinite}
+@keyframes islt{0%,28%{opacity:0}40%,75%{opacity:1}85%,100%{opacity:0}}
+.ease{transition:all 320ms cubic-bezier(.3,0,0,1.15)}
+.tabs{position:relative;display:flex;padding:6px;border-radius:999px;background:var(--blush)}
+.tabs .thumb{position:absolute;top:6px;height:40px;width:58px;left:6px;border-radius:999px;background:var(--cocoa);transition:left 320ms cubic-bezier(.3,0,0,1.15)}
+.tabs button{position:relative;width:58px;height:40px;border-radius:999px;font-size:12px;font-weight:600;transition:color 250ms}
+.tabs button[aria-pressed="true"]{color:var(--petal)}
+.ul{position:relative;display:flex;gap:4px}
+.ul button{width:76px;height:40px;font-size:14px}
+.ul button[aria-pressed="true"]{font-weight:600}
+.ul .bar2{position:absolute;bottom:0;height:3px;width:40px;left:18px;border-radius:2px;background:var(--rose);transition:left 320ms cubic-bezier(.3,0,0,1.15)}
+.burger{width:56px;height:56px;border-radius:18px;background:var(--blush);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.burger span{display:block;width:24px;height:2.5px;border-radius:2px;background:var(--cocoa);transition:transform 300ms cubic-bezier(.3,0,0,1.2),opacity 200ms}
+.burger[aria-expanded="true"] span:nth-child(1){transform:translateY(8.5px) rotate(45deg)}
+.burger[aria-expanded="true"] span:nth-child(2){opacity:0}
+.burger[aria-expanded="true"] span:nth-child(3){transform:translateY(-8.5px) rotate(-45deg)}
+.fan{position:absolute;width:44px;height:44px;border-radius:50%;background:var(--white);box-shadow:0 4px 12px rgb(43 29 23 / .18);display:flex;align-items:center;justify-content:center;font-size:18px;opacity:0;transition:transform 320ms cubic-bezier(.3,0,0,1.3),opacity 200ms}
+.fabw.open .fan{opacity:1}
+.fabw.open .f1{transform:translate(-70px,-30px)}.fabw.open .f2{transform:translate(0,-66px)}.fabw.open .f3{transform:translate(70px,-30px)}
+.fab{position:relative;width:56px;height:56px;border-radius:50%;background:var(--cocoa);color:var(--petal);font-size:30px;line-height:1;transition:transform 300ms cubic-bezier(.3,0,0,1.3)}
+.fabw.open .fab{transform:rotate(45deg)}
+.lg{display:flex;flex-wrap:wrap;gap:6px;width:132px;transition:width 320ms cubic-bezier(.3,0,0,1.15)}
+.lg span{width:60px;height:60px;border-radius:10px;transition:width 320ms cubic-bezier(.3,0,0,1.15),height 320ms cubic-bezier(.3,0,0,1.15)}
+.lg.list{width:210px}.lg.list span{width:210px;height:22px}
+.search{height:46px;width:46px;border-radius:999px;background:var(--blush);display:flex;align-items:center;overflow:hidden;transition:width 360ms cubic-bezier(.3,0,0,1.15)}
+.search.open{width:230px}
+.search input{border:none;outline:none;background:transparent;font:inherit;font-size:14px;width:160px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:0 16px}
+.chips button{height:36px;padding:0 14px;border-radius:999px;font-size:13px;font-weight:600;background:var(--blush);display:flex;align-items:center;gap:6px;transition:background-color 250ms,color 250ms}
+.chips button[aria-pressed="true"]{background:var(--cocoa);color:var(--petal)}
+.chips svg{display:none}
+.chips button[aria-pressed="true"] svg{display:block}
+.chips button[aria-pressed="true"] path{stroke-dasharray:14;animation:dr 300ms both}
+.dotsnav{display:flex;gap:6px;align-items:center}
+.dotsnav button{height:8px;width:8px;border-radius:999px;background:#D9C6C0;transition:width 320ms cubic-bezier(.3,0,0,1.15),background-color 250ms}
+.dotsnav button[aria-pressed="true"]{width:26px;background:var(--cocoa)}
+.xfade{transition:background-color 350ms}
+.pattern{background:repeating-linear-gradient(45deg,var(--powder) 0 10px,var(--blush) 10px 20px)}
+.lens{position:absolute;width:70px;height:70px;margin:-35px 0 0 -35px;border-radius:50%;border:3px solid var(--white);box-shadow:0 6px 16px rgb(43 29 23 / .25);background-size:56px 56px;pointer-events:none}
+.strip button{width:32px;height:26px;border-radius:8px;transition:transform 250ms cubic-bezier(.3,0,0,1.3)}
+.strip button[aria-pressed="true"]{outline:2px solid var(--cocoa);outline-offset:2px;transform:scale(1.15)}
+.cover{position:absolute;width:90px;height:120px;border-radius:45px 45px 12px 12px;box-shadow:0 6px 16px rgb(43 29 23 / .14);animation:cov 6s cubic-bezier(.3,0,0,1.1) infinite}
+@keyframes cov{0%,25%{transform:translateX(var(--a)) scale(var(--s1));z-index:var(--z1)}33%,58%{transform:translateX(var(--b)) scale(var(--s2));z-index:var(--z2)}66%,91%{transform:translateX(var(--c)) scale(var(--s3));z-index:var(--z3)}100%{transform:translateX(var(--a)) scale(var(--s1))}}
+.stag{width:48px;height:60px;border-radius:24px 24px 8px 8px;animation:stg 3.4s cubic-bezier(.3,0,0,1.2) infinite both}
+@keyframes stg{0%{opacity:0;transform:translateY(18px) scale(.9)}15%,85%{opacity:1;transform:none}100%{opacity:0}}
+.shake{animation:shake 420ms cubic-bezier(.36,.07,.19,.97)}
+@keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-7px)}40%,60%{transform:translateX(7px)}}
+.off{animation:off 5s cubic-bezier(.3,0,0,1.1) infinite}
+@keyframes off{0%,8%{transform:translateY(-100%)}18%,45%{transform:translateY(0)}55%,100%{transform:translateY(-100%)}}
+.back{animation:back 5s cubic-bezier(.3,0,0,1.1) infinite}
+@keyframes back{0%,50%{transform:translateY(-100%)}58%,80%{transform:translateY(0)}90%,100%{transform:translateY(-100%)}}
+.swing{transform-origin:50% 6px;animation:swing 2.8s ease-in-out infinite}
+@keyframes swing{0%,100%{transform:rotate(-9deg)}50%{transform:rotate(9deg)}}
+.pull{animation:pull 3.2s cubic-bezier(.3,0,0,1.2) infinite}
+@keyframes pull{0%,10%{transform:translateY(0)}30%,70%{transform:translateY(46px)}85%,100%{transform:translateY(0)}}
+.arc{animation:arc 3.2s infinite}
+@keyframes arc{0%,15%{opacity:0;transform:rotate(0)}30%{opacity:1}70%{opacity:1;transform:rotate(540deg)}80%,100%{opacity:0;transform:rotate(600deg)}}
+.toastS{position:absolute;bottom:46px;width:220px;padding:12px 16px;border-radius:16px;background:var(--cocoa);color:var(--petal);font-size:14px;box-sizing:border-box;transition:transform 320ms cubic-bezier(.3,0,0,1.2),opacity 320ms}
+.dn{transition:background-color 400ms}
+.dn.dark{background:#1E1612}
+.daynight{position:relative;width:96px;height:48px;border-radius:999px;background:var(--butter);transition:background-color 400ms}
+.daynight .k{position:absolute;top:6px;left:6px;width:36px;height:36px;border-radius:50%;background:#E8A93A;box-shadow:0 0 14px rgb(232 169 58 / .7);transition:left 380ms cubic-bezier(.3,0,0,1.2),background-color 380ms,box-shadow 380ms}
+.daynight[aria-checked="true"]{background:#33251F}
+.daynight[aria-checked="true"] .k{left:54px;background:#F2EDE7;box-shadow:inset -10px -4px 0 #C9B8AE}
+.dn.dark .hint{color:#C9B8AE}
+.reveal{position:absolute;inset:0;background:#1E1612;clip-path:circle(0% at 85% 18%);transition:clip-path 650ms cubic-bezier(.6,0,.2,1)}
+.rv.dark .reveal{clip-path:circle(150% at 85% 18%)}
+.rv .rvt{position:relative;transition:color 400ms 200ms}
+.rv.dark .rvt,.rv.dark .hint{color:#F2EDE7}
+.snap{width:100%;height:70px;border-radius:22px 22px 0 0;background:var(--white);box-shadow:0 -6px 20px rgb(43 29 23 / .12);display:flex;flex-direction:column;align-items:center;padding-top:8px;box-sizing:border-box;transition:height 360ms cubic-bezier(.3,0,0,1.15)}
+.press{height:56px;padding:0 28px;border-radius:999px;background:var(--rose);color:#FFFFFF;font-weight:600;box-shadow:0 5px 0 #7A3F46;transition:transform 120ms cubic-bezier(.2,0,0,1),box-shadow 120ms}
+.press:active{transform:translateY(4px) scale(.98);box-shadow:0 1px 0 #7A3F46}
+.mag{height:54px;padding:0 24px;border-radius:999px;background:var(--cocoa);color:var(--petal);font-weight:600;transition:transform 200ms cubic-bezier(.2,0,0,1)}
+.drag{touch-action:pan-y;user-select:none;cursor:grab}
+.settle{transition:transform 260ms cubic-bezier(.3,0,0,1.2)}
+
+/* Votes */
+.vote{display:flex;gap:8px;padding-left:52px}
+.vote button{height:38px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--white);font-size:14px;font-weight:600;cursor:pointer;transition:background-color 200ms,border-color 200ms,color 200ms,transform 160ms}
+.vote button:active{transform:scale(.96)}
+.vote .yes[aria-pressed="true"]{background:var(--pine);border-color:var(--pine);color:#FFFFFF}
+.vote .no[aria-pressed="true"]{background:var(--garnet);border-color:var(--garnet);color:#FFFFFF}
+.tile[data-choice="aime"] .stage{box-shadow:0 0 0 3px var(--fern)}
+.tile[data-choice="aimepas"] .stage{opacity:.55}
+.bar{position:sticky;bottom:max(12px,env(safe-area-inset-bottom,0px));z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 12px 10px 18px;border-radius:22px;background:var(--cocoa);color:var(--petal);box-shadow:0 12px 30px rgb(43 29 23 / .25)}
+.bar .counts{font-weight:600;font-variant-numeric:tabular-nums;flex:1 1 220px}
+.bar .save{font-size:13px;color:var(--rosewood);font-weight:400}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.filters button{height:36px;padding:0 12px;border-radius:999px;border:none;background:rgb(251 243 241 / .12);color:var(--petal);font-size:13px;font-weight:600;cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--petal);color:var(--cocoa)}
+.recap{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;padding:20px;border-radius:22px;background:var(--white)}
+.recap h4{margin:0 0 8px;font-family:var(--serif);font-weight:500;font-size:20px}
+.recap ul{margin:0;padding-left:18px;line-height:1.7;font-size:15px}
+.empty-note{color:var(--taupe);font-size:14px}
+.tile.hide{display:none}
+
+@media (prefers-reduced-motion:reduce){
+  body:not(.force-motion) *,body:not(.force-motion) *::before,body:not(.force-motion) *::after{animation:none!important;transition:none!important}
+}
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:14px">
+    <h1>Catalogue de styles et d'animations</h1>
+    <p class="lead">Tout est vivant ici : certaines vignettes tournent en boucle, d'autres répondent à un clic, un double-clic, au survol ou quand on fait glisser (c'est écrit dans le coin). Note les numéros qui te plaisent, et ceux dont tu ne veux surtout pas.</p>
+    <div class="motion-note" id="motionNote" hidden>
+      <span>Ton appareil demande de réduire les animations : elles sont coupées.</span>
+      <button type="button" id="forceMotion">Les voir quand même</button>
+    </div>
+    <nav class="jump" aria-label="Aller à">
+      <a href="#styles">Styles S1 à S12</a><a href="#aimer">Aimer</a><a href="#ajouter">Ajouter</a><a href="#prix">Prix</a><a href="#commande">Commande</a><a href="#listes">Listes et partage</a><a href="#avis">Avis</a><a href="#navigation">Navigation</a><a href="#photos">Photos</a><a href="#messages">Messages</a><a href="#sombre">Sombre et téléphone</a>
+    </nav>
+  </header>
+
+  <!-- ================= STYLES ================= -->
+  <section id="styles">
+    <h2>Styles d'ensemble, S1 à S12</h2>
+    <p class="lead" style="margin-top:-8px">La même petite fiche dans 12 styles tirés de UI UX Pro Max, aux couleurs de Closyria. Tu peux en garder un seul détail (un bouton, un fond).</p>
+    <div class="grid big">
+
+      <div class="tile"><div class="stage" style="background:var(--blush)">
+        <span style="position:absolute;width:200px;height:200px;border-radius:50%;background:#F4A3A8;left:10%;top:6%;filter:blur(30px)"></span>
+        <span style="position:absolute;width:180px;height:180px;border-radius:50%;background:var(--butter);right:6%;bottom:0;filter:blur(30px)"></span>
+        <div style="position:relative;display:flex;gap:16px;padding:16px;border-radius:26px;background:rgb(255 255 255 / .45);border:1px solid rgb(255 255 255 / .7);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 10px 30px rgb(43 29 23 / .1)">
+          <div class="ph" style="width:110px;height:150px;border-radius:55px 55px 14px 14px;background:rgb(255 255 255 / .5)"><svg class="dress" viewBox="0 0 120 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M46 12 Q60 24 74 12 L80 42 Q68 54 71 62 L102 150 L18 150 L49 62 Q52 54 40 42 Z"/></svg></div>
+          <div class="mini"><span class="b">Sézane</span><span class="n">Robe Lina</span><span class="p">120 €</span><span class="chip" style="background:rgb(255 255 255 / .6)">😍 Coup de cœur</span><button class="cta" style="background:rgb(43 29 23 / .85);color:var(--petal)">Voir</button></div>
+        </div></div>
+        <div class="lab"><span class="num">S1</span><div><div class="nm">Verre dépoli</div><div class="ds">Cartes translucides sur des taches de couleur floues. Moderne, lumineux.</div></div></div></div>
+
+      <div class="tile"><div class="stage" style="background:var(--blush)">
+        <div class="clay" style="display:flex;gap:16px;padding:18px;border-radius:34px;background:var(--petal)">
+          <div class="ph clay" style="width:110px;height:150px;border-radius:30px;background:var(--powder)"><svg class="dress" viewBox="0 0 120 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M46 12 Q60 24 74 12 L80 42 Q68 54 71 62 L102 150 L18 150 L49 62 Q52 54 40 42 Z"/></svg></div>
+          <div class="mini"><span class="b">Sézane</span><span class="n">Robe Lina</span><span class="p">120 €</span><span class="chip clay" style="background:var(--blush)">😍 Coup de cœur</span><button class="cta clay-btn" style="background:var(--rose);color:#FFFFFF">Voir</button></div>
+        </div><span class="hint">Clique le bouton</span></div>
+        <div class="lab"><span class="num">S2</span><div><div class="nm">Pâte à modeler</div><div class="ds">Volumes gonflés et moelleux, boutons qui s'écrasent sous le doigt. Très cocon, ludique.</div></div></div></div>
+
+      <div class="tile"><div class="stage aurora">
+        <div style="display:flex;gap:16px;padding:16px;border-radius:26px;background:var(--white);box-shadow:0 12px 30px rgb(180 100 108 / .18)">
+          <div class="ph" style="width:110px;height:150px;border-radius:55px 55px 14px 14px;background:var(--powder)"><svg class="dress" viewBox="0 0 120 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M46 12 Q60 24 74 12 L80 42 Q68 54 71 62 L102 150 L18 150 L49 62 Q52 54 40 42 Z"/></svg></div>
+          <div class="mini"><span class="b">Sézane</span><span class="n">Robe Lina</span><span class="p">120 €</span><span class="chip" style="background:var(--blush)">😍 Coup de cœur</span><button class="cta" style="background:var(--cocoa);color:var(--petal)">Voir</button></div>
+        </div><span class="hint">Le fond bouge lentement</span></div>
+        <div class="lab"><span class="num">S3</span><div><div class="nm">Aurore pastel</div><div class="ds">Un fond de couleurs douces qui bougent très lentement. Vivant sans être chargé.</div></div></div></div>
+
+      <div class="tile"><div class="stage" style="background:var(--petal);padding:14px;box-sizing:border-box">
+        <div style="width:100%;height:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));gap:8px">
+          <div class="ph" style="grid-row:span 3;border-radius:18px;background:var(--powder)"><svg class="dress" viewBox="0 0 120 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M46 12 Q60 24 74 12 L80 42 Q68 54 71 62 L102 150 L18 150 L49 62 Q52 54 40 42 Z"/></svg></div>
+          <div style="grid-column:span 2;border-radius:18px;background:var(--white);padding:10px 14px;display:flex;flex-direction:column;justify-content:center"><span style="font-size:12px;color:var(--taupe)">Sézane</span><span class="serif" style="font-size:20px">Robe Lina</span></div>
+          <div style="border-radius:18px;background:var(--cocoa);color:var(--petal);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:20px">120 €</div>
+          <div style="border-radius:18px;background:var(--mint);color:var(--pine);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">−20 €</div>
+          <div style="border-radius:18px;background:var(--blush);display:flex;align-items:center;justify-content:center;font-size:26px">😍</div>
+          <div style="border-radius:18px;background:var(--white);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">Taille 38</div>
+        </div></div>
+        <div class="lab"><span class="num">S4</span><div><div class="nm">Mosaïque</div><div class="ds">Chaque info dans sa case, de tailles différentes. Très lisible, idéal pour l'accueil.</div></div></div></div>
+
+      <div class="tile"><div class="stage" style="background:#F3E7E3">
+        <div class="neu" style="display:flex;gap:16px;padding:18px;border-radius:30px">
+          <div class="ph neu-in" style="width:110px;height:150px;border-radius:55px 55px 16px 16px"><svg class="dress" viewBox="0 0 120 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M46 12 Q60 24 74 12 L80 42 Q68 54 71 62 L102 150 L18 150 L49 62 Q52 54 40 42 Z"/></svg></div>
+          <div class="mini"><span class="b">Sézane</span><span class="n">Robe Lina</span><span class="p">120 €</span><span class="chip neu-in">😍 Coup de cœur</span><button class="cta neu">Voir</button></div>
+        </div></div>
+        <div class="lab"><span class="num">S5</span><div><div class="nm">Relief doux</div><div class="ds">Tout est dans la même matière, en creux ou en bosse. Calme et tactile.</div></div></div></div>
+
+      <div class="tile"><div class="stage" style="background:#F2EDE7">
+        <svg aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;opacity:.18"><filter id="grain1"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2"/></filter><rect width="100%" height="100%" filter="url(#grain1)"/></svg>
+        <div style="position:relative;display:flex;gap:20px;align-items:center">
+          <div style="position:relative;padding:8px 8px 26px;background:var(--white);box-shadow:0 6px 16px rgb(43 29 23 / .15);transform:rotate(-4deg)">
+            <div class="ph" style="width:104px;height:128px;background:var(--powder)"><svg class="dress" viewBox="0 0 120 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M46 12 Q60 24 74 12 L80 42 Q68 54 71 62 L102 150 L18 150 L49 62 Q52 54 40 42 Z"/></svg></div>
+            <span style="position:absolute;top:-10px;left:34px;width:54px;height:18px;background:rgb(244 163 168 / .7);transform:rotate(6deg)"></span>
+          </div>
+          <div class="mini"><span class="b">Sézane</span><span class="n" style="font-style:italic">Robe Lina</span><span class="p">120 €</span><span class="serif" style="font-style:italic;font-size:14px;color:var(--taupe)">« pour le mariage de Claire »</span><button class="cta" style="background:var(--cocoa);color:var(--petal)">Voir</button></div>
+        </div></div>
+        <div class="lab"><span class="num">S6</span><div><div class="nm">Carnet de papier</div><div class="ds">Grain de papier, photos comme des tirages collés avec du ruban. Très « carnet de style ».</div></div></div></div>
+
+      <div class="tile"><div class="stage" style="background:var(--white);justify-content:flex-start;padding:0 24px;box-sizing:border-box">
+        <div class="ph" style="width:150px;height:230px;background:var(--latte);border-radius:4px"><svg class="dress" viewBox="0 0 120 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M46 12 Q60 24 74 12 L80 42 Q68 54 71 62 L102 150 L18 150 L49 62 Q52 54 40 42 Z"/></svg></div>
+        <span class="serif" style="position:absolute;left:120px;top:50px;font-size:92px;line-height:.85;font-weight:300;letter-spacing:-0.04em;font-variation-settings:'SOFT' 0,'opsz' 144">Lina</span>
+        <div style="position:absolute;left:190px;top:150px;display:flex;flex-direction:column;gap:4px;font-size:13px"><span style="color:var(--garnet);font-weight:600">Sézane, robe portefeuille</span><span class="serif" style="border-top:1px solid var(--cocoa);padding-top:6px;font-size:22px">120 €</span></div>
+      </div>
+        <div class="lab"><span class="num">S7</span><div><div class="nm">Magazine éditorial</div><div class="ds">Très grands titres qui chevauchent la photo, comme une couverture de magazine.</div></div></div></div>
+
+      <div class="tile"><div class="stage stack" style="background:var(--blush)">
+        <div class="c c1" style="position:absolute;width:150px;height:200px;border-radius:75px 75px 18px 18px;background:var(--sage);box-shadow:0 8px 20px rgb(43 29 23 / .12)"></div>
+        <div class="c c2" style="position:absolute;width:150px;height:200px;border-radius:75px 75px 18px 18px;background:var(--butter);box-shadow:0 8px 20px rgb(43 29 23 / .12)"></div>
+        <div class="ph" style="position:relative;width:150px;height:200px;border-radius:75px 75px 18px 18px;background:var(--powder);box-shadow:0 14px 30px rgb(43 29 23 / .2)"><svg class="dress" viewBox="0 0 120 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M46 12 Q60 24 74 12 L80 42 Q68 54 71 62 L102 150 L18 150 L49 62 Q52 54 40 42 Z"/></svg></div>
+        <span style="position:absolute;right:16%;bottom:40px;padding:8px 14px;border-radius:999px;background:var(--white);box-shadow:0 10px 24px rgb(43 29 23 / .18);font-weight:600">120 €</span>
+        <span style="position:absolute;left:18%;top:40px;width:46px;height:46px;border-radius:50%;background:var(--white);box-shadow:0 10px 24px rgb(43 29 23 / .18);display:flex;align-items:center;justify-content:center;font-size:22px">😍</span>
+        <span class="hint">Survole</span></div>
+        <div class="lab"><span class="num">S8</span><div><div class="nm">Couches et profondeur</div><div class="ds">Photos empilées qui s'écartent au survol, étiquettes qui flottent au-dessus.</div></div></div></div>
+
+      <div class="tile"><div class="stage" style="background:var(--butter)">
+        <div class="brut" style="display:flex;gap:16px;padding:16px;border-radius:20px;background:var(--white)">
+          <div class="ph" style="width:110px;height:150px;border-radius:55px 55px 12px 12px;background:var(--powder);border:2px solid var(--cocoa)"><svg class="dress" viewBox="0 0 120 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M46 12 Q60 24 74 12 L80 42 Q68 54 71 62 L102 150 L18 150 L49 62 Q52 54 40 42 Z"/></svg></div>
+          <div class="mini"><span class="b">Sézane</span><span class="n">Robe Lina</span><span class="p">120 €</span><span class="chip" style="background:#F6CFD4;border:2px solid var(--cocoa)">😍 Coup de cœur</span><button class="cta brut" style="background:var(--rose);color:#FFFFFF">Voir</button></div>
+        </div><span class="hint">Survole, clique</span></div>
+        <div class="lab"><span class="num">S9</span><div><div class="nm">Contours francs</div><div class="ds">Traits noirs et ombres décalées, couleurs pastel. Fort caractère, un peu « fanzine ».</div></div></div></div>
+
+      <div class="tile"><div class="stage" style="background:var(--petal)">
+        <span class="blob" style="position:absolute;width:230px;height:230px;background:var(--powder)"></span>
+        <span class="blob" style="position:absolute;width:170px;height:170px;background:var(--sage);right:12%;top:30px;animation-delay:-3s;opacity:.8"></span>
+        <div class="ph" style="position:relative;width:130px;height:180px;border-radius:65px 65px 18px 18px;background:var(--blush);box-shadow:0 12px 26px rgb(43 29 23 / .12)"><svg class="dress" viewBox="0 0 120 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M46 12 Q60 24 74 12 L80 42 Q68 54 71 62 L102 150 L18 150 L49 62 Q52 54 40 42 Z"/></svg></div>
+        <span class="serif" style="position:absolute;left:24px;bottom:20px;font-size:22px">Robe Lina, 120 €</span></div>
+        <div class="lab"><span class="num">S10</span><div><div class="nm">Formes organiques</div><div class="ds">Des formes douces qui respirent derrière les photos. Naturel, féminin, apaisant.</div></div></div></div>
+
+      <div class="tile"><div class="stage" style="background:var(--cocoa);color:var(--petal);flex-direction:column;gap:18px">
+        <div style="width:100%;overflow:hidden"><div class="marq serif" style="font-size:40px;font-style:italic"><span>Coup de cœur</span><span>✦</span><span>Prix en baisse</span><span>✦</span><span>Coup de cœur</span><span>✦</span><span>Prix en baisse</span><span>✦</span></div></div>
+        <div class="wave serif" style="font-size:46px" aria-label="Lina"><span>L</span><span style="animation-delay:.1s">i</span><span style="animation-delay:.2s">n</span><span style="animation-delay:.3s">a</span></div>
+        <span style="font-size:14px;color:var(--rosewood)">Sézane, 120 €</span></div>
+        <div class="lab"><span class="num">S11</span><div><div class="nm">Texte en mouvement</div><div class="ds">Bandeaux qui défilent et lettres qui ondulent. Pour l'accueil ou les annonces, pas partout.</div></div></div></div>
+
+      <div class="tile"><div class="stage" style="background:var(--latte)">
+        <svg aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;opacity:.25"><filter id="grain2"><feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="2"/></filter><rect width="100%" height="100%" filter="url(#grain2)"/></svg>
+        <div class="film" style="position:relative;padding:10px 10px 40px;background:#FFFDF8;box-shadow:0 8px 18px rgb(43 29 23 / .2);transform:rotate(3deg)">
+          <div class="ph" style="width:160px;height:160px;background:var(--rosewood)"><svg class="dress" viewBox="0 0 120 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M46 12 Q60 24 74 12 L80 42 Q68 54 71 62 L102 150 L18 150 L49 62 Q52 54 40 42 Z"/></svg></div>
+          <span style="position:absolute;right:18px;bottom:50px;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#C0611E;font-weight:700">08 11 26</span>
+          <span class="serif" style="position:absolute;left:12px;bottom:10px;font-style:italic;font-size:16px">Robe Lina, 120 €</span>
+        </div></div>
+        <div class="lab"><span class="num">S12</span><div><div class="nm">Rétro argentique</div><div class="ds">Polaroïds, grain de pellicule, date tamponnée. Nostalgique et chaleureux.</div></div></div></div>
+    </div>
+  </section>
+
+  <!-- ================= ANIMATIONS ================= -->
+  <section id="aimer">
+    <h2>Animations</h2>
+    <h3>Aimer, niveau d'envie</h3>
+    <div class="grid">
+      <div class="tile"><div class="stage"><div id="likeBox" style="position:relative;width:80px;height:80px"><button class="btn" id="like" aria-pressed="false" aria-label="Coup de cœur" style="position:absolute;inset:0;border-radius:50%;background:var(--white);font-size:38px;box-shadow:0 6px 16px rgb(43 29 23 / .14);transition:background-color 250ms">😍</button></div><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">1</span><div><div class="nm">Coup de cœur qui éclate</div><div class="ds">L'émoji se creuse, rebondit, des étincelles jaillissent.</div></div></div></div>
+      <div class="tile"><div class="stage" id="dbl" style="cursor:pointer;background:var(--powder);user-select:none"><svg viewBox="0 0 120 160" width="60" aria-hidden="true" fill="none" stroke="var(--taupe)" stroke-width="2"><path d="M46 12 Q60 24 74 12 L80 42 Q68 54 71 62 L102 150 L18 150 L49 62 Q52 54 40 42 Z"/></svg><span class="hint">Double-clique sur la photo</span></div>
+        <div class="lab"><span class="num">2</span><div><div class="nm">Double-tap sur la photo</div><div class="ds">Deux touches sur une photo = coup de cœur, comme sur Instagram.</div></div></div></div>
+      <div class="tile"><div class="stage"><div class="scale" style="display:flex;gap:14px;font-size:36px"><span>😍</span><span>🙂</span><span>🤔</span><span>😐</span></div><span class="hint">Survole</span></div>
+        <div class="lab"><span class="num">3</span><div><div class="nm">Émojis qui grossissent</div><div class="ds">Le niveau survolé se soulève et grandit avant le choix.</div></div></div></div>
+      <div class="tile"><div class="stage"><div style="position:relative;display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:999px;background:var(--blush);font-weight:600"><span>Avis</span><span class="roll" style="font-variant-numeric:tabular-nums"><i>2<br>3</i></span><span class="plus" style="right:-26px;top:6px">+1</span></div><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">4</span><div><div class="nm">Compteur qui roule</div><div class="ds">Un nouvel avis : le chiffre tourne et un « +1 » s'envole.</div></div></div></div>
+      <div class="tile"><div class="stage"><span class="jelly" aria-hidden="true">😍</span><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">5</span><div><div class="nm">Émoji gelée</div><div class="ds">L'émoji s'écrase et rebondit comme de la gelée, pour attirer l'œil.</div></div></div></div>
+      <div class="tile"><div class="stage"><button class="btn" id="bm" aria-pressed="false" aria-label="Garder" style="width:72px;height:72px;border-radius:22px;background:var(--blush);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="34" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg></button><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">6</span><div><div class="nm">Marque-page qui se remplit</div><div class="ds">Pour « garder pour plus tard », avec un petit saut.</div></div></div></div>
+    </div>
+  </section>
+
+  <section id="ajouter">
+    <h3>Ajouter une envie</h3>
+    <div class="grid">
+      <div class="tile"><div class="stage"><div class="grow"><span style="width:48px;flex-shrink:0;text-align:center;font-size:26px">+</span><span class="t" style="font-size:14px">Colle le lien d'un article</span></div><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">7</span><div><div class="nm">Le « + » qui s'ouvre</div><div class="ds">Le bouton rond s'étire en champ pour coller un lien.</div></div></div></div>
+      <div class="tile"><div class="stage"><div style="position:relative;width:230px;height:96px">
+        <div class="layA" style="position:absolute;inset:0;display:flex;gap:12px"><div class="sk" style="width:70px;border-radius:35px 35px 10px 10px"></div><div style="flex:1;display:flex;flex-direction:column;gap:8px;padding-top:8px"><div class="sk" style="height:12px;width:60%;border-radius:6px"></div><div class="sk" style="height:18px;border-radius:6px"></div><div class="sk" style="height:14px;width:40%;border-radius:6px"></div></div></div>
+        <div class="layB" style="position:absolute;inset:0;display:flex;gap:12px"><div style="width:70px;border-radius:35px 35px 10px 10px;background:var(--powder)"></div><div style="flex:1;display:flex;flex-direction:column;gap:2px;padding-top:6px"><span style="font-size:12px;color:var(--taupe)">Sézane</span><span class="serif" style="font-size:19px">Robe Lina</span><span style="font-weight:600">120 €</span></div></div>
+      </div><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">8</span><div><div class="nm">Carte qui se construit</div><div class="ds">Pendant la lecture du lien, une silhouette scintille puis l'article apparaît.</div></div></div></div>
+      <div class="tile"><div class="stage" style="flex-direction:column;gap:14px"><div class="dots"><span></span><span></span><span></span></div><span style="font-size:14px;color:var(--taupe)">On regarde chez Sézane…</span><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">9</span><div><div class="nm">Points qui sautillent</div><div class="ds">Attente douce avec un message qui dit ce qui se passe.</div></div></div></div>
+      <div class="tile"><div class="stage"><div class="fl"><input id="fl10" placeholder=" "><label for="fl10">Nom de l'article</label></div><span class="hint">Clique dans le champ</span></div>
+        <div class="lab"><span class="num">10</span><div><div class="nm">Étiquette qui flotte</div><div class="ds">Le titre du champ remonte en douceur quand on écrit.</div></div></div></div>
+      <div class="tile"><div class="stage" id="confBox"><button class="btn" id="conf" style="height:48px;padding:0 20px;border-radius:999px;background:var(--cocoa);color:var(--petal);font-weight:600">Ajouter ma 1re envie</button><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">11</span><div><div class="nm">Confettis doux</div><div class="ds">Une seule fois, pour fêter la toute première envie ou une commande.</div></div></div></div>
+      <div class="tile"><div class="stage" style="background:var(--blush)"><div style="width:230px;display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;color:var(--taupe)">Lien de la boutique</span><div style="height:48px;border-radius:14px;background:var(--white);display:flex;align-items:center;padding:0 14px;gap:8px"><span class="glow" style="width:8px;height:8px;border-radius:50%;background:var(--fern)"></span><span style="font-size:14px">sezane.com/robe-lina</span></div><span style="font-size:12px;color:var(--pine);font-weight:600">Boutique reconnue</span></div><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">11b</span><div><div class="nm">Lien reconnu</div><div class="ds">Un point vert dès que la boutique est reconnue, avant même d'envoyer.</div></div></div></div>
+    </div>
+  </section>
+
+  <section id="prix">
+    <h3>Prix</h3>
+    <div class="grid">
+      <div class="tile"><div class="stage"><span class="serif" style="font-size:52px;font-variant-numeric:tabular-nums"><span>1</span><span class="odo"><i>4<br>3<br>2</i></span><span>0</span> €</span><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">12</span><div><div class="nm">Prix qui défile</div><div class="ds">Les chiffres tournent comme un compteur quand le prix change.</div></div></div></div>
+      <div class="tile"><div class="stage"><svg viewBox="0 0 220 90" width="220" aria-hidden="true"><polyline class="line" points="6,20 50,20 90,14 130,22 160,22 185,64 214,64" fill="none" stroke="var(--rosewood)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline><circle class="ldot" cx="214" cy="64" r="6" fill="var(--pine)"></circle></svg><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">13</span><div><div class="nm">Courbe qui se dessine</div><div class="ds">L'historique du prix se trace, le point du jour apparaît à la fin.</div></div></div></div>
+      <div class="tile"><div class="stage"><span style="position:relative;padding:10px 18px;border-radius:999px;background:var(--mint);color:var(--pine);font-weight:600"><span class="ring"></span>−20 € depuis mardi</span><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">14</span><div><div class="nm">Pastille qui respire</div><div class="ds">Une onde douce autour d'une baisse de prix toute fraîche.</div></div></div></div>
+      <div class="tile"><div class="stage" style="gap:16px"><span class="serif" style="position:relative;font-size:30px;color:var(--taupe)">140 €<span class="strike"></span></span><span class="serif newp" style="font-size:40px">120 €</span><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">15</span><div><div class="nm">Ancien prix rayé</div><div class="ds">Un trait barre l'ancien prix, le nouveau arrive en rebondissant.</div></div></div></div>
+      <div class="tile"><div class="stage" style="flex-direction:column;gap:12px"><span class="bubble" id="budBub">200 €</span><input class="rng" id="bud" type="range" min="50" max="500" step="10" value="200" aria-label="Budget"><span class="hint">Fais glisser</span></div>
+        <div class="lab"><span class="num">16</span><div><div class="nm">Budget avec bulle</div><div class="ds">Une bulle suit le curseur et affiche le montant.</div></div></div></div>
+    </div>
+  </section>
+
+  <section id="commande">
+    <h3>Préparer une commande</h3>
+    <div class="grid">
+      <div class="tile"><div class="stage"><span class="flyer"></span><span class="bag" style="position:absolute;right:40px;top:56px;width:46px;height:46px;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="36" aria-hidden="true" fill="none" stroke="var(--cocoa)" stroke-width="1.8" stroke-linejoin="round"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg><span class="badge" style="position:absolute;top:-4px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--rose);color:#FFFFFF;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center">1</span></span><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">17</span><div><div class="nm">Article qui vole</div><div class="ds">La photo file en arc vers le sac, qui rebondit, et la pastille apparaît.</div></div></div></div>
+      <div class="tile"><div class="stage"><span class="hop" style="position:relative"><svg viewBox="0 0 24 24" width="44" aria-hidden="true" fill="none" stroke="var(--cocoa)" stroke-width="1.8" stroke-linejoin="round"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg><span style="position:absolute;top:-6px;right:-10px;width:24px;height:24px;border-radius:50%;background:var(--rose);color:#FFFFFF;font-size:13px;font-weight:600;overflow:hidden;line-height:24px;text-align:center"><span class="hopn">2<br>3</span></span></span><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">18</span><div><div class="nm">Pastille qui saute</div><div class="ds">Le sac fait un petit bond et le nombre d'articles tourne.</div></div></div></div>
+      <div class="tile"><div class="stage"><div class="morph"><span class="m1">Commander</span><span class="m2"><span>−</span><span>1</span><span>+</span></span></div><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">19</span><div><div class="nm">Bouton qui devient compteur</div><div class="ds">« Commander » se transforme en « − 1 + » pour choisir la quantité.</div></div></div></div>
+      <div class="tile"><div class="stage"><button class="btn order" id="order">J'ai commandé</button><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">20</span><div><div class="nm">Bouton qui confirme</div><div class="ds">Il se resserre, tourne un instant, puis passe au vert avec une coche.</div></div></div></div>
+      <div class="tile"><div class="stage" style="gap:14px"><button class="btn sq" id="sq" role="checkbox" aria-checked="false" aria-label="Robe Lina"></button><span class="serif sqname" style="font-size:20px">Robe Lina</span><span class="hint">Clique la case</span></div>
+        <div class="lab"><span class="num">21</span><div><div class="nm">Case qui se coche</div><div class="ds">La coche se trace, le nom se raye doucement.</div></div></div></div>
+      <div class="tile"><div class="stage" style="flex-direction:column;gap:10px;padding:0 24px;box-sizing:border-box"><div style="width:100%;height:14px;border-radius:999px;background:#F2E6E2;overflow:hidden"><div class="fill"></div></div><span style="font-size:14px"><b>365 €</b> sur un budget de 500 €</span><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">22</span><div><div class="nm">Budget qui se remplit</div><div class="ds">La barre se remplit au fil des articles cochés.</div></div></div></div>
+    </div>
+  </section>
+
+  <section id="listes">
+    <h3>Listes et partage</h3>
+    <div class="grid">
+      <div class="tile"><div class="stage" style="perspective:600px"><button class="btn copy" id="copy">Copier le lien</button><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">23</span><div><div class="nm">Lien copié</div><div class="ds">Le bouton bascule comme une pancarte : « Lien copié ».</div></div></div></div>
+      <div class="tile"><div class="stage" style="gap:14px"><button class="btn sw" id="sw" role="switch" aria-checked="false" aria-label="Autoriser les avis"><span class="knob"></span></button><span style="font-size:14px">Autoriser les avis</span><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">24</span><div><div class="nm">Interrupteur élastique</div><div class="ds">Le rond s'étire en glissant, comme une goutte.</div></div></div></div>
+      <div class="tile"><div class="stage"><div class="deal d1" style="background:var(--sage)">Été</div><div class="deal d3" style="background:var(--butter)">Mariage</div><div class="deal d2" style="background:var(--powder)">Anniversaire</div><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">25</span><div><div class="nm">Listes qui se distribuent</div><div class="ds">Les listes sortent du paquet comme des cartes.</div></div></div></div>
+      <div class="tile"><div class="stage"><span class="plane" style="left:70px;top:80px"><svg viewBox="0 0 24 24" width="34" aria-hidden="true" fill="#FFFFFF" stroke="var(--cocoa)" stroke-width="1.6" stroke-linejoin="round"><path d="M3 11l18-7-6 17-3-7z"/><path d="M12 14l9-10"/></svg></span><span style="position:absolute;left:40px;bottom:34px;padding:10px 16px;border-radius:999px;background:var(--cocoa);color:var(--petal);font-weight:600;font-size:14px">Envoyer à Léa</span><span class="hint r">En boucle</span></div>
+        <div class="lab"><span class="num">26</span><div><div class="nm">Avion en papier</div><div class="ds">Partager une liste : un petit avion s'envole.</div></div></div></div>
+      <div class="tile"><div class="stage" style="align-items:flex-start;padding-top:30px;box-sizing:border-box"><button class="btn" id="shareBtn" style="height:44px;padding:0 18px;border-radius:999px;background:var(--blush);font-weight:600">Partager</button><div class="sheet" id="sheet"><div style="width:36px;height:4px;border-radius:2px;background:rgb(251 243 241 / .4);margin:0 auto 10px"></div><div style="display:flex;justify-content:space-around;font-size:13px"><span>Copier</span><span>Messages</span><span>WhatsApp</span></div></div><span class="hint r t">Clique</span></div>
+        <div class="lab"><span class="num">27</span><div><div class="nm">Feuille qui monte</div><div class="ds">Les choix de partage glissent depuis le bas, avec un léger rebond.</div></div></div></div>
+    </div>
+  </section>
+
+  <section id="avis">
+    <h3>Avis des amies</h3>
+    <div class="grid">
+      <div class="tile"><div class="stage"><div class="bub" style="padding:12px 16px;border-radius:20px 20px 20px 6px;background:var(--blush);max-width:200px"><b>😍 Léa</b><br><span style="font-size:14px;color:var(--taupe)">Elle t'irait trop bien</span></div><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">28</span><div><div class="nm">Bulle qui arrive</div><div class="ds">Un nouvel avis apparaît comme un message, en grandissant depuis le coin.</div></div></div></div>
+      <div class="tile"><div class="stage"><span class="glow" style="padding:8px 14px;border-radius:999px;background:var(--rose);color:#FFFFFF;font-weight:600;font-size:14px">2 nouveaux avis</span><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">29</span><div><div class="nm">Pastille qui appelle</div><div class="ds">Une onde douce tant que les nouveaux avis ne sont pas lus.</div></div></div></div>
+      <div class="tile"><div class="stage"><div style="display:flex;padding-left:12px"><span class="av a1" style="background:var(--powder)">L</span><span class="av" style="background:var(--sage);position:relative;z-index:1">C</span><span class="av a3" style="background:var(--butter)">S</span></div><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">30</span><div><div class="nm">Amies qui se rassemblent</div><div class="ds">Les initiales se regroupent en petit tas : « 3 amies ont donné leur avis ».</div></div></div></div>
+      <div class="tile"><div class="stage"><div class="island"><span style="width:32px;height:32px;flex-shrink:0;border-radius:50%;background:var(--powder);color:var(--cocoa);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px">L</span><span class="isl-t" style="font-size:14px">Léa a donné son avis 😍</span></div><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">31</span><div><div class="nm">Notification en îlot</div><div class="ds">Une pastille noire s'ouvre en petite carte, comme sur iPhone.</div></div></div></div>
+    </div>
+  </section>
+
+  <section id="navigation">
+    <h3>Navigation et menus</h3>
+    <div class="grid">
+      <div class="tile"><div class="stage"><div class="tabs" id="tabs"><span class="thumb" aria-hidden="true"></span><button class="btn" aria-pressed="false">Dressing</button><button class="btn" aria-pressed="true">Envies</button><button class="btn" aria-pressed="false">Listes</button><button class="btn" aria-pressed="false">Moi</button></div><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">32</span><div><div class="nm">Menu à pastille</div><div class="ds">Sur téléphone, la pastille glisse sous la rubrique choisie.</div></div></div></div>
+      <div class="tile"><div class="stage"><div class="ul" id="ul"><button class="btn" aria-pressed="true">Toutes</button><button class="btn" aria-pressed="false">Robes</button><button class="btn" aria-pressed="false">Sacs</button><span class="bar2" aria-hidden="true"></span></div><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">33</span><div><div class="nm">Soulignement qui suit</div><div class="ds">Un trait rose glisse sous l'onglet choisi.</div></div></div></div>
+      <div class="tile"><div class="stage"><button class="btn burger" id="burger" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">34</span><div><div class="nm">Menu qui devient croix</div><div class="ds">Les trois traits se croisent pour fermer.</div></div></div></div>
+      <div class="tile"><div class="stage fabw" id="fabw"><span class="fan f1">🔗</span><span class="fan f2">📷</span><span class="fan f3">✍️</span><button class="btn fab" id="fab" aria-label="Ajouter" aria-expanded="false">+</button><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">35</span><div><div class="nm">Bouton « + » en éventail</div><div class="ds">S'ouvre sur : coller un lien, prendre une photo, écrire à la main.</div></div></div></div>
+      <div class="tile"><div class="stage" style="flex-direction:column;gap:10px"><div class="lg" id="lg"><span style="background:var(--powder)"></span><span style="background:var(--sage)"></span><span style="background:var(--butter)"></span><span style="background:var(--latte)"></span></div><button class="btn" id="lgBtn" style="font-size:13px;font-weight:600;text-decoration:underline">Voir en liste</button></div>
+        <div class="lab"><span class="num">36</span><div><div class="nm">Liste ou grille</div><div class="ds">Les cartes se réorganisent en glissant d'une vue à l'autre.</div></div></div></div>
+      <div class="tile"><div class="stage"><div class="search" id="search"><button class="btn" id="searchBtn" aria-label="Chercher" style="width:46px;height:46px;flex-shrink:0;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 16 16" width="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg></button><input id="searchIn" placeholder="Chercher une envie" aria-label="Chercher"></div><span class="hint">Clique la loupe</span></div>
+        <div class="lab"><span class="num">37</span><div><div class="nm">Recherche qui s'ouvre</div><div class="ds">La loupe s'étire en champ de recherche.</div></div></div></div>
+      <div class="tile"><div class="stage"><div class="chips" id="chips"><button class="btn" aria-pressed="false"><svg viewBox="0 0 16 16" width="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>Robes</button><button class="btn" aria-pressed="true"><svg viewBox="0 0 16 16" width="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>Coups de cœur</button><button class="btn" aria-pressed="false"><svg viewBox="0 0 16 16" width="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>Prix en baisse</button><button class="btn" aria-pressed="false"><svg viewBox="0 0 16 16" width="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>Taille 38</button></div><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">38</span><div><div class="nm">Filtres à cocher</div><div class="ds">Une petite coche apparaît dans le filtre choisi.</div></div></div></div>
+    </div>
+  </section>
+
+  <section id="photos">
+    <h3>Photos</h3>
+    <div class="grid">
+      <div class="tile"><div class="stage" style="flex-direction:column;gap:14px"><div class="xfade" id="carPh" style="width:110px;height:110px;border-radius:55px 55px 14px 14px;background:var(--powder)"></div><div class="dotsnav" id="dotsnav"><button class="btn" aria-pressed="true" aria-label="Photo 1"></button><button class="btn" aria-pressed="false" aria-label="Photo 2"></button><button class="btn" aria-pressed="false" aria-label="Photo 3"></button><button class="btn" aria-pressed="false" aria-label="Photo 4"></button></div><span class="hint">Clique les points</span></div>
+        <div class="lab"><span class="num">39</span><div><div class="nm">Points qui s'étirent</div><div class="ds">Le point de la photo affichée s'allonge en petite pilule.</div></div></div></div>
+      <div class="tile"><div class="stage" style="background:var(--blush)"><div class="pattern" id="lensPh" style="position:relative;width:140px;height:150px;border-radius:70px 70px 14px 14px;cursor:none"><span class="lens pattern" id="lens" hidden></span></div><span class="hint">Survole la photo</span></div>
+        <div class="lab"><span class="num">40</span><div><div class="nm">Loupe</div><div class="ds">Une loupe suit la souris pour voir la matière et les détails.</div></div></div></div>
+      <div class="tile"><div class="stage" style="gap:14px"><div class="xfade" id="stripPh" style="width:100px;height:130px;border-radius:50px 50px 12px 12px;background:var(--powder)"></div><div class="strip" id="strip" style="display:flex;flex-direction:column;gap:6px"><button class="btn" aria-pressed="true" aria-label="Photo 1" style="background:var(--powder)"></button><button class="btn" aria-pressed="false" aria-label="Photo 2" style="background:var(--sage)"></button><button class="btn" aria-pressed="false" aria-label="Photo 3" style="background:var(--butter)"></button><button class="btn" aria-pressed="false" aria-label="Photo 4" style="background:var(--latte)"></button></div><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">41</span><div><div class="nm">Vignettes qui grossissent</div><div class="ds">La vignette choisie grossit, la grande photo change en fondu.</div></div></div></div>
+      <div class="tile"><div class="stage">
+        <span class="cover" style="background:var(--powder);--a:0px;--b:-70px;--c:70px;--s1:1.15;--s2:.85;--s3:.85;--z1:3;--z2:1;--z3:1"></span>
+        <span class="cover" style="background:var(--sage);--a:70px;--b:0px;--c:-70px;--s1:.85;--s2:1.15;--s3:.85;--z1:1;--z2:3;--z3:1"></span>
+        <span class="cover" style="background:var(--butter);--a:-70px;--b:70px;--c:0px;--s1:.85;--s2:.85;--s3:1.15;--z1:1;--z2:1;--z3:3"></span>
+        <span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">42</span><div><div class="nm">Carrousel en vitrine</div><div class="ds">La photo du centre est plus grande, les voisines dépassent sur les côtés.</div></div></div></div>
+      <div class="tile"><div class="stage"><div style="display:grid;grid-template-columns:repeat(4,48px);gap:8px"><span class="stag" style="background:var(--powder)"></span><span class="stag" style="background:var(--sage);animation-delay:.08s"></span><span class="stag" style="background:var(--butter);animation-delay:.16s"></span><span class="stag" style="background:var(--latte);animation-delay:.24s"></span><span class="stag" style="background:var(--rosewood);animation-delay:.32s"></span><span class="stag" style="background:var(--blush);animation-delay:.4s"></span><span class="stag" style="background:#E5D7CC;animation-delay:.48s"></span><span class="stag" style="background:#EBE3DB;animation-delay:.56s"></span></div><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">43</span><div><div class="nm">Grille en cascade</div><div class="ds">À l'ouverture d'une page, les articles arrivent l'un après l'autre.</div></div></div></div>
+    </div>
+  </section>
+
+  <section id="messages">
+    <h3>Chargement, messages, erreurs, pages vides</h3>
+    <div class="grid">
+      <div class="tile"><div class="stage"><div style="display:grid;grid-template-columns:repeat(3,62px);gap:10px">
+        <div style="display:flex;flex-direction:column;gap:6px"><div class="sk" style="height:78px;border-radius:31px 31px 10px 10px"></div><div class="sk" style="height:10px;border-radius:5px"></div><div class="sk" style="height:10px;width:60%;border-radius:5px"></div></div>
+        <div style="display:flex;flex-direction:column;gap:6px"><div class="sk" style="height:78px;border-radius:31px 31px 10px 10px"></div><div class="sk" style="height:10px;border-radius:5px"></div><div class="sk" style="height:10px;width:60%;border-radius:5px"></div></div>
+        <div style="display:flex;flex-direction:column;gap:6px"><div class="sk" style="height:78px;border-radius:31px 31px 10px 10px"></div><div class="sk" style="height:10px;border-radius:5px"></div><div class="sk" style="height:10px;width:60%;border-radius:5px"></div></div>
+      </div><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">44</span><div><div class="nm">Silhouettes qui scintillent</div><div class="ds">Pendant le chargement, la forme des articles (en arche) brille doucement.</div></div></div></div>
+      <div class="tile"><div class="stage" id="toastBox"><button class="btn" id="toastBtn" style="position:absolute;top:12px;right:12px;height:34px;padding:0 12px;border-radius:999px;background:var(--blush);font-size:13px;font-weight:600">Nouveau message</button><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">45</span><div><div class="nm">Messages empilés</div><div class="ds">Plusieurs messages se rangent en pile au lieu de se cacher.</div></div></div></div>
+      <div class="tile"><div class="stage"><div class="drag settle" id="swipeMsg" style="padding:12px 18px;border-radius:16px;background:var(--cocoa);color:var(--petal);font-size:14px">Robe Lina ajoutée</div><button class="btn" id="swipeReset" hidden style="font-size:13px;text-decoration:underline">Remettre le message</button><span class="hint">Glisse le message</span></div>
+        <div class="lab"><span class="num">46</span><div><div class="nm">Message qu'on balaie</div><div class="ds">On pousse un message sur le côté pour le fermer.</div></div></div></div>
+      <div class="tile"><div class="stage" style="flex-direction:column;gap:8px"><div id="errRow" style="display:flex;gap:8px"><input id="errIn" aria-label="Lien" placeholder="Colle un lien" style="width:150px;height:44px;padding:0 14px;border-radius:12px;border:1.5px solid var(--line);font:inherit;font-size:14px;outline:none;box-sizing:border-box"><button class="btn" id="errBtn" style="height:44px;padding:0 14px;border-radius:12px;background:var(--cocoa);color:var(--petal);font-weight:600;font-size:14px">Ajouter</button></div><span id="errMsg" style="font-size:13px;color:var(--garnet);min-height:18px"></span><span class="hint">Clique « Ajouter »</span></div>
+        <div class="lab"><span class="num">47</span><div><div class="nm">Champ qui dit non</div><div class="ds">Il tremble un instant et explique quoi faire.</div></div></div></div>
+      <div class="tile"><div class="stage" style="align-items:flex-start"><div class="off" style="position:absolute;left:0;right:0;top:0;padding:10px 14px;background:var(--butter);color:#6A4F12;font-size:13px;font-weight:600">Pas de connexion, on réessaie…</div><div class="back" style="position:absolute;left:0;right:0;top:0;padding:10px 14px;background:var(--mint);color:var(--pine);font-size:13px;font-weight:600">De retour en ligne</div><span class="serif" style="margin-top:80px;font-size:22px;color:var(--taupe)">Mes envies</span><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">48</span><div><div class="nm">Hors ligne</div><div class="ds">Un bandeau glisse du haut quand internet coupe, puis repart.</div></div></div></div>
+      <div class="tile"><div class="stage" style="flex-direction:column;gap:10px"><svg class="swing" viewBox="0 0 80 60" width="80" aria-hidden="true" fill="none" stroke="var(--cocoa)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M40 6a5 5 0 1 1 5 5c-3 0-5 2-5 5v3L8 46h64L40 19"/></svg><span class="serif" style="font-size:18px">Aucune envie pour l'instant</span><button class="btn" style="height:36px;padding:0 14px;border-radius:999px;background:var(--cocoa);color:var(--petal);font-size:13px;font-weight:600">Ajouter une envie</button></div>
+        <div class="lab"><span class="num">49</span><div><div class="nm">Page vide vivante</div><div class="ds">Un cintre se balance doucement, avec un bouton pour commencer.</div></div></div></div>
+      <div class="tile"><div class="stage" style="align-items:flex-start"><svg class="arc" viewBox="0 0 24 24" width="28" aria-hidden="true" style="position:absolute;top:14px" fill="none" stroke="var(--rose)" stroke-width="2.6" stroke-linecap="round"><path d="M12 3a9 9 0 1 1-8.5 6"/></svg><div class="pull" style="margin-top:20px;width:220px;display:flex;flex-direction:column;gap:8px"><div style="height:40px;border-radius:12px;background:var(--blush)"></div><div style="height:40px;border-radius:12px;background:var(--blush)"></div><div style="height:40px;border-radius:12px;background:var(--blush)"></div></div><span class="hint">En boucle</span></div>
+        <div class="lab"><span class="num">50</span><div><div class="nm">Tirer pour actualiser</div><div class="ds">Sur téléphone, on tire la liste vers le bas pour revérifier les prix.</div></div></div></div>
+    </div>
+  </section>
+
+  <section id="sombre">
+    <h3>Mode sombre et téléphone</h3>
+    <div class="grid">
+      <div class="tile"><div class="stage dn" id="dnStage"><button class="btn daynight" id="dn" role="switch" aria-checked="false" aria-label="Mode sombre"><span class="k"></span></button><span class="hint">Clique</span></div>
+        <div class="lab"><span class="num">51</span><div><div class="nm">Soleil qui devient lune</div><div class="ds">Le rond glisse, une ombre le creuse en croissant de lune.</div></div></div></div>
+      <div class="tile"><div class="stage rv" id="rv"><div class="reveal"></div><span class="serif rvt" style="font-size:22px">Mes envies</span><button class="btn" id="rvBtn" aria-label="Changer de thème" style="position:absolute;top:14px;right:18px;width:40px;height:40px;border-radius:50%;background:var(--blush);font-size:18px">☀</button><span class="hint">Clique le rond</span></div>
+        <div class="lab"><span class="num">52</span><div><div class="nm">Le sombre qui s'étale</div><div class="ds">Le mode sombre s'étend en cercle depuis le bouton.</div></div></div></div>
+      <div class="tile"><div class="stage" style="background:var(--blush);align-items:flex-end"><div class="snap" id="snap"><button class="btn" id="snapBtn" aria-label="Agrandir" style="width:100%;height:26px;display:flex;justify-content:center;align-items:center"><span style="width:40px;height:5px;border-radius:3px;background:#D9C6C0"></span></button><span class="serif" style="font-size:17px">Robe Lina, 120 €</span><span id="snapTxt" style="font-size:13px;color:var(--taupe);padding-top:6px">Clique la poignée</span></div><span class="hint t">Clique la poignée</span></div>
+        <div class="lab"><span class="num">53</span><div><div class="nm">Feuille à trois crans</div><div class="ds">Sur téléphone, l'aperçu monte à moitié, puis en entier.</div></div></div></div>
+      <div class="tile"><div class="stage" style="padding:0 14px;box-sizing:border-box"><div style="position:relative;width:100%;height:76px;border-radius:18px;background:var(--rose);overflow:hidden"><span style="position:absolute;right:18px;top:28px;color:#FFFFFF;font-weight:600;font-size:14px">Retirer</span><div class="drag settle" id="row54" style="position:absolute;inset:0;background:var(--white);border:1px solid #F2E6E2;border-radius:18px;display:flex;align-items:center;gap:12px;padding:0 12px"><span style="width:44px;height:56px;border-radius:22px 22px 8px 8px;background:var(--powder)"></span><span class="serif" style="font-size:17px">Robe Lina</span></div></div><span class="hint">Glisse vers la gauche</span></div>
+        <div class="lab"><span class="num">54</span><div><div class="nm">Glisser pour agir</div><div class="ds">L'action apparaît sous l'article quand on le pousse.</div></div></div></div>
+      <div class="tile"><div class="stage"><button class="btn press">Voir chez Sézane</button><span class="hint">Appuie longtemps</span></div>
+        <div class="lab"><span class="num">55</span><div><div class="nm">Bouton qui s'enfonce</div><div class="ds">Il descend vraiment sous le doigt, comme une touche.</div></div></div></div>
+      <div class="tile"><div class="stage" id="magStage"><button class="btn mag" id="mag">Ajouter une envie</button><span class="hint">Approche la souris</span></div>
+        <div class="lab"><span class="num">56</span><div><div class="nm">Bouton aimanté</div><div class="ds">Il se laisse attirer par la souris quand elle s'approche (ordinateur seulement).</div></div></div></div>
+    </div>
+  </section>
+
+  <section id="recap" aria-labelledby="recapTitle">
+    <h2 id="recapTitle">Mon récapitulatif</h2>
+    <div class="recap">
+      <div><h4>J'aime</h4><ul id="listYes"></ul><p class="empty-note" id="emptyYes">Rien pour l'instant.</p></div>
+      <div><h4>J'aime pas</h4><ul id="listNo"></ul><p class="empty-note" id="emptyNo">Rien pour l'instant.</p></div>
+    </div>
+  </section>
+
+  <div class="bar" role="region" aria-label="Mes choix">
+    <span class="counts"><span id="counts">0 j'aime, 0 j'aime pas</span> <span class="save" id="saveState"></span></span>
+    <div class="filters" id="filters" role="group" aria-label="Afficher">
+      <button type="button" data-f="all" aria-pressed="true">Tout</button>
+      <button type="button" data-f="aime" aria-pressed="false">J'aime</button>
+      <button type="button" data-f="aimepas" aria-pressed="false">J'aime pas</button>
+      <button type="button" data-f="none" aria-pressed="false">Sans avis</button>
+      <a href="#recap" style="height:36px;padding:0 12px;border-radius:999px;background:var(--rose);color:#FFFFFF;font-size:13px;font-weight:600;display:flex;align-items:center;text-decoration:none">Récapitulatif</a>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const COLS = ['#B4646C', '#D8A9A3', '#E8CF8F', '#F4A3A8', '#A9DCBF'];
+  const CHECK = '<svg viewBox="0 0 16 16" width="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path class="draw" d="M3.5 8.5l3 3 6-7"/></svg>';
+  const restart = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
+  const later = (el, ms) => setTimeout(() => el.remove(), ms);
+
+  // Reduced motion: say so, and let her see the animations anyway.
+  try {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (mq.matches) $('motionNote').hidden = false;
+    $('forceMotion').addEventListener('click', () => { document.body.classList.add('force-motion'); $('motionNote').hidden = true; });
+  } catch (e) { /* matchMedia missing: animations simply play */ }
+
+  // 1. like burst
+  $('like').addEventListener('click', (e) => {
+    const b = e.currentTarget, on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', on); b.style.background = on ? '#F6CFD4' : '#FFFFFF';
+    restart(b, 'pop');
+    if (!on) return;
+    for (let i = 0; i < 10; i++) { const s = document.createElement('span'); s.className = 'spark'; s.style.setProperty('--a', i * 36 + 'deg'); s.style.background = COLS[i % 4]; $('likeBox').appendChild(s); later(s, 650); }
+  });
+  // 2. double tap
+  $('dbl').addEventListener('dblclick', (e) => { const h = document.createElement('span'); h.className = 'bigheart'; h.textContent = '😍'; e.currentTarget.appendChild(h); later(h, 950); });
+  // 6. bookmark
+  $('bm').addEventListener('click', (e) => { const b = e.currentTarget, on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on); b.querySelector('svg').setAttribute('fill', on ? '#B4646C' : 'none'); restart(b, 'pop'); });
+  // 11. confetti
+  $('conf').addEventListener('click', () => { const box = $('confBox'); const w = box.clientWidth; for (let i = 0; i < 20; i++) { const c = document.createElement('span'); c.className = 'conf'; c.style.left = (8 + (i * 47) % (w - 16)) + 'px'; c.style.background = COLS[i % 5]; c.style.setProperty('--r', ((i % 2 ? 1 : -1) * (180 + i * 20)) + 'deg'); c.style.animationDelay = (i % 6) * 60 + 'ms'; box.appendChild(c); later(c, 1900); } });
+  // 16. budget bubble
+  const bud = $('bud'), bub = $('budBub');
+  const syncBud = () => { const p = (bud.value - 50) / 450; bub.textContent = bud.value + ' €'; bub.style.transform = 'translateX(' + Math.round((p - 0.5) * 190) + 'px)'; };
+  bud.addEventListener('input', syncBud); syncBud();
+  // 20. order confirm
+  $('order').addEventListener('click', (e) => {
+    const b = e.currentTarget;
+    if (b.classList.contains('busy')) return;
+    if (b.classList.contains('done')) { b.className = 'btn order'; b.textContent = "J'ai commandé"; return; }
+    b.classList.add('busy'); b.innerHTML = '<span class="spin" aria-label="En cours"></span>';
+    setTimeout(() => { b.classList.remove('busy'); b.classList.add('done'); b.innerHTML = CHECK + '<span>Commandé</span>'; }, 900);
+  });
+  // 21. square check
+  $('sq').addEventListener('click', (e) => { const b = e.currentTarget, on = b.getAttribute('aria-checked') !== 'true'; b.setAttribute('aria-checked', on); b.innerHTML = on ? CHECK : ''; });
+  // 23. copy
+  let copyT; $('copy').addEventListener('click', (e) => { const b = e.currentTarget; clearTimeout(copyT); b.classList.add('ok'); b.textContent = 'Lien copié ✓'; copyT = setTimeout(() => { b.classList.remove('ok'); b.textContent = 'Copier le lien'; }, 1800); });
+  // 24. stretchy switch
+  $('sw').addEventListener('click', (e) => { const b = e.currentTarget; b.setAttribute('aria-checked', b.getAttribute('aria-checked') !== 'true'); b.classList.add('stretch'); setTimeout(() => b.classList.remove('stretch'), 170); });
+  // 27. share sheet
+  $('shareBtn').addEventListener('click', () => $('sheet').classList.toggle('open'));
+  // 32. pill tabs
+  const tabs = $('tabs'), thumb = tabs.querySelector('.thumb'), tabBtns = [...tabs.querySelectorAll('button')];
+  const setTab = (i) => { tabBtns.forEach((b, k) => b.setAttribute('aria-pressed', k === i)); thumb.style.left = (6 + i * 58) + 'px'; };
+  tabBtns.forEach((b, i) => b.addEventListener('click', () => setTab(i))); setTab(1);
+  // 33. underline
+  const ul = $('ul'), ulBar = ul.querySelector('.bar2'), ulBtns = [...ul.querySelectorAll('button')];
+  ulBtns.forEach((b, i) => b.addEventListener('click', () => { ulBtns.forEach((x, k) => x.setAttribute('aria-pressed', k === i)); ulBar.style.left = (i * 80 + 18) + 'px'; }));
+  // 34. burger
+  $('burger').addEventListener('click', (e) => { const b = e.currentTarget; b.setAttribute('aria-expanded', b.getAttribute('aria-expanded') !== 'true'); });
+  // 35. fab fan
+  $('fab').addEventListener('click', (e) => { const w = $('fabw'); w.classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', w.classList.contains('open')); });
+  // 36. list/grid
+  $('lgBtn').addEventListener('click', (e) => { const l = $('lg'); l.classList.toggle('list'); e.currentTarget.textContent = l.classList.contains('list') ? 'Voir en grille' : 'Voir en liste'; });
+  // 37. search
+  $('searchBtn').addEventListener('click', () => { const s = $('search'); s.classList.toggle('open'); if (s.classList.contains('open')) setTimeout(() => $('searchIn').focus(), 200); });
+  // 38. chips
+  $('chips').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true')));
+  // 39. dots
+  const tones = ['#EBC7C3', '#D5DCC8', '#F3E3A6', '#EADBC8'];
+  const dots = [...$('dotsnav').querySelectorAll('button')];
+  dots.forEach((b, i) => b.addEventListener('click', () => { dots.forEach((x, k) => x.setAttribute('aria-pressed', k === i)); $('carPh').style.background = tones[i]; }));
+  // 40. lens
+  const lensPh = $('lensPh'), lens = $('lens');
+  lensPh.addEventListener('pointermove', (e) => { const r = lensPh.getBoundingClientRect(); const x = e.clientX - r.left, y = e.clientY - r.top; lens.hidden = false; lens.style.left = x + 'px'; lens.style.top = y + 'px'; lens.style.backgroundPosition = (-(x * 2 - 35)) + 'px ' + (-(y * 2 - 35)) + 'px'; });
+  lensPh.addEventListener('pointerleave', () => { lens.hidden = true; });
+  // 41. strip
+  const strip = [...$('strip').querySelectorAll('button')];
+  strip.forEach((b, i) => b.addEventListener('click', () => { strip.forEach((x, k) => x.setAttribute('aria-pressed', k === i)); $('stripPh').style.background = tones[i]; }));
+  // 45. stacked toasts
+  const msgs = ['Robe Lina ajoutée', 'Prix en baisse : Ballerines', 'Léa a donné son avis', 'Trench Jamie de retour en 38', 'Liste partagée'];
+  let tCount = 0; const toastBox = $('toastBox');
+  const layoutToasts = () => { const list = [...toastBox.querySelectorAll('.toastS')]; list.forEach((t, i) => { const k = list.length - 1 - i; t.style.transform = 'translateY(' + (-k * 10) + 'px) scale(' + (1 - k * 0.06) + ')'; t.style.opacity = k > 2 ? 0 : 1 - k * 0.25; t.style.zIndex = 10 - k; }); while (list.length > 4) list.shift().remove(); };
+  const addToast = () => { const t = document.createElement('div'); t.className = 'toastS'; t.textContent = msgs[tCount++ % msgs.length]; t.style.transform = 'translateY(30px)'; t.style.opacity = 0; toastBox.appendChild(t); void t.offsetWidth; layoutToasts(); };
+  $('toastBtn').addEventListener('click', addToast); addToast();
+  // Drag helper for 46 and 54.
+  function draggable(el, { min = -400, max = 400, onEnd }) {
+    let x0 = null, dx = 0, base = 0;
+    el.addEventListener('pointerdown', (e) => { x0 = e.clientX; el.setPointerCapture(e.pointerId); el.classList.remove('settle'); });
+    el.addEventListener('pointermove', (e) => { if (x0 === null) return; dx = Math.max(min, Math.min(max, base + e.clientX - x0)); el.style.transform = 'translateX(' + dx + 'px) rotate(' + (el.dataset.tilt ? dx / 20 : 0) + 'deg)'; });
+    const end = () => { if (x0 === null) return; x0 = null; el.classList.add('settle'); base = onEnd(dx); el.style.transform = 'translateX(' + base + 'px)'; };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    return { reset: () => { base = 0; dx = 0; el.style.transform = 'translateX(0)'; } };
+  }
+  // 46. swipe a message away
+  const swipeMsg = $('swipeMsg'); swipeMsg.dataset.tilt = '1';
+  const sw46 = draggable(swipeMsg, { onEnd: (dx) => { if (Math.abs(dx) > 80) { swipeMsg.style.opacity = 0; setTimeout(() => { swipeMsg.hidden = true; $('swipeReset').hidden = false; }, 250); return dx > 0 ? 300 : -300; } return 0; } });
+  $('swipeReset').addEventListener('click', () => { swipeMsg.hidden = false; swipeMsg.style.opacity = 1; sw46.reset(); $('swipeReset').hidden = true; });
+  // 47. error shake
+  $('errBtn').addEventListener('click', () => { const v = $('errIn').value.trim(); if (v) { $('errMsg').textContent = ''; $('errIn').style.borderColor = 'var(--fern)'; return; } restart($('errRow'), 'shake'); $('errIn').style.borderColor = 'var(--garnet)'; $('errMsg').textContent = "Colle d'abord le lien de l'article."; });
+  // 51. day/night
+  $('dn').addEventListener('click', (e) => { const b = e.currentTarget, on = b.getAttribute('aria-checked') !== 'true'; b.setAttribute('aria-checked', on); $('dnStage').classList.toggle('dark', on); });
+  // 52. circle reveal
+  $('rvBtn').addEventListener('click', (e) => { const r = $('rv'); r.classList.toggle('dark'); const d = r.classList.contains('dark'); e.currentTarget.textContent = d ? '☾' : '☀'; e.currentTarget.style.background = d ? '#33251F' : 'var(--blush)'; e.currentTarget.style.color = d ? '#F2EDE7' : 'var(--cocoa)'; });
+  // 53. snap sheet
+  let snap = 0; const snapH = ['70px', '118px', '168px'], snapT = ['Clique la poignée', 'Taille 38, en stock', 'Taille 38, en stock. Avis : Léa 😍'];
+  $('snapBtn').addEventListener('click', () => { snap = (snap + 1) % 3; $('snap').style.height = snapH[snap]; $('snapTxt').textContent = snapT[snap]; });
+  // 54. swipe to act
+  draggable($('row54'), { min: -110, max: 0, onEnd: (dx) => (dx < -60 ? -96 : 0) });
+  // 56. magnet
+  const magStage = $('magStage'), mag = $('mag');
+  magStage.addEventListener('pointermove', (e) => { const r = magStage.getBoundingClientRect(); const x = e.clientX - (r.left + r.width / 2), y = e.clientY - (r.top + r.height / 2); mag.style.transform = 'translate(' + Math.round(x * 0.25) + 'px,' + Math.round(y * 0.3) + 'px)'; });
+  magStage.addEventListener('pointerleave', () => { mag.style.transform = 'none'; });
+
+  // ---------- Votes: « J'aime » / « J'aime pas » under every number ----------
+  const LOCAL_KEY = 'closyria-catalogue-choix';
+  let choices = {};
+  let filter = 'all';
+  let col = null;
+  const tiles = [...document.querySelectorAll('.tile')].map((tile) => {
+    const id = tile.querySelector('.num').textContent.trim();
+    const name = tile.querySelector('.nm').textContent.trim();
+    const sec = tile.closest('section');
+    const group = (sec.querySelector('h3') || sec.querySelector('h2')).textContent.trim();
+    const box = document.createElement('div');
+    box.className = 'vote';
+    box.innerHTML = '<button type="button" class="yes" aria-pressed="false">J’aime</button><button type="button" class="no" aria-pressed="false">J’aime pas</button>';
+    box.querySelector('.yes').setAttribute('aria-label', 'J’aime ' + id + ', ' + name);
+    box.querySelector('.no').setAttribute('aria-label', 'J’aime pas ' + id + ', ' + name);
+    tile.appendChild(box);
+    const t = { id, name, group, tile, yes: box.querySelector('.yes'), no: box.querySelector('.no') };
+    t.yes.addEventListener('click', () => choose(t, 'aime'));
+    t.no.addEventListener('click', () => choose(t, 'aimepas'));
+    return t;
+  });
+  const byId = Object.fromEntries(tiles.map((t) => [t.id, t]));
+
+  function render() {
+    let yes = 0, no = 0;
+    const ly = $('listYes'), ln = $('listNo');
+    ly.textContent = ''; ln.textContent = '';
+    for (const t of tiles) {
+      const c = choices[t.id] || null;
+      if (c) t.tile.dataset.choice = c; else delete t.tile.dataset.choice;
+      t.yes.setAttribute('aria-pressed', c === 'aime');
+      t.no.setAttribute('aria-pressed', c === 'aimepas');
+      if (c === 'aime') { yes++; const li = document.createElement('li'); li.textContent = t.id + '. ' + t.name; ly.appendChild(li); }
+      if (c === 'aimepas') { no++; const li = document.createElement('li'); li.textContent = t.id + '. ' + t.name; ln.appendChild(li); }
+      const show = filter === 'all' || (filter === 'none' ? !c : c === filter);
+      t.tile.classList.toggle('hide', !show);
+    }
+    $('emptyYes').hidden = yes > 0; $('emptyNo').hidden = no > 0;
+    $('counts').textContent = yes + ' j’aime, ' + no + ' j’aime pas, ' + (tiles.length - yes - no) + ' sans avis';
+  }
+
+  function saveLocal() { try { localStorage.setItem(LOCAL_KEY, JSON.stringify(choices)); } catch (e) { /* storage blocked: choices stay for this visit */ } }
+
+  async function choose(t, value) {
+    const next = choices[t.id] === value ? null : value;
+    if (next) choices[t.id] = next; else delete choices[t.id];
+    render(); saveLocal();
+    if (!col) return;
+    $('saveState').textContent = 'Enregistrement…';
+    try {
+      const doc = col.doc(t.id);
+      if (next) await doc.set({ choice: next, name: t.name, group: t.group, at: new Date().toISOString() });
+      else await doc.delete();
+      $('saveState').textContent = 'Enregistré';
+    } catch (e) {
+      $('saveState').textContent = 'Pas enregistré, réessaie';
+    }
+  }
+
+  $('filters').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    filter = b.dataset.f;
+    $('filters').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    render();
+  }));
+
+  try { const saved = JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}'); if (saved && typeof saved === 'object') choices = saved; } catch (e) { /* nothing saved */ }
+  render();
+  $('saveState').textContent = 'Gardé sur cet appareil';
+
+  // Shared store: Claude reads the choices from here.
+  (async () => {
+    const db = window.claude && typeof window.claude.use === 'function' ? await window.claude.use('db') : null;
+    if (!db) return;
+    col = db.collection('choix');
+    let first = true;
+    const timer = setTimeout(() => { if (first) $('saveState').textContent = 'Gardé sur cet appareil'; }, 10000);
+    col.onSnapshot((snap) => {
+      clearTimeout(timer);
+      const fromDb = {};
+      snap.docs.forEach((d) => { const v = d.data(); if (v && (v.choice === 'aime' || v.choice === 'aimepas') && byId[d.id]) fromDb[d.id] = v.choice; });
+      if (first && snap.empty && Object.keys(choices).length) {
+        // Choices made before the store answered: send them up once.
+        for (const [id, c] of Object.entries(choices)) { const t = byId[id]; if (t) col.doc(id).set({ choice: c, name: t.name, group: t.group, at: new Date().toISOString() }).catch(() => {}); }
+      } else {
+        choices = fromDb; saveLocal();
+      }
+      first = false;
+      $('saveState').textContent = 'Enregistré';
+      render();
+    }, () => { clearTimeout(timer); $('saveState').textContent = 'Gardé sur cet appareil'; });
+  })();
+})();
+</script>
