@@ -35,6 +35,12 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
   // A setting being saved shows its new value until the API answers; it goes back if the save fails.
   const [pending, setPending] = useState<Partial<WishlistSettings>>({});
   const field = useRef<HTMLTextAreaElement>(null);
+  const copyButton = useRef<HTMLButtonElement>(null);
+  // After « Créer le lien », the button she pressed is gone: the focus goes to « Copier le lien » once it shows.
+  const [focusCopy, setFocusCopy] = useState(false);
+  // The list as last rendered: a save that answers late changes only its own setting on it, never the others.
+  const latest = useRef(list);
+  latest.current = list;
   const fieldId = useId();
 
   useEffect(() => {
@@ -68,23 +74,32 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
   const url = link.status === "ready" ? link.url : null;
   const legacy = link.status === "ready" && link.legacy;
 
+  useEffect(() => {
+    if (!focusCopy || !url) return;
+    copyButton.current?.focus();
+    setFocusCopy(false);
+  }, [focusCopy, url]);
+
   /** Shares the list, or makes a new link (the old one stops working). */
   async function share() {
     setBusy(true);
     setMessage(null);
     const renewing = list.shared;
+    const wasLegacy = legacy;
     const result = await shareWishlist(list.id);
     setBusy(false);
     setConfirming(false);
     if (!result.ok) return setMessage({ text: t("failed"), kind: "error" });
     setLink({ status: "ready", url: absoluteShareUrl(window.location.origin, result.url), legacy: false });
     if (renewing) setMessage({ text: t("renewed"), kind: "info" });
+    if (wasLegacy) setFocusCopy(true);
     onChange({ ...list, shared: true, sharedAt: new Date().toISOString() });
     if (!renewing) void requestAccountPrompt("share");
   }
 
   async function copy() {
     if (!url) return;
+    setMessage(null);
     try {
       await navigator.clipboard.writeText(url);
       setMessage({ text: t("copied"), kind: "info" });
@@ -96,10 +111,14 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
 
   async function send() {
     if (!url) return;
+    setMessage(null);
     try {
       await navigator.share({ title: list.name, url });
-    } catch {
-      // Closed without sending, or refused: nothing to say.
+    } catch (error) {
+      // Closed without sending: nothing to say. Anything else: the link is selected, to copy by hand.
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      field.current?.select();
+      setMessage({ text: t("copyFailed"), kind: "error" });
     }
   }
 
@@ -117,12 +136,13 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
   async function toggle(key: Setting) {
     if (pending[key] !== undefined) return;
     const next = !list[key];
+    setMessage(null);
     setPending((previous) => ({ ...previous, [key]: next }));
     const result = await patchWishlistSettings(list.id, { [key]: next });
     setPending(({ [key]: _done, ...rest }) => rest);
     if (!result.ok) return setMessage({ text: t("settingFailed"), kind: "error" });
-    const { ok: _ok, status: _status, ...saved } = result;
-    onChange(saved);
+    // Only this setting: another one saved meanwhile may have answered first, and this answer predates it.
+    onChange({ ...latest.current, [key]: result[key] });
   }
 
   const since = list.sharedAt
@@ -171,7 +191,12 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
             className={`${inputClass} resize-none break-all border-dashed border-selected-line text-sm field-sizing-content`}
           />
           <div className="flex flex-wrap gap-space-2">
-            <button type="button" onClick={() => void copy()} className={`${primaryButtonClass} ${touch}`}>
+            <button
+              ref={copyButton}
+              type="button"
+              onClick={() => void copy()}
+              className={`${primaryButtonClass} ${touch}`}
+            >
               {t("copy")}
             </button>
             {canShare && (

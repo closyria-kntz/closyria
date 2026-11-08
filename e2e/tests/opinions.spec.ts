@@ -393,4 +393,58 @@ test("un réglage qui n'a pas pu être enregistré revient en arrière", async (
   await toggle.click();
   await expect(page.getByRole("alert").filter({ hasText: "Le réglage n’a pas pu être enregistré" })).toBeVisible();
   await expect(toggle).toHaveAttribute("aria-checked", "false");
+  // The next save works: the message goes.
+  await page.unrouteAll();
+  await flip(page, "Montrer le budget", true);
+  await expect(page.getByText("Le réglage n’a pas pu être enregistré", { exact: false })).toHaveCount(0);
+});
+
+test("deux réglages enregistrés coup sur coup : la réponse en retard ne défait pas l'autre", async ({
+  page,
+  browser,
+  baseURL,
+  db,
+  userAgentTag,
+}, testInfo) => {
+  const shareUrl = await sharedList(page, db, userAgentTag);
+  // The first save reaches the API at once, but its answer is held until the second one has answered.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let first = true;
+  await page.route(/\/api\/me\/wishlists\/[^/]+$/, async (route) => {
+    if (route.request().method() !== "PATCH" || !first) return route.fallback();
+    first = false;
+    const response = await route.fetch();
+    await held;
+    await route.fulfill({ response });
+  });
+  const budget = page.getByRole("switch", { name: "Montrer le budget" });
+  const name = page.getByRole("switch", { name: "Montrer mon prénom" });
+  await budget.click();
+  const second = page.waitForResponse(
+    (response) => response.request().method() === "PATCH" && /\/api\/me\/wishlists\/[^/]+$/.test(response.url()),
+  );
+  await name.click();
+  await second;
+  const late = page.waitForResponse(
+    (response) => response.request().method() === "PATCH" && /\/api\/me\/wishlists\/[^/]+$/.test(response.url()),
+  );
+  release();
+  await late;
+  await expect(budget).toHaveAttribute("aria-checked", "true");
+  await expect(name).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByText(/Elle voit aussi tes avis/)).toBeVisible();
+  await expect(page.getByText(/ton prénom/)).toHaveCount(0);
+
+  // As the API kept them, and as the link shows them.
+  await page.reload();
+  await expect(budget).toHaveAttribute("aria-checked", "true");
+  await expect(name).toHaveAttribute("aria-checked", "false");
+  const lea = await friend(browser, baseURL, `10.206.${testInfo.workerIndex % 250}.1`);
+  await lea.goto(shareUrl);
+  await expect(lea.getByRole("heading", { level: 1, name: "Mariage" })).toBeVisible();
+  await expect(lea.getByText(/La liste de/)).toHaveCount(0);
+  await lea.context().close();
 });

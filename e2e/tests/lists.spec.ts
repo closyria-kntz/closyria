@@ -158,6 +158,8 @@ test("le lien se copie, et « Envoyer… » n'apparaît que si le navigateur sai
     Object.defineProperty(navigator, "share", {
       configurable: true,
       value: async (data: ShareData) => {
+        const outcome = (window as unknown as { shareOutcome?: string }).shareOutcome;
+        if (outcome) throw new DOMException("no", outcome);
         (window as unknown as { shared?: ShareData }).shared = data;
       },
     });
@@ -165,6 +167,21 @@ test("le lien se copie, et « Envoyer… » n'apparaît que si le navigateur sai
   await page.reload();
   await page.getByRole("button", { name: "Envoyer…" }).click();
   expect(await page.evaluate(() => (window as unknown as { shared?: ShareData }).shared?.url)).toBe(shareUrl);
+  // Closed without sending: nothing said. Refused: the link is selected, to copy by hand.
+  const setOutcome = (outcome: string) =>
+    page.evaluate((name) => {
+      (window as unknown as { shareOutcome?: string }).shareOutcome = name;
+    }, outcome);
+  await page.getByRole("button", { name: "Copier le lien" }).click();
+  await expect(page.getByText("Lien copié")).toBeVisible();
+  await setOutcome("AbortError");
+  await page.getByRole("button", { name: "Envoyer…" }).click();
+  await expect(page.getByText("Lien copié")).toHaveCount(0);
+  const copyFailed = page.getByText("Copie impossible ici : le lien est sélectionné, copie-le à la main.");
+  await expect(copyFailed).toHaveCount(0);
+  await setOutcome("NotAllowedError");
+  await page.getByRole("button", { name: "Envoyer…" }).click();
+  await expect(copyFailed).toBeVisible();
 });
 
 test("une liste partagée avant que les liens soient gardés : « Créer un lien à garder »", async ({
@@ -196,6 +213,8 @@ test("une liste partagée avant que les liens soient gardés : « Créer un lien
   await confirm.getByRole("button", { name: "Créer le lien" }).click();
   const field = page.getByLabel("Lien de partage");
   await expect(field).toHaveValue(/\/l\/[A-Za-z0-9_-]{20,}$/);
+  // The button she pressed is gone: the focus is on « Copier le lien », not lost on the page.
+  await expect(page.getByRole("button", { name: "Copier le lien" })).toBeFocused();
   await expect(page.getByText("Ce lien ne peut pas être réaffiché.")).toHaveCount(0);
   const kept = await field.inputValue();
   expect((await other.goto(shareUrl))?.status()).toBe(404);
