@@ -564,12 +564,20 @@ test("Mes envies : l'onglet d'une liste montre les envies de tous les profils, �
   await expect(cards).toHaveCount(2);
   await expect(cards.filter({ hasText: "Robe Alma" })).toHaveCount(1);
   await expect(cards.filter({ hasText: "Gilet Brume" })).toHaveCount(1);
+  // The list keeps its own order: no sort in the menu there.
+  const menu = page.getByRole("button", { name: "Filtres et tri" });
+  await menu.click();
+  await expect(page.getByLabel("Boutique")).toBeVisible();
+  await expect(page.getByLabel("Trier par")).toHaveCount(0);
+  await page.keyboard.press("Escape");
   // Léa's wish keeps its pill and menu there: changing it never drops it from the list's tab.
   await cards.filter({ hasText: "Gilet Brume" }).getByTestId("card-take").click();
   await expect(cards).toHaveCount(2);
   await tabs.getByRole("button", { name: /Toutes mes envies/ }).click();
   await expect(cards).toHaveCount(1);
   await expect(cards).toContainText("Robe Alma");
+  await menu.click();
+  await expect(page.getByLabel("Trier par")).toBeVisible();
 });
 
 test("Mes envies : une liste partagée par deux profils, un onglet qui compte et commande les envies des deux", async ({

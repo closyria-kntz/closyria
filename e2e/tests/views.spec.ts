@@ -785,3 +785,50 @@ test("Ma commande : une barre fine sur une ligne, centrée, la jauge dessous", a
     if (content) expect(Math.abs(frame.x + frame.width / 2 - (content.x + content.width / 2))).toBeLessThan(24);
   }
 });
+
+// Palier 3 bis, fix round 1: the search and the menu hand the focus back and close alone.
+
+test("recherche : Échap ou ✕ la referme et rend le focus à la loupe ; une adresse avec recherche ne prend pas le focus", async ({
+  page,
+}) => {
+  await pasteAndWish(page);
+  await page.goto("/envies");
+  const magnifier = page.getByRole("button", { name: "Chercher", exact: true });
+  const field = page.getByRole("searchbox", { name: "Chercher une envie" });
+  await magnifier.click();
+  await expect(field).toBeFocused();
+  await field.fill("pantalon");
+  await expect(page).toHaveURL(/recherche=pantalon/);
+  await page.keyboard.press("Escape");
+  await expect(field).toHaveCount(0);
+  await expect(magnifier).toBeFocused();
+  await expect(page).not.toHaveURL(/recherche=/);
+
+  await magnifier.click();
+  await field.fill("pantalon");
+  await page.getByRole("button", { name: "Fermer la recherche" }).click();
+  await expect(field).toHaveCount(0);
+  await expect(magnifier).toBeFocused();
+
+  // Opened by the address: the field shows its words, the focus (and a phone's keyboard) stays away.
+  await page.goto("/envies?recherche=pantalon");
+  await expect(field).toHaveValue("pantalon");
+  await expect(page.getByTestId("item-card")).toHaveCount(1);
+  await expect(field).not.toBeFocused();
+});
+
+test("menu « Filtres et tri » : un Échap ferme le menu sans quitter « Sélectionner »", async ({ page }) => {
+  await pasteAndWish(page);
+  await page.goto("/envies");
+  await page.getByRole("button", { name: "Sélectionner", exact: true }).click();
+  const menu = page.getByRole("button", { name: "Filtres et tri" });
+  await menu.click();
+  await expect(page.getByLabel("Trier par")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByLabel("Trier par")).toHaveCount(0);
+  await expect(menu).toBeFocused();
+  await expect(page.getByRole("button", { name: "Terminé" })).toBeVisible();
+  // A second Escape leaves the mode, as before.
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Sélectionner", exact: true })).toBeVisible();
+});

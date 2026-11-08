@@ -504,6 +504,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
             tags={tags}
             reference={reference}
             activeCount={count}
+            sortable={!listId}
           />
           {(selecting || data.items.length > 0) && (
             <button

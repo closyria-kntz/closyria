@@ -143,6 +143,9 @@ export function SearchField({
   const told = useRef(onChange);
   told.current = onChange;
   const fieldId = useId();
+  // Where the focus goes once the field opens or closes: only after she opened or closed it herself (an address with
+  // `recherche=` opens it on load without taking the focus, which would pop up a phone's keyboard).
+  const focusNext = useRef<"field" | "button" | null>(null);
   // Cleared elsewhere (« Effacer », the back button): the field follows the address.
   useEffect(() => {
     clearTimeout(timer.current);
@@ -150,8 +153,11 @@ export function SearchField({
     if (value) setOpen(true);
   }, [value]);
   useEffect(() => () => clearTimeout(timer.current), []);
+  // After the render that mounted the field (or the magnifier back): the element exists only now.
   useEffect(() => {
-    if (open) input.current?.focus();
+    if (open && focusNext.current === "field") input.current?.focus();
+    if (!open && focusNext.current === "button") button.current?.focus();
+    focusNext.current = null;
   }, [open]);
   const type = (next: string) => {
     setText(next);
@@ -163,7 +169,7 @@ export function SearchField({
     setOpen(false);
     setText("");
     if (value) onChange(undefined);
-    button.current?.focus();
+    focusNext.current = "button";
   };
   if (!open) {
     return (
@@ -172,7 +178,10 @@ export function SearchField({
         type="button"
         aria-label={t("open")}
         aria-expanded={false}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          focusNext.current = "field";
+          setOpen(true);
+        }}
         className={toolClass}
       >
         <MagnifierIcon />
@@ -255,6 +264,7 @@ export function FiltersMenu({
   tags,
   reference,
   activeCount,
+  sortable = true,
 }: {
   filters: ViewFilters;
   onChange: (filters: ViewFilters) => void;
@@ -262,6 +272,8 @@ export function FiltersMenu({
   tags: readonly TagView[];
   reference: ReferenceView | null;
   activeCount: number;
+  /** False on a list tab: the list keeps its own order, so there is no sort to offer. */
+  sortable?: boolean;
 }) {
   const t = useTranslations("Views.filters");
   const [open, setOpen] = useState(false);
@@ -274,6 +286,9 @@ export function FiltersMenu({
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
+      // One Escape closes the panel and nothing else (not the « Sélectionner » mode behind it).
+      event.preventDefault();
+      event.stopPropagation();
       setOpen(false);
       button.current?.focus();
     };
@@ -282,10 +297,11 @@ export function FiltersMenu({
       if (panel.current?.contains(target) || button.current?.contains(target)) return;
       setOpen(false);
     };
-    document.addEventListener("keydown", onKeyDown);
+    // Capture: ahead of the page's own Escape listeners, whenever they were added.
+    document.addEventListener("keydown", onKeyDown, true);
     document.addEventListener("pointerdown", onPointerDown);
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keydown", onKeyDown, true);
       document.removeEventListener("pointerdown", onPointerDown);
     };
   }, [open]);
@@ -356,13 +372,15 @@ export function FiltersMenu({
             {t("menuTitle")}
           </h2>
           <div className="grid grid-cols-1 gap-space-3 sm:grid-cols-2">
-            <Select label={t("sort")} value={filters.sort ?? "recent"} onChange={(value) => set({ sort: value })}>
-              {itemSortSchema.options.map((sort) => (
-                <option key={sort} value={sort}>
-                  {t(`sortOptions.${sort}`)}
-                </option>
-              ))}
-            </Select>
+            {sortable && (
+              <Select label={t("sort")} value={filters.sort ?? "recent"} onChange={(value) => set({ sort: value })}>
+                {itemSortSchema.options.map((sort) => (
+                  <option key={sort} value={sort}>
+                    {t(`sortOptions.${sort}`)}
+                  </option>
+                ))}
+              </Select>
+            )}
             <Select label={t("shop")} value={filters.shop ?? ""} onChange={(value) => set({ shop: value })}>
               <option value="">{t("anyF")}</option>
               {shops.map((shop) => (
