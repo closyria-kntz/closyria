@@ -205,6 +205,18 @@ export function ProductView({ productId, captureId }: { productId: string; captu
             });
   const kept = hasName && itemLoad !== "error" && item !== null;
 
+  // « Mis à jour le … »: at the end of the shop's sheet, or under the sizes when the sheet has no name yet (no shop
+  // sheet then), as before the overhaul.
+  const updatedLine = product.lastCapturedAt ? (
+    <p className="text-sm text-ink-muted">
+      <time dateTime={product.lastCapturedAt}>
+        {t("product.updatedAt", {
+          date: format.dateTime(new Date(product.lastCapturedAt), { dateStyle: "long" }),
+        })}
+      </time>
+    </p>
+  ) : null;
+
   const sizesBlock =
     product.sizes.length > 0 ? (
       <section aria-labelledby="sizes-title" data-block className={blockClass}>
@@ -223,6 +235,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
             </li>
           ))}
         </ul>
+        {!hasName && updatedLine}
       </section>
     ) : null;
 
@@ -245,15 +258,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
       <ProductTraits traits={product.traits} />
       {product.description && <ProductDescription text={product.description} />}
       <ProductDetails details={product.details} />
-      {product.lastCapturedAt && (
-        <p className="text-sm text-ink-muted">
-          <time dateTime={product.lastCapturedAt}>
-            {t("product.updatedAt", {
-              date: format.dateTime(new Date(product.lastCapturedAt), { dateStyle: "long" }),
-            })}
-          </time>
-        </p>
-      )}
+      {updatedLine}
     </section>
   ) : null;
 

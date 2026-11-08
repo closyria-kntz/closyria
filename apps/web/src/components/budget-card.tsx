@@ -114,7 +114,8 @@ export function BudgetCard({
             <p className="font-strong">{heading}</p>
             <p className="text-ink-muted">{tBudget("spent", { amount: money(state.spent) })}</p>
             {state.kind === "ok" ? (
-              <p>{t("rest", { amount: money(state.rest) })}</p>
+              // An ended budget has nothing left to spend: no « Reste » (it would show the whole amount).
+              !view.ended && <p>{t("rest", { amount: money(state.rest) })}</p>
             ) : (
               <p className="text-danger">{t("over", { amount: money(state.over) })}</p>
             )}

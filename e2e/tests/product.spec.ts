@@ -318,7 +318,7 @@ test("boutique non lisible, fiche remplie : phrase claire, tailles à la main, p
   const note = page.getByTestId("manual-shop-note");
   await expect(note).toBeVisible();
   await expect(note).toHaveText(
-    `${MANUAL_SHOP.name} ne permet pas la lecture automatique : le prix et les tailles ont été notés à la main le ${today}. Closyria ne peut donc pas suivre le stock ni les baisses de prix de cette boutique.`,
+    `${MANUAL_SHOP.name} ne permet pas la lecture automatique : prix et tailles notés à la main, mis à jour le ${today}. Closyria ne peut donc pas suivre le stock ni les baisses de prix de cette boutique.`,
   );
   await expect(page.getByText("notées à la main, stock non suivi")).toBeVisible();
   await expect(page.getByRole("img", { name: /^Prix sur 3 mois/ })).toHaveCount(0);

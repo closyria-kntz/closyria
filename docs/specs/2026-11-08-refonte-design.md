@@ -113,8 +113,8 @@ et l'effet de cercle au passage clair/sombre.
   choisi = bord framboise + fond `color-hint` ; « Prioritaire » avec coche ; pourquoi en italique) ; **taille** (tailles,
   stock, « Me prévenir si le prix baisse ») ; boutons « Voir chez {boutique} », « Je le prends », « Partager » ;
   **avis des amies**.
-- **Boutique non lisible** (saisie manuelle) : la fiche dit « {Boutique} ne permet pas la lecture automatique : le
-  prix et les tailles ont été notés à la main le {date}. Closyria ne peut donc pas suivre le stock ni les baisses de
+- **Boutique non lisible** (saisie manuelle) : la fiche dit « {Boutique} ne permet pas la lecture automatique : prix
+  et tailles notés à la main, mis à jour le {date}. Closyria ne peut donc pas suivre le stock ni les baisses de
   prix de cette boutique. » ; tailles « notées à la main, stock non suivi » ; réglage d'alerte masqué ; pas de courbe.
 - **Ma commande** (bandeau du bas, verre) : « Ma commande » (ou « Ma commande, liste « … » »), nombre d'articles qui
   roule, total, « Il te resterait … » / « … au-dessus » (rouge), barre en deux couleurs ; « Voir » déplie la liste des
