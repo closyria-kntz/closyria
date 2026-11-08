@@ -21,7 +21,7 @@ endroit avec les mêmes mots, et trouve l'ensemble « doux, lumineux, chic » en
 |---|---|---|
 | D1 | Ambiance | **Cocon doux et lumineux.** Pas « magazine éditorial » (S6 et S7 refusés au vote). |
 | D2 | Styles gardés | S1 verre dépoli (menu, panneaux, bandeau), S2 pâte à modeler et S5 relief doux (esprit des boutons et pastilles, **sans ombre portée**), S3 aurore pastel (fond), S11 texte en mouvement (**annonces seulement**). |
-| D3 | Photos | **En arche** (haut arrondi), photo principale en grand, autres photos **en dessous** en petites arches. |
+| D3 | Photos | ~~En arche~~ → **forme C** (2026-11-08 : rectangle au haut plus arrondi, voir `docs/plans/2026-11-08-refonte-ecarts-maquette.md`), photo principale en grand, autres photos **en dessous** en petites vignettes de même forme. |
 | D4 | Infos | Rangées en **blocs séparés** (l'article, ton envie, taille, avis), comme la piste « Boudoir ». |
 | D5 | Couleurs | **« Le mélange des trois »** : fond rose-lavande (Rose et lavande), touches framboise (Framboise et or), boutons bordeaux et détails champagne (Bordeaux et champagne). Valeurs § 4. |
 | D6 | Polices | **Fraunces** pour les titres (logo inchangé : Fraunces 600 droit), **Jost** pour le texte (remplace DM Sans). |
