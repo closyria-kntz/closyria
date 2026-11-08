@@ -98,32 +98,26 @@ describe("Équilibré themes", () => {
   });
 
   it("uses the exact validated palette", () => {
-    expect(get(equilibreLight, "color-surface")).toBe("#F2EDE7");
-    expect(get(equilibreLight, "color-surface-raised")).toBe("#FFFFFF");
-    expect(get(equilibreLight, "color-surface-sunken")).toBe("#EBE3DB");
-    expect(get(equilibreLight, "color-line")).toBe("#E5D7CC");
-    expect(get(equilibreLight, "color-ink")).toBe("#4A332A");
-    expect(get(equilibreLight, "color-ink-muted")).toBe("#6E5A50");
-    expect(get(equilibreLight, "color-accent")).toBe("#5A3A2E");
-    expect(get(equilibreLight, "color-accent-ink")).toBe("#FFFFFF");
-    expect(get(equilibreLight, "color-hint")).toBe("#EBC7C3");
-    expect(get(equilibreLight, "color-premium-surface")).toBe("#F3E3A6");
-    expect(get(equilibreLight, "color-success-surface")).toBe("#D5DCC8");
-    expect(get(equilibreLight, "color-media-backdrop")).toBe("#EADBC8");
-    // « Préparer une commande » band: white with a pink edge, a milk-chocolate button that darkens on hover.
-    expect(get(equilibreLight, "color-band")).toBe("#FFFFFF");
-    // A ticked row in « Préparer une commande »: a very light pink, the band's pink edge.
-    expect(get(equilibreLight, "color-selected-surface")).toBe("#FBF3F1");
-    expect(get(equilibreLight, "color-selected-line")).toBe("#D8A9A3");
-    expect(get(equilibreDark, "color-selected-surface")).toBe("#33251F");
-    expect(get(equilibreDark, "color-selected-line")).toBe("#6B4A44");
-    expect(get(equilibreDark, "color-band")).toBe("#2A201B");
-    expect(get(equilibreLight, "color-band-button-hover")).toBe("#5A3A2E");
-    expect(get(equilibreDark, "color-band-button-hover")).toBe("#F6E4E1");
-    expect(get(equilibreLight, "color-band-line")).toBe("#D8A9A3");
-    expect(get(equilibreLight, "color-band-button")).toBe("#7A5444");
-    expect(get(equilibreLight, "color-band-button-ink")).toBe("#FFFFFF");
-    // Budget pills (version B, 2026-11-07): a soft fill and an edge, the same for green and red.
+    // « Le mélange des trois » (docs/specs/2026-11-08-refonte-design.md, section 4).
+    const expected: [string, string, string][] = [
+      ["color-surface", "#FBF5F9", "#1A1218"],
+      ["color-surface-raised", "#FFFFFF", "#261922"],
+      ["color-ink", "#2A1A24", "#F6EBF1"],
+      ["color-ink-muted", "#6A5563", "#CBB5C2"],
+      ["color-accent", "#BE185D", "#F48BBE"],
+      ["color-button-bg", "#5E1E2E", "#F6EBF1"],
+      ["color-button-ink", "#FBF5F9", "#1A1218"],
+      ["color-hint", "#F6D6E4", "#47233A"],
+      ["color-selected-surface", "#F6D6E4", "#47233A"],
+      ["color-surface-sunken", "#F3E6EF", "#33222D"],
+      ["color-surface-strong", "#EFE1EB", "#2D1E28"],
+      ["color-detail", "#D9BC80", "#D9BC80"],
+    ];
+    for (const [key, light, dark] of expected) {
+      expect(get(equilibreLight, key), `${key} light`).toBe(light);
+      expect(get(equilibreDark, key), `${key} dark`).toBe(dark);
+    }
+    // Success, danger and the budget pills are unchanged.
     expect(get(equilibreLight, "color-success-soft")).toBe("#E3F1E7");
     expect(get(equilibreLight, "color-success-edge")).toBe("#6FA58A");
     expect(get(equilibreLight, "color-danger-soft")).toBe("#FBE3E6");
@@ -132,12 +126,16 @@ describe("Équilibré themes", () => {
     expect(get(equilibreDark, "color-success-edge")).toBe("#4E8A6E");
     expect(get(equilibreDark, "color-danger-soft")).toBe("#4A2228");
     expect(get(equilibreDark, "color-danger-edge")).toBe("#B4646C");
-    expect(get(equilibreDark, "color-surface")).toBe("#1E1612");
-    expect(get(equilibreDark, "color-surface-raised")).toBe("#2A201B");
-    expect(get(equilibreDark, "color-ink")).toBe("#DDD0C6");
-    expect(get(equilibreDark, "color-ink-muted")).toBe("#B5A398");
-    expect(get(equilibreDark, "color-accent")).toBe("#EBC7C3");
-    expect(get(equilibreDark, "color-accent-ink")).toBe("#2B1D17");
+  });
+
+  it("derives the frosted glass and the aurora from the surfaces", () => {
+    for (const theme of themes) {
+      expect(get(theme, "color-glass")).toBe("color-mix(in srgb, var(--color-surface-raised) 62%, transparent)");
+      expect(get(theme, "color-glass-line")).toBe("color-mix(in srgb, var(--color-surface-raised) 75%, transparent)");
+    }
+    const shares = (theme: Theme) => [1, 2, 3].map((n) => get(theme, `color-aurora-${n}`).match(/ (\d+)%,/)?.[1]);
+    expect(shares(equilibreLight)).toEqual(["18", "28", "30"]);
+    expect(shares(equilibreDark)).toEqual(["18", "12", "12"]);
   });
 
   it("defines the specified shapes, durations and fonts", () => {
@@ -148,8 +146,8 @@ describe("Équilibré themes", () => {
     expect(base["motion-duration-fast"]).toBe("150ms");
     expect(base["motion-duration-base"]).toBe("250ms");
     expect(base["motion-duration-slow"]).toBe("400ms");
-    expect(base["font-body"]).toContain("DM Sans");
-    expect(base["font-display"]).toContain("Fraunces");
+    expect(base["font-body"]).toContain("Jost Variable");
+    expect(base["font-display"]).toContain("Fraunces Variable");
   });
 
   const textPairs: [string, string, number][] = [
@@ -176,6 +174,7 @@ describe("Équilibré themes", () => {
     ["color-ink", "color-band", 4.5],
     ["color-band-button-ink", "color-band-button", 4.5],
     ["color-band-button-ink", "color-band-button-hover", 4.5],
+    ["color-button-ink", "color-button-bg", 4.5],
     ["color-surface", "color-danger", 4.5],
     ["color-band-line", "color-band", 1.2],
     ["color-ink", "color-selected-surface", 4.5],

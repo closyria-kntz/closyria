@@ -62,8 +62,8 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   }).toPass();
   // A ticked row: a very light pink background and the band's pink edge, not a heavy dark outline.
   const ticked = page.getByRole("listitem").filter({ hasText: "Robe Alma" }).locator("> div");
-  await expect(ticked).toHaveCSS("background-color", "rgb(251, 243, 241)");
-  await expect(ticked).toHaveCSS("border-top-color", "rgb(216, 169, 163)");
+  await expect(ticked).toHaveCSS("background-color", "rgb(246, 214, 228)");
+  await expect(ticked).toHaveCSS("border-top-color", "rgb(190, 24, 93)");
   await expect(ticked.getByText(/89\s€/)).toHaveCSS("font-variant-numeric", "tabular-nums");
   await expect(band(page).getByText(/2 articles/)).toHaveCSS("font-variant-numeric", "tabular-nums");
   // A white band (chosen on 2026-11-07), and over the budget in red (the danger color).
@@ -75,9 +75,9 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   if (!testInfo.project.use.hasTouch) {
     // Only with a mouse: phones and tablets have no hover.
     await ordered.hover();
-    await expect(ordered).toHaveCSS("background-color", "rgb(90, 58, 46)");
+    await expect(ordered).toHaveCSS("background-color", "rgb(42, 26, 36)");
   }
-  await expect(band(page)).toHaveCSS("border-top-color", "rgb(216, 169, 163)");
+  await expect(band(page)).toHaveCSS("border-top-color", "rgb(246, 214, 228)");
   // Over the budget: a soft red fill, a red edge and red text (version B, same style as the green one).
   const over = band(page).getByText(/au-dessus/);
   await expect(over).toHaveCSS("background-color", "rgb(251, 227, 230)");
@@ -92,8 +92,8 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await page.screenshot({ path: testInfo.outputPath("commande-sombre.png") });
   // The browser knows the page is dark (scroll bars, native controls), and ticked rows keep their soft tint.
   await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
-  await expect(ticked).toHaveCSS("background-color", "rgb(51, 37, 31)");
-  await expect(ticked).toHaveCSS("border-top-color", "rgb(107, 74, 68)");
+  await expect(ticked).toHaveCSS("background-color", "rgb(71, 35, 58)");
+  await expect(ticked).toHaveCSS("border-top-color", "rgb(106, 85, 99)");
   await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
   await page.screenshot({ path: testInfo.outputPath("commande.png") });
   await axe(page);

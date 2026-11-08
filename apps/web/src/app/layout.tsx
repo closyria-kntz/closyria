@@ -1,5 +1,5 @@
 import "@fontsource-variable/fraunces/wght.css";
-import "@fontsource-variable/dm-sans/wght.css";
+import "@fontsource-variable/jost/wght.css";
 import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
