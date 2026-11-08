@@ -1,6 +1,6 @@
 # Refonte « Cocon lumineux » — écarts avec la maquette (palier 3 bis)
 
-> Statut : **à valider par la fondatrice**. Spec : `docs/specs/2026-11-08-refonte-design.md`.
+> Statut : **validé par la fondatrice le 2026-11-08**. Spec : `docs/specs/2026-11-08-refonte-design.md`.
 > Maquette : `docs/maquettes/refonte-a2.html`. Comparaison des formes : https://claude.ai/artifact/2vsadNzN2387JVYUZerfWg
 
 Le palier 3 est en dev (7d6c6f9). La fondatrice trouve que le site ne correspond pas à la maquette et n'aime pas l'arche.
@@ -37,11 +37,9 @@ Ce document liste ce qu'on corrige avant d'aller plus loin.
    s'affiche en citation en italique, le champ n'apparaît qu'en le modifiant ; « Prioritaire » en petite pastille cochée.
 10. **Boutons** « Je le prends », « Voir chez {boutique} », « Partager » alignés sur une ligne sous les blocs.
 
-## Question ouverte
-
-- Liste partagée entre deux profils : la grille n'affiche que les articles du profil courant, alors que « Ma commande »
-  compte aussi ceux de l'autre profil. Recommandation : afficher aussi les articles de l'autre profil dans la grille
-  d'une liste.
+### Liste partagée (validé)
+11. Sur un onglet de liste, la grille affiche les envies de **tous les profils** du compte qui sont dans la liste
+    (comme « Ma commande » et la page de commande). « Toutes mes envies » reste limité au profil courant.
 
 ## Méthode
 
