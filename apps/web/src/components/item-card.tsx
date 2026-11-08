@@ -56,6 +56,11 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
   const [pickerOpen, setPickerOpen] = useState(false);
   const openTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(openTimer.current), []);
+  // The emoji picker opened within the beat after a photo click: that click no longer opens the sheet.
+  const changePicker = (open: boolean) => {
+    if (open) clearTimeout(openTimer.current);
+    setPickerOpen(open);
+  };
   const href = `/produits/${item.product.id}`;
   // A click on the photo waits a beat: a second click (double tap) opens the 4 levels instead of the sheet.
   // The keyboard, a middle click and cmd / ctrl / shift clicks keep the link's own behaviour.
@@ -79,7 +84,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
   const drop = asked === null ? priceDropCents(item.product.priceCents, item.product.compareAtCents) : null;
   const quick = actions && !selection && actions.onTake && actions.onPreview ? actions : null;
   return (
-    <li className="card group relative flex flex-col" data-testid="item-card">
+    <li className="card card-rise group relative flex flex-col" data-testid="item-card">
       <Wrapper
         linked={linked}
         href={href}
@@ -145,7 +150,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
         {selection ? (
           <span
             aria-hidden="true"
-            className={`absolute top-space-5 right-space-1 flex size-space-6 items-center justify-center rounded-full border-2 ${
+            className={`absolute top-touch-target right-space-2 mt-space-1 flex size-space-6 items-center justify-center rounded-full border-2 ${
               selection.selected ? "border-accent bg-accent text-accent-ink" : "border-surface-raised bg-ink/20"
             }`}
           >
@@ -158,7 +163,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               data-testid="card-taken"
               role="img"
               aria-label={t("taken")}
-              className="absolute top-space-5 right-space-1 flex size-space-6 items-center justify-center rounded-md bg-button-bg text-button-ink"
+              className="absolute top-touch-target right-space-2 mt-space-1 flex size-space-6 items-center justify-center rounded-md bg-button-bg text-button-ink"
             >
               <Tick draw />
             </span>
@@ -199,7 +204,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
             onChange={actions.onChanged}
             reload={actions.reload}
             open={pickerOpen}
-            onOpenChange={setPickerOpen}
+            onOpenChange={changePicker}
           />
           <ItemMenu item={item} onChanged={actions.onChanged} onTrashed={actions.onTrashed} reload={actions.reload} />
         </>

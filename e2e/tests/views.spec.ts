@@ -614,6 +614,19 @@ test("« Aperçu » ouvre le panneau sans quitter la page ; « Je le prends » c
   // And take it from the card: the budget card counts it in the order in progress.
   await card(page).getByTestId("card-take").click();
   await expect(card(page).getByTestId("card-taken")).toBeVisible();
+  // The tick never sits under the card's « … » button.
+  const taken = await card(page).getByTestId("card-taken").boundingBox();
+  const menu = await card(page).getByRole("button", { name: "Plus d’actions" }).boundingBox();
+  expect(taken).not.toBeNull();
+  expect(menu).not.toBeNull();
+  if (taken && menu) {
+    const apart =
+      taken.x >= menu.x + menu.width ||
+      menu.x >= taken.x + taken.width ||
+      taken.y >= menu.y + menu.height ||
+      menu.y >= taken.y + taken.height;
+    expect(apart).toBe(true);
+  }
   await expect(page.getByTestId("budget-card")).toContainText(/23\s€/);
   await card(page).getByTestId("card-take").click();
   await expect(page.getByTestId("budget-card")).not.toContainText(/23\s€/);
