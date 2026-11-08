@@ -270,6 +270,34 @@ async function flip(page: Page, name: string, to: boolean): Promise<void> {
   expect((await saved).status()).toBe(200);
 }
 
+test.describe("mouvement réduit", () => {
+  test.use({ reducedMotion: "reduce" });
+
+  test("l'avis nouveau s'affiche d'emblée, sans animation", async ({
+    page,
+    browser,
+    baseURL,
+    db,
+    userAgentTag,
+  }, testInfo) => {
+    test.slow();
+    const shareUrl = await sharedList(page, db, userAgentTag);
+    const lea = await friend(browser, baseURL, `10.208.${testInfo.workerIndex % 250}.1`);
+    await lea.goto(shareUrl);
+    await giveOpinion(lea, "Léa", "En feu", "elle t'irait trop bien");
+    await page.goto("/listes");
+    await page.getByRole("link", { name: /Mariage/ }).click();
+    const bubble = page
+      .getByTestId("item-card")
+      .first()
+      .getByRole("list", { name: "Avis des amies" })
+      .getByRole("listitem");
+    await expect(bubble).toHaveCount(1);
+    expect(await bubble.evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
+    expect(await bubble.evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
+  });
+});
+
 test("la fondatrice voit la pastille, l'avis « nouveau », l'efface et l'annule", async ({
   page,
   browser,
@@ -298,10 +326,15 @@ test("la fondatrice voit la pastille, l'avis « nouveau », l'efface et l'annule
   await expect(opinions.first()).toContainText("Léa");
   await expect(opinions.first()).toContainText("🔥 En feu");
   await expect(opinions.first()).toContainText("elle t'irait trop bien");
-  await expect(opinions.first().getByText("nouveau", { exact: true })).toBeVisible();
+  // A bubble that rises in (new this visit) and a still « 1 nouveau » pill: no endless animation.
+  await expect(opinions.first().locator(".bubble.bubble-new")).toHaveCount(1);
+  const pill = card.getByText("1 nouveau", { exact: true });
+  await expect(pill).toBeVisible();
+  expect(await pill.evaluate((el) => getComputedStyle(el).animationIterationCount)).not.toBe("infinite");
+  expect(await pill.evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
   // Seen once the page shows them: the mark stays for this visit.
   expect((await seen).status()).toBe(204);
-  await expect(opinions.first().getByText("nouveau", { exact: true })).toBeVisible();
+  await expect(pill).toBeVisible();
   await expect(page.getByLabel("Lien de partage")).toHaveValue(shareUrl);
   const sharePanel = page.getByRole("region", { name: "Partage" });
   await page.screenshot({ path: testInfo.outputPath("owner-list-light.png") });
@@ -320,7 +353,8 @@ test("la fondatrice voit la pastille, l'avis « nouveau », l'efface et l'annule
   await expect(row.getByText(/nouvel/)).toHaveCount(0);
   await page.getByRole("link", { name: /Mariage/ }).click();
   await expect(opinions).toHaveCount(1);
-  await expect(opinions.first().getByText("nouveau", { exact: true })).toHaveCount(0);
+  await expect(card.getByText(/nouveau/)).toHaveCount(0);
+  await expect(opinions.first().locator(".bubble-new")).toHaveCount(0);
 
   // « Effacer » → « Avis de Léa effacé · Annuler »; « Annuler » puts it back.
   await opinions.first().getByRole("button", { name: "Effacer l'avis de Léa" }).click();
@@ -499,6 +533,15 @@ test("l'aperçu de commande et la fiche montrent « Avis des amies », avec le n
   const shareUrl = await sharedList(page, db, userAgentTag);
   const preview = page.getByRole("dialog", { name: `Aperçu de ${PRODUCT.name}` });
   const axeSheet = async (page: Page) => {
+    // A new opinion's bubble rises in: axe reads the settled colours, not a half-faded frame.
+    await page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getComputedTiming().iterations !== Number.POSITIVE_INFINITY)
+          .map((a) => a.finished.catch(() => undefined)),
+      ),
+    );
     const { violations } = await new AxeBuilder({ page }).include("[data-testid=preview-body]").analyze();
     expect(violations.map((v) => v.id)).toEqual([]);
   };

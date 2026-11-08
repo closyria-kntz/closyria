@@ -120,6 +120,9 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               <s className="text-ink-muted">{formatAmount(locale, item.product.compareAtCents, currency)}</s>
             )}
           </span>
+          {asked === null && item.product.captureStatus === "manual" && item.product.priceCents !== null && (
+            <span className="truncate text-sm text-ink-muted">{t("manualPrice")}</span>
+          )}
           {item.why && <span className="truncate text-sm text-ink-muted italic">{t("why", { why: item.why })}</span>}
         </div>
       </Wrapper>

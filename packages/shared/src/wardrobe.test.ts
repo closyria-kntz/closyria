@@ -210,6 +210,7 @@ const product = {
   description: null,
   captureStatus: "ok",
   lastCapturedAt: null,
+  updatedAt: "2026-11-01T00:00:00.000Z",
   traits: { category: [], color: null, material: null, pattern: null, season: null, audience: null, childDetail: null },
   details: [],
 };

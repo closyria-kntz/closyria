@@ -163,6 +163,26 @@ body::before {
     animation: none;
   }
 }
+/* A friend's opinion is a soft bubble, rounder than it is square, with a small corner at the bottom left. Only an
+   opinion new this visit rises in (one effect, the base duration); the end state is the bubble's own style, and
+   nothing moves under reduced motion. */
+.bubble {
+  border-radius: var(--radius-card) var(--radius-card) var(--radius-card) var(--radius-sm);
+}
+.bubble-new {
+  animation: bubble-in var(--motion-duration-base) var(--ease-emphasized) backwards;
+}
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--spacing-space-2));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bubble-new {
+    animation: none;
+  }
+}
 .card:nth-child(2) {
   animation-delay: calc(1 * var(--motion-duration-stagger));
 }

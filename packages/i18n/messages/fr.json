@@ -533,6 +533,8 @@
         "robots_disallowed": "La boutique refuse la lecture automatique.",
         "other": "La lecture automatique n'a pas marché."
       },
+      "manualNote": "{shop} ne permet pas la lecture automatique : le prix et les tailles ont été notés à la main le {date}. Closyria ne peut donc pas suivre le stock ni les baisses de prix de cette boutique.",
+      "manualSizes": "notées à la main, stock non suivi",
       "viewAt": "Voir chez {shop}",
       "updatedAt": "Mis à jour le {date}",
       "sizes": "Tailles",
@@ -804,6 +806,7 @@
     },
     "card": {
       "noPrice": "prix inconnu",
+      "manualPrice": "Prix noté à la main",
       "noName": "Article sans nom",
       "noPhoto": "Pas de photo",
       "open": "Ouvrir {name}",
@@ -1071,7 +1074,7 @@
     "newOpinions": "{count, plural, one {# nouvel avis} other {# nouveaux avis}}",
     "opinions": {
       "listLabel": "Avis des amies",
-      "new": "nouveau",
+      "new": "{count, plural, one {# nouveau} other {# nouveaux}}",
       "erase": "Effacer",
       "eraseFor": "l'avis de {name}",
       "erased": "Avis de {name} effacé",

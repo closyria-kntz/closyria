@@ -127,6 +127,8 @@ export const productViewSchema = z.object({
   source: productSourceSchema,
   captureStatus: productCaptureStatusSchema,
   lastCapturedAt: z.string().nullable(),
+  /** When the sheet last changed: for a hand-filled sheet, when it was filled. */
+  updatedAt: z.string(),
   traits: productTraitsSchema,
   /** The shop's own attributes table (« Taille », « Composition »…), empty when the page has none. */
   details: z.array(z.object({ label: z.string(), value: z.string() })),

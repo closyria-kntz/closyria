@@ -33,51 +33,56 @@ export function FriendOpinions({
   const locale = useLocale();
   if (opinions.length === 0) return null;
   const now = new Date();
+  const fresh = opinions.filter((opinion) => opinion.isNew).length;
 
   return (
-    <ul aria-label={t("listLabel")} className="flex flex-col gap-space-2">
-      {newestFirst(opinions).map((opinion) => {
-        const level = levelOf(levels, opinion.level);
-        return (
-          <li key={opinion.id} className="flex items-start gap-space-2 text-sm">
-            <span
-              aria-hidden="true"
-              className="flex size-space-6 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-caption font-strong"
-            >
-              {initialOf(opinion.name)}
-            </span>
-            <div className="flex min-w-space-0 flex-1 flex-col">
-              <p className="flex flex-wrap items-center gap-x-space-1">
-                <span className="font-strong break-words">{opinion.name}</span>
-                <span>
-                  <span aria-hidden="true">{level.emoji}</span> {level.label}
-                </span>
-                {opinion.isNew && (
-                  <span className="rounded-full bg-danger-soft px-space-2 text-caption font-strong text-danger">
-                    {t("new")}
+    <div className="flex flex-col gap-space-2">
+      {fresh > 0 && (
+        <span className="self-start rounded-full bg-accent px-space-3 py-space-1 text-caption font-strong text-accent-ink">
+          {t("new", { count: fresh })}
+        </span>
+      )}
+      <ul aria-label={t("listLabel")} className="flex flex-col gap-space-2">
+        {newestFirst(opinions).map((opinion) => {
+          const level = levelOf(levels, opinion.level);
+          return (
+            <li key={opinion.id} className="flex items-start gap-space-2 text-sm">
+              <span
+                aria-hidden="true"
+                className="flex size-space-6 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-caption font-strong"
+              >
+                {initialOf(opinion.name)}
+              </span>
+              <div
+                className={`bubble flex min-w-space-0 flex-1 flex-col bg-hint px-space-3 py-space-2 ${opinion.isNew ? "bubble-new" : ""}`}
+              >
+                <p className="flex flex-wrap items-center gap-x-space-1">
+                  <span className="font-strong break-words">{opinion.name}</span>
+                  <span>
+                    <span aria-hidden="true">{level.emoji}</span> {level.label}
                   </span>
-                )}
-              </p>
-              {opinion.note && <p className="break-words">{opinion.note}</p>}
-              <p className="flex flex-wrap items-center gap-x-space-3 text-caption text-ink-muted">
-                <time dateTime={opinion.updatedAt} suppressHydrationWarning>
-                  {relativeDate(opinion.updatedAt, now, locale)}
-                </time>
-                {onDelete && (
-                  <button
-                    type="button"
-                    onClick={() => onDelete(opinion)}
-                    className={`inline-flex min-h-touch-target items-center rounded-button underline hover:text-ink ${focusRing}`}
-                  >
-                    {t("erase")}
-                    <span className="sr-only"> {t("eraseFor", { name: opinion.name })}</span>
-                  </button>
-                )}
-              </p>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+                </p>
+                {opinion.note && <p className="break-words">{opinion.note}</p>}
+                <p className="flex flex-wrap items-center gap-x-space-3 text-caption text-ink-muted">
+                  <time dateTime={opinion.updatedAt} suppressHydrationWarning>
+                    {relativeDate(opinion.updatedAt, now, locale)}
+                  </time>
+                  {onDelete && (
+                    <button
+                      type="button"
+                      onClick={() => onDelete(opinion)}
+                      className={`inline-flex min-h-touch-target items-center rounded-button underline hover:text-ink ${focusRing}`}
+                    >
+                      {t("erase")}
+                      <span className="sr-only"> {t("eraseFor", { name: opinion.name })}</span>
+                    </button>
+                  )}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

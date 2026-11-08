@@ -303,6 +303,41 @@ test("fiche d'une boutique non lisible, pas encore remplie : « Voir chez » res
   await expect(page.getByRole("img", { name: /^Prix sur 3 mois/ })).toHaveCount(0);
 });
 
+test("boutique non lisible, fiche remplie : phrase claire, tailles à la main, pas de courbe, carte « Prix noté à la main »", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByLabel("Coller un lien").fill(manualProductUrl());
+  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByLabel("Nom de l’article").fill("Robe en lin");
+  await page.getByLabel("Prix (en euros)").fill("49,90");
+  await page.getByLabel("Tailles").fill("S, M");
+  await page.getByRole("button", { name: "Enregistrer la fiche" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Robe en lin" })).toBeVisible();
+  const today = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(new Date());
+  const note = page.getByTestId("manual-shop-note");
+  await expect(note).toBeVisible();
+  await expect(note).toHaveText(
+    `${MANUAL_SHOP.name} ne permet pas la lecture automatique : le prix et les tailles ont été notés à la main le ${today}. Closyria ne peut donc pas suivre le stock ni les baisses de prix de cette boutique.`,
+  );
+  await expect(page.getByText("notées à la main, stock non suivi")).toBeVisible();
+  await expect(page.getByRole("img", { name: /^Prix sur 3 mois/ })).toHaveCount(0);
+  await axe(page);
+
+  await keepWish(page);
+  await page.goto("/envies");
+  const card = page.getByTestId("item-card").filter({ hasText: "Robe en lin" });
+  await expect(card.getByText("Prix noté à la main")).toBeVisible();
+});
+
+test("boutique lisible : aucune phrase « à la main » ni sur la fiche ni sur la carte", async ({ page }) => {
+  await openSheet(page);
+  await expect(page.getByTestId("manual-shop-note")).toHaveCount(0);
+  await keepWish(page);
+  await page.goto("/envies");
+  await expect(page.getByText("Prix noté à la main")).toHaveCount(0);
+});
+
 test("téléphone ou ordinateur : la galerie puis les blocs, ou côte à côte", async ({ page }) => {
   await openSheet(page);
   await keepWish(page);

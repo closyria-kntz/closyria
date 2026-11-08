@@ -58,6 +58,7 @@ export async function loadProductViews(db: Database, productIds: string[]): Prom
       source: product.source as ProductView["source"],
       captureStatus: product.captureStatus as ProductView["captureStatus"],
       lastCapturedAt: product.lastCapturedAt?.toISOString() ?? null,
+      updatedAt: product.updatedAt.toISOString(),
       traits: {
         category: categoryPath(reference.categories, product.categoryId),
         color: product.colorId ? (reference.colors.get(product.colorId) ?? null) : null,

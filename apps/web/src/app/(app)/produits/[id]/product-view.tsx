@@ -211,6 +211,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
         <h2 id="sizes-title" className="font-display text-lead">
           {t("product.sizes")}
         </h2>
+        {manualShop && <p className="text-sm text-ink-muted">{t("product.manualSizes")}</p>}
         <ul className="flex flex-wrap gap-space-2">
           {product.sizes.map((size) => (
             <li
@@ -331,6 +332,14 @@ export function ProductView({ productId, captureId }: { productId: string; captu
           {waiting && <Skeleton className="h-space-5 w-1/3" />}
         </header>
         {waiting && <Skeleton className="h-space-6 w-1/2" />}
+        {hasName && manualShop && (
+          <p data-testid="manual-shop-note" data-block className={`${blockClass} text-sm`}>
+            {t("product.manualNote", {
+              shop,
+              date: format.dateTime(new Date(product.updatedAt), { dateStyle: "long" }),
+            })}
+          </p>
+        )}
 
         {hasName && item && current.id && item.profileId !== current.id && (
           <p role="status" className="rounded-card border border-line bg-hint px-space-3 py-space-2 text-sm">
