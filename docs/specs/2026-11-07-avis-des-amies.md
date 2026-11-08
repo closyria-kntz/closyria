@@ -181,4 +181,10 @@ Décidés ou constatés pendant la réalisation ; ils complètent ou corrigent c
 - L'aperçu de commande ne se rafraîchit pas en direct tant qu'il est ouvert (la mise à jour automatique est en pause pendant les fenêtres) ; il relit les avis à chaque ouverture. Les pages, elles, se rafraîchissent en direct.
 - La bande de photos de l'aperçu de commande est maintenant atteignable au clavier (défaut qui existait déjà).
 - Le budget sur le lien public est toujours en euros (pas de colonne de devise).
+- « Arrêter le partage » demande d'abord : « Arrêter le partage ? », « L'ancien lien ne marchera plus et les avis des amies seront effacés. », boutons « Arrêter » / « Annuler » (validé par la fondatrice). La page de la liste retire les avis aussitôt.
+- Décision A : les listes déjà partagées avant cette version ne se mettent pas à montrer ses avis (`show_owner_opinions` passe à faux pour elles dans la migration) ; les nouveaux partages gardent le défaut (vrai).
+- Adresse web : `http(s)://` et `www.` sont reconnus quelle que soit la casse ; une adresse nue n'est reconnue qu'avec une fin en minuscules (« zara.com », « Shop.fr » oui ; « Trop belle.Ca te va », « Shop.FR » non), pour ne pas bloquer une phrase collée à une majuscule.
+- Un prénom qui contient une adresse web est refusé aussi (erreur `web_address`, même message que pour le petit mot) ; de même à la restauration d'un avis effacé, qui exige en plus que la liste soit toujours partagée.
+- Limites : en plus des 40 et 200 caractères (graphèmes) vus à l'écran, le prénom est plafonné à 320 points de code et le petit mot à 1 600, les mêmes que les contraintes de la base (qui comptent en points de code) ; un drapeau ou un émoji avec teinte passent partout.
+- Une invitée (sans compte) n'a pas de prénom : le lien ne montre jamais « La liste de Anonymous ».
 - `SHARE_LINK_KEY` est obligatoire dans tous les environnements : la fondatrice doit l'ajouter à `/etc/closyria/dev.env` (puis `prod.env`) avant de déployer cette branche, sinon l'API refuse de démarrer (voir `deploy/README.md`).
