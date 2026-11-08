@@ -1,6 +1,6 @@
 # Envies chaleureuses — partie 2a : les avis des amies
 
-Date : 2026-11-07 · Statut : **cahier des charges à relire par la fondatrice**.
+Date : 2026-11-07 · Statut : **livrée sur la branche avis-des-amies, à déployer en dev (clé SHARE_LINK_KEY à ajouter)**.
 Maquette validée : https://claude.ai/artifact/LiaSpnDBfXYatHNLQV7Zrc (3 écrans, clair et sombre).
 Suite de `docs/specs/2026-11-07-envies-chaleureuses.md` (partie 1, en dev).
 
@@ -171,3 +171,14 @@ des amies doivent arriver là où elle choisit ses achats (sa liste, l'aperçu d
 - E-mail récapitulatif ou notification sur le téléphone (à proposer si elle rate des avis).
 - Compte pour les amies.
 - Répondre à un avis (fil de discussion).
+
+## 9. Écarts et précisions (2026-11-08)
+Décidés ou constatés pendant la réalisation ; ils complètent ou corrigent ce qui précède.
+- Arrêter le partage (DELETE) efface aussi les avis et les appareils des amies ; « Changer le lien » garde les avis.
+- Deux codes d'erreur en plus : `forbidden` (effacer l'avis d'une autre personne) et `opinion_exists` (conflit à la restauration).
+- Une amie peut reprendre un prénom avec « Oui, c'est moi » (risque accepté, décision A3) ; changer le lien coupe l'accès à toutes les autres.
+- Textes choisis pendant le développement, absents de la spec, à relire par la fondatrice : « Tu en penses quoi ? », « Son avis » / « Liste partagée » quand son prénom est masqué, les noms des champs, les messages d'erreur.
+- L'aperçu de commande ne se rafraîchit pas en direct tant qu'il est ouvert (la mise à jour automatique est en pause pendant les fenêtres) ; il relit les avis à chaque ouverture. Les pages, elles, se rafraîchissent en direct.
+- La bande de photos de l'aperçu de commande est maintenant atteignable au clavier (défaut qui existait déjà).
+- Le budget sur le lien public est toujours en euros (pas de colonne de devise).
+- `SHARE_LINK_KEY` est obligatoire dans tous les environnements : la fondatrice doit l'ajouter à `/etc/closyria/dev.env` (puis `prod.env`) avant de déployer cette branche, sinon l'API refuse de démarrer (voir `deploy/README.md`).
