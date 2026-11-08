@@ -11,7 +11,7 @@ import { buttonClass } from "./ui";
 
 const touch = "min-h-touch-target";
 
-type Loaded = { status: "loading" | "ready" | "error"; view: BudgetView | null };
+type Loaded = { status: "loading" | "ready" | "error"; view: BudgetView | null; scopeKey: string };
 
 /**
  * The budget under the title of « Mes envies »: what the budget is, what is already ordered, what is left (or by how
@@ -33,32 +33,33 @@ export function BudgetCard({
   const t = useTranslations("Views.budgetCard");
   const tBudget = useTranslations("OrderDraft.budget");
   const locale = useLocale();
-  const [budget, setBudget] = useState<Loaded>({ status: "loading", view: null });
+  const [stored, setBudget] = useState<Loaded>({ status: "loading", view: null, scopeKey: "" });
   const [dialogOpen, setDialogOpen] = useState(false);
   const titleId = useId();
   const generation = useRef(0);
   const scopeKey = JSON.stringify(scope);
+  // What was read for another scope is never shown: it counts as still loading.
+  const budget: Loaded = stored.scopeKey === scopeKey ? stored : { status: "loading", view: null, scopeKey };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey stands for scope.
   const load = useCallback(async () => {
     const mine = ++generation.current;
     try {
       const view = await fetchBudget(scope);
-      if (mine === generation.current) setBudget({ status: "ready", view });
+      if (mine === generation.current) setBudget({ status: "ready", view, scopeKey });
     } catch {
-      if (mine === generation.current) setBudget((previous) => ({ status: "error", view: previous.view }));
+      if (mine === generation.current)
+        setBudget((previous) => ({
+          status: "error",
+          view: previous.scopeKey === scopeKey ? previous.view : null,
+          scopeKey,
+        }));
     }
   }, [scopeKey]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey asks for another read.
   useEffect(() => {
     void load();
   }, [load, reloadKey]);
-  // A list's tab starts from "loading" again, never from the previous list's budget.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey stands for scope.
-  useEffect(() => {
-    setBudget({ status: "loading", view: null });
-  }, [scopeKey]);
-
   const view = budget.view;
   const state = budgetCardState(view, draftCents);
   // The two widths go through custom properties (no inline pixel in the markup).
@@ -135,8 +136,19 @@ export function BudgetCard({
             />
           </div>
           <p className="flex flex-wrap gap-x-space-4 text-sm text-ink-muted">
-            <span>{t("legendSpent")}</span>
-            <span>{t("legendDraft", { amount: money(draftCents) })}</span>
+            <span className="inline-flex items-center gap-space-2">
+              <i aria-hidden="true" data-testid="swatch-spent" className="size-space-2 rounded-full bg-ink-muted/55" />
+              {t("legendSpent")}
+            </span>
+            <span className="inline-flex items-center gap-space-2">
+              <i
+                aria-hidden="true"
+                data-testid="swatch-draft"
+                className={`size-space-2 rounded-full ${state.overBar ? "bg-danger" : "bg-success"}`}
+              />
+              {t("legendDraft", { amount: money(draftCents) })}
+              {state.overBar && <span className="text-danger">{t("legendOver")}</span>}
+            </span>
           </p>
           {isList && <p className="text-sm text-ink-muted">{t("listCountsToo")}</p>}
         </>
@@ -148,7 +160,7 @@ export function BudgetCard({
         scope={scope}
         budget={view}
         onChanged={(next) => {
-          setBudget({ status: "ready", view: next });
+          setBudget({ status: "ready", view: next, scopeKey });
           setDialogOpen(false);
           void load();
         }}

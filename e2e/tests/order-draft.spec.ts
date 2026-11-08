@@ -405,6 +405,11 @@ test("Mes envies : un onglet par liste, la grille filtrée et le budget de la li
   await expect(card).toContainText(/Déjà commandé : 0\s€/);
   await expect(card).toContainText(/Reste 100\s€/);
   await expect(card).toContainText("Ma commande en cours");
+  // The legend tells which bar is which: a swatch each, in the colours of the two bars.
+  const spentColor = await card.getByTestId("swatch-spent").evaluate((n) => getComputedStyle(n).backgroundColor);
+  const draftColor = await card.getByTestId("swatch-draft").evaluate((n) => getComputedStyle(n).backgroundColor);
+  expect(spentColor).not.toBe(draftColor);
+  expect(draftColor).not.toBe("rgba(0, 0, 0, 0)");
   await expect(card).toContainText("Ces articles comptent aussi dans ton budget du mois.");
   await axe(page);
 

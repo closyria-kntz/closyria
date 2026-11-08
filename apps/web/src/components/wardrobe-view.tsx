@@ -61,10 +61,18 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   // « Mes envies » only: the list tab in the address (`?liste=<id>`), null for « Toutes mes envies ».
   const listParam = z.uuid().safeParse(search.get(LIST_PARAM));
   const listId = view === "envies" && listParam.success ? listParam.data : null;
+  // The list id of the address counts only once her lists were read and know it (a deleted list is not asked for).
+  const [lists, setLists] = useState<{ status: "loading" | "ready"; items: WishlistView[] }>({
+    status: "loading",
+    items: [],
+  });
+  const activeList = lists.items.find((list) => list.id === listId) ?? null;
+  const listPending = listId !== null && lists.status === "loading";
+  const queryListId = activeList ? listId : null;
   const query = useMemo(() => {
     const base = toItemQuery(view, filters, current.id);
-    return listId ? { ...base, wishlist: listId } : base;
-  }, [view, filters, current.id, listId]);
+    return queryListId ? { ...base, wishlist: queryListId } : base;
+  }, [view, filters, current.id, queryListId]);
   const queryKey = JSON.stringify(query);
 
   const [data, setData] = useState<Loaded>({ items: [], nextCursor: null, status: "loading" });
@@ -79,11 +87,8 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   // Bumped to read the first page again (retry, undo): the effect depends on it.
   const [reloadToken, setReloadToken] = useState(0);
   // « Mes envies »: her lists and every wish she has at « Repéré » (counts of the tabs, total of the ticked wishes).
-  const [lists, setLists] = useState<{ status: "loading" | "ready"; items: WishlistView[] }>({
-    status: "loading",
-    items: [],
-  });
   const [wishes, setWishes] = useState<ItemView[]>([]);
+  const [wishesError, setWishesError] = useState(false);
   const [scopeToken, setScopeToken] = useState(0);
   const generation = useRef(0);
   const moreController = useRef<AbortController | null>(null);
@@ -102,6 +107,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   useEffect(() => {
     if (view !== "envies" || !ready) return;
     let stale = false;
+    setWishesError(false);
     void reloadToken;
     void scopeToken;
     fetchWishlists().then(
@@ -112,17 +118,20 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     if (current.id) wanted.profile = current.id;
     fetchAllWishes(wanted).then(
       (items) => !stale && setWishes(items),
-      () => {},
+      () => !stale && setWishesError(true),
     );
     return () => {
       stale = true;
     };
   }, [view, ready, current.id, reloadToken, scopeToken]);
+  // Another profile: its wishes are not those on screen.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: cleared when the profile changes.
+  useEffect(() => setWishes([]), [current.id]);
 
   // First page, again whenever the view, the filters, the profile or the reload token change.
   // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey stands for query.
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || listPending) return;
     const mine = ++generation.current;
     const controller = new AbortController();
     setData((previous) => ({ ...previous, status: "loading" }));
@@ -138,7 +147,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
       controller.abort();
       moreController.current?.abort();
     };
-  }, [queryKey, ready, reloadToken]);
+  }, [queryKey, ready, reloadToken, listPending]);
 
   const loadMore = useCallback(async () => {
     if (!data.nextCursor || loadingMore || data.status !== "ready") return;
@@ -275,7 +284,6 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   }, [selecting, leaveSelection]);
 
   // The tabs and the budget card of « Mes envies »; the ticked wishes of the scope are counted here, once.
-  const activeList = lists.items.find((list) => list.id === listId) ?? null;
   const scopeWishes = useMemo(() => {
     if (!listId) return wishes;
     const inList = new Set(activeList?.itemIds ?? []);
@@ -349,6 +357,20 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           listName={activeList?.name}
           reloadKey={reloadToken + scopeToken}
         />
+      )}
+      {view === "envies" && wishesError && (
+        <div className="flex flex-wrap items-center gap-space-3">
+          <p role="alert" className="text-sm text-danger">
+            {t("loadError")}
+          </p>
+          <button
+            type="button"
+            className={`${buttonClass} ${touch}`}
+            onClick={() => setScopeToken((value) => value + 1)}
+          >
+            {t("retry")}
+          </button>
+        </div>
       )}
       {selecting && selected.size === 0 && <p className="text-sm text-ink-muted">{t("selection.hint")}</p>}
       <FiltersBar
