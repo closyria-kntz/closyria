@@ -24,6 +24,7 @@ export function UndoToast() {
     <div
       role="status"
       aria-live="polite"
+      aria-atomic="false"
       aria-relevant="additions"
       aria-label={t("label")}
       data-undo-toast=""

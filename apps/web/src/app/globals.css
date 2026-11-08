@@ -33,9 +33,7 @@ html[data-toast-lift] [data-undo-toast] {
   position: relative;
   z-index: 0; /* newest on top: a transformed older bubble would otherwise paint over it */
   transform-origin: bottom center;
-  transition:
-    transform var(--motion-duration-base) var(--ease-standard),
-    opacity var(--motion-duration-base) var(--ease-standard);
+  transition: transform var(--motion-duration-base) var(--ease-standard);
 }
 [data-undo-toast] [data-toast-rank="0"] {
   z-index: 3;
@@ -47,6 +45,25 @@ html[data-toast-lift] [data-undo-toast] {
 [data-undo-toast] [data-toast-rank="2"] {
   z-index: 1;
   transform: translateY(calc(-2 * var(--spacing-toast-stack))) scale(calc(1 - 2 * var(--scale-toast-stack)));
+}
+/* Hovered or focused: the stack fans out, one bubble per row (newest at the bottom), so every « Annuler » is
+   reachable. The ::after bridges the gap between rows so the pointer does not drop the hover while crossing it. */
+[data-undo-toast]:hover,
+[data-undo-toast]:focus-within {
+  row-gap: var(--spacing-space-2);
+}
+[data-undo-toast]:hover [data-toast-rank],
+[data-undo-toast]:focus-within [data-toast-rank] {
+  grid-area: auto;
+  transform: none;
+}
+[data-undo-toast]:hover [data-toast-rank]::after,
+[data-undo-toast]:focus-within [data-toast-rank]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  height: var(--spacing-space-2);
 }
 
 body {

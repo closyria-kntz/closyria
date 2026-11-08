@@ -197,3 +197,28 @@ test("passer à « Reçu » avec le prix payé : l'article est dans Dressing, pu
   await page.goto("/dressing");
   await expect(page.getByRole("heading", { name: "Ton dressing est vide" })).toBeVisible();
 });
+
+test("deux messages empilés : survoler la pile déploie les bulles, l'Annuler du plus ancien est cliquable", async ({
+  page,
+}) => {
+  await openSheet(page);
+  await page.getByRole("button", { name: "Ajouter à mes envies" }).click();
+  const mine = page.getByRole("region", { name: "Mon article" });
+  const toast = page.getByRole("status", { name: "Notifications" });
+  await expect(toast).toContainText("Ajouté à tes envies");
+  await mine.getByRole("group", { name: "Tu l’aimes comment ?" }).getByRole("button", { name: "En feu" }).click();
+  await expect(toast).toContainText("Niveau : En feu");
+  await expect(toast.getByRole("button", { name: "Annuler" })).toHaveCount(2);
+  await toast.locator('[data-toast-rank="0"]').hover();
+  // Fanned out: the older bubble sits fully above the newest one, nothing overlaps.
+  const older = toast.locator('[data-toast-rank="1"]');
+  const newest = toast.locator('[data-toast-rank="0"]');
+  await expect
+    .poll(async () => {
+      const [o, n] = [await older.boundingBox(), await newest.boundingBox()];
+      return o && n ? o.y + o.height <= n.y : false;
+    })
+    .toBe(true);
+  await older.getByRole("button", { name: "Annuler" }).click();
+  await expect(page.getByRole("button", { name: "Ajouter à mes envies" })).toBeVisible();
+});
