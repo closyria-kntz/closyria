@@ -75,11 +75,11 @@ const opinion = {
 const browserFetch = (response: Response) => vi.fn(async (_url: string, _init?: RequestInit) => response);
 
 describe("the friend's calls", () => {
-  it("reads the list again, without credentials; null once the link stopped", async () => {
+  it("reads the list again with same-origin credentials (dev's password), null once the link stopped", async () => {
     const fetcher = browserFetch(Response.json(view));
     expect(await fetchSharedView(TOKEN, fetcher as unknown as typeof fetch)).toEqual(view);
     expect(fetcher.mock.calls[0]?.[0]).toBe(`/api/shared/${TOKEN}`);
-    expect(fetcher.mock.calls[0]?.[1]?.credentials).toBe("omit");
+    expect(fetcher.mock.calls[0]?.[1]?.credentials).toBe("same-origin");
     const gone = browserFetch(Response.json({ error: "not_found" }, { status: 404 }));
     expect(await fetchSharedView(TOKEN, gone as unknown as typeof fetch)).toBeNull();
   });
@@ -91,6 +91,7 @@ describe("the friend's calls", () => {
     const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`/api/shared/${TOKEN}/items/${ITEM}/opinion`);
     expect(init.method).toBe("PUT");
+    expect(init.credentials).toBe("same-origin");
     expect(JSON.parse(String(init.body))).toEqual(input);
   });
 

@@ -10,7 +10,8 @@ import { z } from "zod";
 import { type AdminResult, fetchAdminJson, type InternalApi } from "./admin-api";
 
 // The public page's calls: its first paint reads the shared list through the internal API (server); a friend's
-// opinions are written from her browser, same origin, without credentials.
+// opinions are written from her browser, same origin. Same-origin credentials let the browser send dev's
+// password (HTTP Basic); the public routes read no session or cookie, so she stays anonymous.
 
 /** A share token is base64url; anything else is an unknown list and never reaches the API path. */
 const TOKEN = /^[A-Za-z0-9_-]{1,100}$/;
@@ -30,7 +31,7 @@ export async function fetchSharedView(
   fetcher: typeof fetch = fetch,
 ): Promise<SharedWishlistView | null> {
   if (!TOKEN.test(token)) return null;
-  const res = await fetcher(`/api/shared/${token}`, { credentials: "omit", cache: "no-store" });
+  const res = await fetcher(`/api/shared/${token}`, { credentials: "same-origin", cache: "no-store" });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`/api/shared answered ${res.status}`);
   return sharedWishlistViewSchema.parse(await res.json());
@@ -59,7 +60,7 @@ async function opinionCall(
   try {
     return await fetcher(`/api/shared/${token}/items/${encodeURIComponent(itemId)}/opinion`, {
       method,
-      credentials: "omit",
+      credentials: "same-origin",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
