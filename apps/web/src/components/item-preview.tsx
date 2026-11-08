@@ -93,7 +93,12 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
       {item && (
         <>
           {photos.length > 0 && (
-            <div className="flex snap-x snap-mandatory gap-space-2 overflow-x-auto">
+            <section
+              aria-label={t("photos")}
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable strip must be reachable by keyboard.
+              tabIndex={0}
+              className={`flex snap-x snap-mandatory gap-space-2 overflow-x-auto rounded-card ${focusRing}`}
+            >
               {photos.map((url) => (
                 // biome-ignore lint/performance/noImgElement: photos come from our own API, already resized.
                 <img
@@ -104,7 +109,7 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
                   className={`aspect-3/4 shrink-0 snap-start rounded-card bg-media-backdrop object-cover ${photos.length > 1 ? "w-4/5" : "w-full"}`}
                 />
               ))}
-            </div>
+            </section>
           )}
           <div className="flex flex-col gap-space-3">
             <div className="flex flex-col gap-space-1">

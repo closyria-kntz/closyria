@@ -461,12 +461,8 @@ test("l'aperçu de commande et la fiche montrent « Avis des amies », avec le n
   test.slow();
   const shareUrl = await sharedList(page, db, userAgentTag);
   const preview = page.getByRole("dialog", { name: `Aperçu de ${PRODUCT.name}` });
-  // The sheet body only: its photo strip has an older scroll-focus finding of its own. */
   const axeSheet = async (page: Page) => {
-    const { violations } = await new AxeBuilder({ page })
-      .include("[data-testid=preview-body]")
-      .disableRules("scrollable-region-focusable")
-      .analyze();
+    const { violations } = await new AxeBuilder({ page }).include("[data-testid=preview-body]").analyze();
     expect(violations.map((v) => v.id)).toEqual([]);
   };
 
@@ -537,6 +533,48 @@ test("l'aperçu de commande et la fiche montrent « Avis des amies », avec le n
   await expect(preview.getByText("Cadeaux", { exact: true })).toBeVisible();
   await expect(preview.getByRole("list", { name: "Avis des amies" }).getByRole("listitem")).toHaveCount(2);
   await axeSheet(page);
+
+  await lea.context().close();
+  await mia.context().close();
+});
+
+test("la fiche ouverte se met à jour tout seul, et garde les avis déjà montrés si le rafraîchissement échoue", async ({
+  page,
+  browser,
+  baseURL,
+  db,
+  userAgentTag,
+}, testInfo) => {
+  test.slow();
+  const shareUrl = await sharedList(page, db, userAgentTag);
+  // The item page (not the preview: the live poll waits while a sheet is open).
+  await page.goto("/envies/commande");
+  await page.getByRole("button", { name: new RegExp(PRODUCT.name) }).click();
+  await page
+    .getByRole("dialog", { name: `Aperçu de ${PRODUCT.name}` })
+    .getByRole("link", { name: "Ouvrir la fiche complète" })
+    .click();
+  await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+  // The first stamp read is the baseline: wait for it before the friend answers.
+  await page.waitForResponse((r) => r.url().endsWith("/api/me/changes"), { timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Avis des amies" })).toHaveCount(0);
+
+  // A friend answers elsewhere: the open preview shows it without a reload (live poll).
+  const lea = await friend(browser, baseURL, `10.207.${testInfo.workerIndex % 250}.1`);
+  await lea.goto(shareUrl);
+  await giveOpinion(lea, "Léa", "En feu", "elle t'irait trop bien");
+  const opinions = page.getByRole("list", { name: "Avis des amies" }).getByRole("listitem");
+  await expect(opinions).toHaveCount(1, { timeout: 40_000 });
+
+  // The opinions request now fails: what is shown stays when a second opinion moves the stamp.
+  await page.route("**/api/me/items/*/opinions", (route) => route.fulfill({ status: 500, body: "{}" }));
+  const mia = await friend(browser, baseURL, `10.208.${testInfo.workerIndex % 250}.1`);
+  await mia.goto(shareUrl);
+  await giveOpinion(mia, "Mia", "Mims", "la couleur est parfaite");
+  await page.waitForResponse((r) => r.url().includes("/opinions") && r.status() === 500, { timeout: 40_000 });
+  await expect(opinions).toHaveCount(1);
+  await expect(opinions.first()).toContainText("Léa");
+  await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
 
   await lea.context().close();
   await mia.context().close();

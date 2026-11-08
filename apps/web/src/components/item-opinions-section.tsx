@@ -2,7 +2,7 @@
 
 import type { ItemOpinions } from "@closyria/shared";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useLiveRefresh } from "@/lib/live-changes";
 import { useLoveLevels } from "@/lib/profile-context";
 import { fetchItemOpinions } from "@/lib/wardrobe-client";
@@ -21,12 +21,17 @@ export function ItemOpinionsSection({ itemId }: { itemId: string }) {
   const titleId = useId();
   const [lists, setLists] = useState<Lists>([]);
 
+  // Only the latest request may set state: a slow answer for a previous item (or an older refresh) is dropped.
+  const latest = useRef(0);
+
   const load = useCallback(async () => {
+    const mine = ++latest.current;
     try {
       const result = await fetchItemOpinions(itemId);
-      setLists(result.ok ? result.lists : []);
+      // A failed refresh keeps what is shown; the first load failing leaves nothing.
+      if (mine === latest.current && result.ok) setLists(result.lists);
     } catch {
-      setLists([]);
+      // Secondary section: stays quiet.
     }
   }, [itemId]);
 
