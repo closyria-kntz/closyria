@@ -11,8 +11,6 @@ import { BudgetBars } from "./budget-bars";
 import { SquareCheck } from "./square-check";
 import { focusRing } from "./ui";
 
-const touch = "min-h-touch-target";
-
 /**
  * « Ma commande »: the band stuck at the bottom of « Mes envies » and of « Préparer une commande ». The ticked wishes
  * of the scope (`items` are those of the scope, ticked or not), what they add up to, what the budget would have left,
@@ -100,29 +98,38 @@ export function OrderBand({
       ref={setElement}
       aria-labelledby={titleId}
       data-testid="order-band"
-      className="glass sticky bottom-space-4 z-10 mx-auto flex w-full max-w-panel flex-col gap-space-2 rounded-card py-space-2 pr-space-2 pl-space-4 text-ink shadow-lifted"
+      className="glass sticky bottom-space-4 z-10 mx-auto flex w-full max-w-band flex-col gap-space-2 rounded-band py-space-2 pr-space-2 pl-space-4 text-ink shadow-block sm:gap-space-2-5 sm:py-space-2-5 sm:pr-space-2-5 sm:pl-space-5"
     >
       {/* One line: what is taken, what the budget would have left, « Voir » and « J'ai commandé (n) ». On a narrow
-          phone only the totals wrap, inside their column; the buttons stay on the right. */}
+          phone the bar stays slim (two lines at most): the title steps aside (screen readers keep it) when the budget
+          line needs its room, and the buttons stay on the right. */}
       <div className="flex items-center gap-space-3">
         <div className="flex min-w-space-0 flex-1 flex-col">
-          <h2 id={titleId} className="truncate text-caption text-ink-muted">
+          <h2
+            id={titleId}
+            className={`truncate text-caption text-ink-muted ${totals.afterCents !== null ? "max-sm:sr-only" : ""}`}
+          >
             {listName ? t("band.titleList", { name: listName }) : t("band.title")}
           </h2>
-          <div aria-live="polite" className="flex flex-wrap items-center gap-x-space-2 gap-y-space-1 tabular-nums">
-            <p key={totals.count} data-testid="count-roll" className="count-roll font-strong">
+          <div
+            aria-live="polite"
+            className="flex flex-wrap items-center gap-x-space-2 gap-y-space-1 text-sm tabular-nums sm:text-control"
+          >
+            <p key={totals.count} data-testid="count-roll" className="count-roll font-bold">
               {t("band.total", { count: totals.count, amount: money(totals.totalCents) })}
             </p>
             {totals.unknownPrices > 0 && (
-              <p className="text-sm text-ink-muted">{t("band.unknown", { count: totals.unknownPrices })}</p>
+              <p className="text-caption text-ink-muted sm:text-sm">
+                {t("band.unknown", { count: totals.unknownPrices })}
+              </p>
             )}
             {totals.afterCents !== null &&
               (totals.afterCents >= 0 ? (
-                <p className="rounded-button border border-success-edge bg-success-soft px-space-2 text-sm font-strong whitespace-nowrap text-success">
+                <p className="rounded-button border border-success-edge bg-success-soft px-space-2 text-caption font-strong whitespace-nowrap text-success sm:text-sm">
                   {t("band.left", { amount: money(totals.afterCents) })}
                 </p>
               ) : (
-                <p className="rounded-button border border-danger-edge bg-danger-soft px-space-2 text-sm font-strong whitespace-nowrap text-danger">
+                <p className="rounded-button border border-danger-edge bg-danger-soft px-space-2 text-caption font-strong whitespace-nowrap text-danger sm:text-sm">
                   {t("band.over", { amount: money(-totals.afterCents) })}
                 </p>
               ))}
@@ -134,7 +141,7 @@ export function OrderBand({
             aria-expanded={open}
             aria-controls={listId}
             onClick={() => setOpen((value) => !value)}
-            className={`${touch} rounded-button bg-surface-sunken px-space-3 text-sm font-strong sm:px-space-4 text-ink hover:bg-surface-strong ${focusRing}`}
+            className={`hit-area relative h-control-sm rounded-button bg-surface-strong px-space-3 text-sm font-strong text-ink hover:bg-hint sm:h-touch-target sm:px-space-4 sm:text-control ${focusRing}`}
           >
             {t("band.see")}
           </button>
@@ -144,7 +151,7 @@ export function OrderBand({
             data-shaking={shaking}
             onAnimationEnd={() => setShaking(false)}
             onClick={() => void order()}
-            className={`band-shake ${touch} inline-flex items-center rounded-button bg-band-button px-space-3 py-space-2 whitespace-nowrap sm:px-space-4 text-sm font-strong text-band-button-ink hover:bg-band-button-hover disabled:opacity-60 ${focusRing}`}
+            className={`band-shake hit-area relative inline-flex h-control-sm items-center rounded-button bg-band-button px-space-3 whitespace-nowrap sm:h-control-plus sm:px-space-5 sm:text-control text-sm font-strong text-band-button-ink hover:bg-band-button-hover disabled:opacity-60 ${focusRing}`}
           >
             {t("band.ordered", { count: totals.count })}
           </button>

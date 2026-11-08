@@ -128,14 +128,20 @@ describe("Équilibré themes", () => {
     expect(get(equilibreDark, "color-danger-edge")).toBe("#B4646C");
   });
 
-  it("derives the frosted glass and the aurora from the surfaces", () => {
+  it("takes the frosted glass and the translucent aurora from the mockup (palette p5)", () => {
+    // Glass: the raised surface at 60 % (62 % in dark), a white edge (75 %, 7 % in dark).
+    expect(get(equilibreLight, "color-glass")).toBe("color-mix(in srgb, var(--color-surface-raised) 60%, transparent)");
+    expect(get(equilibreDark, "color-glass")).toBe("color-mix(in srgb, var(--color-surface-raised) 62%, transparent)");
+    expect(get(equilibreLight, "color-glass-line")).toBe("color-mix(in srgb, #FFFFFF 75%, transparent)");
+    expect(get(equilibreDark, "color-glass-line")).toBe("color-mix(in srgb, #FFFFFF 7%, transparent)");
+    // The patches fade into transparency (not into a tinted surface), so the page between them stays plain.
     for (const theme of themes) {
-      expect(get(theme, "color-glass")).toBe("color-mix(in srgb, var(--color-surface-raised) 62%, transparent)");
-      expect(get(theme, "color-glass-line")).toBe("color-mix(in srgb, var(--color-surface-raised) 75%, transparent)");
+      for (const n of [1, 2, 3]) expect(get(theme, `color-aurora-${n}`)).toMatch(/, transparent\)$/);
     }
     const shares = (theme: Theme) => [1, 2, 3].map((n) => get(theme, `color-aurora-${n}`).match(/ (\d+)%,/)?.[1]);
     expect(shares(equilibreLight)).toEqual(["18", "28", "30"]);
     expect(shares(equilibreDark)).toEqual(["18", "12", "12"]);
+    expect(defaultSemanticTokens["aurora-fade"]).toBe("70%");
   });
 
   it("defines the specified shapes, durations and fonts", () => {

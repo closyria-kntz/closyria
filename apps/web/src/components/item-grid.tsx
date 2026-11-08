@@ -9,7 +9,7 @@ export type GridSelection = { selected: ReadonlySet<string>; onToggle: (id: stri
 
 /** 2 columns on a phone (< 48 rem), 3 on a tablet, 4 from 64 rem (refonte, gaps of the mockup). */
 export const GRID_CLASS =
-  "grid grid-cols-2 gap-x-space-4 gap-y-space-5 md:grid-cols-3 lg:grid-cols-4 lg:gap-x-space-5 lg:gap-y-space-6";
+  "grid grid-cols-2 gap-x-space-4 gap-y-space-5 md:grid-cols-3 lg:grid-cols-4 lg:gap-x-grid-col lg:gap-y-grid-row";
 
 export function ItemGrid({
   label,

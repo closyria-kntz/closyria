@@ -72,17 +72,18 @@ body {
   font-family: var(--font-body);
 }
 
-/* Aurora: three soft light patches fixed behind everything, drifting very slowly. Reduced motion stops it. */
+/* Aurora: three soft translucent ellipses fixed behind everything, drifting very slowly (the mockup's .aurora: a
+   layer larger than the window, each patch fading out well before the next). Reduced motion stops it. */
 body::before {
   content: "";
   position: fixed;
-  inset: 0;
+  inset: var(--aurora-overscan);
   z-index: -1;
   pointer-events: none;
   background-image:
-    radial-gradient(circle at var(--aurora-at-1), var(--color-aurora-1), transparent var(--aurora-reach)),
-    radial-gradient(circle at var(--aurora-at-2), var(--color-aurora-2), transparent var(--aurora-reach)),
-    radial-gradient(circle at var(--aurora-at-3), var(--color-aurora-3), transparent var(--aurora-reach));
+    radial-gradient(var(--aurora-shape-1), var(--color-aurora-1), transparent var(--aurora-fade)),
+    radial-gradient(var(--aurora-shape-2), var(--color-aurora-2), transparent var(--aurora-fade)),
+    radial-gradient(var(--aurora-shape-3), var(--color-aurora-3), transparent var(--aurora-fade));
   animation: aurora-drift var(--motion-duration-aurora) var(--ease-standard) infinite alternate;
 }
 
@@ -115,6 +116,16 @@ body::before {
   html.no-backdrop & {
     background: var(--color-surface-raised);
     backdrop-filter: none;
+  }
+}
+
+/* A control drawn smaller than a finger keeps a finger-wide hit area: an invisible layer reaches out to the touch
+   target around it (none when the control is already larger). The control must be positioned. */
+@utility hit-area {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: var(--spacing-hit-inset);
   }
 }
 

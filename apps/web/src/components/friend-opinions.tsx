@@ -54,7 +54,7 @@ export function FriendOpinions({
                 {initialOf(opinion.name)}
               </span>
               <div
-                className={`bubble flex min-w-space-0 flex-1 flex-col bg-hint px-space-3 py-space-2 ${opinion.isNew ? "bubble-new" : ""}`}
+                className={`bubble flex min-w-space-0 flex-1 flex-col bg-surface-sunken px-space-4 py-space-3 ${opinion.isNew ? "bubble-new" : ""}`}
               >
                 <p className="flex flex-wrap items-center gap-x-space-1">
                   <span className="font-strong break-words">{opinion.name}</span>

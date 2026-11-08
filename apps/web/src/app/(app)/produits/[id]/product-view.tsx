@@ -4,7 +4,7 @@ import type { CaptureView, ItemView, PriceHistory, ProductView as Product } from
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PriceCurve } from "@/components/price-curve";
-import { blockClass, buttonClass } from "@/components/ui";
+import { blockClass, blockTitleClass, buttonClass } from "@/components/ui";
 import { formatAmount } from "@/lib/budget";
 import { pollCapture, pollUntil } from "@/lib/capture-poll";
 import { fetchCaptureView, fetchProduct } from "@/lib/catalog-client";
@@ -220,7 +220,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   const sizesBlock =
     product.sizes.length > 0 ? (
       <section aria-labelledby="sizes-title" data-block className={blockClass}>
-        <h2 id="sizes-title" className="font-display text-lead">
+        <h2 id="sizes-title" className={blockTitleClass}>
           {t("product.sizes")}
         </h2>
         {manualShop && <p className="text-sm text-ink-muted">{t("product.manualSizes")}</p>}
@@ -228,7 +228,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
           {product.sizes.map((size) => (
             <li
               key={size.label}
-              className={`flex min-h-touch-target min-w-touch-target items-center justify-center rounded-button border border-line px-space-3 text-sm font-strong ${size.available ? "bg-surface-raised" : "text-ink-muted line-through"}`}
+              className={`flex h-space-7 min-w-size-chip items-center justify-center rounded-size bg-surface-strong px-space-3 text-control font-strong ${size.available ? "" : "text-ink-muted line-through"}`}
             >
               {size.label}
               {!size.available && <span className="sr-only"> ({t("product.unavailable")})</span>}
@@ -252,7 +252,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
 
   const shopSheet = hasName ? (
     <section aria-labelledby="shop-title" data-block className={blockClass}>
-      <h2 id="shop-title" className="font-display text-lead">
+      <h2 id="shop-title" className={blockTitleClass}>
         {tItem("sections.shop")}
       </h2>
       <ProductTraits traits={product.traits} />
@@ -281,10 +281,10 @@ export function ProductView({ productId, captureId }: { productId: string; captu
         ) : null}
       </div>
 
-      <div data-testid="product-info" className="flex min-w-space-0 flex-col gap-space-4">
+      <div data-testid="product-info" className="flex min-w-space-0 flex-col gap-space-3-5">
         <header data-testid="product-header" data-block className={blockClass}>
           <div className="flex flex-col gap-space-1">
-            <p className="text-sm text-ink-muted">
+            <p className="text-sm text-ink-muted sm:text-control">
               {waiting ? <span role="status">{t("product.loading", { shop })}</span> : shop}
             </p>
             {hasName && product.brand && (
@@ -294,7 +294,9 @@ export function ProductView({ productId, captureId }: { productId: string; captu
           <h1
             ref={heading}
             tabIndex={-1}
-            className={waiting ? "sr-only" : "font-display text-title text-balance focus:outline-none"}
+            className={
+              waiting ? "sr-only" : "font-display text-sheet-title leading-none text-balance focus:outline-none"
+            }
           >
             {product.name ?? shop}
           </h1>
@@ -307,7 +309,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
               <p className="flex items-baseline gap-space-3 tabular-nums">
                 <span className="font-display text-title">{formatPrice(locale, product.priceCents, currency)}</span>
                 {product.compareAtCents !== null && product.compareAtCents > product.priceCents && (
-                  <s className="text-lead text-ink-muted decoration-accent">
+                  <s className="text-quote text-ink-muted decoration-accent decoration-2">
                     <span className="sr-only">{t("product.comparePrice")} </span>
                     {formatPrice(locale, product.compareAtCents, currency)}
                   </s>
@@ -321,7 +323,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
             </div>
           )}
           {mention && (
-            <p className="self-start rounded-full bg-success-soft px-space-3 py-space-1 text-sm font-strong text-success tabular-nums">
+            <p className="self-start rounded-full bg-success-soft px-space-3 py-space-1-5 text-caption font-strong text-success tabular-nums">
               {mention.months === null
                 ? t("product.drop", {
                     amount: formatAmount(locale, mention.cents, currency),
@@ -367,12 +369,8 @@ export function ProductView({ productId, captureId }: { productId: string; captu
             onChange={setItem}
             onGone={() => setItem(null)}
             reload={reloadItem}
-            middle={
-              <>
-                {sizesBlock}
-                {actions}
-              </>
-            }
+            beside={sizesBlock}
+            middle={actions}
             shop={shopSheet}
           />
         ) : (

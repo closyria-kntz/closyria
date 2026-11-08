@@ -39,6 +39,7 @@ export function LoveLevelPill({
   reload,
   open,
   onOpenChange,
+  big = false,
 }: {
   item: ItemView;
   onChange: (item: ItemView) => void;
@@ -46,6 +47,8 @@ export function LoveLevelPill({
   reload: () => Promise<void>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The big photo of the sheet: a bigger glyph (mockup 36 px, 30 px on a card). */
+  big?: boolean;
 }) {
   const t = useTranslations("Views");
   const tCard = useTranslations("Views.card");
@@ -81,7 +84,7 @@ export function LoveLevelPill({
           aria-expanded={open}
           aria-busy={busy || undefined}
           onClick={() => onOpenChange(!open)}
-          className={`flex min-h-touch-target min-w-touch-target items-center justify-center rounded-full p-space-1 text-lead leading-none ${focusRing}`}
+          className={`flex min-h-touch-target min-w-touch-target items-center justify-center rounded-full p-space-1 ${big ? "text-emoji-sheet" : "text-emoji-card"} leading-none ${focusRing}`}
         >
           {current ? (
             <span aria-hidden="true" className="drop-shadow-emoji">

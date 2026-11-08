@@ -138,7 +138,7 @@ export function PhotoManager({
         groupLabels={{ private: t("photos.private"), shop: t("photos.shop") }}
         alwaysThumbs
         overlay={
-          <LoveLevelPill item={item} onChange={onChange} reload={reload} open={picker} onOpenChange={setPicker} />
+          <LoveLevelPill big item={item} onChange={onChange} reload={reload} open={picker} onOpenChange={setPicker} />
         }
         onDoubleTap={() => setPicker(true)}
         footer={footer}

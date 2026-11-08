@@ -54,7 +54,9 @@ export const primitives = {
     raspberry: "#BE185D",
     bordeaux: "#5E1E2E",
     champagne: "#D9BC80",
-    lavender: "#CDB8E8",
+    // The aurora of the mockup (palette p5): a bright pink and a lavender mist, always translucent.
+    pinkFlash: "#EC4899",
+    lavenderMist: "#B9A8F0",
     plum: "#1A1218",
     plumRaised: "#261922",
     pinkMist: "#F6D6E4",

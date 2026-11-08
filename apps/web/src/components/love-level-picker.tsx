@@ -22,7 +22,7 @@ export function LoveLevelPicker({ value, onChange, disabled = false, hideLegend 
   return (
     <fieldset className="flex min-w-space-0 flex-col gap-space-2">
       <legend className={hideLegend ? "sr-only" : "pb-space-2 text-sm font-strong"}>{t("levels")}</legend>
-      <div className="grid grid-cols-4 gap-space-2">
+      <div className="grid grid-cols-2 gap-space-2 sm:grid-cols-(--grid-levels)">
         {levels.map((level) => (
           <button
             key={level.level}
@@ -32,7 +32,7 @@ export function LoveLevelPicker({ value, onChange, disabled = false, hideLegend 
             onClick={() => onChange(level.level)}
             className={levelButtonClass}
           >
-            <span aria-hidden="true" className="text-lead">
+            <span aria-hidden="true" className="text-emoji-level leading-none">
               {level.emoji}
             </span>
             <span className="max-w-full truncate">{level.label}</span>

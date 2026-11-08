@@ -119,16 +119,18 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
         </div>
         <div className="flex min-w-space-0 flex-col gap-space-1 px-space-1">
           <span className="truncate text-sm text-ink-muted">{item.product.shop.name}</span>
-          <span className="truncate font-display text-lead leading-tight">{name}</span>
-          <span className="flex flex-wrap items-center gap-x-space-2 gap-y-space-1 tabular-nums">
+          <span className="truncate font-display text-card-title leading-tight">{name}</span>
+          <span className="flex flex-wrap items-center gap-x-space-2 gap-y-space-1 font-bold tabular-nums">
             {price}
             {drop !== null && item.product.compareAtCents !== null && (
-              <s className="text-sm text-ink-muted">{formatAmount(locale, item.product.compareAtCents, currency)}</s>
+              <s className="text-sm font-regular text-ink-muted">
+                {formatAmount(locale, item.product.compareAtCents, currency)}
+              </s>
             )}
             {drop !== null && (
               <span
                 data-testid="card-drop"
-                className="rounded-full bg-success-soft px-space-2 py-space-1 text-caption font-strong text-success"
+                className="rounded-full bg-success-soft px-space-3 py-space-1-5 text-caption font-strong text-success"
               >
                 −{formatAmount(locale, drop, currency)}
               </span>
@@ -162,7 +164,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               data-testid="card-taken"
               role="img"
               aria-label={t("taken")}
-              className="absolute top-space-7 right-space-3 mt-space-2 flex size-space-6 items-center justify-center rounded-md bg-button-bg text-button-ink"
+              className="absolute top-space-7 right-space-3 mt-space-2 flex size-control-2xs items-center justify-center rounded-mark bg-button-bg text-button-ink"
             >
               <Tick draw />
             </span>
@@ -175,7 +177,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               data-testid="card-preview"
               aria-label={t("previewOf", { name })}
               onClick={() => quick.onPreview?.(item)}
-              className={`glass pointer-events-auto flex min-h-touch-target min-w-touch-target items-center justify-center rounded-button px-space-2 text-sm font-strong text-ink sm:flex-1 ${focusRing}`}
+              className={`hit-area pointer-events-auto relative flex h-control-sm min-w-control-sm items-center justify-center rounded-button border border-line bg-surface-raised px-space-2 text-caption font-strong text-ink sm:h-control-lg sm:flex-1 sm:text-sm ${focusRing}`}
             >
               {/* A narrow phone card has no room for both words: the eye says « Aperçu » (its name says it too). */}
               <svg
@@ -201,9 +203,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               onClick={(event) =>
                 quick.onTake?.(item, event.currentTarget.closest("li")?.querySelector("[data-photo]"))
               }
-              className={`pointer-events-auto min-h-touch-target min-w-space-0 flex-1 rounded-button px-space-2 text-sm font-strong whitespace-nowrap ${focusRing} ${
-                item.inOrderDraft ? "glass text-ink" : "bg-button-bg text-button-ink"
-              }`}
+              className={`hit-area pointer-events-auto relative h-control-sm min-w-space-0 flex-1 rounded-button bg-button-bg px-space-2 text-caption font-strong whitespace-nowrap text-button-ink sm:h-control-lg sm:text-sm ${focusRing}`}
             >
               {t(item.inOrderDraft ? "remove" : "take")}
             </button>

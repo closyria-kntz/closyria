@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import { ItemOpinionsSection } from "@/components/item-opinions-section";
 import { LoveLevelPicker } from "@/components/love-level-picker";
 import { Tick } from "@/components/tick";
-import { blockClass, buttonClass, focusRing, inputClass, primaryButtonClass } from "@/components/ui";
+import { blockClass, blockTitleClass, buttonClass, focusRing, inputClass, primaryButtonClass } from "@/components/ui";
 import { levelOf } from "@/lib/love-levels";
 import { formatPrice } from "@/lib/price";
 import { useLoveLevels, useProfiles } from "@/lib/profile-context";
@@ -47,7 +47,9 @@ type Props = {
   onGone: () => void;
   /** Re-reads her item (after an undo). */
   reload: () => Promise<void>;
-  /** Between « Ton envie » and « Mon article »: the sizes and the sheet's buttons. */
+  /** Beside « Ton envie » when there is room (two blocks side by side, mockup): the sizes. */
+  beside?: React.ReactNode;
+  /** Between « Ton envie » and « Mon article »: the sheet's buttons. */
   middle: React.ReactNode;
   /** The shop's sheet, shown between « Mon article » and « Autres actions ». */
   shop: React.ReactNode;
@@ -58,7 +60,7 @@ type Props = {
  * (stage, size and amounts, notes, opinions, lists, tags), the shop sheet, « Autres actions » (profile, delete).
  * Photos live in the gallery column.
  */
-export function ItemPanel({ item, onChange, onGone, reload, middle, shop }: Props) {
+export function ItemPanel({ item, onChange, onGone, reload, beside, middle, shop }: Props) {
   const t = useTranslations("Item");
   const tMenu = useTranslations("Views.menu");
   const levels = useLoveLevels();
@@ -276,86 +278,94 @@ export function ItemPanel({ item, onChange, onGone, reload, middle, shop }: Prop
 
   return (
     <>
-      <section aria-labelledby="wish-title" aria-busy={busy || undefined} data-block className={blockClass}>
-        <div className="flex flex-wrap items-center justify-between gap-space-2">
-          <h2 id="wish-title" className="font-display text-lead">
-            {t("sections.wish")}
-          </h2>
-          {/* A small ticked pill, a finger wide all the same (the button is taller than the pill it shows). */}
-          <button
-            type="button"
+      <div className="grid grid-cols-(--grid-blocks) gap-space-3-5">
+        <section aria-labelledby="wish-title" aria-busy={busy || undefined} data-block className={blockClass}>
+          <div className="flex flex-wrap items-center justify-between gap-space-2">
+            <h2 id="wish-title" className={blockTitleClass}>
+              {t("sections.wish")}
+            </h2>
+            {/* A small ticked pill, a finger wide all the same (the button is taller than the pill it shows). */}
+            <button
+              type="button"
+              disabled={busy}
+              aria-pressed={item.priority}
+              onClick={togglePriority}
+              className={`group flex min-h-touch-target items-center rounded-full disabled:opacity-60 ${focusRing}`}
+            >
+              <span className="inline-flex h-control-xs items-center gap-space-1-5 rounded-full border border-transparent bg-surface-strong px-space-3-5 text-caption font-strong text-ink group-hover:bg-hint group-aria-pressed:border-accent group-aria-pressed:bg-hint">
+                {item.priority && <Tick draw />}
+                {t("keep.priority")}
+              </span>
+            </button>
+          </div>
+          {errorIn(true)}
+          <LoveLevelPicker
+            value={item.loveLevel}
+            onChange={(level) => void chooseLevel(level)}
             disabled={busy}
-            aria-pressed={item.priority}
-            onClick={togglePriority}
-            className={`group flex min-h-touch-target items-center rounded-full disabled:opacity-60 ${focusRing}`}
-          >
-            <span className="inline-flex items-center gap-space-1 rounded-full bg-surface-sunken px-space-3 py-space-1 text-caption font-strong text-ink group-hover:bg-surface-strong group-aria-pressed:bg-hint">
-              {item.priority && <Tick draw />}
-              {t("keep.priority")}
-            </span>
-          </button>
-        </div>
-        {errorIn(true)}
-        <LoveLevelPicker
-          value={item.loveLevel}
-          onChange={(level) => void chooseLevel(level)}
-          disabled={busy}
-          hideLegend
-        />
-        {editingWhy ? (
-          <form onSubmit={saveWhy} className="flex min-w-space-0 flex-wrap items-center gap-space-2">
-            <label htmlFor="item-why" className="sr-only">
-              {t("keep.why")}
-            </label>
-            <input
-              id="item-why"
-              // biome-ignore lint/a11y/noAutofocus: she just asked to edit it; the field replaces the button she pressed.
-              autoFocus
-              value={why}
-              maxLength={MAX_WHY}
-              placeholder={t("keep.why")}
-              onChange={(e) => setWhy(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  cancelWhy();
-                }
-              }}
-              className={`${inputClass} ${touch} w-auto min-w-space-0 flex-1 basis-sidebar font-display text-lead italic`}
-            />
-            <button type="submit" disabled={busy} aria-label={t("panel.whySave")} className={`${buttonClass} ${touch}`}>
-              {t("panel.save")}
-            </button>
-            <button type="button" onClick={cancelWhy} className={`${buttonClass} ${touch}`}>
-              {t("panel.whyCancel")}
-            </button>
-          </form>
-        ) : item.why ? (
-          <div className="flex flex-wrap items-baseline justify-between gap-space-2">
-            <p data-testid="item-why" className="min-w-space-0 font-display text-lead italic">
-              {t("panel.whyQuote", { why: item.why })}
-            </p>
+            hideLegend
+          />
+          {editingWhy ? (
+            <form onSubmit={saveWhy} className="flex min-w-space-0 flex-wrap items-center gap-space-2">
+              <label htmlFor="item-why" className="sr-only">
+                {t("keep.why")}
+              </label>
+              <input
+                id="item-why"
+                // biome-ignore lint/a11y/noAutofocus: she just asked to edit it; the field replaces the button she pressed.
+                autoFocus
+                value={why}
+                maxLength={MAX_WHY}
+                placeholder={t("keep.why")}
+                onChange={(e) => setWhy(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelWhy();
+                  }
+                }}
+                className={`${inputClass} ${touch} w-auto min-w-space-0 flex-1 basis-sidebar font-display text-quote italic`}
+              />
+              <button
+                type="submit"
+                disabled={busy}
+                aria-label={t("panel.whySave")}
+                className={`${buttonClass} ${touch}`}
+              >
+                {t("panel.save")}
+              </button>
+              <button type="button" onClick={cancelWhy} className={`${buttonClass} ${touch}`}>
+                {t("panel.whyCancel")}
+              </button>
+            </form>
+          ) : item.why ? (
+            <div className="flex flex-wrap items-baseline justify-between gap-space-2">
+              <p data-testid="item-why" className="min-w-space-0 font-display text-quote leading-snug italic">
+                {t("panel.whyQuote", { why: item.why })}
+              </p>
+              <button
+                ref={whyButton}
+                type="button"
+                aria-label={t("panel.whyEditLabel")}
+                onClick={() => setEditingWhy(true)}
+                className={`${touch} rounded-button px-space-2 text-sm font-strong text-ink underline underline-offset-4 ${focusRing}`}
+              >
+                {t("panel.whyEdit")}
+              </button>
+            </div>
+          ) : (
             <button
               ref={whyButton}
               type="button"
-              aria-label={t("panel.whyEditLabel")}
               onClick={() => setEditingWhy(true)}
-              className={`${touch} rounded-button px-space-2 text-sm font-strong text-ink underline underline-offset-4 ${focusRing}`}
+              className={`${touch} self-start rounded-button px-space-2 text-sm font-strong text-ink underline underline-offset-4 ${focusRing}`}
             >
-              {t("panel.whyEdit")}
+              {t("panel.whyAdd")}
             </button>
-          </div>
-        ) : (
-          <button
-            ref={whyButton}
-            type="button"
-            onClick={() => setEditingWhy(true)}
-            className={`${touch} self-start rounded-button px-space-2 text-sm font-strong text-ink underline underline-offset-4 ${focusRing}`}
-          >
-            {t("panel.whyAdd")}
-          </button>
-        )}
-      </section>
+          )}
+        </section>
+        {beside}
+      </div>
 
       {middle}
 
@@ -365,7 +375,7 @@ export function ItemPanel({ item, onChange, onGone, reload, middle, shop }: Prop
         data-block
         className={`${blockClass} gap-space-5`}
       >
-        <h2 id="mine-title" className="font-display text-lead">
+        <h2 id="mine-title" className={blockTitleClass}>
           {t("sections.mine")}
         </h2>
 

@@ -4,12 +4,15 @@ import type { ItemView } from "@closyria/shared";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { Tick } from "@/components/tick";
-import { buttonClass, primaryButtonClass, toggleButtonClass } from "@/components/ui";
+import { focusRing } from "@/components/ui";
 import { COPIED_FEEDBACK_MS } from "@/lib/timing";
 import { pushUndo } from "@/lib/undo";
 import { patchItem, undoWith } from "@/lib/wardrobe-client";
 
-const touch = "min-h-touch-target";
+/** The sheet's buttons (mockup .actions .clay): 54 px with 16 px text, a finger tall on a phone. */
+const actionClass = `inline-flex h-touch-target items-center justify-center gap-space-2 rounded-button px-space-5 text-sm font-strong sm:h-control-2xl sm:text-control ${focusRing}`;
+/** The light ones (mockup .clay.light): the raised surface with a fine line. */
+const lightClass = "border border-line bg-surface-raised text-ink hover:bg-surface-strong";
 
 const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
 
@@ -83,7 +86,7 @@ export function ProductActions({
             disabled={busy}
             aria-pressed={item.inOrderDraft}
             onClick={() => void take(item)}
-            className={`${toggleButtonClass} justify-center px-space-5`}
+            className={`${actionClass} ${lightClass} aria-pressed:border-accent aria-pressed:bg-hint`}
           >
             {item.inOrderDraft && <Tick draw />}
             {t("take")}
@@ -94,17 +97,13 @@ export function ProductActions({
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className={`${primaryButtonClass} ${touch} px-space-5`}
+            className={`${actionClass} bg-button-bg text-button-ink disabled:opacity-60`}
           >
             {t("viewAt", { shop })}
           </a>
         )}
         {title !== null && isHttpUrl(url) && (
-          <button
-            type="button"
-            onClick={() => void share(title)}
-            className={`${buttonClass} ${touch} justify-center px-space-5`}
-          >
+          <button type="button" onClick={() => void share(title)} className={`${actionClass} ${lightClass}`}>
             {t("share")}
           </button>
         )}

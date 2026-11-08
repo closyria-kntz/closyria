@@ -117,7 +117,7 @@ export function ProductGallery({
 
   return (
     <div className="flex flex-col items-center gap-space-4">
-      <div className="relative w-full max-w-narrow">
+      <div className="relative w-full max-w-photo">
         <div data-testid="gallery-main" className="photo-shape relative aspect-3/4 overflow-hidden bg-media-backdrop">
           {current ? (
             <button
@@ -147,7 +147,7 @@ export function ProductGallery({
               <div
                 data-testid="gallery-dots"
                 aria-hidden="true"
-                className="glass flex items-center gap-space-1 rounded-full px-space-3 py-space-2"
+                className="glass flex items-center gap-space-1-5 rounded-full px-space-3 py-space-2-5"
               >
                 {photos.map((photo, n) => (
                   <span

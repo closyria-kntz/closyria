@@ -47,11 +47,14 @@ import { ListTabs } from "./list-tabs";
 import { OrderBand } from "./order-band";
 import { LIST_PARAM, PREVIEW_PARAM } from "./order-draft";
 import { SelectionBar } from "./selection-bar";
-import { buttonClass, primaryButtonClass } from "./ui";
+import { buttonClass, focusRing, primaryButtonClass } from "./ui";
 
 type Loaded = { items: ItemView[]; nextCursor: string | null; status: "loading" | "ready" | "error" };
 
 const touch = "min-h-touch-target";
+/** The text buttons of the tools row: the mockup's light clay (38 px on a phone, 44 above; a finger wide anyway). */
+const toolButtonClass = `hit-area relative inline-flex h-control-sm items-center rounded-button border border-line bg-surface-raised px-space-3-5 text-sm font-strong text-ink hover:bg-surface-strong sm:h-touch-target ${focusRing}`;
+const toolPrimaryClass = `hit-area relative inline-flex h-control-sm items-center rounded-button bg-button-bg px-space-3-5 text-sm font-strong text-button-ink sm:h-touch-target ${focusRing}`;
 
 /**
  * One of the four views (Envies, Commandé, Dressing, À vendre): filters in the address, infinite scroll, a pill and
@@ -462,20 +465,20 @@ export function WardrobeView({ view }: { view: ViewKey }) {
       {/* Positioned: the filters menu opens against this row (full width on a phone, under the tools from sm up). */}
       <div className="relative flex flex-wrap items-end justify-between gap-x-space-5 gap-y-space-4">
         <div className="flex min-w-space-0 flex-col gap-space-3">
-          <h1 className="font-display text-display leading-none font-regular">{t(`heading.${view}`)}</h1>
+          <h1 className="font-display text-hero leading-none font-regular tracking-display">{t(`heading.${view}`)}</h1>
           {summary && (
             <ul aria-label={t("summary.label")} data-testid="wish-summary" className="flex flex-wrap gap-space-2">
-              <li className="glass rounded-full px-space-3 py-space-1 text-sm tabular-nums">
+              <li className="glass rounded-full px-space-3 py-space-1-5 text-sm tabular-nums">
                 {t.rich("summary.count", { count: summary.count, b: (chunks) => <b>{chunks}</b> })}
               </li>
-              <li className="glass rounded-full px-space-3 py-space-1 text-sm tabular-nums">
+              <li className="glass rounded-full px-space-3 py-space-1-5 text-sm tabular-nums">
                 {t.rich("summary.total", {
                   amount: formatAmount(locale, summary.totalCents),
                   b: (chunks) => <b>{chunks}</b>,
                 })}
               </li>
               {summary.drops > 0 && (
-                <li className="rounded-full bg-success-soft px-space-3 py-space-1 text-sm font-strong text-success tabular-nums">
+                <li className="rounded-full bg-success-soft px-space-3 py-space-1-5 text-sm font-strong text-success tabular-nums">
                   {t("summary.drops", { count: summary.drops })}
                 </li>
               )}
@@ -509,14 +512,14 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           {(selecting || data.items.length > 0) && (
             <button
               type="button"
-              className={`${selecting ? primaryButtonClass : buttonClass} ${touch}`}
+              className={`${selecting ? toolPrimaryClass : toolButtonClass}`}
               onClick={() => (selecting ? leaveSelection() : setSelecting(true))}
             >
               {selecting ? t("selection.done") : t("selection.start")}
             </button>
           )}
           {view === "envies" && !filters.stage && !selecting && (
-            <Link href={orderHref} className={`${buttonClass} ${touch}`}>
+            <Link href={orderHref} className={toolButtonClass}>
               {t("prepareOrder")}
             </Link>
           )}
@@ -525,7 +528,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
               type="button"
               aria-expanded={adding}
               onClick={() => setAdding((value) => !value)}
-              className={`${primaryButtonClass} ${touch} px-space-5`}
+              className={`hit-area relative inline-flex h-control-md items-center justify-center rounded-button bg-button-bg px-space-4 text-sm font-strong text-button-ink sm:h-control-xl sm:px-space-5-5 sm:text-control ${focusRing}`}
             >
               {t("tools.add")}
             </button>

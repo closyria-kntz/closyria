@@ -8,9 +8,10 @@ import { type BudgetScope, fetchBudget } from "@/lib/wardrobe-client";
 import { BudgetBars } from "./budget-bars";
 import { BudgetDialog } from "./budget-dialog";
 import { dateOf } from "./order-draft";
-import { buttonClass } from "./ui";
+import { focusRing } from "./ui";
 
-const touch = "min-h-touch-target";
+/** « Ajouter un budget », « Modifier »: an underlined text button in the line (mockup), a finger wide all the same. */
+const linkButton = `hit-area relative inline-flex h-space-6 items-center rounded-button text-sm font-strong text-ink underline underline-offset-4 ${focusRing}`;
 
 type Loaded = { status: "loading" | "ready" | "error"; view: BudgetView | null; scopeKey: string };
 
@@ -90,7 +91,7 @@ export function BudgetCard({
     <section
       aria-labelledby={titleId}
       data-testid="budget-card"
-      className="glass flex max-w-measure flex-col gap-space-2 rounded-card p-space-4 tabular-nums"
+      className="glass flex max-w-budget flex-col gap-space-2 rounded-panel px-space-3-5 py-space-3 text-sm tabular-nums sm:px-space-4-5 sm:py-space-3-5 sm:text-ui"
     >
       <h2 id={titleId} className="sr-only">
         {t("label")}
@@ -99,19 +100,19 @@ export function BudgetCard({
       {budget.status === "error" && <p className="text-sm text-danger">{t("loadError")}</p>}
       {budget.status === "ready" && state.kind === "none" && (
         <>
-          <div className="flex flex-wrap items-center gap-x-space-4 gap-y-space-1">
-            <p className="font-strong">{isList && listName ? t("noneList", { list: listName }) : t("noneProfile")}</p>
-            <button type="button" className={`${buttonClass} ${touch}`} onClick={() => setDialogOpen(true)}>
+          <div className="flex flex-wrap items-center gap-x-space-3-5 gap-y-space-1">
+            <p className="font-bold">{isList && listName ? t("noneList", { list: listName }) : t("noneProfile")}</p>
+            <button type="button" className={linkButton} onClick={() => setDialogOpen(true)}>
               {t("add")}
             </button>
           </div>
-          {isList && <p className="text-sm text-ink-muted">{t("listCountsAnyway")}</p>}
+          {isList && <p className="text-caption text-ink-muted">{t("listCountsAnyway")}</p>}
         </>
       )}
       {budget.status === "ready" && state.kind !== "none" && view && (
         <>
-          <div className="flex flex-wrap items-baseline gap-x-space-4 gap-y-space-1">
-            <p className="font-strong">{heading}</p>
+          <div className="flex flex-wrap items-baseline gap-x-space-3-5 gap-y-space-1">
+            <p className="font-bold">{heading}</p>
             <p className="text-ink-muted">{tBudget("spent", { amount: money(state.spent) })}</p>
             {state.kind === "ok" ? (
               // An ended budget has nothing left to spend: no « Reste » (it would show the whole amount).
@@ -119,12 +120,12 @@ export function BudgetCard({
             ) : (
               <p className="text-danger">{t("over", { amount: money(state.over) })}</p>
             )}
-            <button type="button" className={`${buttonClass} ${touch}`} onClick={() => setDialogOpen(true)}>
+            <button type="button" className={linkButton} onClick={() => setDialogOpen(true)}>
               {t("edit")}
             </button>
           </div>
           <BudgetBars spentPct={state.spentPct} pickPct={state.pickPct} overBar={state.overBar} />
-          <p className="flex flex-wrap gap-x-space-4 text-sm text-ink-muted">
+          <p className="flex flex-wrap gap-x-space-3-5 gap-y-space-1 text-caption text-ink-muted">
             <span className="inline-flex items-center gap-space-2">
               <i aria-hidden="true" data-testid="swatch-spent" className="size-space-2 rounded-full bg-ink-muted/55" />
               {t("legendSpent")}
@@ -139,7 +140,7 @@ export function BudgetCard({
               {state.overBar && <span className="text-danger">{t("legendOver")}</span>}
             </span>
           </p>
-          {isList && <p className="text-sm text-ink-muted">{t("listCountsToo")}</p>}
+          {isList && <p className="text-caption text-ink-muted">{t("listCountsToo")}</p>}
         </>
       )}
       <BudgetDialog

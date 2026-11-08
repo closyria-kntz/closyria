@@ -616,9 +616,15 @@ test("« Aperçu » ouvre le panneau sans quitter la page ; « Je le prends » c
     await first.hover();
     await expect(quick).toHaveCSS("opacity", "1");
   }
+  // Drawn at the mockup's size (42 px, 38 on a phone), a finger wide all the same: the invisible hit area reaches 44.
   for (const button of [take, preview]) {
     const box = await button.boundingBox();
-    expect(box?.height).toBeGreaterThanOrEqual(44);
+    expect(box?.height).toBeLessThanOrEqual(42);
+    const hit = await button.evaluate((el) => {
+      const after = getComputedStyle(el, "::after");
+      return { width: Number.parseFloat(after.width), height: Number.parseFloat(after.height) };
+    });
+    expect(Math.min(hit.width, hit.height)).toBeGreaterThanOrEqual(44);
   }
   await expect(take).toHaveAttribute("aria-pressed", "false");
   await expect(first.getByTestId("card-taken")).toHaveCount(0);

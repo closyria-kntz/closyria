@@ -33,9 +33,9 @@ export function ListTabs({
       type="button"
       aria-current={current === id ? "true" : undefined}
       onClick={() => current !== id && onChange(id)}
-      className={`${focusRing} min-h-touch-target shrink-0 whitespace-nowrap rounded-button px-space-3 text-ink-muted aria-[current=true]:font-strong aria-[current=true]:text-ink`}
+      className={`${focusRing} min-h-touch-target shrink-0 whitespace-nowrap rounded-button px-space-3 text-sm text-ink-muted sm:px-space-3-5 sm:text-ui aria-[current=true]:font-strong aria-[current=true]:text-ink`}
     >
-      {name} <span className="font-body text-sm font-normal tabular-nums text-ink-muted">{count}</span>
+      {name} <span className="font-body font-regular tabular-nums text-ink-muted">{count}</span>
     </button>
   );
   return (

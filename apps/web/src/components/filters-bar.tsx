@@ -9,10 +9,10 @@ import { MAX_SEARCH, STAGE_FILTER_OPTIONS, type ViewFilters } from "@/lib/wardro
 import { focusRing, inputClass } from "./ui";
 
 const field = `${inputClass} min-h-touch-target`;
-/** Full, soft chips: sunken fill, no border; chosen = the hint fill, ink text (refonte, gap 3). */
-const chipClass = `inline-flex min-h-touch-target items-center gap-space-1 rounded-full bg-surface-sunken px-space-4 text-sm font-strong text-ink transition-colors duration-base hover:bg-surface-strong aria-pressed:bg-hint aria-pressed:hover:bg-hint ${focusRing}`;
-/** A round tool of the bar (search, filters): soft fill, a finger wide. */
-export const toolClass = `inline-flex size-touch-target shrink-0 items-center justify-center rounded-full bg-surface-sunken text-ink hover:bg-surface-strong aria-expanded:bg-hint ${focusRing}`;
+/** Full, soft chips (the mockup's relief: 40 px, 34 on a phone, a finger wide all the same); chosen = the hint fill. */
+const chipClass = `hit-area relative inline-flex h-control-2xs items-center gap-space-1-5 rounded-full bg-surface-strong px-space-3 text-caption font-strong text-ink transition-colors duration-base hover:bg-hint sm:h-control-md sm:px-space-4 sm:text-sm aria-pressed:bg-hint ${focusRing}`;
+/** A round tool of the bar (search, filters): soft fill, a finger wide (drawn 38 px on a phone). */
+export const toolClass = `hit-area relative inline-flex size-control-sm shrink-0 items-center justify-center rounded-full bg-surface-strong text-ink hover:bg-hint sm:size-touch-target aria-expanded:bg-hint ${focusRing}`;
 /** The drawn check of an active chip (decorative: `aria-pressed` carries the state). */
 function ChipCheck() {
   return (
@@ -87,8 +87,8 @@ export function FilterChips({
     onChange(filters.priority ? rest : { ...rest, priority: true });
   };
   return (
-    <div className="flex flex-wrap items-center gap-space-2">
-      <fieldset className="flex flex-wrap gap-space-2">
+    <div className="flex flex-wrap items-center gap-x-space-2 gap-y-space-2-5 sm:gap-space-2-5">
+      <fieldset className="flex flex-wrap gap-x-space-2 gap-y-space-2-5 sm:gap-space-2-5">
         <legend className="sr-only">{t("levels")}</legend>
         {CHIP_LEVELS.map((level) => {
           const { emoji, label } = levelOf(levels, level);
@@ -189,7 +189,7 @@ export function SearchField({
     );
   }
   return (
-    <search className="search-open flex h-touch-target w-full min-w-space-0 items-center rounded-full bg-surface-sunken pl-space-3 sm:w-sidebar">
+    <search className="search-open flex h-control-sm w-full min-w-space-0 items-center rounded-full bg-surface-strong pl-space-3 sm:h-control-plus sm:w-sidebar">
       <label htmlFor={fieldId} className="flex shrink-0 text-ink-muted">
         <MagnifierIcon />
         <span className="sr-only">{label}</span>
@@ -208,13 +208,13 @@ export function SearchField({
             close();
           }
         }}
-        className="min-w-space-0 flex-1 bg-transparent px-space-2 text-body text-ink outline-none placeholder:text-ink-muted"
+        className="min-w-space-0 flex-1 bg-transparent px-space-2 text-ui text-ink outline-none placeholder:text-ink-muted"
       />
       <button
         type="button"
         aria-label={t("close")}
         onClick={close}
-        className={`flex size-touch-target shrink-0 items-center justify-center rounded-full text-ink-muted hover:text-ink ${focusRing}`}
+        className={`hit-area relative flex size-control-sm shrink-0 items-center justify-center rounded-full text-ink-muted hover:text-ink sm:size-touch-target ${focusRing}`}
       >
         <svg
           viewBox="0 0 16 16"

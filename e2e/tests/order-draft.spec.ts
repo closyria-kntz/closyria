@@ -68,7 +68,7 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await expect(band(page).getByText(/2 articles/)).toHaveCSS("font-variant-numeric", "tabular-nums");
   // A glass band (refonte « Cocon lumineux », replaces the white one of 2026-11-07), and over the budget in red.
   await expect(band(page)).toHaveClass(/glass/);
-  await expect(band(page)).toHaveCSS("background-color", "color(srgb 1 1 1 / 0.62)");
+  await expect(band(page)).toHaveCSS("background-color", "color(srgb 1 1 1 / 0.6)");
   // Buttons show the hand, like links, and « J'ai commandé » darkens on hover.
   const ordered = band(page).getByRole("button", { name: "J’ai commandé" });
   await expect(ordered).toHaveCSS("cursor", "pointer");
