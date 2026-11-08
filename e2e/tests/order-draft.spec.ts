@@ -51,7 +51,7 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
 
   await row(page, "Robe Alma").check();
   await row(page, "Gilet Brume").check();
-  await expect(band(page)).toContainText(/2 articles · 154\s€/);
+  await expect(band(page)).toContainText(/2 articles, 154\s€/);
   await expect(band(page)).toContainText(/4\s€ au-dessus/);
   // The toast (« Budget enregistré · Annuler ») sits above the band, never over the totals.
   await expect(toast(page)).toContainText("Budget enregistré");
@@ -103,7 +103,7 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await expect(row(page, "Robe Alma")).toBeChecked();
   await expect(row(page, "Gilet Brume")).toBeChecked();
   await row(page, "Gilet Brume").uncheck();
-  await expect(band(page)).toContainText(/1 article · 89\s€/);
+  await expect(band(page)).toContainText(/1 article, 89\s€/);
   await expect(band(page)).toContainText(/Il te resterait 61\s€/);
   // Under the budget: a soft mint fill, a green edge and pine text (version B).
   const left = band(page).getByText(/Il te resterait/);
@@ -118,14 +118,14 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await axe(page);
   await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
   await row(page, "Gilet Brume").check();
-  await expect(band(page)).toContainText(/2 articles · 154\s€/);
+  await expect(band(page)).toContainText(/2 articles, 154\s€/);
 
   await band(page).getByRole("button", { name: "J’ai commandé" }).click();
   await expect(toast(page)).toContainText("2 articles passés en Commandé");
   await expect(card).toContainText(/Déjà commandé : 154\s€/);
   await expect(page.getByRole("checkbox")).toHaveCount(0);
   await expect(page.getByText("Rien à commander pour l’instant")).toBeVisible();
-  await expect(band(page)).toContainText(/0 article · 0\s€/);
+  await expect(band(page)).toContainText(/0 article, 0\s€/);
 
   // In « Commandé » (another tab: the toast stays here).
   const other = await page.context().newPage();
@@ -137,7 +137,7 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await expect(row(page, "Robe Alma")).toBeChecked();
   await expect(row(page, "Gilet Brume")).toBeChecked();
   await expect(card).toContainText(/Déjà commandé : 0\s€/);
-  await expect(band(page)).toContainText(/2 articles · 154\s€/);
+  await expect(band(page)).toContainText(/2 articles, 154\s€/);
 });
 
 test("depuis une liste, seuls ses articles et le budget de la liste", async ({ page }) => {
@@ -174,7 +174,7 @@ test("depuis une liste, seuls ses articles et le budget de la liste", async ({ p
   await dialog.getByRole("button", { name: "Enregistrer" }).click();
   await expect(card).toContainText(/Budget : 300,50\s€/);
   await row(page, "Pull Noël").check();
-  await expect(band(page)).toContainText(/1 article · 40\s€/);
+  await expect(band(page)).toContainText(/1 article, 40\s€/);
   await expect(band(page)).toContainText(/Il te resterait 260,50\s€/);
   await axe(page);
 
@@ -272,7 +272,7 @@ test("la petite case coche, et le lien de la boutique s’ouvre dans un nouvel o
   expect(size?.width).toBeLessThanOrEqual(24);
   await expect(mark).not.toHaveCSS("border-top-left-radius", "9999px");
   await box.check();
-  await expect(band(page)).toContainText(/1 article · 89\s€/);
+  await expect(band(page)).toContainText(/1 article, 89\s€/);
   const shop = page.getByRole("link", { name: /^Voir chez / });
   await expect(shop).toHaveAttribute("target", "_blank");
   await expect(shop).toHaveAttribute("rel", /noopener/);
@@ -310,7 +310,7 @@ test("l’aperçu s’ouvre sans quitter la page : « Je le prends », Fermer, �
   // « Je le prends » ticks it in the order without closing.
   await preview.getByRole("checkbox", { name: /Je le prends/ }).check();
   await expect(preview).toBeVisible();
-  await expect(band(page)).toContainText(/1 article · 89\s€/);
+  await expect(band(page)).toContainText(/1 article, 89\s€/);
 
   // « Fermer »: back on the list, the box ticked.
   await preview.getByRole("button", { name: "Fermer" }).click();
@@ -474,7 +474,7 @@ test("Mes envies : le bandeau « Ma commande », trois envies prises, une décoc
   const bar = envBand(page);
   await expect(bar).toBeVisible();
   await expect(bar.getByRole("heading", { name: "Ma commande" })).toBeVisible();
-  await expect(bar).toContainText(/3 articles · 184\s€/);
+  await expect(bar).toContainText(/3 articles, 184\s€/);
   await expect(bar).toContainText(/Il te resterait 116\s€/);
   await expect(bar).toHaveClass(/glass/);
   await expect(bar.getByTestId("budget-bars")).toBeVisible();
@@ -491,7 +491,7 @@ test("Mes envies : le bandeau « Ma commande », trois envies prises, une décoc
   await expect(rows.first()).toBeChecked();
   await bar.getByRole("checkbox", { name: /Jupe Été/ }).uncheck();
   await expect(bar.getByRole("checkbox", { name: /Jupe Été/ })).toBeVisible();
-  await expect(bar).toContainText(/2 articles · 154\s€/);
+  await expect(bar).toContainText(/2 articles, 154\s€/);
   await expect(bar.getByRole("button", { name: "J’ai commandé (2)" })).toBeVisible();
   await bar.getByRole("checkbox", { name: /Jupe Été/ }).check();
   await expect(bar.getByRole("button", { name: "J’ai commandé (3)" })).toBeVisible();
@@ -511,9 +511,8 @@ test("Mes envies : le bandeau « Ma commande », trois envies prises, une décoc
   await expect(card).toContainText(/Déjà commandé : 154\s€/);
 });
 
-test("Mes envies : une liste partagée par deux profils, un onglet qui compte et commande les envies des deux", async ({
-  page,
-}) => {
+/** « Robe Alma » (Moi, 89 €) and « Gilet Brume » (Léa, 65 €), both in the list « Été »; ends on « Mes envies » of Moi. */
+async function twoProfilesInOneList(page: Page): Promise<void> {
   await wishAt(page, "Robe Alma", "89");
   await wishAt(page, "Gilet Brume", "65");
   await page.goto("/reglages/profils");
@@ -550,15 +549,42 @@ test("Mes envies : une liste partagée par deux profils, un onglet qui compte et
   await page.getByRole("dialog", { name: "Déplacer vers un profil" }).getByRole("button", { name: "Léa" }).click();
   await expect(toast(page)).toContainText("Déplacé vers Léa");
   await expect(page.getByTestId("item-card")).toHaveCount(1);
+}
+
+test("Mes envies : l'onglet d'une liste montre les envies de tous les profils, « Toutes mes envies » celles du profil", async ({
+  page,
+}) => {
+  await twoProfilesInOneList(page);
+  const cards = page.getByTestId("item-card");
+  const tabs = page.getByRole("navigation", { name: "Mes listes" });
+  await expect(cards).toHaveCount(1);
+  await expect(cards).toContainText("Robe Alma");
+  await tabs.getByRole("button", { name: /^Été/ }).click();
+  await expect(page).toHaveURL(/liste=[0-9a-f-]{36}/);
+  await expect(cards).toHaveCount(2);
+  await expect(cards.filter({ hasText: "Robe Alma" })).toHaveCount(1);
+  await expect(cards.filter({ hasText: "Gilet Brume" })).toHaveCount(1);
+  // Léa's wish keeps its pill and menu there: changing it never drops it from the list's tab.
+  await cards.filter({ hasText: "Gilet Brume" }).getByTestId("card-take").click();
+  await expect(cards).toHaveCount(2);
+  await tabs.getByRole("button", { name: /Toutes mes envies/ }).click();
+  await expect(cards).toHaveCount(1);
+  await expect(cards).toContainText("Robe Alma");
+});
+
+test("Mes envies : une liste partagée par deux profils, un onglet qui compte et commande les envies des deux", async ({
+  page,
+}) => {
+  await twoProfilesInOneList(page);
 
   // One tick each, from each profile.
   await takeCard(page, "Robe Alma").click();
-  await expect(envBand(page)).toContainText(/1 article · 89\s€/);
+  await expect(envBand(page)).toContainText(/1 article, 89\s€/);
   const switcher = page.getByLabel("Profil", { exact: true }).filter({ visible: true });
   await switcher.selectOption({ label: "Léa" });
   await expect(page.getByTestId("item-card")).toHaveCount(1);
   await takeCard(page, "Gilet Brume").click();
-  await expect(envBand(page)).toContainText(/1 article · 65\s€/);
+  await expect(envBand(page)).toContainText(/1 article, 65\s€/);
   await switcher.selectOption({ label: "Moi" });
   await expect(page.getByTestId("item-card")).toContainText("Robe Alma");
 
@@ -570,7 +596,7 @@ test("Mes envies : une liste partagée par deux profils, un onglet qui compte et
   await summer.click();
   await expect(page).toHaveURL(/liste=[0-9a-f-]{36}/);
   const bar = envBand(page);
-  await expect(bar).toContainText(/2 articles · 154\s€/);
+  await expect(bar).toContainText(/2 articles, 154\s€/);
   await bar.getByRole("button", { name: "J’ai commandé (2)" }).click();
   await expect(toast(page)).toContainText("2 articles passés en Commandé");
   await expect(envBand(page)).toHaveCount(0);
@@ -588,7 +614,7 @@ test("Mes envies : tout décocher puis « J’ai commandé (0) » secoue le bout
   await page.goto("/envies");
   await takeCard(page, "Robe Alma").click();
   const bar = envBand(page);
-  await expect(bar).toContainText(/1 article · 89\s€/);
+  await expect(bar).toContainText(/1 article, 89\s€/);
   await bar.getByRole("button", { name: "Voir" }).click();
   await bar.getByRole("checkbox", { name: /Robe Alma/ }).uncheck();
   // Still there while the list is open, so she can tick it again.
@@ -612,7 +638,7 @@ test("Mes envies : une envie sans prix cochée, 1 article, 0 €, « dont 1 prix
   await wishAt(page, "Sac sans prix", "");
   await page.goto("/envies");
   await takeCard(page, "Sac sans prix").click();
-  await expect(envBand(page)).toContainText(/1 article · 0\s€/);
+  await expect(envBand(page)).toContainText(/1 article, 0\s€/);
   await expect(envBand(page)).toContainText("dont 1 prix inconnu");
 });
 
@@ -623,7 +649,7 @@ test("Mes envies : décocher puis commander aussitôt, l’envie décochée n’
   await takeCard(page, "Robe Alma").click();
   await takeCard(page, "Gilet Brume").click();
   const bar = envBand(page);
-  await expect(bar).toContainText(/2 articles · 154\s€/);
+  await expect(bar).toContainText(/2 articles, 154\s€/);
   await bar.getByRole("button", { name: "Voir" }).click();
   // The saves are slow: the order must wait for them instead of overtaking the untick.
   await page.route("**/api/me/items/*", async (route) => {

@@ -11,6 +11,7 @@ import {
   MAX_BULK_ITEMS,
 } from "@closyria/shared";
 import { z } from "zod";
+import { priceDropCents } from "./price";
 
 /** Envies, Commandé, Dressing, À vendre: one stage each; `sold` and `returned` are reached by the « Étape » filter. */
 export const VIEWS = {
@@ -57,7 +58,12 @@ export type ViewFilters = {
   sort?: ItemSort;
   /** `sold` or `returned`, replacing the view's own stage. */
   stage?: (typeof STAGE_FILTER_OPTIONS)[number];
+  /** Words to find in the name, the brand or the shop (`recherche=`). */
+  q?: string;
 };
+
+/** The longest search the API takes. */
+export const MAX_SEARCH = 100;
 
 /** Parameter names in the address (French, like the pages). */
 const PARAMS = {
@@ -70,6 +76,7 @@ const PARAMS = {
   priority: "prioritaire",
   sort: "tri",
   stage: "etape",
+  q: "recherche",
 } as const;
 
 /** `4,3` → [4, 3]: the valid levels, once each, highest first. */
@@ -103,6 +110,8 @@ export function filtersFromParams(params: Pick<URLSearchParams, "get">): ViewFil
   if (sort.success && sort.data !== DEFAULT_SORT) filters.sort = sort.data;
   const stage = params.get(PARAMS.stage);
   if (stage === "sold" || stage === "returned") filters.stage = stage;
+  const q = params.get(PARAMS.q)?.trim().slice(0, MAX_SEARCH).trim();
+  if (q) filters.q = q;
   return filters;
 }
 
@@ -119,6 +128,7 @@ export function filtersToParams(filters: ViewFilters, into?: URLSearchParams): U
   if (filters.priority) params.set(PARAMS.priority, "1");
   if (filters.sort && filters.sort !== DEFAULT_SORT) params.set(PARAMS.sort, filters.sort);
   if (filters.stage) params.set(PARAMS.stage, filters.stage);
+  if (filters.q) params.set(PARAMS.q, filters.q);
   return params;
 }
 
@@ -141,7 +151,33 @@ export function toItemQuery(view: ViewKey, filters: ViewFilters, profileId: stri
   if (filters.levels?.length) query.loveLevel = filters.levels.join(",");
   if (filters.priority) query.priority = "true";
   if (filters.sort) query.sort = filters.sort;
+  if (filters.q) query.q = filters.q;
   return query satisfies Partial<Record<keyof ItemListQuery, string>>;
+}
+
+/**
+ * The grid's query: « Toutes mes envies » (and the other views) show the current profile's items; a list tab
+ * (`listId`) shows the list's wishes of every profile of the account, as « Ma commande » and the order page count them.
+ */
+export function toViewQuery(
+  view: ViewKey,
+  filters: ViewFilters,
+  profileId: string | null,
+  listId: string | null,
+): Record<string, string> {
+  if (!listId) return toItemQuery(view, filters, profileId);
+  return { ...toItemQuery(view, filters, null), wishlist: listId };
+}
+
+/** The pills under « Mes envies »: how many wishes, what their known prices add up to, how many prices dropped. */
+export function wishSummary(items: readonly ItemView[]): { count: number; totalCents: number; drops: number } {
+  let totalCents = 0;
+  let drops = 0;
+  for (const { product } of items) {
+    if (product.priceCents !== null) totalCents += product.priceCents;
+    if (priceDropCents(product.priceCents, product.compareAtCents) !== null) drops += 1;
+  }
+  return { count: items.length, totalCents, drops };
 }
 
 /**

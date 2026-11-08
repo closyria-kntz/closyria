@@ -45,8 +45,9 @@ type Props = {
 };
 
 /**
- * One item in the grid (spec §3.2): 3:4 frame with the whole photo, level pill top left, « … » top right,
- * « Prioritaire » at the bottom of the photo; name, shop, price and her opinion under it; link to the sheet.
+ * One item in the grid (refonte, shape C): a 3:4 photo that fills its frame, her level emoji top left (tucked in from
+ * the curve), « … » top right with the « taken » tick just under it, « Prioritaire » under the emoji; under the photo
+ * the shop, the name (Fraunces), the price with the crossed one and the « −20 € » drop beside it, her opinion.
  */
 export function ItemCard({ item, actions, selection, showStage, linked = true, children }: Props) {
   const t = useTranslations("Views.card");
@@ -92,7 +93,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
         selection={selection}
         onToggle={() => selection?.onToggle(item.id)}
       >
-        <div data-photo className="arch relative aspect-3/4 overflow-hidden bg-media-backdrop">
+        <div data-photo className="photo-shape relative aspect-3/4 overflow-hidden bg-media-backdrop">
           {item.coverUrl ? (
             // biome-ignore lint/performance/noImgElement: photos come from our own API, already resized.
             <img
@@ -100,7 +101,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               alt=""
               loading="lazy"
               decoding="async"
-              className="card-photo size-full object-contain"
+              className="card-photo size-full object-cover"
             />
           ) : (
             <span
@@ -116,13 +117,21 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
             </span>
           )}
         </div>
-        <div className="flex min-w-space-0 flex-col px-space-1">
-          <span className="truncate font-display text-body font-strong">{name}</span>
+        <div className="flex min-w-space-0 flex-col gap-space-1 px-space-1">
           <span className="truncate text-sm text-ink-muted">{item.product.shop.name}</span>
-          <span className="flex items-baseline gap-space-2 text-sm tabular-nums">
+          <span className="truncate font-display text-lead leading-tight">{name}</span>
+          <span className="flex flex-wrap items-center gap-x-space-2 gap-y-space-1 tabular-nums">
             {price}
             {drop !== null && item.product.compareAtCents !== null && (
-              <s className="text-ink-muted">{formatAmount(locale, item.product.compareAtCents, currency)}</s>
+              <s className="text-sm text-ink-muted">{formatAmount(locale, item.product.compareAtCents, currency)}</s>
+            )}
+            {drop !== null && (
+              <span
+                data-testid="card-drop"
+                className="rounded-full bg-success-soft px-space-2 py-space-1 text-caption font-strong text-success"
+              >
+                −{formatAmount(locale, drop, currency)}
+              </span>
             )}
           </span>
           {asked === null && item.product.captureStatus === "manual" && item.product.priceCents !== null && (
@@ -132,25 +141,15 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
         </div>
       </Wrapper>
       <div className="pointer-events-none absolute inset-x-space-0 top-space-0 aspect-3/4">
-        <div className="absolute top-space-7 left-space-0 flex flex-col items-start gap-space-1">
-          {drop !== null && (
-            <span
-              data-testid="card-drop"
-              className="rounded-full bg-success-soft px-space-3 py-space-1 text-sm font-strong text-success tabular-nums"
-            >
-              −{formatAmount(locale, drop, currency)}
-            </span>
-          )}
-          {item.priority && (
-            <span className="rounded-full bg-accent px-space-2 py-space-1 text-caption font-strong text-accent-ink">
-              {t("priority")}
-            </span>
-          )}
-        </div>
+        {item.priority && (
+          <span className="absolute top-space-7 left-space-3 mt-space-2 rounded-full bg-accent px-space-2 py-space-1 text-caption font-strong text-accent-ink">
+            {t("priority")}
+          </span>
+        )}
         {selection ? (
           <span
             aria-hidden="true"
-            className={`absolute top-touch-target right-space-2 mt-space-1 flex size-space-6 items-center justify-center rounded-full border-2 ${
+            className={`absolute top-space-7 right-space-3 mt-space-2 flex size-space-6 items-center justify-center rounded-full border-2 ${
               selection.selected ? "border-accent bg-accent text-accent-ink" : "border-surface-raised bg-ink/20"
             }`}
           >
@@ -163,22 +162,36 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               data-testid="card-taken"
               role="img"
               aria-label={t("taken")}
-              className="absolute top-touch-target right-space-2 mt-space-1 flex size-space-6 items-center justify-center rounded-md bg-button-bg text-button-ink"
+              className="absolute top-space-7 right-space-3 mt-space-2 flex size-space-6 items-center justify-center rounded-md bg-button-bg text-button-ink"
             >
               <Tick draw />
             </span>
           )
         )}
         {quick && (
-          <div className="card-quick pointer-events-none absolute inset-x-space-2 bottom-space-2 flex gap-space-2">
+          <div className="card-quick pointer-events-none absolute inset-x-space-2 bottom-space-2 flex gap-space-2 sm:inset-x-space-3 sm:bottom-space-3">
             <button
               type="button"
               data-testid="card-preview"
               aria-label={t("previewOf", { name })}
               onClick={() => quick.onPreview?.(item)}
-              className={`glass pointer-events-auto min-h-touch-target flex-1 rounded-button px-space-2 text-sm font-strong text-ink ${focusRing}`}
+              className={`glass pointer-events-auto flex min-h-touch-target min-w-touch-target items-center justify-center rounded-button px-space-2 text-sm font-strong text-ink sm:flex-1 ${focusRing}`}
             >
-              {t("preview")}
+              {/* A narrow phone card has no room for both words: the eye says « Aperçu » (its name says it too). */}
+              <svg
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className="size-space-4 sm:hidden"
+              >
+                <path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" />
+                <circle cx="8" cy="8" r="2" />
+              </svg>
+              <span className="hidden sm:inline">{t("preview")}</span>
             </button>
             <button
               type="button"
@@ -188,7 +201,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               onClick={(event) =>
                 quick.onTake?.(item, event.currentTarget.closest("li")?.querySelector("[data-photo]"))
               }
-              className={`pointer-events-auto min-h-touch-target flex-1 rounded-button px-space-2 text-sm font-strong ${focusRing} ${
+              className={`pointer-events-auto min-h-touch-target min-w-space-0 flex-1 rounded-button px-space-2 text-sm font-strong whitespace-nowrap ${focusRing} ${
                 item.inOrderDraft ? "glass text-ink" : "bg-button-bg text-button-ink"
               }`}
             >
@@ -237,18 +250,18 @@ function Wrapper({
         type="button"
         aria-pressed={selection.selected}
         onClick={onToggle}
-        className={`flex flex-col gap-space-2 rounded-card text-left ${focusRing} ${selection.selected ? "ring-2 ring-accent" : ""}`}
+        className={`flex flex-col gap-space-3 rounded-card text-left ${focusRing} ${selection.selected ? "ring-2 ring-accent" : ""}`}
       >
         {children}
       </button>
     );
   }
-  if (!linked) return <div className="flex flex-col gap-space-2">{children}</div>;
+  if (!linked) return <div className="flex flex-col gap-space-3">{children}</div>;
   return (
     <Link
       href={href}
       {...(onClick ? { onClick } : {})}
-      className={`flex flex-col gap-space-2 rounded-card ${focusRing}`}
+      className={`flex flex-col gap-space-3 rounded-card ${focusRing}`}
     >
       {children}
     </Link>

@@ -674,7 +674,12 @@
       "delete": "Supprimer",
       "deleteHint": "L’article va dans la corbeille pendant 30 jours.",
       "loadingExtras": "Chargement…",
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "whyEdit": "Modifier",
+      "whyEditLabel": "Modifier le pourquoi",
+      "whyAdd": "Dire pourquoi",
+      "whyCancel": "Annuler",
+      "whyQuote": "« {why} »"
     },
     "stage": {
       "spotted": "Repéré",
@@ -766,6 +771,23 @@
       "commande": "Commandé",
       "dressing": "Dressing",
       "a-vendre": "À vendre"
+    },
+    "heading": {
+      "envies": "Mes envies",
+      "commande": "Commandé",
+      "dressing": "Dressing",
+      "a-vendre": "À vendre"
+    },
+    "summary": {
+      "label": "En bref",
+      "count": "<b>{count, number}</b> {count, plural, one {envie} other {envies}}",
+      "total": "<b>{amount}</b> en tout",
+      "drops": "{count, plural, one {# prix en baisse} other {# prix en baisse}}"
+    },
+    "tools": {
+      "add": "Ajouter une envie",
+      "addTitle": "Ajouter une envie",
+      "close": "Fermer"
     },
     "metadata": {
       "envies": "Mes envies",
@@ -860,7 +882,15 @@
         "returned": "Renvoyé"
       },
       "levels": "Niveau",
-      "priority": "Prioritaires"
+      "priority": "Prioritaires",
+      "menu": "{count, plural, =0 {Filtres et tri} other {Filtres et tri (#)}}",
+      "menuTitle": "Filtres et tri",
+      "search": {
+        "open": "Chercher",
+        "label": "Chercher un article",
+        "labelEnvies": "Chercher une envie",
+        "close": "Fermer la recherche"
+      }
     },
     "selection": {
       "count": "{count, plural, one {# sélectionné} other {# sélectionnés}}",
@@ -1120,7 +1150,7 @@
       "titleList": "Ma commande, liste « {name} »",
       "see": "Voir",
       "items": "Envies de la commande",
-      "total": "{count, plural, one {# article} other {# articles}} · {amount}",
+      "total": "{count, plural, one {# article} other {# articles}}, {amount}",
       "unknown": "dont {count, plural, one {# prix inconnu} other {# prix inconnus}}",
       "left": "Il te resterait {amount}",
       "over": "{amount} au-dessus",

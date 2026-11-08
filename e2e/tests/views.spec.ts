@@ -21,6 +21,16 @@ async function pasteAndWish(page: Page): Promise<void> {
 }
 
 const toast = (page: Page) => page.getByRole("status", { name: "Notifications" });
+/** The colour a token resolves to, as computed styles report it. */
+const tokenColor = (page: Page, token: string) =>
+  page.evaluate((name) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${name})`;
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  }, token);
 const axe = async (page: Page) => {
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
@@ -31,7 +41,7 @@ test("un article gardé apparaît dans Envies, l'onglet courant est marqué, et 
 }) => {
   await pasteAndWish(page);
   await page.goto("/envies");
-  await expect(page.getByRole("heading", { level: 1, name: "Envies" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Mes envies" })).toBeVisible();
   const card = page.getByTestId("item-card").first();
   await expect(card).toContainText(PRODUCT.name);
   await expect(card.getByRole("button", { name: "Niveau : J’aime. Toucher pour changer" })).toBeVisible();
@@ -41,7 +51,8 @@ test("un article gardé apparaît dans Envies, l'onglet courant est marqué, et 
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
 
-  await card.getByRole("link").click();
+  // On the photo (its centre: the quick buttons sit at its bottom, always shown on a touch screen).
+  await card.locator("[data-photo]").click();
   await expect(page).toHaveURL(/\/produits\//);
 
   await page.goto("/dressing");
@@ -53,7 +64,7 @@ test("les filtres vivent dans l'adresse et le bouton Précédent les restaure", 
   await pasteAndWish(page);
   await page.goto("/envies");
   await expect(page.getByTestId("item-card")).toHaveCount(1);
-  await page.getByRole("button", { name: "Filtres" }).click();
+  await page.getByRole("button", { name: "Filtres et tri" }).click();
   await page.getByLabel("Trier par").selectOption("price_asc");
   await expect(page).toHaveURL(/tri=price_asc/);
   await page.getByLabel("Étape").selectOption("sold");
@@ -158,6 +169,7 @@ test("Sélectionner : deux articles passent En feu, Annuler ; filtres par niveau
 
   // « Ce que j’aime le plus »: the « En feu » first, then the « J’aime » (the priority one before the other).
   await page.goto("/envies");
+  await page.getByRole("button", { name: "Filtres et tri" }).click();
   await page.getByLabel("Trier par").selectOption({ label: "Ce que j’aime le plus" });
   await expect(page).toHaveURL(/tri=love/);
   await expect(cards.nth(0).getByRole("button", { name: /niveau : En feu/ })).toBeVisible();
@@ -280,14 +292,14 @@ test("ce qui change ailleurs apparaît tout seul, sans recharger ni cliquer", as
   await expect(card.getByRole("button", { name: /niveau : Mims/ })).toBeVisible({ timeout: 15_000 });
 });
 
-test("la grille a 2, 3 ou 5 colonnes selon l'écran", async ({ page }, testInfo) => {
+test("la grille a 2, 3 ou 4 colonnes selon l'écran", async ({ page }, testInfo) => {
   await pasteAndWish(page);
   await page.goto("/envies");
   await expect(page.getByTestId("item-card")).toHaveCount(1);
   const columns = await page
     .getByTestId("item-grid")
     .evaluate((grid) => getComputedStyle(grid).gridTemplateColumns.split(" ").length);
-  const expected = { "iPhone 15": 2, "iPad (gen 7)": 3, "Desktop Chrome": 5 }[testInfo.project.name];
+  const expected = { "iPhone 15": 2, "iPad (gen 7)": 3, "Desktop Chrome": 4 }[testInfo.project.name];
   expect(columns).toBe(expected);
 });
 
@@ -428,7 +440,7 @@ test("double-clic sur la photo : la bulle des 4 niveaux, rien ne change avant de
   // A click on the emoji opens it too; click outside closes without a change.
   await emoji.click();
   await expect(bubble).toBeVisible();
-  await page.getByRole("heading", { level: 1, name: "Envies" }).click();
+  await page.getByRole("heading", { level: 1, name: "Mes envies" }).click();
   await expect(bubble).toHaveCount(0);
 
   // Choosing « Mims » changes the card and saves; « Annuler » puts it back.
@@ -450,7 +462,7 @@ test("double-clic sur la photo : la bulle des 4 niveaux, rien ne change avant de
 test("un clic simple sur la photo ouvre la fiche après un court délai, le clavier tout de suite", async ({ page }) => {
   await pasteAndWish(page);
   await page.goto("/envies");
-  await page.getByTestId("item-card").first().getByRole("link").click();
+  await page.getByTestId("item-card").first().locator("[data-photo]").click();
   await expect(page).toHaveURL(/\/produits\//);
   await page.goBack();
   const link = page.getByTestId("item-card").first().getByRole("link");
@@ -505,9 +517,11 @@ test("filtres : la coche se dessine dans la pastille active, « Effacer » vide 
 
   await priority.click();
   await expect(cards).toHaveCount(0);
-  await page.getByRole("button", { name: "Filtres (2)" }).click();
+  // The levels and « Prioritaires » are chips, not in the menu: its button counts none of them.
+  await page.getByRole("button", { name: "Filtres et tri", exact: true }).click();
   await page.getByLabel("Trier par").selectOption("price_asc");
   await expect(page).toHaveURL(/tri=price_asc/);
+  await page.keyboard.press("Escape");
   const clear = page.getByRole("button", { name: "Effacer les 2 filtres", exact: true });
   await expect(clear).toBeVisible();
   expect((await clear.boundingBox())?.height).toBeGreaterThanOrEqual(44);
@@ -521,11 +535,11 @@ test("filtres : la coche se dessine dans la pastille active, « Effacer » vide 
   await expect(page.getByRole("button", { name: /^Effacer/ })).toHaveCount(0);
 });
 
-// Refonte « Cocon lumineux », task 9: arch cards, « Aperçu », « Je le prends ».
+// Refonte « Cocon lumineux », task 9 and palier 3 bis: cards in shape C, « Aperçu », « Je le prends ».
 
 const card = (page: Page) => page.getByTestId("item-card").first();
 
-test("la carte est en arche, montre « −20 € » quand la boutique barre un prix plus haut, et garde le prix barré", async ({
+test("la carte en forme C : émoji en haut à gauche, « … » en haut à droite, « −20 € » à côté du prix sous la photo", async ({
   page,
   db,
 }) => {
@@ -536,11 +550,25 @@ test("la carte est en arche, montre « −20 € » quand la boutique barre un p
   await db.query("UPDATE products SET compare_at_cents = NULL WHERE id = $1", [productId]);
   await page.reload();
   const first = card(page);
-  // Elliptical top (50 % of the width), small bottom corners: an arch, not a rounded rectangle.
+  // Shape C: the top corners much rounder than the bottom ones (44 / 14 px), the photo filling the frame.
   const photo = first.locator("[data-photo]");
-  await expect(photo).toHaveCSS("border-top-left-radius", "50%");
-  await expect(photo).toHaveCSS("border-top-right-radius", "50%");
-  await expect(photo).not.toHaveCSS("border-bottom-left-radius", "50%");
+  await expect(photo).toHaveCSS("border-top-left-radius", "44px");
+  await expect(photo).toHaveCSS("border-top-right-radius", "44px");
+  await expect(photo).toHaveCSS("border-bottom-left-radius", "14px");
+  await expect(photo.locator("img")).toHaveCSS("object-fit", "cover");
+  // The emoji alone top left, tucked in from the curve; « … » top right; both a finger wide (measured once the
+  // card has risen in).
+  await first.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  const frame = await photo.boundingBox();
+  const emoji = await first.getByRole("button", { name: /niveau : J’aime/ }).boundingBox();
+  const more = await first.getByRole("button", { name: /Plus d’actions/ }).boundingBox();
+  if (!frame || !emoji || !more) throw new Error("no box");
+  expect(emoji.x - frame.x).toBeGreaterThanOrEqual(4);
+  expect(emoji.y - frame.y).toBeGreaterThanOrEqual(4);
+  expect(emoji.x + emoji.width / 2).toBeLessThan(frame.x + frame.width / 2);
+  expect(more.x + more.width / 2).toBeGreaterThan(frame.x + frame.width / 2);
+  expect(Math.abs(more.y - emoji.y)).toBeLessThan(2);
+  for (const box of [emoji, more]) expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(44);
   // No drop yet: nothing crossed.
   await expect(first.getByTestId("card-drop")).toHaveCount(0);
 
@@ -548,6 +576,13 @@ test("la carte est en arche, montre « −20 € » quand la boutique barre un p
   await page.reload();
   await expect(card(page).getByTestId("card-drop")).toHaveText(/^−20\s€$/);
   await expect(card(page).locator("s")).toHaveText(/43\s€/);
+  // Under the photo, beside the price: never over « Aperçu » and « Je le prends ».
+  const dropBox = await card(page).getByTestId("card-drop").boundingBox();
+  const photoBox = await card(page).locator("[data-photo]").boundingBox();
+  const priceBox = await card(page).locator("s").boundingBox();
+  if (!dropBox || !photoBox || !priceBox) throw new Error("no box");
+  expect(dropBox.y).toBeGreaterThan(photoBox.y + photoBox.height);
+  expect(Math.abs(dropBox.y + dropBox.height / 2 - (priceBox.y + priceBox.height / 2))).toBeLessThan(6);
   // Equal or lower crossed price: no badge.
   await db.query("UPDATE products SET compare_at_cents = 2300 WHERE id = $1", [productId]);
   await page.reload();
@@ -649,4 +684,104 @@ test("prix inconnu : la carte dit « prix inconnu » ; en sélection, plus de bo
   await page.getByRole("button", { name: "Sélectionner" }).click();
   await expect(card(page).getByTestId("card-take")).toHaveCount(0);
   await expect(card(page).getByTestId("card-preview")).toHaveCount(0);
+});
+
+// Palier 3 bis (docs/plans/2026-11-08-refonte-ecarts-maquette.md): the head of « Mes envies » and its tools.
+
+test("Mes envies : grand titre, pastilles de résumé, loupe, menu des filtres et du tri, « Ajouter une envie »", async ({
+  page,
+  db,
+}) => {
+  await pasteAndWish(page);
+  await pasteAndWish(page);
+  await page.goto("/envies");
+  const cards = page.getByTestId("item-card");
+  await expect(cards).toHaveCount(2);
+  const ids = await Promise.all(
+    (await cards.getByRole("link").all()).map(async (link) => (await link.getAttribute("href"))?.split("/").pop()),
+  );
+  await db.query("UPDATE products SET name = 'Robe Lina', compare_at_cents = 4300 WHERE id = $1", [ids[0]]);
+  await db.query("UPDATE products SET compare_at_cents = NULL WHERE id = $1", [ids[1]]);
+  await page.reload();
+
+  const title = page.getByRole("heading", { level: 1, name: "Mes envies" });
+  await expect(title).toHaveCSS("font-family", /Fraunces/);
+  const summary = page.getByRole("list", { name: "En bref" });
+  await expect(summary.getByRole("listitem")).toHaveText(["2 envies", /^46\s€ en tout$/, "1 prix en baisse"]);
+
+  // The old « Filtres » button and the « Trier par » list with its label above are gone from the page itself.
+  await expect(page.getByRole("button", { name: "Filtres", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Trier par")).toHaveCount(0);
+  // The chips: full and soft, no border; chosen = the hint fill.
+  const liked = page.getByRole("button", { name: "J’aime", exact: true });
+  await expect(liked).toHaveCSS("border-top-width", "0px");
+  await liked.click();
+  await expect(liked).toHaveCSS("background-color", await tokenColor(page, "--color-hint"));
+  await liked.click();
+
+  // The menu holds the sort and the other filters; Escape closes it and gives the focus back.
+  const menu = page.getByRole("button", { name: "Filtres et tri" });
+  await menu.click();
+  await expect(menu).toHaveAttribute("aria-expanded", "true");
+  await page.getByLabel("Trier par").selectOption("name");
+  await expect(page).toHaveURL(/tri=name/);
+  await expect(cards.first()).toContainText(PRODUCT.name);
+  await page.keyboard.press("Escape");
+  await expect(page.getByLabel("Trier par")).toHaveCount(0);
+  await expect(menu).toBeFocused();
+
+  // The magnifier opens a field; the search lives in the address and « Effacer » clears it.
+  await page.getByRole("button", { name: "Chercher", exact: true }).click();
+  const field = page.getByRole("searchbox", { name: "Chercher une envie" });
+  await expect(field).toBeFocused();
+  await field.fill("lina");
+  await expect(page).toHaveURL(/recherche=lina/);
+  await expect(cards).toHaveCount(1);
+  await expect(cards).toContainText("Robe Lina");
+  await page.getByRole("button", { name: "Effacer le filtre", exact: true }).click();
+  await expect(cards).toHaveCount(2);
+  await expect(page).not.toHaveURL(/recherche=/);
+  await expect(page).toHaveURL(/tri=name/);
+  await expect(field).toHaveValue("");
+
+  // « Ajouter une envie » opens the paste field right there.
+  await page.getByRole("button", { name: "Ajouter une envie" }).click();
+  await expect(page.getByRole("region", { name: "Ajouter une envie" }).getByLabel("Coller un lien")).toBeVisible();
+  await axe(page);
+});
+
+test("Ma commande : une barre fine sur une ligne, centrée, la jauge dessous", async ({ page }) => {
+  await pasteAndWish(page);
+  await page.goto("/envies");
+  await page.getByTestId("budget-card").getByRole("button", { name: "Ajouter un budget" }).click();
+  const budgetDialog = page.getByRole("dialog", { name: "Mon budget" });
+  await budgetDialog.getByLabel("Montant (en euros)").fill("100");
+  await budgetDialog.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(budgetDialog).toHaveCount(0);
+  await card(page).getByTestId("card-take").click();
+  const band = page.getByTestId("order-band");
+  await expect(band).toContainText(/1 article, 23\s€/);
+  await expect(band).toContainText(/Il te resterait 77\s€/);
+  const parts = [
+    band.getByRole("heading", { name: "Ma commande" }),
+    band.getByText(/Il te resterait/),
+    band.getByRole("button", { name: "Voir" }),
+    band.getByRole("button", { name: "J’ai commandé (1)" }),
+  ];
+  const boxes = await Promise.all(parts.map(async (part) => await part.boundingBox()));
+  const bars = await band.getByTestId("budget-bars").boundingBox();
+  const frame = await band.boundingBox();
+  const width = page.viewportSize()?.width ?? 0;
+  if (!bars || !frame || boxes.some((b) => !b)) throw new Error("no box");
+  // The gauge under everything else.
+  for (const box of boxes) expect(bars.y).toBeGreaterThan((box?.y ?? 0) + (box?.height ?? 0) - 1);
+  if (width >= 768) {
+    // One line: the buttons sit level with the totals, and the bar is centred and narrow.
+    const middle = (b: (typeof boxes)[number] | undefined) => (b?.y ?? 0) + (b?.height ?? 0) / 2;
+    expect(Math.abs(middle(boxes[2]) - middle(boxes[3]))).toBeLessThan(2);
+    expect(Math.abs(middle(boxes[1]) - middle(boxes[3]))).toBeLessThan(16);
+    expect(frame.height).toBeLessThan(110);
+    const content = await page.locator("#app-content").boundingBox();
+    if (content) expect(Math.abs(frame.x + frame.width / 2 - (content.x + content.width / 2))).toBeLessThan(24);
+  }
 });

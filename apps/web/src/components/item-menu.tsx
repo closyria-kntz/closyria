@@ -142,7 +142,7 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
         aria-controls={panelId}
         aria-busy={busy || undefined}
         onClick={() => (open ? close(true) : setOpen(true))}
-        className={`absolute top-space-0 right-space-0 z-10 flex min-h-touch-target min-w-touch-target items-center justify-center rounded-card p-space-2 ${focusRing}`}
+        className={`absolute top-space-2 right-space-2 z-10 flex min-h-touch-target min-w-touch-target items-center justify-center rounded-full p-space-1 ${focusRing}`}
       >
         <span
           aria-hidden="true"

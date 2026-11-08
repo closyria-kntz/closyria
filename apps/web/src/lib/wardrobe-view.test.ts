@@ -11,8 +11,10 @@ import {
   stillShown,
   toggleSelection,
   toItemQuery,
+  toViewQuery,
   VIEWS,
   viewForPath,
+  wishSummary,
 } from "./wardrobe-view";
 
 const UUID = "7b1f6a52-3a0b-4a4c-9f0e-5b1c2d3e4f50";
@@ -169,5 +171,48 @@ describe("moreReducer", () => {
     state = moreReducer(state, { type: "end", generation: 1, failed: true });
     expect(state).toMatchObject({ loading: false, failed: true });
     expect(moreReducer(state, { type: "start", generation: 1 }).failed).toBe(false);
+  });
+});
+
+describe("search", () => {
+  it("reads `recherche=` trimmed, drops an empty one, and writes it back", () => {
+    expect(filtersFromParams(new URLSearchParams("recherche=%20robe%20lin%20"))).toEqual({ q: "robe lin" });
+    expect(filtersFromParams(new URLSearchParams("recherche=%20%20"))).toEqual({});
+    expect(filtersFromParams(new URLSearchParams(`recherche=${"a".repeat(150)}`)).q).toHaveLength(100);
+    expect(filtersToParams({ q: "robe" }).get("recherche")).toBe("robe");
+  });
+
+  it("sends it to the API and counts it as a filter (« Effacer » clears it too)", () => {
+    expect(toItemQuery("envies", { q: "robe" }, null)).toEqual({ stage: "spotted", q: "robe" });
+    expect(activeFilterCount({ q: "robe", priority: true })).toBe(2);
+  });
+});
+
+describe("toViewQuery", () => {
+  it("« Toutes mes envies »: the wishes of the current profile", () => {
+    expect(toViewQuery("envies", {}, UUID, null)).toEqual({ stage: "spotted", profile: UUID });
+  });
+
+  it("a list tab: the list's wishes of every profile of the account", () => {
+    const list = "9b1f6a52-3a0b-4a4c-9f0e-5b1c2d3e4f50";
+    expect(toViewQuery("envies", { priority: true }, UUID, list)).toEqual({
+      stage: "spotted",
+      priority: "true",
+      wishlist: list,
+    });
+  });
+});
+
+describe("wishSummary", () => {
+  const wish = (priceCents: number | null, compareAtCents: number | null = null) =>
+    ({ product: { priceCents, compareAtCents } }) as unknown as ItemView;
+
+  it("counts the wishes, adds the known prices and the prices that dropped", () => {
+    expect(wishSummary([wish(12000, 14000), wish(9500), wish(null), wish(24500, 27500), wish(3000, 3000)])).toEqual({
+      count: 5,
+      totalCents: 49000,
+      drops: 2,
+    });
+    expect(wishSummary([])).toEqual({ count: 0, totalCents: 0, drops: 0 });
   });
 });

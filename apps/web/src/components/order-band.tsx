@@ -100,49 +100,55 @@ export function OrderBand({
       ref={setElement}
       aria-labelledby={titleId}
       data-testid="order-band"
-      className="glass sticky bottom-space-0 z-10 flex flex-col gap-space-2 rounded-card p-space-4 text-ink shadow-lifted"
+      className="glass sticky bottom-space-4 z-10 mx-auto flex w-full max-w-panel flex-col gap-space-2 rounded-card py-space-2 pr-space-2 pl-space-4 text-ink shadow-lifted"
     >
-      <div className="flex flex-wrap items-center justify-between gap-space-3">
-        <h2 id={titleId} className="font-display text-lead font-strong">
-          {listName ? t("band.titleList", { name: listName }) : t("band.title")}
-        </h2>
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls={listId}
-          onClick={() => setOpen((value) => !value)}
-          className={`${touch} rounded-button px-space-3 text-sm font-strong text-accent hover:underline ${focusRing}`}
-        >
-          {t("band.see")}
-        </button>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-space-3">
-        <div aria-live="polite" className="flex flex-col items-start gap-space-1 tabular-nums">
-          <p key={totals.count} data-testid="count-roll" className="count-roll font-strong">
-            {t("band.total", { count: totals.count, amount: money(totals.totalCents) })}
-          </p>
-          {totals.unknownPrices > 0 && <p className="text-sm">{t("band.unknown", { count: totals.unknownPrices })}</p>}
-          {totals.afterCents !== null &&
-            (totals.afterCents >= 0 ? (
-              <p className="rounded-button border border-success-edge bg-success-soft px-space-2 font-strong text-sm text-success">
-                {t("band.left", { amount: money(totals.afterCents) })}
-              </p>
-            ) : (
-              <p className="rounded-button border border-danger-edge bg-danger-soft px-space-2 font-strong text-sm text-danger">
-                {t("band.over", { amount: money(-totals.afterCents) })}
-              </p>
-            ))}
+      {/* One line: what is taken, what the budget would have left, « Voir » and « J'ai commandé (n) ». On a narrow
+          phone only the totals wrap, inside their column; the buttons stay on the right. */}
+      <div className="flex items-center gap-space-3">
+        <div className="flex min-w-space-0 flex-1 flex-col">
+          <h2 id={titleId} className="truncate text-caption text-ink-muted">
+            {listName ? t("band.titleList", { name: listName }) : t("band.title")}
+          </h2>
+          <div aria-live="polite" className="flex flex-wrap items-center gap-x-space-2 gap-y-space-1 tabular-nums">
+            <p key={totals.count} data-testid="count-roll" className="count-roll font-strong">
+              {t("band.total", { count: totals.count, amount: money(totals.totalCents) })}
+            </p>
+            {totals.unknownPrices > 0 && (
+              <p className="text-sm text-ink-muted">{t("band.unknown", { count: totals.unknownPrices })}</p>
+            )}
+            {totals.afterCents !== null &&
+              (totals.afterCents >= 0 ? (
+                <p className="rounded-button border border-success-edge bg-success-soft px-space-2 text-sm font-strong whitespace-nowrap text-success">
+                  {t("band.left", { amount: money(totals.afterCents) })}
+                </p>
+              ) : (
+                <p className="rounded-button border border-danger-edge bg-danger-soft px-space-2 text-sm font-strong whitespace-nowrap text-danger">
+                  {t("band.over", { amount: money(-totals.afterCents) })}
+                </p>
+              ))}
+          </div>
         </div>
-        <button
-          type="button"
-          disabled={ordering}
-          data-shaking={shaking}
-          onAnimationEnd={() => setShaking(false)}
-          onClick={() => void order()}
-          className={`band-shake ${touch} inline-flex items-center rounded-button bg-band-button px-space-4 py-space-2 text-sm font-strong text-band-button-ink hover:bg-band-button-hover disabled:opacity-60 ${focusRing}`}
-        >
-          {t("band.ordered", { count: totals.count })}
-        </button>
+        <div className="flex shrink-0 items-center gap-space-2">
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={listId}
+            onClick={() => setOpen((value) => !value)}
+            className={`${touch} rounded-button bg-surface-sunken px-space-3 text-sm font-strong sm:px-space-4 text-ink hover:bg-surface-strong ${focusRing}`}
+          >
+            {t("band.see")}
+          </button>
+          <button
+            type="button"
+            disabled={ordering}
+            data-shaking={shaking}
+            onAnimationEnd={() => setShaking(false)}
+            onClick={() => void order()}
+            className={`band-shake ${touch} inline-flex items-center rounded-button bg-band-button px-space-3 py-space-2 whitespace-nowrap sm:px-space-4 text-sm font-strong text-band-button-ink hover:bg-band-button-hover disabled:opacity-60 ${focusRing}`}
+          >
+            {t("band.ordered", { count: totals.count })}
+          </button>
+        </div>
       </div>
       {state.kind !== "none" && (
         <BudgetBars spentPct={state.spentPct} pickPct={state.pickPct} overBar={state.overBar} />

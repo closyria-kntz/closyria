@@ -21,7 +21,7 @@ export function LoveLevelBadge({ item }: { item: ItemView }) {
   if (item.loveLevel === null) return null;
   const { emoji, label } = levelOf(levels, item.loveLevel);
   return (
-    <span className={`${pillClass} pointer-events-none absolute top-space-2 left-space-2 max-w-3/4`}>
+    <span className={`${pillClass} pointer-events-none absolute top-space-3 left-space-3 max-w-3/4`}>
       <span aria-hidden="true">{emoji}</span>
       <span className="min-w-space-0 truncate">{label}</span>
     </span>
@@ -72,7 +72,8 @@ export function LoveLevelPill({
 
   return (
     <>
-      <div className="absolute top-space-0 left-space-0 z-10">
+      {/* Tucked in from the curve: the glyph sits about space-4 from the top and from the edge of the photo. */}
+      <div className="absolute top-space-2 left-space-2 z-10">
         <button
           ref={setAnchor}
           type="button"
@@ -80,7 +81,7 @@ export function LoveLevelPill({
           aria-expanded={open}
           aria-busy={busy || undefined}
           onClick={() => onOpenChange(!open)}
-          className={`flex min-h-touch-target min-w-touch-target items-center justify-center rounded-card p-space-1 text-title leading-none ${focusRing}`}
+          className={`flex min-h-touch-target min-w-touch-target items-center justify-center rounded-full p-space-1 text-lead leading-none ${focusRing}`}
         >
           {current ? (
             <span aria-hidden="true" className="drop-shadow-emoji">
@@ -89,7 +90,7 @@ export function LoveLevelPill({
           ) : (
             <span
               aria-hidden="true"
-              className="glass flex size-space-6 items-center justify-center rounded-full text-lead font-strong text-ink"
+              className="glass flex size-space-6 items-center justify-center rounded-full text-body font-strong text-ink"
             >
               +
             </span>

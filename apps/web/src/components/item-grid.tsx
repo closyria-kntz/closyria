@@ -7,8 +7,9 @@ import { type CardActions, ItemCard } from "./item-card";
 /** « Sélectionner » mode: which items are chosen, and the toggle. */
 export type GridSelection = { selected: ReadonlySet<string>; onToggle: (id: string) => void };
 
-/** 2 columns on a phone (< 48 rem), 3 on a tablet, 5 from 64 rem (spec §4). */
-export const GRID_CLASS = "grid grid-cols-2 gap-x-space-3 gap-y-space-5 md:grid-cols-3 lg:grid-cols-5 lg:gap-x-space-4";
+/** 2 columns on a phone (< 48 rem), 3 on a tablet, 4 from 64 rem (refonte, gaps of the mockup). */
+export const GRID_CLASS =
+  "grid grid-cols-2 gap-x-space-4 gap-y-space-5 md:grid-cols-3 lg:grid-cols-4 lg:gap-x-space-5 lg:gap-y-space-6";
 
 export function ItemGrid({
   label,

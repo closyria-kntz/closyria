@@ -32,13 +32,15 @@ import {
   paramsText,
   stillShown,
   toggleSelection,
-  toItemQuery,
+  toViewQuery,
   VIEWS,
   type ViewFilters,
   type ViewKey,
+  wishSummary,
 } from "@/lib/wardrobe-view";
 import { BudgetCard } from "./budget-card";
-import { FiltersBar } from "./filters-bar";
+import { CaptureForm } from "./capture-form";
+import { FilterChips, FiltersMenu, SearchField } from "./filters-bar";
 import { ItemGrid } from "./item-grid";
 import { ItemPreview } from "./item-preview";
 import { ListTabs } from "./list-tabs";
@@ -76,10 +78,11 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   const activeList = lists.items.find((list) => list.id === listId) ?? null;
   const listPending = listId !== null && lists.status === "loading";
   const queryListId = activeList ? listId : null;
-  const query = useMemo(() => {
-    const base = toItemQuery(view, filters, current.id);
-    return queryListId ? { ...base, wishlist: queryListId } : base;
-  }, [view, filters, current.id, queryListId]);
+  // A list tab shows the list's wishes of every profile; the other tabs and views, the current profile's items.
+  const query = useMemo(
+    () => toViewQuery(view, filters, current.id, queryListId),
+    [view, filters, current.id, queryListId],
+  );
   const queryKey = JSON.stringify(query);
 
   const [data, setData] = useState<Loaded>({ items: [], nextCursor: null, status: "loading" });
@@ -97,6 +100,8 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   // the account, so its tab, its budget and its band count (and « J'ai commandé » orders) the wishes of every profile.
   const [accountWishes, setWishes] = useState<ItemView[]>([]);
   const [wishesError, setWishesError] = useState(false);
+  const [wishesReady, setWishesReady] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [scopeToken, setScopeToken] = useState(0);
   const generation = useRef(0);
   const moreController = useRef<AbortController | null>(null);
@@ -124,7 +129,11 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     );
     fetchAllWishes({ stage: "spotted" }).then(
       // A tick still being saved would be put back by this read: kept as it is, the next change reads it again.
-      (items) => !stale && !ticks.current?.busy() && setWishes(items),
+      (items) => {
+        if (stale || ticks.current?.busy()) return;
+        setWishes(items);
+        setWishesReady(true);
+      },
       () => !stale && setWishesError(true),
     );
     return () => {
@@ -193,10 +202,13 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     return () => observer.disconnect();
   }, [data.nextCursor, moreFailed, loadMore]);
 
-  const setFilters = (next: ViewFilters) => {
-    const params = filtersToParams(next, new URLSearchParams(search.toString()));
+  // `replace`: the search writes the address as she types, without a history entry per pause.
+  const setFilters = (next: ViewFilters, replace = false) => {
+    const params = filtersToParams(next, new URLSearchParams(window.location.search));
     const text = paramsText(params);
-    router.push(text ? `${pathname}?${text}` : pathname, { scroll: false });
+    const href = text ? `${pathname}?${text}` : pathname;
+    if (replace) router.replace(href, { scroll: false });
+    else router.push(href, { scroll: false });
   };
 
   const reload = useCallback(async () => setReloadToken((value) => value + 1), []);
@@ -256,7 +268,8 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           ? previous.map((known) => (known.id === item.id ? item : known))
           : previous.filter((known) => known.id !== item.id),
       );
-      const stays = stillShown(item, viewStage, current.id, { tag, levels, priority });
+      // A list tab holds the wishes of every profile: a card there never leaves for its profile.
+      const stays = stillShown(item, viewStage, listId ? null : current.id, { tag, levels, priority });
       setData((previous) => ({
         ...previous,
         items: stays
@@ -264,7 +277,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           : previous.items.filter((known) => known.id !== item.id),
       }));
     },
-    [viewStage, current.id, tag, levelsKey, priority],
+    [viewStage, current.id, listId, tag, levelsKey, priority],
   );
   const trashed = useCallback((id: string) => gone([id]), [gone]);
 
@@ -303,7 +316,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     async (item: ItemView, photo?: Element | null) => {
       const next = !item.inOrderDraft;
       // The tick is state at once, saved in the background; the flight is only a flourish and waits for nothing.
-      // The band shows first (it is hidden while nothing is ticked), then the arch flies to it.
+      // The band shows first (it is hidden while nothing is ticked), then the photo shape flies to it.
       flushSync(() => setTick(item.id, next));
       ticks.current?.set(item.id, next, item.inOrderDraft);
       const band = document.querySelector("[data-testid=order-band]");
@@ -439,16 +452,59 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   const label = t(`title.${view}`);
   const isEmpty = data.status === "ready" && data.items.length === 0;
 
+  const summary = view === "envies" && wishesReady ? wishSummary(scopeWishes) : null;
+  const withoutSearch = ({ q: _, ...rest }: ViewFilters): ViewFilters => rest;
+  const showBudget = view === "envies" && budgetScope !== null && (!listId || activeList !== null);
+
   return (
-    <div className="flex flex-col gap-space-4 pb-space-6">
-      <div className="flex flex-wrap items-center justify-between gap-space-3">
-        <h1 className="font-display text-title font-strong">{label}</h1>
-        <div className="flex flex-wrap gap-space-2">
-          {view === "envies" && !filters.stage && !selecting && (
-            <Link href={orderHref} className={`${buttonClass} ${touch}`}>
-              {t("prepareOrder")}
-            </Link>
+    <div className="flex flex-col gap-space-4 pt-space-5 pb-space-6">
+      {view === "envies" && <ListTabs lists={tabs} current={listId} allCount={wishes.length} onChange={chooseList} />}
+      {/* Positioned: the filters menu opens against this row (full width on a phone, under the tools from sm up). */}
+      <div className="relative flex flex-wrap items-end justify-between gap-x-space-5 gap-y-space-4">
+        <div className="flex min-w-space-0 flex-col gap-space-3">
+          <h1 className="font-display text-display leading-none font-regular">{t(`heading.${view}`)}</h1>
+          {summary && (
+            <ul aria-label={t("summary.label")} data-testid="wish-summary" className="flex flex-wrap gap-space-2">
+              <li className="glass rounded-full px-space-3 py-space-1 text-sm tabular-nums">
+                {t.rich("summary.count", { count: summary.count, b: (chunks) => <b>{chunks}</b> })}
+              </li>
+              <li className="glass rounded-full px-space-3 py-space-1 text-sm tabular-nums">
+                {t.rich("summary.total", {
+                  amount: formatAmount(locale, summary.totalCents),
+                  b: (chunks) => <b>{chunks}</b>,
+                })}
+              </li>
+              {summary.drops > 0 && (
+                <li className="rounded-full bg-success-soft px-space-3 py-space-1 text-sm font-strong text-success tabular-nums">
+                  {t("summary.drops", { count: summary.drops })}
+                </li>
+              )}
+            </ul>
           )}
+          {showBudget && budgetScope && (
+            <BudgetCard
+              scope={budgetScope}
+              draftCents={draftCents}
+              listName={activeList?.name}
+              reloadKey={reloadToken + scopeToken}
+              onBudget={(next) => setBandBudget({ key: scopeKey, view: next })}
+            />
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-space-2">
+          <SearchField
+            value={filters.q}
+            label={t(view === "envies" ? "filters.search.labelEnvies" : "filters.search.label")}
+            onChange={(q) => setFilters(q ? { ...filters, q } : withoutSearch(filters), true)}
+          />
+          <FiltersMenu
+            filters={filters}
+            onChange={setFilters}
+            shops={shops}
+            tags={tags}
+            reference={reference}
+            activeCount={count}
+          />
           {(selecting || data.items.length > 0) && (
             <button
               type="button"
@@ -458,17 +514,35 @@ export function WardrobeView({ view }: { view: ViewKey }) {
               {selecting ? t("selection.done") : t("selection.start")}
             </button>
           )}
+          {view === "envies" && !filters.stage && !selecting && (
+            <Link href={orderHref} className={`${buttonClass} ${touch}`}>
+              {t("prepareOrder")}
+            </Link>
+          )}
+          {view === "envies" && (
+            <button
+              type="button"
+              aria-expanded={adding}
+              onClick={() => setAdding((value) => !value)}
+              className={`${primaryButtonClass} ${touch} px-space-5`}
+            >
+              {t("tools.add")}
+            </button>
+          )}
         </div>
       </div>
-      {view === "envies" && <ListTabs lists={tabs} current={listId} allCount={wishes.length} onChange={chooseList} />}
-      {view === "envies" && budgetScope && (!listId || activeList) && (
-        <BudgetCard
-          scope={budgetScope}
-          draftCents={draftCents}
-          listName={activeList?.name}
-          reloadKey={reloadToken + scopeToken}
-          onBudget={(next) => setBandBudget({ key: scopeKey, view: next })}
-        />
+      {adding && (
+        <section
+          aria-label={t("tools.addTitle")}
+          className="glass flex flex-col items-end gap-space-2 rounded-card p-space-4"
+        >
+          <div className="w-full">
+            <CaptureForm />
+          </div>
+          <button type="button" className={`${buttonClass} ${touch}`} onClick={() => setAdding(false)}>
+            {t("tools.close")}
+          </button>
+        </section>
       )}
       {view === "envies" && wishesError && (
         <div className="flex flex-wrap items-center gap-space-3">
@@ -485,12 +559,9 @@ export function WardrobeView({ view }: { view: ViewKey }) {
         </div>
       )}
       {selecting && selected.size === 0 && <p className="text-sm text-ink-muted">{t("selection.hint")}</p>}
-      <FiltersBar
+      <FilterChips
         filters={filters}
         onChange={setFilters}
-        shops={shops}
-        tags={tags}
-        reference={reference}
         activeCount={count}
         onClearAll={() => setFilters(filters.sort ? { sort: filters.sort } : {})}
       />
