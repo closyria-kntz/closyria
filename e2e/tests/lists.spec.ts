@@ -91,6 +91,9 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   expect(response?.status()).toBe(200);
   expect(response?.headers()["x-robots-tag"]).toBe("noindex");
   await expect(other.getByRole("heading", { level: 1, name: "Été à Nice" })).toBeVisible();
+  // She is a guest (no account): no « La liste de Anonymous ».
+  await expect(other.getByText(/La liste de/)).toHaveCount(0);
+  await expect(other.getByText(/Anonymous/)).toHaveCount(0);
   const items = other.getByRole("list", { name: "Articles" }).getByRole("listitem");
   await expect(items).toHaveCount(1);
   await expect(items.first()).toContainText(PRODUCT.name);
@@ -118,7 +121,18 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   expect((await other.goto(shareUrl))?.status()).toBe(404);
   expect((await other.goto(second))?.status()).toBe(200);
 
+  // « Arrêter le partage » asks first: « Annuler » changes nothing.
   await page.getByRole("button", { name: "Arrêter le partage" }).click();
+  const stop = page.getByRole("dialog", { name: "Arrêter le partage ?" });
+  await expect(stop.getByText("L'ancien lien ne marchera plus et les avis des amies seront effacés.")).toBeVisible();
+  await axe(page);
+  await stop.getByRole("button", { name: "Annuler" }).click();
+  await expect(stop).toHaveCount(0);
+  await expect(field).toHaveValue(second);
+  expect((await other.goto(second))?.status()).toBe(200);
+  await page.getByRole("button", { name: "Arrêter le partage" }).click();
+  await stop.getByRole("button", { name: "Arrêter", exact: true }).click();
+  await expect(stop).toHaveCount(0);
   await expect(toast(page)).toContainText("Partage arrêté");
   const gone = await other.goto(second);
   expect(gone?.status()).toBe(404);

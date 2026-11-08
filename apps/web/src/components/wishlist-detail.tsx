@@ -97,6 +97,11 @@ export function WishlistDetail({ id }: { id: string }) {
   useEffect(() => {
     void loadOpinions();
   }, [loadOpinions]);
+  // Stopping the share erases the friends' opinions: the page stops showing them at once.
+  const shared = state.status === "ready" ? state.list.shared : null;
+  useEffect(() => {
+    if (shared === false) setOpinions(new Map());
+  }, [shared]);
 
   /** `quiet`: back on the page, no loading state and the list kept when the read fails. */
   const load = useCallback(

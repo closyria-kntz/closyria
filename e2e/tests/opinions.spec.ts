@@ -25,9 +25,9 @@ async function sharedList(page: Page, db: Parameters<typeof sessionsOf>[0], user
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
   await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
-  // Her account name (« Mon compte »): the link shows its first word.
+  // Her account name (« Mon compte »): the link shows its first word. A guest's never shows (« Anonymous »).
   const [session] = await sessionsOf(db, userAgentTag);
-  await db.query(`update "user" set name = 'Camille Durand' where id = $1`, [session?.userId]);
+  await db.query(`update "user" set name = 'Camille Durand', is_anonymous = false where id = $1`, [session?.userId]);
 
   await page.goto("/envies");
   const card = page.getByTestId("item-card").first();
@@ -72,6 +72,13 @@ async function friend(browser: Browser, baseURL: string | undefined, address: st
 test("une amie donne son avis", async ({ page, browser, baseURL, db, userAgentTag }, testInfo) => {
   test.slow();
   const shareUrl = await sharedList(page, db, userAgentTag);
+  // A long name of her own for one level: it must read in full on the friend's sheet.
+  const [session] = await sessionsOf(db, userAgentTag);
+  await db.query(
+    `insert into love_levels (user_id, level, emoji, label)
+     values ($1, 1, '😕', 'Bof'), ($1, 2, '🤍', 'Franchement canon'), ($1, 3, '🥰', 'Mims'), ($1, 4, '🔥', 'En feu')`,
+    [session?.userId],
+  );
 
   const lea = await friend(browser, baseURL, `10.201.${testInfo.workerIndex % 250}.1`);
   await lea.goto(shareUrl);
@@ -89,6 +96,19 @@ test("une amie donne son avis", async ({ page, browser, baseURL, db, userAgentTa
   await item.getByRole("button", { name: "Donner mon avis" }).click();
   const sheet = lea.getByRole("dialog", { name: `Ton avis sur ${PRODUCT.name}` });
   await expect(sheet).toBeVisible();
+  // The four levels read in full, on a phone too (two by two there).
+  const longLabel = sheet.locator("button[aria-pressed] span:last-child").filter({ hasText: "Franchement canon" });
+  await expect(longLabel).toHaveCount(1);
+  const clipped = await longLabel.evaluateAll(
+    (labels) => labels.filter((label) => label.scrollWidth > label.clientWidth).length,
+  );
+  expect(clipped).toBe(0);
+  await sheet.screenshot({ path: testInfo.outputPath("sheet-levels.png") });
+  // A web address is refused in the name too.
+  await sheet.getByLabel("Ton prénom").fill("zara.com");
+  await sheet.getByRole("button", { name: "En feu" }).click();
+  await sheet.getByRole("button", { name: "Envoyer mon avis" }).click();
+  await expect(sheet.getByRole("alert")).toHaveText("Les liens ne sont pas acceptés dans les avis.");
   await sheet.getByLabel("Ton prénom").fill("Léa");
   await sheet.getByRole("button", { name: "En feu" }).click();
   await expect(sheet.getByRole("button", { name: "En feu" })).toHaveAttribute("aria-pressed", "true");
@@ -200,8 +220,7 @@ test("une amie donne son avis", async ({ page, browser, baseURL, db, userAgentTa
   await expect(againItem.getByRole("button", { name: "Modifier mon avis" })).toBeVisible();
 
   // The owner stops sharing while the page is open: sending shows that the link no longer works.
-  await page.getByRole("button", { name: "Arrêter le partage" }).click();
-  await expect(appToast(page)).toContainText("Partage arrêté");
+  await stopSharing(page);
   await againItem.getByRole("button", { name: "Modifier mon avis" }).click();
   await againSheet.getByLabel("Un petit mot").fill("toujours Mims");
   await againSheet.getByRole("button", { name: "Envoyer mon avis" }).click();
@@ -227,6 +246,16 @@ async function giveOpinion(friendPage: Page, name: string, level: string, note: 
   await sheet.getByLabel("Un petit mot").fill(note);
   await sheet.getByRole("button", { name: "Envoyer mon avis" }).click();
   await expect(friendPage.getByRole("status", { name: "Notifications" })).toContainText("Avis envoyé");
+}
+
+/** « Arrêter le partage », then « Arrêter » in the question it asks. */
+async function stopSharing(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Arrêter le partage" }).click();
+  await page
+    .getByRole("dialog", { name: "Arrêter le partage ?" })
+    .getByRole("button", { name: "Arrêter", exact: true })
+    .click();
+  await expect(appToast(page)).toContainText("Partage arrêté");
 }
 
 /** Flips one of the list's sharing settings and waits until it is saved. */
@@ -304,6 +333,10 @@ test("la fondatrice voit la pastille, l'avis « nouveau », l'efface et l'annule
   await expect(
     lea.getByRole("list", { name: "Articles" }).getByRole("list", { name: "Avis des amies" }).getByRole("listitem"),
   ).toHaveCount(1);
+
+  // Stopping the share erases the opinions: the page stops showing them at once, without reloading.
+  await stopSharing(page);
+  await expect(card.getByRole("list", { name: "Avis des amies" })).toHaveCount(0);
   await lea.context().close();
 });
 

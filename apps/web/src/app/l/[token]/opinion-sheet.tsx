@@ -109,7 +109,7 @@ export function OpinionSheet({ open, onClose, token, item, listOpinions, levels,
       return;
     }
     if (level === null) return setError(t("errors.level"));
-    if (containsWebAddress(text)) return setError(t("errors.webAddress"));
+    if (containsWebAddress(chosen) || containsWebAddress(text)) return setError(t("errors.webAddress"));
     setError(null);
     setBusy(true);
     const previous = findByName(item.opinions, chosen);
@@ -273,7 +273,7 @@ export function OpinionSheet({ open, onClose, token, item, listOpinions, levels,
 
         <fieldset className="flex min-w-space-0 flex-col gap-space-2">
           <legend className="pb-space-2 text-sm text-ink-muted">{t("levels")}</legend>
-          <div className="grid grid-cols-4 gap-space-2">
+          <div className="grid grid-cols-2 gap-space-2 sm:grid-cols-4">
             {levels.map((entry) => (
               <button
                 key={entry.level}
@@ -288,7 +288,7 @@ export function OpinionSheet({ open, onClose, token, item, listOpinions, levels,
                 <span aria-hidden="true" className="text-lead">
                   {entry.emoji}
                 </span>
-                <span className="max-w-full truncate">{entry.label}</span>
+                <span className="max-w-full break-words">{entry.label}</span>
               </button>
             ))}
           </div>

@@ -30,6 +30,7 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
   const [message, setMessage] = useState<{ text: string; kind: "info" | "error" } | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingStop, setConfirmingStop] = useState(false);
   // The browser's share menu (phones mostly): known only in the browser.
   const [canShare, setCanShare] = useState(false);
   // A setting being saved shows its new value until the API answers; it goes back if the save fails.
@@ -126,6 +127,7 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
     setBusy(true);
     const result = await unshareWishlist(list.id);
     setBusy(false);
+    setConfirmingStop(false);
     if (!result.ok) return setMessage({ text: t("failed"), kind: "error" });
     setLink({ status: "loading" });
     setMessage(null);
@@ -270,7 +272,7 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
         <button
           type="button"
           disabled={busy}
-          onClick={() => void stop()}
+          onClick={() => setConfirmingStop(true)}
           className={`${buttonClass} ${touch} self-start`}
         >
           {t("stop")}
@@ -294,6 +296,28 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
             {legacy ? t("keepConfirm") : t("renew")}
           </button>
           <button type="button" onClick={() => setConfirming(false)} className={`${buttonClass} ${touch}`}>
+            {t("cancel")}
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={confirmingStop}
+        onClose={() => setConfirmingStop(false)}
+        title={t("stopTitle")}
+        closeLabel={t("close")}
+      >
+        <p className="text-ink-muted">{t("stopBody")}</p>
+        <div className="flex flex-wrap gap-space-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void stop()}
+            className={`${primaryButtonClass} ${touch}`}
+          >
+            {t("stopConfirm")}
+          </button>
+          <button type="button" onClick={() => setConfirmingStop(false)} className={`${buttonClass} ${touch}`}>
             {t("cancel")}
           </button>
         </div>
