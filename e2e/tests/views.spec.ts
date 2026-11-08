@@ -647,6 +647,10 @@ test("« Aperçu » ouvre le panneau sans quitter la page ; « Je le prends » c
   await expect(card(page).getByTestId("card-taken")).toBeVisible();
   await expect(card(page).getByTestId("card-take")).toHaveAttribute("aria-pressed", "true");
   await expect(card(page).getByTestId("card-take")).toHaveText("Retirer");
+  // Taken, it reads as a state: the soft pressed look (hint fill, accent edge, ink text), not the dark « Je le prends ».
+  await expect(card(page).getByTestId("card-take")).toHaveCSS("background-color", "rgb(246, 214, 228)");
+  await expect(card(page).getByTestId("card-take")).toHaveCSS("color", "rgb(42, 26, 36)");
+  await expect(card(page).getByTestId("card-take")).toHaveCSS("border-top-color", "rgb(190, 24, 93)");
 
   // Put it back from the card.
   await card(page).getByTestId("card-take").click();
@@ -810,7 +814,18 @@ test("recherche : Échap ou ✕ la referme et rend le focus à la loupe ; une ad
   await expect(magnifier).toBeFocused();
   await expect(page).not.toHaveURL(/recherche=/);
 
+  // Drawn smaller than a finger on a phone: a tap just outside the pill, or on its padding, still lands in the field.
   await magnifier.click();
+  await field.blur();
+  const pill = await page.locator("search").boundingBox();
+  if (!pill) throw new Error("no search pill");
+  if (pill.height < 44) {
+    await page.mouse.click(pill.x + pill.width / 2, pill.y - (44 - pill.height) / 2 + 1);
+    await expect(field).toBeFocused();
+    await field.blur();
+  }
+  await page.mouse.click(pill.x + 4, pill.y + pill.height / 2);
+  await expect(field).toBeFocused();
   await field.fill("pantalon");
   await page.getByRole("button", { name: "Fermer la recherche" }).click();
   await expect(field).toHaveCount(0);

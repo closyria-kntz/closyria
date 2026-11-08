@@ -203,7 +203,10 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               onClick={(event) =>
                 quick.onTake?.(item, event.currentTarget.closest("li")?.querySelector("[data-photo]"))
               }
-              className={`hit-area pointer-events-auto relative h-control-sm min-w-space-0 flex-1 rounded-button bg-button-bg px-space-2 text-caption font-strong whitespace-nowrap text-button-ink sm:h-control-lg sm:text-sm ${focusRing}`}
+              className={`hit-area pointer-events-auto relative h-control-sm min-w-space-0 flex-1 rounded-button border px-space-2 text-caption font-strong whitespace-nowrap sm:h-control-lg sm:text-sm ${focusRing} ${
+                // Taken: the soft pressed look (hint fill, accent edge, ink text), so « Retirer » reads as a state.
+                item.inOrderDraft ? "border-accent bg-hint text-ink" : "border-transparent bg-button-bg text-button-ink"
+              }`}
             >
               {t(item.inOrderDraft ? "remove" : "take")}
             </button>

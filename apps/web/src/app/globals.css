@@ -129,6 +129,17 @@ body::before {
   }
 }
 
+/* The same reach for a field drawn smaller than a finger: an element of it (its label) spreads under the whole
+   positioned, isolated container out to the touch target, below the field and its buttons. */
+@utility hit-area-under {
+  &::before {
+    content: "";
+    position: absolute;
+    inset: var(--spacing-hit-inset);
+    z-index: -1;
+  }
+}
+
 /* Skeleton: a slow breathing, on motion tokens only. Reduced motion zeroes the durations (tokens) and drops it here too. */
 @keyframes skeleton-breathe {
   from {

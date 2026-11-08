@@ -189,8 +189,10 @@ export function SearchField({
     );
   }
   return (
-    <search className="search-open flex h-control-sm w-full min-w-space-0 items-center rounded-full bg-surface-strong pl-space-3 sm:h-control-plus sm:w-sidebar">
-      <label htmlFor={fieldId} className="flex shrink-0 text-ink-muted">
+    <search className="search-open relative isolate flex h-control-sm w-full min-w-space-0 items-center rounded-full bg-surface-strong pl-space-3 sm:h-control-plus sm:w-sidebar">
+      {/* Drawn 38 px on a phone: the magnifier's label spreads under the whole pill, out to the touch target, so a tap
+          anywhere around the field focuses it. */}
+      <label htmlFor={fieldId} className="hit-area-under flex shrink-0 text-ink-muted">
         <MagnifierIcon />
         <span className="sr-only">{label}</span>
       </label>
@@ -208,7 +210,7 @@ export function SearchField({
             close();
           }
         }}
-        className="min-w-space-0 flex-1 bg-transparent px-space-2 text-ui text-ink outline-none placeholder:text-ink-muted"
+        className="min-w-space-0 flex-1 self-stretch bg-transparent px-space-2 text-ui text-ink outline-none placeholder:text-ink-muted"
       />
       <button
         type="button"
