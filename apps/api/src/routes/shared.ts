@@ -96,7 +96,7 @@ const putOpinionRoute = defineAccess(
       403: errorContent("Opinions are off (opinions_closed)"),
       404: errorContent("Unknown share or item not in the list (not_found)"),
       409: errorContent("Name used by another device (name_taken)"),
-      422: errorContent("Web address in the note (web_address)"),
+      422: errorContent("Web address in the name or the note (web_address)"),
       429: errorContent("Too many opinions (rate_limited)"),
     },
   }),
@@ -167,7 +167,8 @@ export function sharedRoutes(deps: WardrobeDeps) {
       const list = await findList(token);
       if (!list) return c.json({ error: "not_found" } as const, 404);
       if (!list.allowOpinions) return c.json({ error: "opinions_closed" } as const, 403);
-      if (input.note !== null && containsWebAddress(input.note)) return c.json({ error: "web_address" } as const, 422);
+      if (containsWebAddress(input.name) || (input.note !== null && containsWebAddress(input.note)))
+        return c.json({ error: "web_address" } as const, 422);
       const result = await upsertOpinion(db, {
         ...input,
         wishlistId: list.id,

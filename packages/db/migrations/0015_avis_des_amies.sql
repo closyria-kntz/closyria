@@ -16,9 +16,9 @@ CREATE TABLE "wishlist_opinions" (
 	"note" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "wishlist_opinions_author_name_check" CHECK (char_length("wishlist_opinions"."author_name") BETWEEN 1 AND 40),
+	CONSTRAINT "wishlist_opinions_author_name_check" CHECK (char_length("wishlist_opinions"."author_name") BETWEEN 1 AND 320),
 	CONSTRAINT "wishlist_opinions_level_check" CHECK ("wishlist_opinions"."level" BETWEEN 1 AND 4),
-	CONSTRAINT "wishlist_opinions_note_check" CHECK ("wishlist_opinions"."note" IS NULL OR char_length("wishlist_opinions"."note") <= 400)
+	CONSTRAINT "wishlist_opinions_note_check" CHECK ("wishlist_opinions"."note" IS NULL OR char_length("wishlist_opinions"."note") <= 1600)
 );
 --> statement-breakpoint
 ALTER TABLE "wishlists" ADD COLUMN "share_token_encrypted" text;--> statement-breakpoint
@@ -32,4 +32,7 @@ ALTER TABLE "wishlist_opinions" ADD CONSTRAINT "wishlist_opinions_wishlist_id_wi
 ALTER TABLE "wishlist_opinions" ADD CONSTRAINT "wishlist_opinions_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "wishlist_opinions_author_idx" ON "wishlist_opinions" USING btree ("wishlist_id","item_id","author_name_key");--> statement-breakpoint
 CREATE INDEX "wishlist_opinions_wishlist_id_updated_at_idx" ON "wishlist_opinions" USING btree ("wishlist_id","updated_at");--> statement-breakpoint
-CREATE INDEX "wishlist_opinions_item_id_idx" ON "wishlist_opinions" USING btree ("item_id");
+CREATE INDEX "wishlist_opinions_item_id_idx" ON "wishlist_opinions" USING btree ("item_id");--> statement-breakpoint
+-- Hand-written (founder decision A): lists already shared before this version keep what their link showed,
+-- so her own opinions stay hidden there until she turns them on; new shares keep the default (true).
+UPDATE "wishlists" SET "show_owner_opinions" = false WHERE "share_token_hash" IS NOT NULL;

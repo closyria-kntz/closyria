@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, type Database, eq, isNull, schema, sql } from "@closyria/db";
+import { and, asc, type Database, eq, isNotNull, isNull, schema, sql } from "@closyria/db";
 import {
   type ErasedOpinion,
   type OpinionDelete,
@@ -171,6 +171,13 @@ export async function restoreOpinion(
   const nameKey = opinionNameKey(opinion.name);
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${wishlistId}:${nameKey}`}, 0))`);
+    // As for a friend's write: the list must still be shared, and stopping the share waits for us (then erases).
+    const [list] = await tx
+      .select({ id: schema.wishlists.id })
+      .from(schema.wishlists)
+      .where(and(eq(schema.wishlists.id, wishlistId), isNotNull(schema.wishlists.shareTokenHash)))
+      .for("share");
+    if (!list) return "not_found" as const;
     const [member] = await tx
       .select({ itemId: schema.wishlistItems.itemId })
       .from(schema.wishlistItems)

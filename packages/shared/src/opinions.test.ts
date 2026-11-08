@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   containsWebAddress,
   deviceKeySchema,
+  OPINION_NAME_MAX_CODE_POINTS,
+  OPINION_NOTE_MAX_CODE_POINTS,
   opinionDeleteSchema,
   opinionInputSchema,
   opinionNameKey,
@@ -28,12 +30,19 @@ describe("opinionNameKey", () => {
 });
 
 describe("containsWebAddress", () => {
-  it.each(["va sur http://x.fr", "www.zara.com", "zara.com/robe", "Shop.FR"])("detects %s", (text) => {
-    expect(containsWebAddress(text)).toBe(true);
-  });
-  it.each(["trop bien !", "taille 38.5", "j'adore... vraiment"])("lets %s through", (text) => {
-    expect(containsWebAddress(text)).toBe(false);
-  });
+  it.each(["va sur http://x.fr", "HTTPS://X.FR", "www.zara.com", "WWW.Zara.Com", "zara.com/robe", "Shop.fr"])(
+    "detects %s",
+    (text) => {
+      expect(containsWebAddress(text)).toBe(true);
+    },
+  );
+  // The bare-domain rule only knows lower-case endings: a sentence glued to a capital (« belle.Ca ») is not a link.
+  it.each(["trop bien !", "taille 38.5", "j'adore... vraiment", "Trop belle.Ca te va", "c'est top.De rien", "Shop.FR"])(
+    "lets %s through",
+    (text) => {
+      expect(containsWebAddress(text)).toBe(false);
+    },
+  );
 });
 
 describe("opinionInputSchema", () => {
@@ -43,6 +52,18 @@ describe("opinionInputSchema", () => {
   it("limits the name in graphemes", () => {
     expect(opinionInputSchema.safeParse({ ...base, name: "🔥".repeat(40) }).success).toBe(true);
     expect(opinionInputSchema.safeParse({ ...base, name: "a".repeat(41) }).success).toBe(false);
+  });
+  it("takes 40 flags as a name and 200 toned emojis as a note", () => {
+    expect(opinionInputSchema.safeParse({ ...base, name: "🇫🇷".repeat(40), note: "👍🏽".repeat(200) }).success).toBe(
+      true,
+    );
+  });
+  it("also caps code points, so one huge grapheme cannot pass", () => {
+    const huge = (n: number) => `a${"\u0301".repeat(n)}`;
+    expect(opinionInputSchema.safeParse({ ...base, name: huge(OPINION_NAME_MAX_CODE_POINTS - 1) }).success).toBe(true);
+    expect(opinionInputSchema.safeParse({ ...base, name: huge(OPINION_NAME_MAX_CODE_POINTS) }).success).toBe(false);
+    expect(opinionInputSchema.safeParse({ ...base, note: huge(OPINION_NOTE_MAX_CODE_POINTS - 1) }).success).toBe(true);
+    expect(opinionInputSchema.safeParse({ ...base, note: huge(OPINION_NOTE_MAX_CODE_POINTS) }).success).toBe(false);
   });
   it("refuses a bad level, a long note and a short device key", () => {
     expect(opinionInputSchema.safeParse({ ...base, level: 5 }).success).toBe(false);

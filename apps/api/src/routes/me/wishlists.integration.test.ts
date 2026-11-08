@@ -349,6 +349,28 @@ describe("sharing", () => {
     expect(await get()).toEqual({ url: null, legacy: false });
   });
 
+  it("GET share warns once, with the list id only, when the kept token cannot be read", async () => {
+    const { cookie } = await t.signIn();
+    const list = await createList(cookie);
+    const token = await share(cookie, list.id);
+    await t.db
+      .update(schema.wishlists)
+      .set({ shareTokenEncrypted: "v1.garbage.garbage.garbage" })
+      .where(eq(schema.wishlists.id, list.id));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const res = await call("GET", `/api/me/wishlists/${list.id}/share`, cookie);
+      expect(await res.json()).toEqual({ url: null, legacy: true });
+      expect(warn).toHaveBeenCalledTimes(1);
+      const logged = JSON.stringify(warn.mock.calls);
+      expect(logged).toContain(list.id);
+      expect(logged).not.toContain(token);
+      expect(logged).not.toContain("garbage");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("GET share answers 404 for another account's list and 401 without a session", async () => {
     const { cookie } = await t.signIn();
     const list = await createList(cookie);

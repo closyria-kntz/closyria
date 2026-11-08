@@ -14,7 +14,8 @@ import {
   MAX_TAG_NAME,
   MAX_WHY,
   MAX_WISHLIST_NAME,
-  OPINION_NAME_MAX,
+  OPINION_NAME_MAX_CODE_POINTS,
+  OPINION_NOTE_MAX_CODE_POINTS,
   photoImportErrorSchema,
   photoImportStatusSchema,
   profileColorSchema,
@@ -324,10 +325,11 @@ export const wishlistOpinions = pgTable(
     uniqueIndex("wishlist_opinions_author_idx").on(t.wishlistId, t.itemId, t.authorNameKey),
     index("wishlist_opinions_wishlist_id_updated_at_idx").on(t.wishlistId, t.updatedAt),
     index("wishlist_opinions_item_id_idx").on(t.itemId),
-    check("wishlist_opinions_author_name_check", lengthBetween(t.authorName, OPINION_NAME_MAX)),
+    // Code points (what char_length counts), the same caps as the shared schemas: the user-facing limits are in
+    // graphemes (40 and 200), enforced by the API; a grapheme can be several code points.
+    check("wishlist_opinions_author_name_check", lengthBetween(t.authorName, OPINION_NAME_MAX_CODE_POINTS)),
     check("wishlist_opinions_level_check", sql`${t.level} BETWEEN 1 AND 4`),
-    // Loose guard: the real limit (200 graphemes) is enforced by the API; a grapheme can be several characters.
-    check("wishlist_opinions_note_check", atMost(t.note, 400)),
+    check("wishlist_opinions_note_check", atMost(t.note, OPINION_NOTE_MAX_CODE_POINTS)),
   ],
 );
 

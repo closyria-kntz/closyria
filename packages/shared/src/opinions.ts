@@ -3,6 +3,13 @@ import { loveLevelSchema } from "./love-level";
 
 export const OPINION_NAME_MAX = 40;
 export const OPINION_NOTE_MAX = 200;
+/**
+ * Code-point caps, on top of the grapheme limits above (which are the rule the user sees). PostgreSQL's
+ * `char_length` counts code points, so the database checks use these: a flag (2 code points) or a toned emoji
+ * (2) passes everywhere, and one grapheme built of hundreds of combining marks cannot slip through.
+ */
+export const OPINION_NAME_MAX_CODE_POINTS = OPINION_NAME_MAX * 8;
+export const OPINION_NOTE_MAX_CODE_POINTS = OPINION_NOTE_MAX * 8;
 
 const dateTimeSchema = z.iso.datetime({ offset: true });
 const segmenter = new Intl.Segmenter("fr", { granularity: "grapheme" });
@@ -19,9 +26,14 @@ export function opinionNameKey(name: string): string {
   return name.trim().replace(/\s+/g, " ").toLocaleLowerCase("fr");
 }
 
-const WEB_ADDRESS = /(https?:\/\/|www\.)|\b[a-z0-9-]+\.(com|fr|net|org|io|shop|store|co|eu|be|ch|ca|uk|de|it|es)\b/i;
+/** Number of code points (what PostgreSQL's `char_length` counts). */
+const codePoints = (value: string) => [...value].length;
+
+const SCHEME_OR_WWW = /https?:\/\/|www\./i;
+// Endings in lower case only: « zara.com » and « Shop.fr » are links, « Trop belle.Ca te va » is a sentence.
+const BARE_DOMAIN = /\b[A-Za-z0-9-]+\.(com|fr|net|org|io|shop|store|co|eu|be|ch|ca|uk|de|it|es)\b/;
 export function containsWebAddress(text: string): boolean {
-  return WEB_ADDRESS.test(text);
+  return SCHEME_OR_WWW.test(text) || BARE_DOMAIN.test(text);
 }
 
 export const deviceKeySchema = z
@@ -33,15 +45,25 @@ export const deviceKeySchema = z
 const opinionNameSchema = z
   .string()
   .trim()
-  .refine((value) => textLength(value) >= 1 && textLength(value) <= OPINION_NAME_MAX, "name length");
+  .refine(
+    (value) =>
+      textLength(value) >= 1 &&
+      textLength(value) <= OPINION_NAME_MAX &&
+      codePoints(value) <= OPINION_NAME_MAX_CODE_POINTS,
+    "name length",
+  );
+
+const opinionNoteSchema = z
+  .string()
+  .refine(
+    (value) => textLength(value) <= OPINION_NOTE_MAX && codePoints(value) <= OPINION_NOTE_MAX_CODE_POINTS,
+    "note length",
+  );
 
 export const opinionInputSchema = z.object({
   name: opinionNameSchema,
   level: loveLevelSchema,
-  note: z
-    .string()
-    .refine((value) => textLength(value) <= OPINION_NOTE_MAX, "note length")
-    .nullable(),
+  note: opinionNoteSchema.nullable(),
   deviceKey: deviceKeySchema,
   claim: z.boolean().optional(),
 });
@@ -66,10 +88,7 @@ export type OpinionView = z.infer<typeof opinionViewSchema>;
 export const erasedOpinionSchema = opinionViewSchema.extend({
   itemId: z.uuid(),
   name: opinionNameSchema,
-  note: z
-    .string()
-    .refine((value) => textLength(value) <= OPINION_NOTE_MAX, "note length")
-    .nullable(),
+  note: opinionNoteSchema.nullable(),
 });
 export type ErasedOpinion = z.infer<typeof erasedOpinionSchema>;
 

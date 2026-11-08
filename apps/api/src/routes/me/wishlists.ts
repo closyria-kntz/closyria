@@ -1,5 +1,6 @@
 import { and, asc, eq, isNotNull, isNull, schema, sql } from "@closyria/db";
 import {
+  containsWebAddress,
   erasedOpinionSchema,
   itemOpinionsSchema,
   type OpinionView,
@@ -173,7 +174,7 @@ const shareRoute = defineAccess(
     path: "/me/wishlists/{id}/share",
     summary: "Share a list by a link",
     description:
-      "Returns `/l/<token>`, the only time the token is shown. Each call makes a new token; the previous link stops working.",
+      "Returns `/l/<token>`; she can read it again with `GET`. Each call makes a new token; the previous link stops working (the friends' opinions stay).",
     request: { params: idParams },
     responses: {
       200: json("The link", shareResultSchema),
@@ -255,13 +256,14 @@ const opinionRestoreRoute = defineAccess(
     method: "post",
     path: "/me/wishlists/{id}/opinions/restore",
     summary: "Put back an opinion she erased",
-    description: "Body: the erased opinion as `DELETE` returned it. Same id and dates.",
+    description: "Body: the erased opinion as `DELETE` returned it. Same id and dates. Only while the list is shared.",
     request: { params: idParams, ...body(z.object({ opinion: erasedOpinionSchema }).or(erasedOpinionSchema)) },
     responses: {
       201: json("Restored", z.object({ opinion: erasedOpinionSchema })),
       400: errorContent("Invalid body (invalid_request)"),
-      404: errorContent("Unknown list, or the item is no longer in it (not_found)"),
+      404: errorContent("Unknown or no longer shared list, or the item is no longer in it (not_found)"),
       409: errorContent("Another opinion has the same name on that item meanwhile (opinion_exists)"),
+      422: errorContent("Web address in the name or the note (web_address)"),
     },
   }),
   "user",
@@ -395,6 +397,8 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
       const { id } = c.req.valid("param");
       const sent = c.req.valid("json");
       const opinion = "opinion" in sent ? sent.opinion : sent;
+      if (containsWebAddress(opinion.name) || (opinion.note !== null && containsWebAddress(opinion.note)))
+        return c.json({ error: "web_address" } as const, 422);
       const [list] = await db
         .select({ id: schema.wishlists.id })
         .from(schema.wishlists)
@@ -545,6 +549,8 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
       if (!row) return c.json(notFound, 404);
       const token = row.encrypted ? decryptShareToken(row.encrypted, shareLinkKey) : null;
       if (token) return c.json({ url: `/l/${token}`, legacy: false }, 200);
+      // Kept but unreadable: altered, or SHARE_LINK_KEY changed. Never log the value or the key.
+      if (row.encrypted) console.warn(`share link of list ${c.req.valid("param").id} cannot be decrypted`);
       return c.json({ url: null, legacy: row.hash !== null }, 200);
     })
     .openapi(unshareRoute, async (c) => {

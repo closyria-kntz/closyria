@@ -164,6 +164,24 @@ describe("owner side of the opinions", () => {
     ).toBe(400);
   });
 
+  it("restores only on a list still shared, and never a note with a web address", async () => {
+    const { cookie, list, item } = await setup();
+    const row = await addOpinion(list.id, item.id, "Léa", 4);
+    const del = await call("DELETE", `/me/wishlists/${list.id}/opinions/${row.id}`, cookie);
+    const { opinion } = (await del.json()) as { opinion: Record<string, unknown> };
+    const restore = (body: unknown) => call("POST", `/me/wishlists/${list.id}/opinions/restore`, cookie, body);
+    const linked = await restore({ ...opinion, note: "regarde zara.com" });
+    expect(linked.status).toBe(422);
+    expect(await linked.json()).toEqual({ error: "web_address" });
+    expect((await restore({ ...opinion, name: "www.lea.fr" })).status).toBe(422);
+
+    expect((await call("DELETE", `/me/wishlists/${list.id}/share`, cookie)).status).toBe(204);
+    const stopped = await restore(opinion);
+    expect(stopped.status).toBe(404);
+    expect(await stopped.json()).toEqual({ error: "not_found" });
+    expect(await t.db.select().from(schema.wishlistOpinions).where(eq(schema.wishlistOpinions.id, row.id))).toEqual([]);
+  });
+
   it("lists the opinions of an item across her shared lists only, by list name", async () => {
     const { cookie, userId, list, item } = await setup();
     const zeta = await createList(cookie, "Zèbre");

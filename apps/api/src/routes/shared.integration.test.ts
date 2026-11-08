@@ -85,6 +85,8 @@ const opinion = (over: Record<string, unknown> = {}) => ({
   deviceKey: keyA,
   ...over,
 });
+const opinionRowsOf = (listId: string) =>
+  t.db.select().from(schema.wishlistOpinions).where(eq(schema.wishlistOpinions.wishlistId, listId));
 const view = async (token: string) => (await (await getShared(token)).json()) as SharedWishlistView;
 
 describe("public opinions", () => {
@@ -131,6 +133,21 @@ describe("public opinions", () => {
     const v = await view(s.token);
     expect(v.allowOpinions).toBe(false);
     expect(v.items[0]?.opinions).toHaveLength(1);
+  });
+
+  it("takes 40 flags as a name and 200 toned emojis as a note (graphemes, not code points)", async () => {
+    const s = await setup();
+    const res = await putOpinion(s.token, s.item.id, opinion({ name: "🇫🇷".repeat(40), note: "👍🏽".repeat(200) }));
+    expect(res.status).toBe(200);
+    expect(await opinionRowsOf(s.list.id)).toHaveLength(1);
+  });
+
+  it("refuses a web address in the name", async () => {
+    const s = await setup();
+    const res = await putOpinion(s.token, s.item.id, opinion({ name: "zara.com" }));
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: "web_address" });
+    expect(await opinionRowsOf(s.list.id)).toHaveLength(0);
   });
 
   it("refuses a web address in the note", async () => {
@@ -216,9 +233,19 @@ describe("races and hidden items", () => {
 });
 
 describe("public view", () => {
+  it("never shows a guest's placeholder name (« Anonymous »)", async () => {
+    const s = await setup({ showOwnerName: true });
+    const [owner] = await t.db.select().from(schema.user).where(eq(schema.user.id, s.userId));
+    expect(owner).toMatchObject({ name: "Anonymous", isAnonymous: true });
+    expect((await view(s.token)).ownerName).toBeNull();
+  });
+
   it("shows the first name, owner opinion and budget amount only when allowed", async () => {
     const s = await setup({ showOwnerName: false, showOwnerOpinions: false, showBudget: false });
-    await t.db.update(schema.user).set({ name: "Amina Benali" }).where(eq(schema.user.id, s.userId));
+    await t.db
+      .update(schema.user)
+      .set({ name: "Amina Benali", isAnonymous: false })
+      .where(eq(schema.user.id, s.userId));
     await t.db
       .update(schema.items)
       .set({ loveLevel: 4, priority: true, why: "Pour l'été", notes: "secret", sizeLabel: "M" })

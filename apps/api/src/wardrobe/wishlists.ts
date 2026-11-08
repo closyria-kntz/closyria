@@ -134,10 +134,11 @@ export async function loadSharedView(db: Database, list: SharedList): Promise<Sh
   let ownerName: string | null = null;
   if (list.showOwnerName) {
     const [owner] = await db
-      .select({ name: schema.user.name })
+      .select({ name: schema.user.name, isAnonymous: schema.user.isAnonymous })
       .from(schema.user)
       .where(eq(schema.user.id, list.userId));
-    ownerName = owner?.name.trim().split(/\s+/)[0] || null;
+    // A guest has no name of her own: Better Auth names her « Anonymous », which must never reach her friends.
+    ownerName = owner && !owner.isAnonymous ? owner.name.trim().split(/\s+/)[0] || null : null;
   }
   let budget: SharedWishlistView["budget"] = null;
   if (list.showBudget) {
