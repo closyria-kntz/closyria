@@ -61,17 +61,21 @@ async function keepWithPhotos(page: Page, count: number): Promise<void> {
 }
 
 const mine = (page: Page) => page.getByRole("list", { name: "Mes photos" });
+/** The big photo of the gallery: a click opens the viewer on it (her photos, or the shop's). */
+const bigPhoto = (page: Page) => page.getByTestId("product-gallery").getByTestId("gallery-photo");
 
 test("la visionneuse s'ouvre sur la photo cliquée, navigue, zoome et rend le focus", async ({ page }, testInfo) => {
   await keepWithPhotos(page, 3);
-  // Her photos and the shop's are told apart by name.
+  // Her photos and the shop's are told apart by name; a thumbnail shows its photo in the big arch, which opens it.
   await expect(page.getByRole("button", { name: "Agrandir ta photo 1", exact: true })).toHaveCount(1);
   await expect(
     page
       .getByRole("list", { name: "Photos de la boutique" })
-      .getByRole("button", { name: "Agrandir la photo 1 de la boutique" }),
+      .getByRole("button", { name: "Voir la photo 1 de la boutique" }),
   ).toBeVisible();
-  const opener = mine(page).getByRole("button", { name: "Agrandir ta photo 2" });
+  await mine(page).getByRole("button", { name: "Voir ta photo 2" }).click();
+  const opener = bigPhoto(page);
+  await expect(opener).toHaveAccessibleName("Agrandir ta photo 2");
   await opener.click();
 
   const viewer = page.getByRole("dialog");
@@ -136,7 +140,8 @@ test("la visionneuse s'ouvre sur la photo cliquée, navigue, zoome et rend le fo
 
 test("avec une seule photo, ni flèches ni compteur", async ({ page }) => {
   await keepWithPhotos(page, 1);
-  await mine(page).getByRole("button", { name: "Agrandir ta photo 1" }).click();
+  await expect(bigPhoto(page)).toHaveAccessibleName("Agrandir ta photo 1");
+  await bigPhoto(page).click();
   const viewer = page.getByRole("dialog");
   await expect(viewer).toBeVisible();
   await expect(viewer.getByRole("button", { name: "Photo suivante" })).toHaveCount(0);
@@ -149,7 +154,8 @@ test("avec une seule photo, ni flèches ni compteur", async ({ page }) => {
 
 test("la page derrière ne défile plus, un clic à côté de la photo ferme, un clic dessus zoome", async ({ page }) => {
   await keepWithPhotos(page, 1);
-  const opener = mine(page).getByRole("button", { name: "Agrandir ta photo 1" });
+  const opener = bigPhoto(page);
+  await expect(opener).toHaveAccessibleName("Agrandir ta photo 1");
   const overflow = () => page.evaluate(() => getComputedStyle(document.documentElement).overflow);
   expect(await overflow()).not.toBe("hidden");
   await opener.click();

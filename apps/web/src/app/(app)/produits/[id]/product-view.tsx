@@ -1,21 +1,25 @@
 "use client";
 
-import type { CaptureView, ItemView, ProductView as Product } from "@closyria/shared";
+import type { CaptureView, ItemView, PriceHistory, ProductView as Product } from "@closyria/shared";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PhotoViewer } from "@/components/photo-viewer";
-import { buttonClass, primaryButtonClass } from "@/components/ui";
+import { PriceCurve } from "@/components/price-curve";
+import { blockClass, buttonClass } from "@/components/ui";
+import { formatAmount } from "@/lib/budget";
 import { pollCapture, pollUntil } from "@/lib/capture-poll";
 import { fetchCaptureView, fetchProduct } from "@/lib/catalog-client";
 import { formatOptionalPrice, formatPrice } from "@/lib/price";
+import { dropMention } from "@/lib/price-history";
 import { useCurrentProfile, useProfiles } from "@/lib/profile-context";
-import { fetchItemForProduct } from "@/lib/wardrobe-client";
+import { fetchItemForProduct, fetchPriceHistory } from "@/lib/wardrobe-client";
 import { ItemPanel } from "./item-panel";
 import { KeepActions } from "./keep-actions";
 import { ManualForm } from "./manual-form";
 import { PhotoManager, PhotoPlaceholder } from "./photo-manager";
+import { ProductActions } from "./product-actions";
 import { ProductDescription } from "./product-description";
 import { ProductDetails } from "./product-details";
+import { ProductGallery } from "./product-gallery";
 import { ProductTraits } from "./product-traits";
 
 type Load = "loading" | "ready" | "not_found" | "error";
@@ -28,12 +32,8 @@ const FAILURE_KEYS = {
   robots_disallowed: "robots_disallowed",
 } as const;
 
-/** One column on a phone and in portrait; photos left, details right from 48rem in landscape and on desktop. */
-const TWO_COLUMNS = "grid grid-cols-1 md:landscape:grid-cols-2 md:landscape:gap-space-6 lg:grid-cols-2 lg:gap-space-6";
-
-const touch = "min-h-touch-target";
-
-const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
+/** One column on a phone and in portrait (the gallery, then the blocks); side by side from 48rem in landscape and on desktop. */
+const TWO_COLUMNS = "grid grid-cols-1 md:landscape:grid-cols-2 md:landscape:gap-space-6 lg:grid-cols-2 lg:gap-space-7";
 
 function Skeleton({ className }: { className: string }) {
   return <div aria-hidden="true" className={`skeleton rounded-card ${className}`} />;
@@ -47,8 +47,6 @@ function Skeleton({ className }: { className: string }) {
 export function ProductView({ productId, captureId }: { productId: string; captureId: string | null }) {
   const t = useTranslations("Capture");
   const tItem = useTranslations("Item");
-  const tMedia = useTranslations("Media");
-  const [viewing, setViewing] = useState<number | null>(null);
   const locale = useLocale();
   const format = useFormatter();
   const [product, setProduct] = useState<Product | null>(null);
@@ -63,6 +61,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   const profiles = useProfiles();
   const [item, setItem] = useState<ItemView | null>(null);
   const [itemLoad, setItemLoad] = useState<"loading" | "error" | "ready">("loading");
+  const [history, setHistory] = useState<PriceHistory | null>(null);
 
   /** Reads her item for this sheet. The keep actions only show once this succeeded (never on a failed read). */
   const reloadItem = useCallback(async () => {
@@ -131,6 +130,21 @@ export function ProductView({ productId, captureId }: { productId: string; captu
     );
   }, [rereadPending, productId]);
 
+  // The price over 3 months, once the sheet is read and again after each capture; none for a hand-captured shop.
+  const historyKey =
+    product && product.name !== null && product.captureStatus !== "manual" ? (product.lastCapturedAt ?? "") : null;
+  useEffect(() => {
+    if (historyKey === null) return setHistory(null);
+    let alive = true;
+    fetchPriceHistory(productId).then(
+      (found) => alive && setHistory(found),
+      () => alive && setHistory(null),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [productId, historyKey]);
+
   // After a manual save the form disappears: the focus goes to the sheet's heading.
   useEffect(() => {
     if (focusHeading && product?.name) {
@@ -178,96 +192,102 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   const currency = product.currency ?? "EUR";
   const noPhotoYet = product.images.length === 0 && (capturing || reloadedPending);
 
-  const shopSheet =
-    hasName || product.sizes.length > 0 ? (
-      <section aria-labelledby="shop-title" className="flex flex-col gap-space-4">
-        <h2 id="shop-title" className="font-display text-lead font-strong">
-          {tItem("sections.shop")}
+  const mention = history && hasName ? dropMention(history, new Date()) : null;
+  const sinceText = (since: NonNullable<typeof mention>["since"]) =>
+    since.kind === "today"
+      ? t("product.sinceToday")
+      : since.kind === "yesterday"
+        ? t("product.sinceYesterday")
+        : since.kind === "weekday"
+          ? format.dateTime(since.date, { weekday: "long", timeZone: "UTC" })
+          : t("product.sinceDate", {
+              date: format.dateTime(since.date, { day: "numeric", month: "long", timeZone: "UTC" }),
+            });
+  const kept = hasName && itemLoad !== "error" && item !== null;
+
+  const sizesBlock =
+    product.sizes.length > 0 ? (
+      <section aria-labelledby="sizes-title" data-block className={blockClass}>
+        <h2 id="sizes-title" className="font-display text-lead">
+          {t("product.sizes")}
         </h2>
-        {product.sizes.length > 0 && (
-          <section aria-labelledby="sizes-title" className="flex flex-col gap-space-2">
-            <h3 id="sizes-title" className="text-sm font-strong">
-              {t("product.sizes")}
-            </h3>
-            <ul className="flex flex-wrap gap-space-2">
-              {product.sizes.map((size) => (
-                <li
-                  key={size.label}
-                  className={`rounded-button border border-line px-space-3 py-space-1 text-sm ${size.available ? "bg-surface-raised" : "text-ink-muted line-through"}`}
-                >
-                  {size.label}
-                  {!size.available && <span className="sr-only"> ({t("product.unavailable")})</span>}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-        {hasName && <ProductTraits traits={product.traits} />}
-        {hasName && product.description && <ProductDescription text={product.description} />}
-        {hasName && <ProductDetails details={product.details} />}
-        {product.lastCapturedAt && (
-          <p className="text-sm text-ink-muted">
-            <time dateTime={product.lastCapturedAt}>
-              {t("product.updatedAt", {
-                date: format.dateTime(new Date(product.lastCapturedAt), { dateStyle: "long" }),
-              })}
-            </time>
-          </p>
-        )}
+        <ul className="flex flex-wrap gap-space-2">
+          {product.sizes.map((size) => (
+            <li
+              key={size.label}
+              className={`flex min-h-touch-target min-w-touch-target items-center justify-center rounded-button border border-line px-space-3 text-sm font-strong ${size.available ? "bg-surface-raised" : "text-ink-muted line-through"}`}
+            >
+              {size.label}
+              {!size.available && <span className="sr-only"> ({t("product.unavailable")})</span>}
+            </li>
+          ))}
+        </ul>
       </section>
     ) : null;
 
+  const actions = hasName ? (
+    <ProductActions
+      shop={shop}
+      url={product.canonicalUrl}
+      item={kept ? item : null}
+      onChange={setItem}
+      reload={reloadItem}
+    />
+  ) : null;
+
+  const shopSheet = hasName ? (
+    <section aria-labelledby="shop-title" data-block className={blockClass}>
+      <h2 id="shop-title" className="font-display text-lead">
+        {tItem("sections.shop")}
+      </h2>
+      <ProductTraits traits={product.traits} />
+      {product.description && <ProductDescription text={product.description} />}
+      <ProductDetails details={product.details} />
+      {product.lastCapturedAt && (
+        <p className="text-sm text-ink-muted">
+          <time dateTime={product.lastCapturedAt}>
+            {t("product.updatedAt", {
+              date: format.dateTime(new Date(product.lastCapturedAt), { dateStyle: "long" }),
+            })}
+          </time>
+        </p>
+      )}
+    </section>
+  ) : null;
+
   return (
     <article className={`${TWO_COLUMNS} gap-space-5`} aria-busy={capturing || reloadedPending || undefined}>
-      <div data-testid="product-gallery" className={item ? "lg:self-start" : "lg:sticky lg:top-space-8 lg:self-start"}>
+      <div data-testid="product-gallery" className="lg:sticky lg:top-space-0 lg:self-start">
         {item && itemLoad !== "error" ? (
           <PhotoManager item={item} onChange={setItem} reload={reloadItem} />
         ) : product.images.length > 0 ? (
-          <div className="grid grid-cols-2 gap-space-2">
-            {product.images.map((image, index) => (
-              // The whole photo in a 3:4 frame on the media backdrop, never cropped (visual direction §6).
-              <button
-                type="button"
-                key={image.id}
-                aria-label={tMedia("viewer.open", { n: index + 1 })}
-                onClick={() => setViewing(index)}
-                className={`aspect-3/4 overflow-hidden rounded-card bg-media-backdrop focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring focus-visible:outline-solid ${index === 0 && product.images.length === 1 ? "col-span-2" : index === 0 ? "col-span-2 md:landscape:col-span-1 lg:col-span-1" : ""}`}
-              >
-                {/* biome-ignore lint/performance/noImgElement: photos come from our own /api/catalog-images, sized by the API. */}
-                <img
-                  src={image.url}
-                  width={image.width}
-                  height={image.height}
-                  alt={product.name ?? ""}
-                  loading={index === 0 ? "eager" : "lazy"}
-                  className="size-full object-contain"
-                />
-              </button>
-            ))}
-            <PhotoViewer
-              photos={product.images}
-              index={viewing}
-              alt={product.name ?? ""}
-              onClose={() => setViewing(null)}
-            />
-          </div>
+          <ProductGallery
+            photos={product.images.map((image) => ({ ...image, group: "product" as const }))}
+            alt={product.name ?? ""}
+            thumbAlt={(n) => tItem("photos.alt", { n, name: product.name ?? shop })}
+            groupLabels={{ product: tItem("photos.title") }}
+          />
         ) : noPhotoYet ? (
-          <Skeleton className="aspect-3/4 w-full" />
+          <Skeleton className="arch aspect-3/4 w-full" />
         ) : !waiting ? (
           <PhotoPlaceholder label={t("product.noPhoto")} />
         ) : null}
       </div>
 
-      <div data-testid="product-info" className="flex flex-col gap-space-5">
-        <header data-testid="product-header" className="flex flex-col gap-space-2">
-          <p className="text-sm text-ink-muted">
-            {waiting ? <span role="status">{t("product.loading", { shop })}</span> : shop}
-          </p>
-          {hasName && product.brand && <p className="text-sm font-strong uppercase text-ink-muted">{product.brand}</p>}
+      <div data-testid="product-info" className="flex min-w-space-0 flex-col gap-space-4">
+        <header data-testid="product-header" data-block className={blockClass}>
+          <div className="flex flex-col gap-space-1">
+            <p className="text-sm text-ink-muted">
+              {waiting ? <span role="status">{t("product.loading", { shop })}</span> : shop}
+            </p>
+            {hasName && product.brand && (
+              <p className="text-sm font-strong uppercase text-ink-muted">{product.brand}</p>
+            )}
+          </div>
           <h1
             ref={heading}
             tabIndex={-1}
-            className={waiting ? "sr-only" : "font-display text-title font-strong focus:outline-none"}
+            className={waiting ? "sr-only" : "font-display text-title text-balance focus:outline-none"}
           >
             {product.name ?? shop}
           </h1>
@@ -276,27 +296,38 @@ export function ProductView({ productId, captureId }: { productId: string; captu
             <p className="text-ink-muted">{formatOptionalPrice(locale, null, currency, t("product.priceMissing"))}</p>
           )}
           {hasName && product.priceCents !== null && (
-            <p className="flex items-baseline gap-space-3 tabular-nums">
-              <span className="text-lead font-strong">{formatPrice(locale, product.priceCents, currency)}</span>
-              {product.compareAtCents !== null && product.compareAtCents > product.priceCents && (
-                <s className="text-ink-muted">
-                  <span className="sr-only">{t("product.comparePrice")} </span>
-                  {formatPrice(locale, product.compareAtCents, currency)}
-                </s>
+            <div className="flex flex-wrap items-center gap-x-space-4 gap-y-space-2">
+              <p className="flex items-baseline gap-space-3 tabular-nums">
+                <span className="font-display text-title">{formatPrice(locale, product.priceCents, currency)}</span>
+                {product.compareAtCents !== null && product.compareAtCents > product.priceCents && (
+                  <s className="text-lead text-ink-muted decoration-accent">
+                    <span className="sr-only">{t("product.comparePrice")} </span>
+                    {formatPrice(locale, product.compareAtCents, currency)}
+                  </s>
+                )}
+              </p>
+              {history && (
+                <div className="ml-auto">
+                  <PriceCurve points={history.points} currency={currency} />
+                </div>
               )}
+            </div>
+          )}
+          {mention && (
+            <p className="self-start rounded-full bg-success-soft px-space-3 py-space-1 text-sm font-strong text-success tabular-nums">
+              {mention.months === null
+                ? t("product.drop", {
+                    amount: formatAmount(locale, mention.cents, currency),
+                    since: sinceText(mention.since),
+                  })
+                : t("product.dropLowest", {
+                    amount: formatAmount(locale, mention.cents, currency),
+                    since: sinceText(mention.since),
+                    months: mention.months,
+                  })}
             </p>
           )}
           {waiting && <Skeleton className="h-space-5 w-1/3" />}
-          {isHttpUrl(product.canonicalUrl) && (
-            <a
-              href={product.canonicalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`${primaryButtonClass} ${touch} mt-space-2 self-start`}
-            >
-              {t("product.viewAt", { shop })}
-            </a>
-          )}
         </header>
         {waiting && <Skeleton className="h-space-6 w-1/2" />}
 
@@ -315,18 +346,37 @@ export function ProductView({ productId, captureId }: { productId: string; captu
             </button>
           </div>
         )}
-        {hasName && itemLoad !== "error" && item && (
-          <ItemPanel item={item} onChange={setItem} onGone={() => setItem(null)} reload={reloadItem} shop={shopSheet} />
+        {kept && item ? (
+          <ItemPanel
+            item={item}
+            onChange={setItem}
+            onGone={() => setItem(null)}
+            reload={reloadItem}
+            middle={
+              <>
+                {sizesBlock}
+                {actions}
+              </>
+            }
+            shop={shopSheet}
+          />
+        ) : (
+          <>
+            {hasName && itemLoad === "loading" && !item && (
+              <p role="status" className="text-sm text-ink-muted">
+                {tItem("keep.working")}
+              </p>
+            )}
+            {hasName && itemLoad === "ready" && !item && (
+              <div data-block className={blockClass}>
+                <KeepActions product={product} profileId={current.id} onKept={setItem} reload={reloadItem} />
+              </div>
+            )}
+            {sizesBlock}
+            {actions}
+            {shopSheet}
+          </>
         )}
-        {hasName && itemLoad === "loading" && !item && (
-          <p role="status" className="text-sm text-ink-muted">
-            {tItem("keep.working")}
-          </p>
-        )}
-        {hasName && itemLoad === "ready" && !item && (
-          <KeepActions product={product} profileId={current.id} onKept={setItem} reload={reloadItem} />
-        )}
-        {!(hasName && itemLoad !== "error" && item) && shopSheet}
 
         {!hasName && (failed || manualShop) && (
           <p role="status" className="text-ink-muted">

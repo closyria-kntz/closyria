@@ -203,7 +203,7 @@ test.describe("820 px", () => {
   });
 });
 
-// Chantier 2a, task 8: the sheet has three parts, in this order.
+// Chantier 2a, task 8, then the redesign (task 13): the sheet's blocks, in this order.
 test.describe("structure de la fiche", () => {
   const verticalOrder = async (page: Page, selectors: string[]) => {
     const ys: number[] = [];
@@ -211,7 +211,9 @@ test.describe("structure de la fiche", () => {
     expect(ys).toEqual([...ys].sort((a, b) => a - b));
   };
 
-  test("fiche gardée : en-tête, Mon article, La fiche de la boutique, Autres actions", async ({ page }) => {
+  test("fiche gardée : l'article, Ton envie, Tailles, boutons, Mon article, La fiche de la boutique, Autres actions", async ({
+    page,
+  }) => {
     await openSheet(page);
     const created = await page.request.post("/api/me/profiles", {
       data: { name: "Léa", audience: "women", color: "rose" },
@@ -223,25 +225,28 @@ test.describe("structure de la fiche", () => {
     await expect(mine).toBeVisible();
 
     const header = page.getByTestId("product-header");
-    await expect(header.getByRole("link", { name: /Voir chez/ })).toBeVisible();
     await expect(header.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible();
+    await expect(page.getByTestId("product-actions").getByRole("link", { name: /Voir chez/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Voir chez/ })).toHaveCount(1);
+    await expect(page.getByRole("region", { name: "Tailles" }).getByRole("heading", { level: 2 })).toHaveText([
+      "Tailles",
+    ]);
     const shop = page.getByRole("region", { name: "La fiche de la boutique" });
-    await expect(shop.getByRole("region", { name: "Tailles" })).toBeVisible();
-    // Its parts (sizes, traits, description) are h3 under the part's own h2.
-    await expect(shop.getByRole("heading", { level: 3, name: "Tailles" })).toBeVisible();
     await expect(shop.getByRole("heading", { level: 2 })).toHaveText(["La fiche de la boutique"]);
     await expect(shop.getByText(/Mis à jour le/)).toBeVisible();
-    await expect(page.getByRole("link", { name: /Voir chez/ })).toHaveCount(1);
     const more = page.getByRole("region", { name: "Autres actions" });
     await expect(more.getByRole("button", { name: "Déplacer" })).toBeVisible();
     await expect(more.getByRole("button", { name: "Supprimer" })).toBeVisible();
-    // Her item keeps its own controls inside the first box, not in the shop's part.
+    // Her item keeps its own controls in its own block, not in the shop's part.
     await expect(mine.getByRole("button", { name: /Passer à/ }).first()).toBeVisible();
     await expect(mine.getByLabel("Taille", { exact: true })).toBeVisible();
     await expect(shop.getByLabel("Taille", { exact: true })).toHaveCount(0);
 
     await verticalOrder(page, [
       "[data-testid=product-header]",
+      "section[aria-labelledby=wish-title]",
+      "section[aria-labelledby=sizes-title]",
+      "[data-testid=product-actions]",
       "section[aria-labelledby=mine-title]",
       "section[aria-labelledby=shop-title]",
       "section[aria-labelledby=more-title]",
@@ -249,18 +254,20 @@ test.describe("structure de la fiche", () => {
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   });
 
-  test("fiche non gardée : en-tête, Garder cet article, La fiche de la boutique", async ({ page }) => {
+  test("fiche non gardée : l'article, Garder cet article, Tailles, boutons, La fiche de la boutique", async ({
+    page,
+  }) => {
     await openSheet(page);
     await expect(page.getByRole("heading", { name: "Garder cet article" })).toBeAttached();
     await expect(page.getByRole("button", { name: "Ajouter à mes envies" })).toBeVisible();
     await expect(page.getByRole("region", { name: "Mon article" })).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Autres actions" })).toHaveCount(0);
-    await expect(
-      page.getByRole("region", { name: "La fiche de la boutique" }).getByRole("region", { name: "Tailles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("region", { name: "Tailles" })).toBeVisible();
     await verticalOrder(page, [
       "[data-testid=product-header]",
       "section[aria-labelledby=keep-title]",
+      "section[aria-labelledby=sizes-title]",
+      "[data-testid=product-actions]",
       "section[aria-labelledby=shop-title]",
     ]);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);

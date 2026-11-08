@@ -64,19 +64,20 @@ test("Mims, Prioritaire et « Trop mims » avant d'ajouter ; sur la fiche gardé
   await expect(mine).toBeVisible();
   const toast = page.getByRole("status", { name: "Notifications" });
   await expect(toast).toContainText("Ajouté à tes envies");
-  // Her item shows what she chose, and changes it in place.
-  const kept = mine.getByRole("group", { name: "Tu l’aimes comment ?" });
+  // Her item shows what she chose, and changes it in place (the « Ton envie » block of the sheet).
+  const wish = page.getByRole("region", { name: "Ton envie" });
+  const kept = wish.getByRole("group", { name: "Tu l’aimes comment ?" });
   await expect(kept.getByRole("button", { name: "Mims" })).toHaveAttribute("aria-pressed", "true");
-  await expect(mine.getByRole("button", { name: "Prioritaire" })).toHaveAttribute("aria-pressed", "true");
-  await expect(mine.getByLabel("Pourquoi ? (facultatif)")).toHaveValue("Trop mims");
+  await expect(wish.getByRole("button", { name: "Prioritaire" })).toHaveAttribute("aria-pressed", "true");
+  await expect(wish.getByLabel("Pourquoi ? (facultatif)")).toHaveValue("Trop mims");
   await kept.getByRole("button", { name: "En feu" }).click();
   await expect(toast).toContainText("Niveau : En feu");
   await expect(kept.getByRole("button", { name: "En feu" })).toHaveAttribute("aria-pressed", "true");
   await toast.getByRole("button", { name: "Annuler" }).last().click();
   await expect(kept.getByRole("button", { name: "Mims" })).toHaveAttribute("aria-pressed", "true");
 
-  await mine.getByLabel("Pourquoi ? (facultatif)").fill("Trop trop mims");
-  await mine.getByRole("button", { name: "Enregistrer l’avis" }).click();
+  await wish.getByLabel("Pourquoi ? (facultatif)").fill("Trop trop mims");
+  await wish.getByRole("button", { name: "Enregistrer l’avis" }).click();
   await expect(toast).toContainText("Avis enregistré");
   await mine.screenshot({ path: testInfo.outputPath("kept-level.png") });
   expect((await new AxeBuilder({ page }).analyze()).violations.map((v) => v.id)).toEqual([]);
@@ -203,10 +204,10 @@ test("deux messages empilés : survoler la pile déploie les bulles, l'Annuler d
 }) => {
   await openSheet(page);
   await page.getByRole("button", { name: "Ajouter à mes envies" }).click();
-  const mine = page.getByRole("region", { name: "Mon article" });
+  const wish = page.getByRole("region", { name: "Ton envie" });
   const toast = page.getByRole("status", { name: "Notifications" });
   await expect(toast).toContainText("Ajouté à tes envies");
-  await mine.getByRole("group", { name: "Tu l’aimes comment ?" }).getByRole("button", { name: "En feu" }).click();
+  await wish.getByRole("group", { name: "Tu l’aimes comment ?" }).getByRole("button", { name: "En feu" }).click();
   await expect(toast).toContainText("Niveau : En feu");
   await expect(toast.getByRole("button", { name: "Annuler" })).toHaveCount(2);
   await toast.locator('[data-toast-rank="0"]').hover();

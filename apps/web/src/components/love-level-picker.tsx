@@ -11,15 +11,17 @@ type Props = {
   /** Called with the level she touched (the current one too: the caller decides whether that clears it). */
   onChange: (level: LoveLevel) => void;
   disabled?: boolean;
+  /** The question read aloud only, under a heading that already names the block (« Ton envie »). */
+  hideLegend?: boolean;
 };
 
 /** « Tu l’aimes comment ? »: her 4 levels (her own emoji and names) as big buttons, the chosen one pressed. */
-export function LoveLevelPicker({ value, onChange, disabled = false }: Props) {
+export function LoveLevelPicker({ value, onChange, disabled = false, hideLegend = false }: Props) {
   const t = useTranslations("Item.keep");
   const levels = useLoveLevels();
   return (
     <fieldset className="flex min-w-space-0 flex-col gap-space-2">
-      <legend className="pb-space-2 text-sm font-strong">{t("levels")}</legend>
+      <legend className={hideLegend ? "sr-only" : "pb-space-2 text-sm font-strong"}>{t("levels")}</legend>
       <div className="grid grid-cols-4 gap-space-2">
         {levels.map((level) => (
           <button

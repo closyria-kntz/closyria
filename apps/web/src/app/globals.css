@@ -371,3 +371,30 @@ body::before {
     animation: none;
   }
 }
+
+/* The price curve of the sheet draws itself once (pathLength 1), then its end dot shows; both stand still in reduced
+   motion (durations are tokens, zero there, and the animations are dropped). The end state is the element's own style. */
+.price-curve-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: curve-draw var(--motion-duration-fly) var(--ease-standard) both;
+}
+.price-curve-dot {
+  animation: curve-dot var(--motion-duration-base) var(--ease-standard) var(--motion-duration-fly) both;
+}
+@keyframes curve-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+@keyframes curve-dot {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .price-curve-line,
+  .price-curve-dot {
+    animation: none;
+  }
+}

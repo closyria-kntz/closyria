@@ -14,10 +14,11 @@ import {
   type WishlistView,
 } from "@closyria/shared";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ItemOpinionsSection } from "@/components/item-opinions-section";
 import { LoveLevelPicker } from "@/components/love-level-picker";
-import { buttonClass, inputClass, primaryButtonClass, toggleButtonClass } from "@/components/ui";
+import { Tick } from "@/components/tick";
+import { blockClass, buttonClass, inputClass, primaryButtonClass, toggleButtonClass } from "@/components/ui";
 import { levelOf } from "@/lib/love-levels";
 import { formatPrice } from "@/lib/price";
 import { useLoveLevels, useProfiles } from "@/lib/profile-context";
@@ -46,12 +47,18 @@ type Props = {
   onGone: () => void;
   /** Re-reads her item (after an undo). */
   reload: () => Promise<void>;
+  /** Between « Ton envie » and « Mon article »: the sizes and the sheet's buttons. */
+  middle: React.ReactNode;
   /** The shop's sheet, shown between « Mon article » and « Autres actions ». */
   shop: React.ReactNode;
 };
 
-/** HER item in three parts: « Mon article » (level, priority and opinion, stage, size and amounts, notes, lists, tags), the shop sheet, « Autres actions » (profile, delete). Photos live in the gallery column. */
-export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
+/**
+ * HER item as blocks of the sheet: « Ton envie » (level, priority, why), then `middle` (sizes, buttons), « Mon article »
+ * (stage, size and amounts, notes, opinions, lists, tags), the shop sheet, « Autres actions » (profile, delete).
+ * Photos live in the gallery column.
+ */
+export function ItemPanel({ item, onChange, onGone, reload, middle, shop }: Props) {
   const t = useTranslations("Item");
   const tMenu = useTranslations("Views.menu");
   const levels = useLoveLevels();
@@ -59,7 +66,7 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
   const profiles = useProfiles();
   const currency = item.product.currency ?? "EUR";
   const money = (cents: number) => formatPrice(locale, cents, currency);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ text: string; inWish: boolean } | null>(null);
   const [stage, setStage] = useState<ItemStage | null>(null);
   const [sizeLabel, setSizeLabel] = useState(item.sizeLabel ?? "");
   const [sizeNote, setSizeNote] = useState(item.sizeNote ?? "");
@@ -71,7 +78,10 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
   const [newTag, setNewTag] = useState("");
   const [target, setTarget] = useState(profiles.find((p) => p.id !== item.profileId)?.id ?? "");
   const [busy, setBusy] = useState(false);
-  const fail = (code: string) => setError(t(`errors.${code}` as "errors.failed"));
+  // The message shows in the block she acted in: « Ton envie » for the level, priority and why, else « Mon article ».
+  const acting = useRef<"wish" | "mine">("mine");
+  const fail = (code: string) =>
+    setError({ text: t(`errors.${code}` as "errors.failed"), inWish: acting.current === "wish" });
   const itemId = item.id;
 
   const [extrasFailed, setExtrasFailed] = useState(false);
@@ -102,7 +112,8 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
     setWhy(item.why ?? "");
   }, [item.sizeLabel, item.sizeNote, item.notes, item.why]);
 
-  async function run(action: () => Promise<void>) {
+  async function run(action: () => Promise<void>, where: "wish" | "mine" = "mine") {
+    acting.current = where;
     setBusy(true);
     setError(null);
     try {
@@ -123,7 +134,7 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
         cleared ? tMenu("toast.levelCleared") : tMenu("toast.level", { label: levelOf(levels, level).label }),
         undoWith(result.undo, reload),
       );
-    });
+    }, "wish");
 
   const togglePriority = () =>
     run(async () => {
@@ -131,7 +142,7 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
       if (!result.ok) return fail(result.error);
       onChange(result.item);
       pushUndo(tMenu(item.priority ? "toast.priorityOff" : "toast.priorityOn"), undoWith(result.undo, reload));
-    });
+    }, "wish");
 
   const saveWhy = (event: React.FormEvent) => {
     event.preventDefault();
@@ -140,7 +151,7 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
       if (!result.ok) return fail(result.error);
       onChange(result.item);
       pushUndo(tMenu("toast.why"), undoWith(result.undo, reload));
-    });
+    }, "wish");
   };
 
   const saveDetails = (event: React.FormEvent) => {
@@ -242,57 +253,69 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
     item.saleChannel && t("panel.channel", { channel: item.saleChannel }),
   ].filter(Boolean);
 
+  const errorIn = (inWish: boolean) =>
+    error && error.inWish === inWish ? (
+      <p role="alert" className="text-sm text-danger">
+        {error.text}
+      </p>
+    ) : null;
+
   return (
-    <div className="flex flex-col gap-space-5" aria-busy={busy || undefined}>
+    <>
+      <section aria-labelledby="wish-title" aria-busy={busy || undefined} data-block className={blockClass}>
+        <h2 id="wish-title" className="font-display text-lead">
+          {t("sections.wish")}
+        </h2>
+        {errorIn(true)}
+        <LoveLevelPicker
+          value={item.loveLevel}
+          onChange={(level) => void chooseLevel(level)}
+          disabled={busy}
+          hideLegend
+        />
+        <div className="flex flex-wrap items-center gap-space-2">
+          <button
+            type="button"
+            disabled={busy}
+            aria-pressed={item.priority}
+            onClick={togglePriority}
+            className={toggleButtonClass}
+          >
+            {item.priority && <Tick draw />}
+            {t("keep.priority")}
+          </button>
+          <form onSubmit={saveWhy} className="flex min-w-space-0 flex-1 basis-1/2 flex-wrap items-center gap-space-2">
+            <label htmlFor="item-why" className="sr-only">
+              {t("keep.why")}
+            </label>
+            <input
+              id="item-why"
+              value={why}
+              maxLength={MAX_WHY}
+              placeholder={t("keep.why")}
+              onChange={(e) => setWhy(e.target.value)}
+              className={`${inputClass} ${touch} w-auto min-w-space-0 flex-1 font-display text-lead italic`}
+            />
+            <button type="submit" disabled={busy} aria-label={t("panel.whySave")} className={`${buttonClass} ${touch}`}>
+              {t("panel.save")}
+            </button>
+          </form>
+        </div>
+      </section>
+
+      {middle}
+
       <section
         aria-labelledby="mine-title"
-        className="flex flex-col gap-space-5 rounded-card border border-line bg-surface-raised p-space-4"
+        aria-busy={busy || undefined}
+        data-block
+        className={`${blockClass} gap-space-5`}
       >
-        <h2 id="mine-title" className="font-display text-lead font-strong">
+        <h2 id="mine-title" className="font-display text-lead">
           {t("sections.mine")}
         </h2>
 
-        {error && (
-          <p role="alert" className="text-sm text-danger">
-            {error}
-          </p>
-        )}
-
-        <div className="flex flex-col gap-space-3">
-          <LoveLevelPicker value={item.loveLevel} onChange={(level) => void chooseLevel(level)} disabled={busy} />
-          <div className="flex flex-wrap items-center gap-space-2">
-            <button
-              type="button"
-              disabled={busy}
-              aria-pressed={item.priority}
-              onClick={togglePriority}
-              className={toggleButtonClass}
-            >
-              {t("keep.priority")}
-            </button>
-            <form onSubmit={saveWhy} className="flex min-w-space-0 flex-1 basis-1/2 flex-wrap items-center gap-space-2">
-              <label htmlFor="item-why" className="sr-only">
-                {t("keep.why")}
-              </label>
-              <input
-                id="item-why"
-                value={why}
-                maxLength={MAX_WHY}
-                placeholder={t("keep.why")}
-                onChange={(e) => setWhy(e.target.value)}
-                className={`${inputClass} ${touch} w-auto min-w-space-0 flex-1`}
-              />
-              <button
-                type="submit"
-                disabled={busy}
-                aria-label={t("panel.whySave")}
-                className={`${buttonClass} ${touch}`}
-              >
-                {t("panel.save")}
-              </button>
-            </form>
-          </div>
-        </div>
+        {errorIn(false)}
 
         <section aria-labelledby="stages-title" className="flex flex-col gap-space-2">
           <h3 id="stages-title" className="text-sm font-strong">
@@ -463,7 +486,7 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
 
       {shop}
 
-      <section aria-labelledby="more-title" className="flex flex-col gap-space-4 border-t border-line pt-space-5">
+      <section aria-labelledby="more-title" data-block className={blockClass}>
         <h2 id="more-title" className="text-sm font-strong">
           {t("sections.more")}
         </h2>
@@ -510,6 +533,6 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
           <p className="text-sm text-ink-muted">{t("panel.deleteHint")}</p>
         </div>
       </section>
-    </div>
+    </>
   );
 }

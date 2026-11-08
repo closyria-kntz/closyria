@@ -96,6 +96,11 @@
       "invalid_upload": "Aucune photo reçue, réessaie",
       "rate_limited": "Tu as envoyé beaucoup de photos d’un coup. Réessaie dans une heure.",
       "busy": "Beaucoup de photos arrivent en même temps. Réessaie dans un instant."
+    },
+    "gallery": {
+      "show": "Voir la photo {n}",
+      "showMine": "Voir ta photo {n}",
+      "showShop": "Voir la photo {n} de la boutique"
     }
   },
   "Admin": {
@@ -568,7 +573,17 @@
       },
       "details": {
         "title": "Détails de la boutique"
-      }
+      },
+      "curveLabel": "Prix sur 3 mois : de {from} à {to}",
+      "drop": "−{amount} depuis {since}",
+      "dropLowest": "−{amount} depuis {since}, le plus bas depuis {months} mois",
+      "sinceToday": "aujourd’hui",
+      "sinceYesterday": "hier",
+      "sinceDate": "le {date}",
+      "take": "Je le prends",
+      "share": "Partager",
+      "copied": "Lien copié",
+      "copyFailed": "Copie impossible. Voici le lien : {url}"
     },
     "manual": {
       "nameLabel": "Nom de l’article",
@@ -618,12 +633,15 @@
       "listRemoved": "Retiré de {name}",
       "tagAdded": "Étiquette {name} ajoutée",
       "tagRemoved": "Étiquette {name} retirée",
-      "failed": "Impossible d’annuler."
+      "failed": "Impossible d’annuler.",
+      "taken": "Ajouté à ma commande",
+      "untaken": "Retiré de ma commande"
     },
     "sections": {
       "mine": "Mon article",
       "shop": "La fiche de la boutique",
-      "more": "Autres actions"
+      "more": "Autres actions",
+      "wish": "Ton envie"
     },
     "panel": {
       "whySave": "Enregistrer l’avis",
