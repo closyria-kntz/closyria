@@ -74,4 +74,26 @@ describe("createTickQueue", () => {
     await waiting;
     expect(settled).toEqual([{ ok: false, confirmed: false }]);
   });
+
+  it("says when it starts and stops saving, once for several wishes, so a live refresh can wait", async () => {
+    const gate = deferred();
+    const busy: boolean[] = [];
+    const queue = createTickQueue<string>(
+      async () => {
+        await gate.promise;
+        return { ok: true, value: "x" };
+      },
+      () => {},
+      (value) => busy.push(value),
+    );
+    expect(queue.busy()).toBe(false);
+    queue.set("a", true, false);
+    queue.set("b", true, false);
+    expect(queue.busy()).toBe(true);
+    expect(busy).toEqual([true]);
+    gate.resolve();
+    await queue.idle();
+    expect(queue.busy()).toBe(false);
+    expect(busy).toEqual([true, false]);
+  });
 });

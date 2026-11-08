@@ -60,7 +60,10 @@ export function OrderDraft() {
   const [budget, setBudget] = useState<Budget>({ status: "loading", view: null, history: [] });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ticking, setTicking] = useState(false);
+  const [ordering, setOrdering] = useState(false);
   const generation = useRef(0);
+  const ticks = useRef<TickQueue | null>(null);
   const budgetTitleId = useId();
 
   // Only the latest read applies: a late answer for a previous scope never overwrites the current one.
@@ -101,6 +104,8 @@ export function OrderDraft() {
           ? { stage: "spotted", wishlist: scope.wishlistId }
           : { stage: "spotted", profile: scope.profileId, sort: "love" };
       const wishes = sortForOrder(await fetchAllWishes(query));
+      // A tick saved meanwhile: this read may predate it (the next change reads again).
+      if (mine === generation.current && ticks.current?.busy()) return;
       if (mine === generation.current) setItems({ status: "ready", items: wishes, listName });
     } catch {
       if (mine === generation.current) setItems((previous) => ({ ...previous, status: "error" }));
@@ -110,8 +115,9 @@ export function OrderDraft() {
   useEffect(() => {
     if (ready) void load();
   }, [ready, load]);
-  // Changed elsewhere (her phone, another tab): ticks, prices and budget again (already without a loading state).
-  useLiveRefresh(() => void load(), ready && items.status === "ready");
+  // Changed elsewhere (her phone, another tab): ticks, prices and budget again (already without a loading state); not
+  // while a tick is being saved or the order sent, so the read never puts the old ticks back for a moment.
+  useLiveRefresh(() => void load(), ready && !ticking && !ordering && items.status === "ready");
 
   const setTicked = (id: string, inOrderDraft: boolean) =>
     setItems((previous) => ({
@@ -124,7 +130,6 @@ export function OrderDraft() {
   setTickedRef.current = setTicked;
   const toggleFailed = useRef(() => {});
   toggleFailed.current = () => setError(t("toggleFailed"));
-  const ticks = useRef<TickQueue | null>(null);
   if (!ticks.current) {
     ticks.current = createTickQueue<null>(
       async (id, wanted) =>
@@ -134,6 +139,7 @@ export function OrderDraft() {
         setTickedRef.current(id, outcome.confirmed);
         toggleFailed.current();
       },
+      setTicking,
     );
   }
 
@@ -367,6 +373,7 @@ export function OrderDraft() {
           listName={isList ? items.listName : null}
           showWhenEmpty
           settle={() => ticks.current?.idle() ?? Promise.resolve()}
+          onOrderingChange={setOrdering}
           onOrdered={load}
           onToggle={(item) => void toggle(item)}
         />

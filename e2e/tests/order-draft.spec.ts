@@ -511,6 +511,76 @@ test("Mes envies : le bandeau « Ma commande », trois envies prises, une décoc
   await expect(card).toContainText(/Déjà commandé : 154\s€/);
 });
 
+test("Mes envies : une liste partagée par deux profils, un onglet qui compte et commande les envies des deux", async ({
+  page,
+}) => {
+  await wishAt(page, "Robe Alma", "89");
+  await wishAt(page, "Gilet Brume", "65");
+  await page.goto("/reglages/profils");
+  const add = page.getByRole("form", { name: "Nouveau profil" });
+  await add.getByLabel("Nom").fill("Léa");
+  await add.getByRole("button", { name: "Ajouter un profil" }).click();
+  await expect(toast(page)).toContainText("Profil « Léa » ajouté");
+  await page.goto("/listes");
+  await page.getByLabel("Nom de la nouvelle liste").fill("Été");
+  await page.getByRole("button", { name: "Créer la liste" }).click();
+  await expect(toast(page)).toContainText("Liste « Été » créée");
+  await page.goto("/envies");
+  await page.getByRole("button", { name: "Sélectionner", exact: true }).click();
+  for (const name of ["Robe Alma", "Gilet Brume"]) {
+    await page.getByTestId("item-card").getByRole("button", { name }).click();
+  }
+  await page
+    .getByRole("region", { name: "Actions sur la sélection" })
+    .getByRole("button", { name: "Liste", exact: true })
+    .click();
+  await page.getByRole("dialog", { name: "Ajouter à une liste" }).getByRole("button", { name: "Été" }).click();
+  await expect(toast(page)).toContainText("2 articles ajoutés à Été");
+  await page.goto("/envies");
+  // « Gilet Brume » goes to Léa: the list now holds a wish of each profile.
+  await page
+    .getByTestId("item-card")
+    .filter({ hasText: "Gilet Brume" })
+    .getByRole("button", { name: "Plus d’actions" })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Actions sur Gilet Brume" })
+    .getByRole("button", { name: "Déplacer vers un profil" })
+    .click();
+  await page.getByRole("dialog", { name: "Déplacer vers un profil" }).getByRole("button", { name: "Léa" }).click();
+  await expect(toast(page)).toContainText("Déplacé vers Léa");
+  await expect(page.getByTestId("item-card")).toHaveCount(1);
+
+  // One tick each, from each profile.
+  await takeCard(page, "Robe Alma").click();
+  await expect(envBand(page)).toContainText(/1 article · 89\s€/);
+  const switcher = page.getByLabel("Profil", { exact: true }).filter({ visible: true });
+  await switcher.selectOption({ label: "Léa" });
+  await expect(page.getByTestId("item-card")).toHaveCount(1);
+  await takeCard(page, "Gilet Brume").click();
+  await expect(envBand(page)).toContainText(/1 article · 65\s€/);
+  await switcher.selectOption({ label: "Moi" });
+  await expect(page.getByTestId("item-card")).toContainText("Robe Alma");
+
+  // The list's tab: both wishes, as on « Préparer une commande » of the list and as the server orders them.
+  const tabs = page.getByRole("navigation", { name: "Mes listes" });
+  const summer = tabs.getByRole("button", { name: /^Été/ });
+  await expect(tabs.getByRole("button", { name: /Toutes mes envies/ })).toContainText("1");
+  await expect(summer).toContainText("2");
+  await summer.click();
+  await expect(page).toHaveURL(/liste=[0-9a-f-]{36}/);
+  const bar = envBand(page);
+  await expect(bar).toContainText(/2 articles · 154\s€/);
+  await bar.getByRole("button", { name: "J’ai commandé (2)" }).click();
+  await expect(toast(page)).toContainText("2 articles passés en Commandé");
+  await expect(envBand(page)).toHaveCount(0);
+  await expect(summer).toContainText("0");
+  await page.goto("/commande");
+  await expect(page.getByTestId("item-card")).toContainText("Robe Alma");
+  await switcher.selectOption({ label: "Léa" });
+  await expect(page.getByTestId("item-card")).toContainText("Gilet Brume");
+});
+
 test("Mes envies : tout décocher puis « J’ai commandé (0) » secoue le bouton ; mouvement réduit : rien ne bouge", async ({
   page,
 }) => {

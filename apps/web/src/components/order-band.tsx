@@ -27,6 +27,7 @@ export function OrderBand({
   listName,
   showWhenEmpty = false,
   settle,
+  onOrderingChange,
   onOrdered,
   onToggle,
 }: {
@@ -37,6 +38,8 @@ export function OrderBand({
   showWhenEmpty?: boolean;
   /** Resolves when every tick or untick has been saved: the order waits for it. */
   settle?: () => Promise<void>;
+  /** « J'ai commandé » is being sent (true) or done (false): the page holds its live refresh meanwhile. */
+  onOrderingChange?: (ordering: boolean) => void;
   /** The ticked ones went to « Commandé » (or the order was undone): read the page again. */
   onOrdered(): void | Promise<void>;
   onToggle(item: ItemView): void;
@@ -75,9 +78,12 @@ export function OrderBand({
       return pushUndo(t("errors.empty"), null);
     }
     setOrdering(true);
+    onOrderingChange?.(true);
     await settle?.();
-    const result = await orderDraftOrdered(scope);
-    setOrdering(false);
+    const result = await orderDraftOrdered(scope).finally(() => {
+      setOrdering(false);
+      onOrderingChange?.(false);
+    });
     if (!result.ok) return pushUndo(t(`errors.${orderDraftErrorKey(result.error)}`), null);
     pushUndo(
       t("ordered", { count: result.itemIds.length }),

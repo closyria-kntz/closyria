@@ -93,8 +93,9 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   const [reference, setReference] = useState<ReferenceView | null>(null);
   // Bumped to read the first page again (retry, undo): the effect depends on it.
   const [reloadToken, setReloadToken] = useState(0);
-  // « Mes envies »: her lists and every wish she has at « Repéré » (counts of the tabs, total of the ticked wishes).
-  const [wishes, setWishes] = useState<ItemView[]>([]);
+  // « Mes envies »: her lists and every wish of the account at « Repéré », whatever the profile: a list belongs to
+  // the account, so its tab, its budget and its band count (and « J'ai commandé » orders) the wishes of every profile.
+  const [accountWishes, setWishes] = useState<ItemView[]>([]);
   const [wishesError, setWishesError] = useState(false);
   const [scopeToken, setScopeToken] = useState(0);
   const generation = useRef(0);
@@ -121,19 +122,20 @@ export function WardrobeView({ view }: { view: ViewKey }) {
       (items) => !stale && setLists({ status: "ready", items }),
       () => !stale && setLists((previous) => ({ ...previous, status: "ready" })),
     );
-    const wanted: Record<string, string> = { stage: "spotted" };
-    if (current.id) wanted.profile = current.id;
-    fetchAllWishes(wanted).then(
-      (items) => !stale && setWishes(items),
+    fetchAllWishes({ stage: "spotted" }).then(
+      // A tick still being saved would be put back by this read: kept as it is, the next change reads it again.
+      (items) => !stale && !ticks.current?.busy() && setWishes(items),
       () => !stale && setWishesError(true),
     );
     return () => {
       stale = true;
     };
-  }, [view, ready, current.id, reloadToken, scopeToken]);
-  // Another profile: its wishes are not those on screen.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: cleared when the profile changes.
-  useEffect(() => setWishes([]), [current.id]);
+  }, [view, ready, reloadToken, scopeToken]);
+  // « Toutes mes envies »: those of the current profile.
+  const wishes = useMemo(
+    () => (current.id ? accountWishes.filter((item) => item.profileId === current.id) : accountWishes),
+    [accountWishes, current.id],
+  );
 
   // First page, again whenever the view, the filters, the profile or the reload token change.
   // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey stands for query.
@@ -198,6 +200,9 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   };
 
   const reload = useCallback(async () => setReloadToken((value) => value + 1), []);
+  const [ticking, setTicking] = useState(false);
+  const [ordering, setOrdering] = useState(false);
+  const ticks = useRef<TickQueue | null>(null);
 
   // Changed elsewhere (her phone, another tab): read again, quietly (no loading state), as many items as she has
   // scrolled through so the page does not jump; never during a selection.
@@ -218,6 +223,8 @@ export function WardrobeView({ view }: { view: ViewKey }) {
         items.push(...page.items);
         cursor = page.nextCursor;
       } while (cursor && items.length < wanted);
+      // A tick saved meanwhile: this read may predate it, the next change reads again.
+      if (ticks.current?.busy()) return;
       setData({ items, nextCursor: cursor, status: "ready" });
     } catch {
       // Kept as it is: the next change tries again.
@@ -228,7 +235,8 @@ export function WardrobeView({ view }: { view: ViewKey }) {
       setScopeToken((value) => value + 1);
       void refreshQuietly();
     },
-    ready && !selecting && data.status === "ready",
+    // Not while a tick is being saved or the order is being sent: the read would put the old ticks back for a moment.
+    ready && !selecting && !ticking && !ordering && data.status === "ready",
   );
   const gone = useCallback((ids: readonly string[]) => {
     const away = new Set(ids);
@@ -270,7 +278,6 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     setWishes((previous) => previous.map(apply));
     setData((previous) => ({ ...previous, items: previous.items.map(apply) }));
   }, []);
-  const ticks = useRef<TickQueue | null>(null);
   if (!ticks.current) {
     ticks.current = createTickQueue<ItemView>(
       async (id, wanted) => {
@@ -284,6 +291,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
         setTick(id, outcome.confirmed);
         pushUndo(tItemRef.current(`errors.${failure.current}` as "errors.failed"), null);
       },
+      setTicking,
     );
   }
   const failure = useRef("failed");
@@ -381,11 +389,13 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   }, [selecting, leaveSelection]);
 
   // The tabs and the budget card of « Mes envies »; the ticked wishes of the scope are counted here, once.
+  // A list tab: every wish of the list, whatever the profile, as the server orders them (and as
+  // /envies/commande?liste=… shows them).
   const scopeWishes = useMemo(() => {
     if (!listId) return wishes;
     const inList = new Set(activeList?.itemIds ?? []);
-    return wishes.filter((item) => inList.has(item.id));
-  }, [wishes, listId, activeList]);
+    return accountWishes.filter((item) => inList.has(item.id));
+  }, [wishes, accountWishes, listId, activeList]);
   const draftCents = draftTotals(scopeWishes, null).totalCents;
   const budgetScope: BudgetScope | null = listId
     ? { wishlistId: listId }
@@ -400,9 +410,9 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     () =>
       lists.items.map((list) => {
         const inList = new Set(list.itemIds);
-        return { list, count: wishes.filter((item) => inList.has(item.id)).length };
+        return { list, count: accountWishes.filter((item) => inList.has(item.id)).length };
       }),
-    [lists.items, wishes],
+    [lists.items, accountWishes],
   );
   const chooseList = (id: string | null) => {
     const params = new URLSearchParams(search.toString());
@@ -581,6 +591,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           budget={budgetOfScope}
           listName={activeList?.name}
           settle={() => ticks.current?.idle() ?? Promise.resolve()}
+          onOrderingChange={setOrdering}
           onOrdered={async () => {
             setScopeToken((value) => value + 1);
             await reload();
