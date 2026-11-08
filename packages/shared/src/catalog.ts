@@ -133,6 +133,15 @@ export const productViewSchema = z.object({
 });
 export type ProductView = z.infer<typeof productViewSchema>;
 
+/** A product's price over time, one point per day at most. */
+export const priceHistorySchema = z.object({
+  points: z.array(z.object({ at: z.string(), priceCents: z.number().int().nonnegative() })),
+  lowestSinceDays: z.number().int().nonnegative().nullable(),
+  dropCents: z.number().int().negative().nullable(),
+  dropSince: z.string().nullable(),
+});
+export type PriceHistory = z.infer<typeof priceHistorySchema>;
+
 export const captureViewSchema = z.object({
   id: z.uuid(),
   status: captureStatusSchema,

@@ -30,6 +30,7 @@ import {
   type ProfilePatch,
   photoImportAcceptedSchema,
   photoImportViewSchema,
+  priceHistorySchema,
   profileListSchema,
   profileViewSchema,
   type RecentList,
@@ -199,6 +200,13 @@ export async function fetchItemForProduct(
   if (response.status === 401) return null;
   if (!response.ok) throw new Error(`items ${response.status}`);
   return itemPageSchema.parse(await response.json()).items[0] ?? null;
+}
+
+/** A product's price history over the last `days` days. Throws on a network error or a malformed answer. */
+export async function fetchPriceHistory(productId: string, days = 90, deps: ClientDeps = defaultDeps) {
+  const response = await deps.fetch(`/api/products/${productId}/price-history?days=${days}`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`price-history ${response.status}`);
+  return priceHistorySchema.parse(await response.json());
 }
 
 export async function fetchWishlists(deps: ClientDeps = defaultDeps): Promise<WishlistView[]> {

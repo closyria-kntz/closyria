@@ -1,5 +1,5 @@
-import { eq, schema } from "@closyria/db";
-import { catalogErrorSchema, manualEntrySchema, productViewSchema } from "@closyria/shared";
+import { and, asc, eq, gte, schema } from "@closyria/db";
+import { catalogErrorSchema, manualEntrySchema, priceHistorySchema, productViewSchema } from "@closyria/shared";
 import { ObjectNotFoundError } from "@closyria/storage";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
@@ -29,6 +29,36 @@ const getProductRoute = defineAccess(
   }),
   "public",
 );
+
+const historyQuery = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(90),
+});
+
+const priceHistoryRoute = defineAccess(
+  createRoute({
+    method: "get",
+    path: "/products/{id}/price-history",
+    summary: "A product's price history",
+    description:
+      "Captured prices of the last `days` days (integer 1 to 365, default 90). Days are UTC dates. " +
+      "`points` holds at most one point per day (the last capture of that day), oldest first; `at` is the capture " +
+      "time (ISO 8601) and prices are integer cents. `dropCents` is the latest price minus the previous different " +
+      "price, only when negative (otherwise null), and `dropSince` the ISO date of the point where that latest " +
+      "price first appeared. `lowestSinceDays` is the number of days between today and the most recent point " +
+      "(before the latest price's run) whose price was as low as or lower than the current one; when the current " +
+      "price is the lowest of the window it is the age of the oldest point. A product with no history, or a " +
+      "manual one (captureStatus manual), answers `points: []` and nulls.",
+    request: { params: idParams, query: historyQuery },
+    responses: {
+      200: { description: "The price history", content: { "application/json": { schema: priceHistorySchema } } },
+      400: errorContent("Malformed id or days (invalid_request)"),
+      404: errorContent("Unknown product (not_found)"),
+    },
+  }),
+  "public",
+);
+
+const dayOf = (d: Date) => d.toISOString().slice(0, 10);
 
 const manualRoute = (limiter: MiddlewareHandler<AccessEnv>) =>
   defineAccess(
@@ -83,6 +113,50 @@ export function productsRoutes(deps: CatalogDeps, limiter: MiddlewareHandler<Acc
     .openapi(getProductRoute, async (c) => {
       const view = await loadProductView(db, c.req.valid("param").id);
       return view ? c.json(view, 200) : c.json(notFound, 404);
+    })
+    .openapi(priceHistoryRoute, async (c) => {
+      const { id } = c.req.valid("param");
+      const { days } = c.req.valid("query");
+      const [product] = await db
+        .select({ captureStatus: schema.products.captureStatus })
+        .from(schema.products)
+        .where(eq(schema.products.id, id));
+      if (!product) return c.json(notFound, 404);
+      const empty = { points: [], lowestSinceDays: null, dropCents: null, dropSince: null };
+      if (product.captureStatus === "manual") return c.json(empty, 200);
+      const current = now();
+      const rows = await db
+        .select({ seenAt: schema.productHistory.seenAt, priceCents: schema.productHistory.priceCents })
+        .from(schema.productHistory)
+        .where(
+          and(
+            eq(schema.productHistory.productId, id),
+            gte(schema.productHistory.seenAt, new Date(current.getTime() - days * 86_400_000)),
+          ),
+        )
+        .orderBy(asc(schema.productHistory.seenAt));
+      const byDay = new Map<string, { at: Date; priceCents: number }>();
+      for (const row of rows) byDay.set(dayOf(row.seenAt), { at: row.seenAt, priceCents: row.priceCents });
+      const kept = [...byDay.values()];
+      const latest = kept.at(-1);
+      if (!latest) return c.json(empty, 200);
+      const dayDiff = (d: Date) => Math.round((Date.parse(dayOf(current)) - Date.parse(dayOf(d))) / 86_400_000);
+      let runStart = kept.length - 1;
+      while (runStart > 0 && kept[runStart - 1]?.priceCents === latest.priceCents) runStart -= 1;
+      const before = kept.slice(0, runStart);
+      const previous = before.at(-1);
+      const drop = previous ? latest.priceCents - previous.priceCents : 0;
+      const lower = before.findLast((point) => point.priceCents <= latest.priceCents);
+      const lowestSince = lower ?? kept[0];
+      return c.json(
+        {
+          points: kept.map((point) => ({ at: point.at.toISOString(), priceCents: point.priceCents })),
+          lowestSinceDays: lowestSince ? dayDiff(lowestSince.at) : null,
+          dropCents: drop < 0 ? drop : null,
+          dropSince: drop < 0 ? dayOf((kept[runStart] ?? latest).at) : null,
+        },
+        200,
+      );
     })
     .openapi(manualRoute(limiter), async (c) => {
       const { id } = c.req.valid("param");
