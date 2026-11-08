@@ -166,3 +166,61 @@ body::before {
     bottom: var(--spacing-space-8);
   }
 }
+
+/* The bubble of the 4 levels opens with a small pop; durations are tokens (0 ms under reduced motion). */
+@keyframes picker-in {
+  from {
+    opacity: 0;
+    scale: 0.85;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+.level-picker {
+  animation: picker-in var(--motion-duration-base) var(--ease-emphasized) both;
+}
+
+/* Sparks around the emoji, for the highest level only (never rendered under reduced motion). */
+.level-spark {
+  animation: spark-fly calc(var(--motion-duration-slow) * 2) var(--ease-standard) both;
+}
+
+.level-spark:nth-child(1) {
+  --i: 0;
+}
+.level-spark:nth-child(2) {
+  --i: 1;
+}
+.level-spark:nth-child(3) {
+  --i: 2;
+}
+.level-spark:nth-child(4) {
+  --i: 3;
+}
+.level-spark:nth-child(5) {
+  --i: 4;
+}
+.level-spark:nth-child(6) {
+  --i: 5;
+}
+
+@keyframes spark-fly {
+  from {
+    opacity: 1;
+    transform: rotate(calc(var(--spark-step) * var(--i))) translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: rotate(calc(var(--spark-step) * var(--i))) translateY(calc(var(--spark-reach) * -1)) scale(0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .level-picker,
+  .level-spark {
+    animation: none;
+  }
+}

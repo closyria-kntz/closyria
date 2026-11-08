@@ -160,9 +160,9 @@ test("Sélectionner : deux articles passent En feu, Annuler ; filtres par niveau
   await page.goto("/envies");
   await page.getByLabel("Trier par").selectOption({ label: "Ce que j’aime le plus" });
   await expect(page).toHaveURL(/tri=love/);
-  await expect(cards.nth(0)).toContainText("En feu");
-  await expect(cards.nth(1)).toContainText("En feu");
-  await expect(cards.nth(2)).toContainText("J’aime");
+  await expect(cards.nth(0).getByRole("button", { name: /niveau : En feu/ })).toBeVisible();
+  await expect(cards.nth(1).getByRole("button", { name: /niveau : En feu/ })).toBeVisible();
+  await expect(cards.nth(2).getByRole("button", { name: /niveau : J’aime/ })).toBeVisible();
 });
 
 test("Sélectionner : changer l'étape puis Annuler ; Échap quitte le mode", async ({ page }) => {
@@ -262,7 +262,7 @@ test("ce qui change ailleurs apparaît tout seul, sans recharger ni cliquer", as
   await pasteAndWish(page);
   await page.goto("/envies");
   const card = page.getByTestId("item-card").first();
-  await expect(card).toContainText("J’aime");
+  await expect(card.getByRole("button", { name: /niveau : J’aime/ })).toBeVisible();
 
   // Elsewhere (as on her phone): the level becomes Mims, with no event on this page (no focus, no tab switch).
   const status = await page.evaluate(async () => {
@@ -275,9 +275,9 @@ test("ce qui change ailleurs apparaît tout seul, sans recharger ni cliquer", as
     return res.status;
   });
   expect(status).toBe(200);
-  await expect(card).toContainText("J’aime");
+  await expect(card.getByRole("button", { name: /niveau : J’aime/ })).toBeVisible();
   // Nothing to do: the page asks every 10 s whether something changed.
-  await expect(card).toContainText("Mims", { timeout: 15_000 });
+  await expect(card.getByRole("button", { name: /niveau : Mims/ })).toBeVisible({ timeout: 15_000 });
 });
 
 test("la grille a 2, 3 ou 5 colonnes selon l'écran", async ({ page }, testInfo) => {
@@ -395,4 +395,89 @@ test.describe("barre du haut sur ordinateur", () => {
     await expect(page).toHaveURL(/\/reglages\//);
     await expect(more).toHaveAttribute("aria-expanded", "false");
   });
+});
+
+// Cocon lumineux, task 6: the emoji sits alone on the photo; a double tap (or a click on it) opens her 4 levels.
+
+test("double-clic sur la photo : la bulle des 4 niveaux, rien ne change avant de choisir, pas de navigation", async ({
+  page,
+}, testInfo) => {
+  await pasteAndWish(page);
+  await page.goto("/envies");
+  const card = page.getByTestId("item-card").first();
+  const emoji = card.getByRole("button", { name: /niveau : J’aime/ });
+  await expect(emoji).toBeVisible();
+
+  await card.locator("img, [data-photo]").first().dblclick();
+  const bubble = page.getByRole("radiogroup", { name: `Ton niveau d’envie pour ${PRODUCT.name}` });
+  await expect(bubble).toBeVisible();
+  await expect(bubble.getByRole("radio")).toHaveCount(4);
+  await expect(bubble.getByRole("radio", { name: "J’aime" })).toBeChecked();
+  await expect(bubble.getByRole("radio", { name: "J’aime" })).toBeFocused();
+  await page.waitForTimeout(450); // longer than the single-click delay
+  await expect(page).toHaveURL(/\/envies/);
+  await expect(emoji).toBeVisible(); // nothing changed yet
+  await axe(page);
+
+  // Escape closes without a change.
+  await page.keyboard.press("Escape");
+  await expect(bubble).toHaveCount(0);
+  await expect(emoji).toBeVisible();
+  await expect(emoji).toBeFocused();
+
+  // A click on the emoji opens it too; click outside closes without a change.
+  await emoji.click();
+  await expect(bubble).toBeVisible();
+  await page.getByRole("heading", { level: 1, name: "Envies" }).click();
+  await expect(bubble).toHaveCount(0);
+
+  // Choosing « Mims » changes the card and saves; « Annuler » puts it back.
+  await emoji.click();
+  await bubble.getByRole("radio", { name: "Mims" }).click();
+  await expect(bubble).toHaveCount(0);
+  await expect(card.getByRole("button", { name: /niveau : Mims/ })).toBeVisible();
+  await expect(toast(page)).toContainText(`${PRODUCT.name} : Mims`);
+  await page.reload();
+  await expect(
+    page
+      .getByTestId("item-card")
+      .first()
+      .getByRole("button", { name: /niveau : Mims/ }),
+  ).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("level-picker.png") });
+});
+
+test("un clic simple sur la photo ouvre la fiche après un court délai, le clavier tout de suite", async ({ page }) => {
+  await pasteAndWish(page);
+  await page.goto("/envies");
+  await page.getByTestId("item-card").first().getByRole("link").click();
+  await expect(page).toHaveURL(/\/produits\//);
+  await page.goBack();
+  const link = page.getByTestId("item-card").first().getByRole("link");
+  await link.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/produits\//);
+});
+
+test("étincelles seulement pour le niveau le plus haut, rien en mouvement réduit", async ({ page }) => {
+  await pasteAndWish(page);
+  await page.goto("/envies");
+  const card = page.getByTestId("item-card").first();
+  const bubble = page.getByRole("radiogroup");
+  const pick = async (from: RegExp, to: string) => {
+    await card.getByRole("button", { name: from }).click();
+    await bubble.getByRole("radio", { name: to }).click();
+  };
+  await pick(/niveau : J’aime/, "Mims");
+  await expect(card.getByRole("button", { name: /niveau : Mims/ })).toBeVisible();
+  await expect(card.getByTestId("level-sparks")).toHaveCount(0);
+
+  await pick(/niveau : Mims/, "En feu");
+  await expect(card.getByTestId("level-sparks")).toHaveCount(1);
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await pick(/niveau : En feu/, "Mims");
+  await pick(/niveau : Mims/, "En feu");
+  await expect(card.getByRole("button", { name: /niveau : En feu/ })).toBeVisible();
+  await expect(card.getByTestId("level-sparks")).toHaveCount(0);
 });

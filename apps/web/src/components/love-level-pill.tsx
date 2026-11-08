@@ -1,12 +1,14 @@
 "use client";
 
-import type { ItemView } from "@closyria/shared";
+import type { ItemView, LoveLevel } from "@closyria/shared";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { levelOf, nextLoveLevel } from "@/lib/love-levels";
+import { levelOf } from "@/lib/love-levels";
 import { useLoveLevels } from "@/lib/profile-context";
 import { pushUndo } from "@/lib/undo";
 import { patchItem, undoWith } from "@/lib/wardrobe-client";
+import { LevelPicker, LevelSparks } from "./level-picker";
+import { shouldSpark } from "./level-picker-logic";
 import { focusRing } from "./ui";
 
 /** The look of the pill: emoji and name on translucent white, top left of the photo (spec §3.2). */
@@ -27,31 +29,40 @@ export function LoveLevelBadge({ item }: { item: ItemView }) {
 }
 
 /**
- * The level pill of a card: one tap moves to the next level (« + » gives « J'aime » to a wish without one), with
+ * The level emoji laid alone on the photo (no disc, only a soft shadow on the glyph). A click on it, or a double tap on
+ * the photo (the card opens `open`), shows the bubble with her 4 levels; nothing changes until she picks one, then
  * « Niveau : Mims · Annuler ». Never removes the item (spec §4).
  */
 export function LoveLevelPill({
   item,
   onChange,
   reload,
+  open,
+  onOpenChange,
 }: {
   item: ItemView;
   onChange: (item: ItemView) => void;
   /** Re-reads what changed (after « Annuler »). */
   reload: () => Promise<void>;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("Views");
   const tCard = useTranslations("Views.card");
   const tErrors = useTranslations("Item.errors");
   const levels = useLoveLevels();
   const [busy, setBusy] = useState(false);
+  const [sparks, setSparks] = useState(false);
+  const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const current = item.loveLevel === null ? null : levelOf(levels, item.loveLevel);
   const name = item.name?.trim() || tCard("noName");
 
-  async function next() {
-    if (busy) return;
+  async function pick(level: LoveLevel) {
+    onOpenChange(false);
+    anchor?.focus();
+    if (busy || level === item.loveLevel) return;
+    setSparks(shouldSpark(level) && !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     setBusy(true);
-    const level = nextLoveLevel(item.loveLevel);
     const result = await patchItem(item.id, { loveLevel: level });
     setBusy(false);
     if (!result.ok) return pushUndo(tErrors(result.error as "failed"), null);
@@ -60,23 +71,42 @@ export function LoveLevelPill({
   }
 
   return (
-    <button
-      type="button"
-      aria-label={current ? t("card.level", { name, label: current.label }) : t("card.levelAdd", { name })}
-      aria-busy={busy || undefined}
-      onClick={() => void next()}
-      className={`absolute top-space-0 left-space-0 z-10 flex min-h-touch-target min-w-touch-target max-w-3/4 items-center rounded-card p-space-2 ${focusRing}`}
-    >
-      <span aria-hidden="true" className={pillClass}>
-        {current ? (
-          <>
-            <span>{current.emoji}</span>
-            <span className="min-w-space-0 truncate">{current.label}</span>
-          </>
-        ) : (
-          <span className="px-space-1">+</span>
-        )}
-      </span>
-    </button>
+    <>
+      <div className="absolute top-space-0 left-space-0 z-10">
+        <button
+          ref={setAnchor}
+          type="button"
+          aria-label={current ? t("card.level", { name, label: current.label }) : t("card.levelAdd", { name })}
+          aria-expanded={open}
+          aria-busy={busy || undefined}
+          onClick={() => onOpenChange(!open)}
+          className={`flex min-h-touch-target min-w-touch-target items-center justify-center rounded-card p-space-1 text-title leading-none ${focusRing}`}
+        >
+          {current ? (
+            <span aria-hidden="true" className="drop-shadow-emoji">
+              {current.emoji}
+            </span>
+          ) : (
+            <span
+              aria-hidden="true"
+              className="glass flex size-space-6 items-center justify-center rounded-full text-lead font-strong text-ink"
+            >
+              +
+            </span>
+          )}
+        </button>
+        {sparks && <LevelSparks onDone={() => setSparks(false)} />}
+      </div>
+      {open && anchor && (
+        <LevelPicker
+          levels={levels}
+          value={item.loveLevel}
+          anchor={anchor}
+          label={tCard("pickerLabel", { name })}
+          onPick={(level) => void pick(level)}
+          onClose={() => onOpenChange(false)}
+        />
+      )}
+    </>
   );
 }

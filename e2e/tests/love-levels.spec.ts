@@ -26,7 +26,7 @@ async function wishInEnvies(page: Page): Promise<void> {
 const card = (page: Page) => page.getByTestId("item-card").first();
 const menu = (page: Page) => page.getByRole("dialog", { name: `Actions sur ${PRODUCT.name}` });
 
-test("la pastille passe de J’aime à Mims, « Annuler » remet J’aime ; plus de case à cocher", async ({ page }) => {
+test("l’émoji ouvre la bulle : J’aime → Mims, « Annuler » remet J’aime ; plus de case à cocher", async ({ page }) => {
   await wishInEnvies(page);
   await expect(card(page).getByRole("checkbox")).toHaveCount(0);
   await expect(card(page).getByRole("img", { name: "Favori" })).toHaveCount(0);
@@ -40,8 +40,8 @@ test("la pastille passe de J’aime à Mims, « Annuler » remet J’aime ; plus
   ).toBeVisible();
 
   await card(page).getByRole("button", { name: "Niveau : J’aime. Toucher pour changer" }).click();
+  await page.getByRole("radiogroup").getByRole("radio", { name: "Mims" }).click();
   await expect(card(page).getByRole("button", { name: "Niveau : Mims. Toucher pour changer" })).toBeVisible();
-  await expect(card(page)).toContainText("Mims");
   await expect(toast(page)).toContainText(`${PRODUCT.name} : Mims`);
 
   await toast(page).getByRole("button", { name: "Annuler" }).last().click();
@@ -55,6 +55,7 @@ test("la pastille passe de J’aime à Mims, « Annuler » remet J’aime ; plus
     card(page).getByRole("button", { name: `${PRODUCT.name} — donner un niveau`, exact: true }),
   ).toBeVisible();
   await card(page).getByRole("button", { name: "Donner un niveau" }).click();
+  await page.getByRole("radiogroup").getByRole("radio", { name: "J’aime" }).click();
   await expect(card(page).getByRole("button", { name: "Niveau : J’aime. Toucher pour changer" })).toBeVisible();
 });
 
@@ -137,7 +138,8 @@ test("menu « … » → « Retirer de mes envies » met l’article à la corbe
 test("Mes niveaux : renommer Mims, refuser deux émojis, revenir aux niveaux de départ", async ({ page }) => {
   await wishInEnvies(page);
   await card(page).getByRole("button", { name: "Niveau : J’aime. Toucher pour changer" }).click();
-  await expect(card(page)).toContainText("Mims");
+  await page.getByRole("radiogroup").getByRole("radio", { name: "Mims" }).click();
+  await expect(card(page).getByRole("button", { name: "Niveau : Mims. Toucher pour changer" })).toBeVisible();
 
   await page.goto("/reglages/niveaux");
   await expect(page.getByRole("heading", { level: 2, name: "Tes mots à toi" })).toBeVisible();
@@ -164,7 +166,7 @@ test("Mes niveaux : renommer Mims, refuser deux émojis, revenir aux niveaux de 
 
   await page.goto("/envies");
   await expect(card(page)).toContainText("😍");
-  await expect(card(page)).toContainText("Trop beau");
+  await expect(card(page).getByRole("button", { name: "Niveau : Trop beau. Toucher pour changer" })).toBeVisible();
 
   await page.goto("/reglages/niveaux");
   await page.getByRole("button", { name: "Revenir aux niveaux de départ" }).click();
@@ -173,12 +175,12 @@ test("Mes niveaux : renommer Mims, refuser deux émojis, revenir aux niveaux de 
   await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(page.getByLabel("Nom du niveau 3")).toHaveValue("Trop beau");
   await page.goto("/envies");
-  await expect(card(page)).toContainText("Trop beau");
+  await expect(card(page).getByRole("button", { name: "Niveau : Trop beau. Toucher pour changer" })).toBeVisible();
 
   await page.goto("/reglages/niveaux");
   await page.getByRole("button", { name: "Revenir aux niveaux de départ" }).click();
   await expect(page.getByLabel("Nom du niveau 3")).toHaveValue("Mims");
   await page.goto("/envies");
   await expect(card(page)).toContainText("🥰");
-  await expect(card(page)).toContainText("Mims");
+  await expect(card(page).getByRole("button", { name: "Niveau : Mims. Toucher pour changer" })).toBeVisible();
 });

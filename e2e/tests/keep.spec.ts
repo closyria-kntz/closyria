@@ -84,7 +84,7 @@ test("Mims, Prioritaire et « Trop mims » avant d'ajouter ; sur la fiche gardé
   await page.goto("/envies");
   const card = page.getByTestId("item-card").first();
   await expect(card).toContainText("🥰");
-  await expect(card).toContainText("Mims");
+  await expect(card.getByRole("button", { name: /niveau : Mims/ })).toBeVisible();
   await expect(card.getByText("Prioritaire", { exact: true })).toBeVisible();
   await expect(card).toContainText("Trop trop mims");
 });

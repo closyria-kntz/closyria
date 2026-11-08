@@ -106,6 +106,11 @@ export const defaultSemanticTokens = {
   "aurora-at-3": "50% 95%",
   "aurora-reach": "55%",
   "aurora-drift-shift": "4%",
+  // The level emoji laid alone on a photo: its soft shadow follows the glyph (a drop-shadow, not a box), and the
+  // sparks of the highest level fly this far.
+  "drop-shadow-emoji": "0 0.1875rem 0.3125rem color-mix(in srgb, var(--color-ink) 28%, transparent)",
+  "spark-reach": "2.25rem",
+  "spark-step": "60deg",
   // Layout
   "breakpoint-sm": breakpoint.sm,
   "breakpoint-md": breakpoint.md,

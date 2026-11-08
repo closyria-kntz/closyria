@@ -2,10 +2,12 @@
 
 import type { ItemView } from "@closyria/shared";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { formatOptionalPrice } from "@/lib/price";
 import { ItemMenu } from "./item-menu";
+import { PHOTO_CLICK_DELAY_MS, photoClickPlan } from "./level-picker-logic";
 import { LoveLevelBadge, LoveLevelPill } from "./love-level-pill";
 import { focusRing } from "./ui";
 
@@ -43,6 +45,25 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
   const t = useTranslations("Views.card");
   const tStage = useTranslations("Item.stage");
   const locale = useLocale();
+  const router = useRouter();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(openTimer.current), []);
+  const href = `/produits/${item.product.id}`;
+  // A click on the photo waits a beat: a second click (double tap) opens the 4 levels instead of the sheet.
+  // The keyboard, a middle click and cmd / ctrl / shift clicks keep the link's own behaviour.
+  const onPhotoClick =
+    actions && !selection && linked
+      ? (event: MouseEvent<HTMLAnchorElement>) => {
+          if (!(event.target as Element).closest("[data-photo]")) return;
+          const plan = photoClickPlan(event.nativeEvent);
+          if (plan === "pass") return;
+          event.preventDefault();
+          clearTimeout(openTimer.current);
+          if (plan === "pick") setPickerOpen(true);
+          else if (plan === "wait") openTimer.current = setTimeout(() => router.push(href), PHOTO_CLICK_DELAY_MS);
+        }
+      : undefined;
   const name = item.name?.trim() || t("noName");
   const asked = item.stage === "for_sale" || item.stage === "sold" ? item.salePriceCents : null;
   const price = formatOptionalPrice(
@@ -55,11 +76,12 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
     <li className="card group relative flex flex-col" data-testid="item-card">
       <Wrapper
         linked={linked}
-        href={`/produits/${item.product.id}`}
+        href={href}
+        onClick={onPhotoClick}
         selection={selection}
         onToggle={() => selection?.onToggle(item.id)}
       >
-        <div className="relative aspect-3/4 overflow-hidden rounded-card bg-media-backdrop">
+        <div data-photo className="relative aspect-3/4 overflow-hidden rounded-card bg-media-backdrop">
           {item.coverUrl ? (
             // biome-ignore lint/performance/noImgElement: photos come from our own API, already resized.
             <img
@@ -118,7 +140,13 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
       </Wrapper>
       {actions && !selection ? (
         <>
-          <LoveLevelPill item={item} onChange={actions.onChanged} reload={actions.reload} />
+          <LoveLevelPill
+            item={item}
+            onChange={actions.onChanged}
+            reload={actions.reload}
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+          />
           <ItemMenu item={item} onChanged={actions.onChanged} onTrashed={actions.onTrashed} reload={actions.reload} />
         </>
       ) : (
@@ -132,12 +160,14 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
 function Wrapper({
   linked,
   href,
+  onClick,
   selection,
   onToggle,
   children,
 }: {
   linked: boolean;
   href: string;
+  onClick: ((event: MouseEvent<HTMLAnchorElement>) => void) | undefined;
   selection: CardSelection | undefined;
   onToggle: () => void;
   children: ReactNode;
@@ -156,7 +186,11 @@ function Wrapper({
   }
   if (!linked) return <div className="flex flex-col gap-space-2">{children}</div>;
   return (
-    <Link href={href} className={`flex flex-col gap-space-2 rounded-card ${focusRing}`}>
+    <Link
+      href={href}
+      {...(onClick ? { onClick } : {})}
+      className={`flex flex-col gap-space-2 rounded-card ${focusRing}`}
+    >
       {children}
     </Link>
   );

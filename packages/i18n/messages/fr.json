@@ -791,6 +791,7 @@
       "open": "Ouvrir {name}",
       "level": "{name} — niveau : {label}. Toucher pour changer",
       "levelAdd": "{name} — donner un niveau",
+      "pickerLabel": "Ton niveau d’envie pour {name}",
       "priority": "Prioritaire",
       "why": "« {why} »"
     },
