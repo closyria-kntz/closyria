@@ -37,7 +37,8 @@ export function NavUnderline({
       }
       const box = container.getBoundingClientRect();
       const target = active.getBoundingClientRect();
-      element.style.setProperty("--underline-x", `${target.left - box.left}px`);
+      // In the container's own coordinates: a bar that scrolls sideways carries the line with its content.
+      element.style.setProperty("--underline-x", `${target.left - box.left + container.scrollLeft}px`);
       element.style.setProperty("--underline-width", `${target.width}px`);
       element.dataset.shown = "true";
     };

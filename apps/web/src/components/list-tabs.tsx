@@ -10,7 +10,8 @@ export type ListTab = { list: WishlistView; count: number };
 
 /**
  * The tabs of « Mes envies »: « Toutes mes envies » (`null`), then each list, each with its number of wishes. The
- * raspberry line follows the current one. Nothing to choose from (no list) shows nothing.
+ * raspberry line follows the current one. One row that scrolls sideways when the lists do not fit (never wrapped: the
+ * line would sit under the wrong row). Nothing to choose from (no list) shows nothing.
  */
 export function ListTabs({
   lists,
@@ -32,7 +33,7 @@ export function ListTabs({
       type="button"
       aria-current={current === id ? "true" : undefined}
       onClick={() => current !== id && onChange(id)}
-      className={`${focusRing} min-h-touch-target rounded-button px-space-3 text-ink-muted aria-[current=true]:font-strong aria-[current=true]:text-ink`}
+      className={`${focusRing} min-h-touch-target shrink-0 whitespace-nowrap rounded-button px-space-3 text-ink-muted aria-[current=true]:font-strong aria-[current=true]:text-ink`}
     >
       {name} <span className="font-body text-sm font-normal tabular-nums text-ink-muted">{count}</span>
     </button>
@@ -41,7 +42,7 @@ export function ListTabs({
     <nav
       ref={container}
       aria-label={t("label")}
-      className="relative flex flex-wrap gap-space-1 border-b border-line pb-space-1"
+      className="relative flex flex-nowrap gap-space-1 overflow-x-auto border-b border-line p-space-1"
     >
       {tab(null, t("all"), allCount)}
       {lists.map(({ list, count }) => tab(list.id, list.name, count))}
