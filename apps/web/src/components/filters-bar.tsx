@@ -16,10 +16,29 @@ type Props = {
   reference: ReferenceView | null;
   /** Number of filters on (the sort does not count). */
   activeCount: number;
+  /** Clears every filter (the sort stays: it is not a filter). */
+  onClearAll: () => void;
 };
 
 const field = `${inputClass} min-h-touch-target`;
 const chipClass = `inline-flex min-h-touch-target items-center gap-space-1 rounded-full border border-line bg-surface-raised px-space-3 text-sm text-ink hover:bg-surface-strong aria-pressed:border-accent aria-pressed:bg-surface-strong aria-pressed:font-strong ${focusRing}`;
+/** The drawn check of an active chip (decorative: `aria-pressed` carries the state). */
+function ChipCheck() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="size-space-4 shrink-0"
+    >
+      <path className="chip-check" pathLength={1} d="M3 8.5l3.2 3.2L13 4.8" />
+    </svg>
+  );
+}
 /** Highest first, as in the menu of a card: En feu, Mims, J'aime, Bof. */
 const CHIP_LEVELS: readonly LoveLevel[] = [4, 3, 2, 1];
 
@@ -51,7 +70,7 @@ function Select({
  * Sort, her level chips (several at once) and « Prioritaires », then the other filters (shop, type, colour,
  * audience, tag, stage) in a panel; state lives in the address.
  */
-export function FiltersBar({ filters, onChange, shops, tags, reference, activeCount }: Props) {
+export function FiltersBar({ filters, onChange, shops, tags, reference, activeCount, onClearAll }: Props) {
   const t = useTranslations("Views.filters");
   const levels = useLoveLevels();
   const [open, setOpen] = useState(activeCount > 0);
@@ -110,12 +129,8 @@ export function FiltersBar({ filters, onChange, shops, tags, reference, activeCo
           ))}
         </Select>
         {activeCount > 0 && (
-          <button
-            type="button"
-            className={`${buttonClass} min-h-touch-target`}
-            onClick={() => onChange(filters.sort ? { sort: filters.sort } : {})}
-          >
-            {t("reset")}
+          <button type="button" className={`${buttonClass} min-h-touch-target`} onClick={onClearAll}>
+            {t("clearAll", { count: activeCount })}
           </button>
         )}
       </div>
@@ -134,12 +149,14 @@ export function FiltersBar({ filters, onChange, shops, tags, reference, activeCo
               >
                 <span aria-hidden="true">{emoji}</span>
                 {label}
+                {filters.levels?.includes(level) && <ChipCheck />}
               </button>
             );
           })}
         </fieldset>
         <button type="button" aria-pressed={filters.priority ?? false} onClick={togglePriority} className={chipClass}>
           {t("priority")}
+          {filters.priority && <ChipCheck />}
         </button>
       </div>
       {open && (

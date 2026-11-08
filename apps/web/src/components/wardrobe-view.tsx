@@ -380,6 +380,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
         tags={tags}
         reference={reference}
         activeCount={count}
+        onClearAll={() => setFilters(filters.sort ? { sort: filters.sort } : {})}
       />
 
       {data.status === "error" && (

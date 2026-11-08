@@ -224,3 +224,25 @@ body::before {
     animation: none;
   }
 }
+
+/* The check of an active filter chip: its stroke is drawn once (pathLength 1), nothing moves in reduced motion. */
+.chip-check {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: chip-check-draw var(--motion-duration-base) var(--ease-standard) both;
+}
+
+@keyframes chip-check-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip-check {
+    animation: none;
+  }
+}

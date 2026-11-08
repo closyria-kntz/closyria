@@ -811,6 +811,7 @@
       "anyF": "Toutes",
       "stageView": "Cette vue",
       "reset": "Effacer les filtres",
+      "clearAll": "{count, plural, one {Effacer le filtre} other {Effacer les # filtres}}",
       "audienceOptions": {
         "women": "Femme",
         "men": "Homme",

@@ -481,3 +481,42 @@ test("étincelles seulement pour le niveau le plus haut, rien en mouvement rédu
   await expect(card.getByRole("button", { name: /niveau : En feu/ })).toBeVisible();
   await expect(card.getByTestId("level-sparks")).toHaveCount(0);
 });
+
+test("filtres : la coche se dessine dans la pastille active, « Effacer » vide tout en un clic et garde le tri", async ({
+  page,
+}) => {
+  await pasteAndWish(page);
+  await pasteAndWish(page);
+  await page.goto("/envies");
+  const cards = page.getByTestId("item-card");
+  await expect(cards).toHaveCount(2);
+  await expect(page.getByRole("button", { name: /^Effacer/ })).toHaveCount(0);
+
+  const liked = page.getByRole("button", { name: "J’aime", exact: true });
+  const priority = page.getByRole("button", { name: "Prioritaires", exact: true });
+  // A check is only drawn (non-zero dash) inside an active chip.
+  await expect(liked.locator("svg")).toHaveCount(0);
+  await liked.click();
+  await expect(liked).toHaveAttribute("aria-pressed", "true");
+  const stroke = liked.locator("svg path");
+  await expect(stroke).toHaveCount(1);
+  await expect(stroke).toHaveCSS("stroke-dasharray", /^\d+(\.\d+)?(px)?$/);
+  await expect(page.getByRole("button", { name: "Effacer le filtre", exact: true })).toBeVisible();
+
+  await priority.click();
+  await expect(cards).toHaveCount(0);
+  await page.getByRole("button", { name: "Filtres (2)" }).click();
+  await page.getByLabel("Trier par").selectOption("price_asc");
+  await expect(page).toHaveURL(/tri=price_asc/);
+  const clear = page.getByRole("button", { name: "Effacer les 2 filtres", exact: true });
+  await expect(clear).toBeVisible();
+  expect((await clear.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+
+  await clear.click();
+  await expect(cards).toHaveCount(2);
+  await expect(liked).toHaveAttribute("aria-pressed", "false");
+  await expect(priority).toHaveAttribute("aria-pressed", "false");
+  await expect(page).not.toHaveURL(/niveau=|prioritaire=/);
+  await expect(page).toHaveURL(/tri=price_asc/);
+  await expect(page.getByRole("button", { name: /^Effacer/ })).toHaveCount(0);
+});
