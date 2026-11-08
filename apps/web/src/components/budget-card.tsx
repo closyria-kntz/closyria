@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { budgetCardState, formatAmount } from "@/lib/budget";
 import { type BudgetScope, fetchBudget } from "@/lib/wardrobe-client";
+import { BudgetBars } from "./budget-bars";
 import { BudgetDialog } from "./budget-dialog";
 import { dateOf } from "./order-draft";
 import { buttonClass } from "./ui";
@@ -24,11 +25,14 @@ export function BudgetCard({
   draftCents,
   listName,
   reloadKey = 0,
+  onBudget,
 }: {
   scope: BudgetScope;
   draftCents: number;
   listName?: string | undefined;
   reloadKey?: number;
+  /** Told when the budget of the scope is read or changed (the band under the page needs it). */
+  onBudget?: (view: BudgetView | null) => void;
 }) {
   const t = useTranslations("Views.budgetCard");
   const tBudget = useTranslations("OrderDraft.budget");
@@ -61,17 +65,12 @@ export function BudgetCard({
     void load();
   }, [load, reloadKey]);
   const view = budget.view;
-  const state = budgetCardState(view, draftCents);
-  // The two widths go through custom properties (no inline pixel in the markup).
-  const bars = useRef<HTMLDivElement>(null);
-  const spentPct = state.kind === "none" ? 0 : state.spentPct;
-  const pickPct = state.kind === "none" ? 0 : state.pickPct;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the bars appear when the budget has been read.
+  const told = useRef(onBudget);
+  told.current = onBudget;
   useEffect(() => {
-    bars.current?.style.setProperty("--spent-width", `${spentPct}%`);
-    bars.current?.style.setProperty("--pick-width", `${pickPct}%`);
-  }, [spentPct, pickPct, budget.status]);
-
+    if (budget.status === "ready") told.current?.(view);
+  }, [budget.status, view]);
+  const state = budgetCardState(view, draftCents);
   const money = (cents: number) => formatAmount(locale, cents);
   const isList = "wishlistId" in scope;
   const dialogTitle = tBudget(isList ? "listTitle" : "profileTitle");
@@ -123,18 +122,7 @@ export function BudgetCard({
               {t("edit")}
             </button>
           </div>
-          <div
-            aria-hidden="true"
-            data-testid="budget-bars"
-            data-over={state.overBar}
-            ref={bars}
-            className="flex h-space-2 overflow-hidden rounded-full bg-surface-sunken"
-          >
-            <span className="w-(--spent-width) bg-ink-muted/55 transition-all duration-slow ease-standard" />
-            <span
-              className={`w-(--pick-width) transition-all duration-slow ease-standard ${state.overBar ? "bg-danger" : "bg-success"}`}
-            />
-          </div>
+          <BudgetBars spentPct={state.spentPct} pickPct={state.pickPct} overBar={state.overBar} />
           <p className="flex flex-wrap gap-x-space-4 text-sm text-ink-muted">
             <span className="inline-flex items-center gap-space-2">
               <i aria-hidden="true" data-testid="swatch-spent" className="size-space-2 rounded-full bg-ink-muted/55" />

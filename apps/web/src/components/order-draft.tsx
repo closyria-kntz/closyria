@@ -6,24 +6,21 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { z } from "zod";
-import { draftTotals, formatAmount, orderDraftErrorKey, sortForOrder } from "@/lib/budget";
+import { formatAmount, sortForOrder } from "@/lib/budget";
 import { useLiveRefresh } from "@/lib/live-changes";
 import { levelOf } from "@/lib/love-levels";
 import { profileHref, useCurrentProfile, useLoveLevels, useProfilesReady } from "@/lib/profile-context";
-import { useToastLift } from "@/lib/toast-lift";
-import { pushUndo } from "@/lib/undo";
 import {
   type BudgetScope,
   fetchAllWishes,
   fetchBudget,
   fetchBudgetHistory,
   fetchWishlists,
-  orderDraftOrdered,
   patchItem,
-  undoWith,
 } from "@/lib/wardrobe-client";
 import { BudgetDialog } from "./budget-dialog";
 import { ItemPreview } from "./item-preview";
+import { OrderBand } from "./order-band";
 import { SquareCheck } from "./square-check";
 import { buttonClass, focusRing } from "./ui";
 
@@ -62,13 +59,8 @@ export function OrderDraft() {
   const [budget, setBudget] = useState<Budget>({ status: "loading", view: null, history: [] });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [ordering, setOrdering] = useState(false);
   const generation = useRef(0);
   const budgetTitleId = useId();
-  const bandTitleId = useId();
-  const [band, setBand] = useState<HTMLElement | null>(null);
-  // The undo toast rises above the band instead of covering the totals.
-  useToastLift(band);
 
   // Only the latest read applies: a late answer for a previous scope never overwrites the current one.
   const budgetGeneration = useRef(0);
@@ -117,8 +109,8 @@ export function OrderDraft() {
   useEffect(() => {
     if (ready) void load();
   }, [ready, load]);
-  // Changed elsewhere (her phone, another tab): ticks, prices and budget again (already without a loading state); not while ordering.
-  useLiveRefresh(() => void load(), ready && !ordering && items.status === "ready");
+  // Changed elsewhere (her phone, another tab): ticks, prices and budget again (already without a loading state);
+  useLiveRefresh(() => void load(), ready && items.status === "ready");
 
   const setTicked = (id: string, inOrderDraft: boolean) =>
     setItems((previous) => ({
@@ -163,18 +155,6 @@ export function OrderDraft() {
     } else router.replace(addressWith(null), { scroll: false });
   };
 
-  async function order() {
-    if (!scope || ordering) return;
-    setOrdering(true);
-    setError(null);
-    const result = await orderDraftOrdered(scope);
-    setOrdering(false);
-    if (!result.ok) return setError(t(`errors.${orderDraftErrorKey(result.error)}`));
-    pushUndo(t("ordered", { count: result.itemIds.length }), undoWith(result.undo, load));
-    await load();
-  }
-
-  const totals = draftTotals(items.items, budget.view);
   const money = (cents: number) => formatAmount(locale, cents);
   const isList = scope !== null && "wishlistId" in scope;
   const budgetTitle = t(isList ? "budget.listTitle" : "budget.profileTitle");
@@ -365,39 +345,15 @@ export function OrderDraft() {
       )}
 
       {scope && (
-        <section
-          ref={setBand}
-          aria-labelledby={bandTitleId}
-          className="sticky bottom-space-0 z-10 flex flex-wrap items-center justify-between gap-space-3 rounded-card border-2 border-band-line bg-band p-space-4 text-ink shadow-lifted"
-        >
-          <h2 id={bandTitleId} className="sr-only">
-            {t("band.label")}
-          </h2>
-          <div aria-live="polite" className="flex flex-col items-start gap-space-1 tabular-nums">
-            <p className="font-strong">{t("band.total", { count: totals.count, amount: money(totals.totalCents) })}</p>
-            {totals.unknownPrices > 0 && (
-              <p className="text-sm">{t("band.unknown", { count: totals.unknownPrices })}</p>
-            )}
-            {totals.afterCents !== null &&
-              (totals.afterCents >= 0 ? (
-                <p className="rounded-button border border-success-edge bg-success-soft px-space-2 font-strong text-sm text-success">
-                  {t("band.left", { amount: money(totals.afterCents) })}
-                </p>
-              ) : (
-                <p className="rounded-button border border-danger-edge bg-danger-soft px-space-2 font-strong text-sm text-danger">
-                  {t("band.over", { amount: money(-totals.afterCents) })}
-                </p>
-              ))}
-          </div>
-          <button
-            type="button"
-            disabled={ordering}
-            onClick={() => void order()}
-            className={`${touch} inline-flex items-center rounded-button bg-band-button px-space-4 py-space-2 text-sm font-strong text-band-button-ink hover:bg-band-button-hover disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus-ring`}
-          >
-            {t("band.ordered")}
-          </button>
-        </section>
+        <OrderBand
+          scope={scope}
+          items={items.items}
+          budget={budget.view}
+          listName={isList ? items.listName : null}
+          showWhenEmpty
+          onOrdered={load}
+          onToggle={(item) => void toggle(item)}
+        />
       )}
 
       {scope && (

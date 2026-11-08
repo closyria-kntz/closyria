@@ -56,7 +56,7 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   // The toast (« Budget enregistré · Annuler ») sits above the band, never over the totals.
   await expect(toast(page)).toContainText("Budget enregistré");
   await expect(async () => {
-    const message = await toast(page).locator("p").boundingBox();
+    const message = await toast(page).locator("p").filter({ hasText: "Budget enregistré" }).boundingBox();
     const bar = await band(page).boundingBox();
     expect(message && bar && message.y + message.height <= bar.y).toBe(true);
   }).toPass();
@@ -66,8 +66,9 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await expect(ticked).toHaveCSS("border-top-color", "rgb(190, 24, 93)");
   await expect(ticked.getByText(/89\s€/)).toHaveCSS("font-variant-numeric", "tabular-nums");
   await expect(band(page).getByText(/2 articles/)).toHaveCSS("font-variant-numeric", "tabular-nums");
-  // A white band (chosen on 2026-11-07), and over the budget in red (the danger color).
-  await expect(band(page)).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  // A glass band (refonte « Cocon lumineux », replaces the white one of 2026-11-07), and over the budget in red.
+  await expect(band(page)).toHaveClass(/glass/);
+  await expect(band(page)).toHaveCSS("background-color", "color(srgb 1 1 1 / 0.62)");
   // Buttons show the hand, like links, and « J'ai commandé » darkens on hover.
   const ordered = band(page).getByRole("button", { name: "J’ai commandé" });
   await expect(ordered).toHaveCSS("cursor", "pointer");
@@ -77,7 +78,6 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
     await ordered.hover();
     await expect(ordered).toHaveCSS("background-color", "rgb(42, 26, 36)");
   }
-  await expect(band(page)).toHaveCSS("border-top-color", "rgb(246, 214, 228)");
   // Over the budget: a soft red fill, a red edge and red text (version B, same style as the green one).
   const over = band(page).getByText(/au-dessus/);
   await expect(over).toHaveCSS("background-color", "rgb(251, 227, 230)");
@@ -418,4 +418,130 @@ test("Mes envies : un onglet par liste, la grille filtrée et le budget de la li
   await expect(page.getByTestId("item-card")).toHaveCount(2);
   await expect(card).toContainText("Pas de budget");
   await expect(card).not.toContainText("Budget du mois");
+});
+
+// Refonte « Cocon lumineux », task 10: the « Ma commande » band at the bottom of « Mes envies ».
+
+const envBand = (page: Page) => page.getByTestId("order-band");
+const takeCard = (page: Page, name: string) =>
+  page.getByTestId("item-card").filter({ hasText: name }).getByTestId("card-take");
+
+async function setBudget(page: Page, dialogName: string, amount: string) {
+  const dialog = page.getByRole("dialog", { name: dialogName });
+  await dialog.getByLabel("Montant (en euros)").fill(amount);
+  await dialog.getByRole("radio", { name: "Par mois" }).check();
+  await dialog.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(dialog).toHaveCount(0);
+}
+
+test("Mes envies : le bandeau « Ma commande », trois envies prises, une décochée, « J’ai commandé (2) »", async ({
+  page,
+}, testInfo) => {
+  await wishAt(page, "Robe Alma", "89");
+  await wishAt(page, "Gilet Brume", "65");
+  await wishAt(page, "Jupe Été", "30");
+  await page.goto("/listes");
+  await page.getByLabel("Nom de la nouvelle liste").fill("Été");
+  await page.getByRole("button", { name: "Créer la liste" }).click();
+  await expect(toast(page)).toContainText("Liste « Été » créée");
+  await page.goto("/envies");
+  await page.getByRole("button", { name: "Sélectionner", exact: true }).click();
+  for (const name of ["Robe Alma", "Gilet Brume", "Jupe Été"]) {
+    await page.getByTestId("item-card").getByRole("button", { name }).click();
+  }
+  await page
+    .getByRole("region", { name: "Actions sur la sélection" })
+    .getByRole("button", { name: "Liste", exact: true })
+    .click();
+  await page.getByRole("dialog", { name: "Ajouter à une liste" }).getByRole("button", { name: "Été" }).click();
+  await expect(toast(page)).toContainText("3 articles ajoutés à Été");
+  await page.goto("/envies");
+  const card = page.getByTestId("budget-card");
+  await card.getByRole("button", { name: "Ajouter un budget" }).click();
+  await setBudget(page, "Mon budget", "300");
+  await page.getByRole("navigation", { name: "Mes listes" }).getByRole("button", { name: /^Été/ }).click();
+  await card.getByRole("button", { name: "Ajouter un budget" }).click();
+  await setBudget(page, "Budget de la liste", "200");
+  await page
+    .getByRole("navigation", { name: "Mes listes" })
+    .getByRole("button", { name: /Toutes mes envies/ })
+    .click();
+
+  // Nothing ticked: no band.
+  await expect(page.getByTestId("item-card")).toHaveCount(3);
+  await expect(envBand(page)).toHaveCount(0);
+  for (const name of ["Robe Alma", "Gilet Brume", "Jupe Été"]) await takeCard(page, name).click();
+  const bar = envBand(page);
+  await expect(bar).toBeVisible();
+  await expect(bar.getByRole("heading", { name: "Ma commande" })).toBeVisible();
+  await expect(bar).toContainText(/3 articles · 184\s€/);
+  await expect(bar).toContainText(/Il te resterait 116\s€/);
+  await expect(bar).toHaveClass(/glass/);
+  await expect(bar.getByTestId("budget-bars")).toBeVisible();
+  await axe(page);
+  await page.screenshot({ path: testInfo.outputPath("envies-bandeau.png") });
+
+  // « Voir » folds the ticked ones out; unticking keeps the row (to tick it again) until the list is closed.
+  const see = bar.getByRole("button", { name: "Voir" });
+  await expect(see).toHaveAttribute("aria-expanded", "false");
+  await see.click();
+  await expect(see).toHaveAttribute("aria-expanded", "true");
+  const rows = bar.getByRole("checkbox");
+  await expect(rows).toHaveCount(3);
+  await expect(rows.first()).toBeChecked();
+  await bar.getByRole("checkbox", { name: /Jupe Été/ }).uncheck();
+  await expect(bar.getByRole("checkbox", { name: /Jupe Été/ })).toBeVisible();
+  await expect(bar).toContainText(/2 articles · 154\s€/);
+  await expect(bar.getByRole("button", { name: "J’ai commandé (2)" })).toBeVisible();
+  await bar.getByRole("checkbox", { name: /Jupe Été/ }).check();
+  await expect(bar.getByRole("button", { name: "J’ai commandé (3)" })).toBeVisible();
+  await bar.getByRole("checkbox", { name: /Jupe Été/ }).uncheck();
+  await see.click();
+  await see.click();
+  await expect(bar.getByRole("checkbox")).toHaveCount(2);
+
+  await bar.getByRole("button", { name: "J’ai commandé (2)" }).click();
+  await expect(toast(page)).toContainText("2 articles passés en Commandé");
+  await expect(envBand(page)).toHaveCount(0);
+  // Only the two went to « Commandé »: the unticked one stays in Mes envies.
+  await expect(page.getByTestId("item-card")).toHaveCount(1);
+  await expect(page.getByTestId("item-card")).toContainText("Jupe Été");
+  await expect(card).toContainText(/Déjà commandé : 154\s€/);
+  await page.getByRole("navigation", { name: "Mes listes" }).getByRole("button", { name: /^Été/ }).click();
+  await expect(card).toContainText(/Déjà commandé : 154\s€/);
+});
+
+test("Mes envies : tout décocher puis « J’ai commandé (0) » secoue le bouton ; mouvement réduit : rien ne bouge", async ({
+  page,
+}) => {
+  await wishAt(page, "Robe Alma", "89");
+  await page.goto("/envies");
+  await takeCard(page, "Robe Alma").click();
+  const bar = envBand(page);
+  await expect(bar).toContainText(/1 article · 89\s€/);
+  await bar.getByRole("button", { name: "Voir" }).click();
+  await bar.getByRole("checkbox", { name: /Robe Alma/ }).uncheck();
+  // Still there while the list is open, so she can tick it again.
+  await expect(bar.getByRole("button", { name: "J’ai commandé (0)" })).toBeVisible();
+  const ordered = bar.getByRole("button", { name: "J’ai commandé (0)" });
+  await ordered.click();
+  await expect(toast(page)).toContainText("Coche au moins une envie");
+  await expect(ordered).toHaveAttribute("data-shaking", "true");
+  await expect(ordered).not.toHaveCSS("animation-name", "none");
+  await expect(ordered).toHaveAttribute("data-shaking", "false");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await ordered.click();
+  await expect(ordered).toHaveCSS("animation-name", "none");
+  await expect(bar.getByTestId("count-roll")).toHaveCSS("animation-name", "none");
+  // Closed with nothing ticked: the band goes.
+  await bar.getByRole("button", { name: "Voir" }).click();
+  await expect(envBand(page)).toHaveCount(0);
+});
+
+test("Mes envies : une envie sans prix cochée, 1 article, 0 €, « dont 1 prix inconnu »", async ({ page }) => {
+  await wishAt(page, "Sac sans prix", "");
+  await page.goto("/envies");
+  await takeCard(page, "Sac sans prix").click();
+  await expect(envBand(page)).toContainText(/1 article · 0\s€/);
+  await expect(envBand(page)).toContainText("dont 1 prix inconnu");
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ItemView, ReferenceView, TagView, WishlistView } from "@closyria/shared";
+import type { BudgetView, ItemView, ReferenceView, TagView, WishlistView } from "@closyria/shared";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -39,6 +39,7 @@ import { FiltersBar } from "./filters-bar";
 import { ItemGrid } from "./item-grid";
 import { ItemPreview } from "./item-preview";
 import { ListTabs } from "./list-tabs";
+import { OrderBand } from "./order-band";
 import { LIST_PARAM, PREVIEW_PARAM } from "./order-draft";
 import { SelectionBar } from "./selection-bar";
 import { buttonClass, primaryButtonClass } from "./ui";
@@ -265,9 +266,14 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     async (item: ItemView) => {
       if (taking.current.has(item.id)) return;
       taking.current.add(item.id);
+      // Ticked at once (a checklist), put back if the save fails.
+      changed({ ...item, inOrderDraft: !item.inOrderDraft });
       const result = await patchItem(item.id, { inOrderDraft: !item.inOrderDraft });
       taking.current.delete(item.id);
-      if (!result.ok) return pushUndo(tItem(`errors.${result.error}` as "errors.failed"), null);
+      if (!result.ok) {
+        changed(item);
+        return pushUndo(tItem(`errors.${result.error}` as "errors.failed"), null);
+      }
       changed(result.item);
     },
     [changed, tItem],
@@ -352,6 +358,10 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     : current.id
       ? { profileId: current.id }
       : null;
+  // The budget of the scope as the card read it (the band needs it); kept with its scope so another one never shows.
+  const [bandBudget, setBandBudget] = useState<{ key: string; view: BudgetView | null } | null>(null);
+  const scopeKey = JSON.stringify(budgetScope);
+  const budgetOfScope = bandBudget?.key === scopeKey ? bandBudget.view : null;
   const tabs = useMemo(
     () =>
       lists.items.map((list) => {
@@ -413,6 +423,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           draftCents={draftCents}
           listName={activeList?.name}
           reloadKey={reloadToken + scopeToken}
+          onBudget={(next) => setBandBudget({ key: scopeKey, view: next })}
         />
       )}
       {view === "envies" && wishesError && (
@@ -527,6 +538,19 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           onSelectAll={() => setSelected(new Set(data.items.slice(0, 200).map((item) => item.id)))}
           onGone={gone}
           reload={reload}
+        />
+      )}
+      {view === "envies" && budgetScope && (!listId || activeList) && (
+        <OrderBand
+          scope={budgetScope}
+          items={scopeWishes}
+          budget={budgetOfScope}
+          listName={activeList?.name}
+          onOrdered={async () => {
+            setScopeToken((value) => value + 1);
+            await reload();
+          }}
+          onToggle={(item) => void take(item)}
         />
       )}
       {view === "envies" && (

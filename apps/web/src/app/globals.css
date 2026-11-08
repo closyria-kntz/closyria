@@ -269,3 +269,39 @@ body::before {
     animation: none;
   }
 }
+
+/* « Ma commande »: the count rolls in once when it changes, the button shakes once when nothing is ticked. */
+.count-roll {
+  animation: count-roll var(--motion-duration-base) var(--ease-standard) both;
+}
+
+@keyframes count-roll {
+  from {
+    transform: translateY(var(--spacing-space-2));
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.band-shake[data-shaking="true"] {
+  animation: band-shake var(--motion-duration-base) var(--ease-standard) both;
+}
+
+@keyframes band-shake {
+  20%,
+  60% {
+    transform: translateX(calc(var(--spacing-space-1) * -1));
+  }
+  40%,
+  80% {
+    transform: translateX(var(--spacing-space-1));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .count-roll,
+  .band-shake[data-shaking="true"] {
+    animation: none;
+  }
+}

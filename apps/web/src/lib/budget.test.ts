@@ -204,3 +204,14 @@ describe("budgetCardState", () => {
     expect(budgetCardState({ ...monthly(0, 0) }, 0)).toMatchObject({ spentPct: 0, pickPct: 0 });
   });
 });
+
+describe("draftTotals, an item without price ticked", () => {
+  it("counts one article, 0 € and one unknown price", () => {
+    expect(draftTotals([item("a", null)], null)).toEqual({
+      count: 1,
+      totalCents: 0,
+      unknownPrices: 1,
+      afterCents: null,
+    });
+  });
+});

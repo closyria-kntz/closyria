@@ -1096,11 +1096,15 @@
     "toggleFailed": "La sélection n’a pas pu être enregistrée. Réessaie.",
     "band": {
       "label": "Ma commande",
+      "title": "Ma commande",
+      "titleList": "Ma commande, liste « {name} »",
+      "see": "Voir",
+      "items": "Envies de la commande",
       "total": "{count, plural, one {# article} other {# articles}} · {amount}",
       "unknown": "dont {count, plural, one {# prix inconnu} other {# prix inconnus}}",
       "left": "Il te resterait {amount}",
       "over": "{amount} au-dessus",
-      "ordered": "J’ai commandé"
+      "ordered": "J’ai commandé ({count})"
     },
     "ordered": "{count, plural, one {# article passé} other {# articles passés}} en Commandé",
     "errors": {
