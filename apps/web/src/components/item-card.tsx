@@ -19,8 +19,9 @@ export type CardActions = {
   onTrashed: (id: string) => void;
   /** Re-reads what changed (after « Annuler »). */
   reload: () => Promise<void>;
-  /** « Je le prends » / « Retirer » on the card (« Mes envies » only; without it the button does not show). */
-  onTake?: (item: ItemView) => void;
+  /** « Je le prends » / « Retirer » on the card (« Mes envies » only; without it the button does not show);
+   * `photo` is the card's photo, where the flight to « Ma commande » starts. */
+  onTake?: (item: ItemView, photo?: Element | null) => void;
   /** « Aperçu » on the card (« Mes envies » only). */
   onPreview?: (item: ItemView) => void;
 };
@@ -175,7 +176,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               data-testid="card-take"
               aria-pressed={item.inOrderDraft}
               aria-label={t(item.inOrderDraft ? "removeOf" : "takeOf", { name })}
-              onClick={() => quick.onTake?.(item)}
+              onClick={(event) => quick.onTake?.(item, event.currentTarget.closest("[data-photo]"))}
               className={`pointer-events-auto min-h-touch-target flex-1 rounded-button px-space-2 text-sm font-strong ${focusRing} ${
                 item.inOrderDraft ? "glass text-ink" : "bg-button-bg text-button-ink"
               }`}

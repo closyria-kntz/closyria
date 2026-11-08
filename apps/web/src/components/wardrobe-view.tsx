@@ -5,8 +5,10 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { z } from "zod";
 import { draftTotals, formatAmount } from "@/lib/budget";
+import { flyTo } from "@/lib/fly-to";
 import { useLiveRefresh } from "@/lib/live-changes";
 import { profileHref, useCurrentProfile, useLoveLevels, useProfilesReady } from "@/lib/profile-context";
 import { createTickQueue, type TickQueue } from "@/lib/tick-queue";
@@ -290,10 +292,16 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   const tItemRef = useRef(tItem);
   tItemRef.current = tItem;
   const take = useCallback(
-    async (item: ItemView) => {
+    async (item: ItemView, photo?: Element | null) => {
       const next = !item.inOrderDraft;
-      setTick(item.id, next);
+      // The tick is state at once, saved in the background; the flight is only a flourish and waits for nothing.
+      // The band shows first (it is hidden while nothing is ticked), then the arch flies to it.
+      flushSync(() => setTick(item.id, next));
       ticks.current?.set(item.id, next, item.inOrderDraft);
+      const band = document.querySelector("[data-testid=order-band]");
+      if (next && photo && band) {
+        void flyTo(photo, band, "var(--color-accent)");
+      }
     },
     [setTick],
   );
@@ -331,7 +339,9 @@ export function WardrobeView({ view }: { view: ViewKey }) {
       onChanged: changed,
       onTrashed: trashed,
       reload,
-      ...(view === "envies" ? { onTake: (item: ItemView) => void take(item), onPreview: openPreview } : {}),
+      ...(view === "envies"
+        ? { onTake: (item: ItemView, photo?: Element | null) => void take(item, photo), onPreview: openPreview }
+        : {}),
     }),
     [changed, trashed, reload, view, take, openPreview],
   );

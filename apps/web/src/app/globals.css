@@ -146,6 +146,72 @@ body::before {
     var(--radius-card) var(--radius-card);
 }
 
+/* The grid arrives in a short cascade: each card rises and fades in, the first twelve one after the other (later ones
+   at once). The end state is the card's own style (visible), so nothing waits at opacity 0; the durations are zero
+   under reduced motion, and the animation is dropped there too. */
+.card {
+  animation: card-rise var(--motion-duration-slow) var(--ease-emphasized) both;
+}
+@keyframes card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--spacing-space-4)) scale(0.97);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+}
+.card:nth-child(2) {
+  animation-delay: calc(1 * var(--motion-duration-stagger));
+}
+.card:nth-child(3) {
+  animation-delay: calc(2 * var(--motion-duration-stagger));
+}
+.card:nth-child(4) {
+  animation-delay: calc(3 * var(--motion-duration-stagger));
+}
+.card:nth-child(5) {
+  animation-delay: calc(4 * var(--motion-duration-stagger));
+}
+.card:nth-child(6) {
+  animation-delay: calc(5 * var(--motion-duration-stagger));
+}
+.card:nth-child(7) {
+  animation-delay: calc(6 * var(--motion-duration-stagger));
+}
+.card:nth-child(8) {
+  animation-delay: calc(7 * var(--motion-duration-stagger));
+}
+.card:nth-child(9) {
+  animation-delay: calc(8 * var(--motion-duration-stagger));
+}
+.card:nth-child(10) {
+  animation-delay: calc(9 * var(--motion-duration-stagger));
+}
+.card:nth-child(11) {
+  animation-delay: calc(10 * var(--motion-duration-stagger));
+}
+.card:nth-child(12) {
+  animation-delay: calc(11 * var(--motion-duration-stagger));
+}
+
+/* The little arch that flies from a card to « Ma commande » (lib/fly-to.ts sets --fly-color and moves it). */
+.fly-arch {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 70;
+  width: var(--spacing-space-7);
+  aspect-ratio: 3 / 4;
+  pointer-events: none;
+  background: var(--fly-color);
+  border-radius:
+    var(--radius-arch) var(--radius-arch) var(--radius-card) var(--radius-card) / var(--radius-arch) var(--radius-arch)
+    var(--radius-card) var(--radius-card);
+}
+
 /* « Aperçu » and « Je le prends » on a card: under a mouse they show when the card is hovered or has the focus (the
    keyboard reaches them); on a touch screen they are always there. */
 .card-quick {

@@ -43,6 +43,28 @@ test.describe("mouvement réduit", () => {
     const name = await page.evaluate(() => getComputedStyle(document.body, "::before").animationName);
     expect(name).toBe("none");
   });
+
+  test("les cartes sont toutes visibles d'un coup, sans cascade", async ({ page }) => {
+    await oneWish(page);
+    const seen = await page.evaluate(() =>
+      [...document.querySelectorAll("[data-testid=item-card]")].map((card) => {
+        const style = getComputedStyle(card);
+        return { opacity: style.opacity, duration: style.animationDuration, delay: style.animationDelay };
+      }),
+    );
+    expect(seen.length).toBeGreaterThan(0);
+    for (const card of seen) expect(card).toEqual({ opacity: "1", duration: "0s", delay: "0s" });
+  });
+});
+
+test("sans mouvement réduit, les cartes arrivent en cascade et finissent visibles", async ({ page }) => {
+  await oneWish(page);
+  const name = await page
+    .getByTestId("item-card")
+    .first()
+    .evaluate((el) => getComputedStyle(el).animationName);
+  expect(name).toBe("card-rise");
+  await expect(page.getByTestId("item-card").first()).toHaveCSS("opacity", "1");
 });
 
 test("l'aurore bouge sinon, derrière le contenu", async ({ page }) => {
@@ -95,4 +117,36 @@ test("sans backdrop-filter, la barre du haut est opaque", async ({ page }) => {
   await page.evaluate(() => document.documentElement.classList.add("no-backdrop"));
   expect(await alpha()).toBe(255);
   expect(await glass.evaluate((el) => getComputedStyle(el).backdropFilter)).toBe("none");
+});
+
+test("« Je le prends » : le bandeau est là aussitôt, une arche y vole puis disparaît", async ({ page }) => {
+  await oneWish(page);
+  await page.getByTestId("item-card").first().hover();
+  await page.getByTestId("card-take").first().click();
+  await expect(page.getByTestId("order-band")).toBeVisible();
+  await expect(page.locator(".fly-arch"))
+    .toHaveCount(1, { timeout: 2_000 })
+    .catch(() => {});
+  await expect(page.locator(".fly-arch")).toHaveCount(0, { timeout: 5_000 });
+  await expect(page.getByTestId("card-take").first()).toHaveAttribute("aria-pressed", "true");
+});
+
+test.describe("mouvement réduit, prendre un article", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("aucune arche n'est créée", async ({ page }) => {
+    await oneWish(page);
+    await page.evaluate(() => {
+      (window as unknown as { __arches: number }).__arches = 0;
+      new MutationObserver((records) => {
+        for (const r of records)
+          for (const n of r.addedNodes)
+            if (n instanceof HTMLElement && n.classList.contains("fly-arch"))
+              (window as unknown as { __arches: number }).__arches++;
+      }).observe(document.body, { childList: true });
+    });
+    await page.getByTestId("item-card").first().hover();
+    await page.getByTestId("card-take").first().click();
+    await expect(page.getByTestId("order-band")).toBeVisible();
+    expect(await page.evaluate(() => (window as unknown as { __arches: number }).__arches)).toBe(0);
+  });
 });

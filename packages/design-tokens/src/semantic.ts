@@ -93,6 +93,9 @@ export const defaultSemanticTokens = {
   "motion-duration-fast": duration.fast,
   "motion-duration-base": duration.base,
   "motion-duration-slow": duration.slow,
+  // An item flies to « Ma commande »; the cards of the grid arrive one after the other (both zeroed under reduced motion).
+  "motion-duration-fly": "700ms",
+  "motion-duration-stagger": "50ms",
   // The aurora behind the page drifts very slowly (zeroed with the others under reduced motion; also stopped in CSS).
   "motion-duration-aurora": "60s",
   "ease-standard": easing.standard,
