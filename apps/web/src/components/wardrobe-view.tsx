@@ -1,13 +1,23 @@
 "use client";
 
-import type { ItemView, ReferenceView, TagView } from "@closyria/shared";
+import type { ItemView, ReferenceView, TagView, WishlistView } from "@closyria/shared";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { z } from "zod";
+import { draftTotals } from "@/lib/budget";
 import { useLiveRefresh } from "@/lib/live-changes";
 import { profileHref, useCurrentProfile, useProfilesReady } from "@/lib/profile-context";
-import { fetchFacets, fetchItemsPage, fetchReference, fetchTags } from "@/lib/wardrobe-client";
+import {
+  type BudgetScope,
+  fetchAllWishes,
+  fetchFacets,
+  fetchItemsPage,
+  fetchReference,
+  fetchTags,
+  fetchWishlists,
+} from "@/lib/wardrobe-client";
 import {
   activeFilterCount,
   filtersFromParams,
@@ -22,8 +32,11 @@ import {
   type ViewFilters,
   type ViewKey,
 } from "@/lib/wardrobe-view";
+import { BudgetCard } from "./budget-card";
 import { FiltersBar } from "./filters-bar";
 import { ItemGrid } from "./item-grid";
+import { ListTabs } from "./list-tabs";
+import { LIST_PARAM } from "./order-draft";
 import { SelectionBar } from "./selection-bar";
 import { buttonClass, primaryButtonClass } from "./ui";
 
@@ -45,7 +58,13 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   const current = useCurrentProfile();
 
   const filters = useMemo(() => filtersFromParams(search), [search]);
-  const query = useMemo(() => toItemQuery(view, filters, current.id), [view, filters, current.id]);
+  // « Mes envies » only: the list tab in the address (`?liste=<id>`), null for « Toutes mes envies ».
+  const listParam = z.uuid().safeParse(search.get(LIST_PARAM));
+  const listId = view === "envies" && listParam.success ? listParam.data : null;
+  const query = useMemo(() => {
+    const base = toItemQuery(view, filters, current.id);
+    return listId ? { ...base, wishlist: listId } : base;
+  }, [view, filters, current.id, listId]);
   const queryKey = JSON.stringify(query);
 
   const [data, setData] = useState<Loaded>({ items: [], nextCursor: null, status: "loading" });
@@ -59,6 +78,13 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   const [reference, setReference] = useState<ReferenceView | null>(null);
   // Bumped to read the first page again (retry, undo): the effect depends on it.
   const [reloadToken, setReloadToken] = useState(0);
+  // « Mes envies »: her lists and every wish she has at « Repéré » (counts of the tabs, total of the ticked wishes).
+  const [lists, setLists] = useState<{ status: "loading" | "ready"; items: WishlistView[] }>({
+    status: "loading",
+    items: [],
+  });
+  const [wishes, setWishes] = useState<ItemView[]>([]);
+  const [scopeToken, setScopeToken] = useState(0);
   const generation = useRef(0);
   const moreController = useRef<AbortController | null>(null);
   const sentinel = useRef<HTMLDivElement>(null);
@@ -72,6 +98,26 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     fetchTags().then(setTags, () => {});
     fetchReference().then(setReference, () => {});
   }, []);
+
+  useEffect(() => {
+    if (view !== "envies" || !ready) return;
+    let stale = false;
+    void reloadToken;
+    void scopeToken;
+    fetchWishlists().then(
+      (items) => !stale && setLists({ status: "ready", items }),
+      () => !stale && setLists((previous) => ({ ...previous, status: "ready" })),
+    );
+    const wanted: Record<string, string> = { stage: "spotted" };
+    if (current.id) wanted.profile = current.id;
+    fetchAllWishes(wanted).then(
+      (items) => !stale && setWishes(items),
+      () => {},
+    );
+    return () => {
+      stale = true;
+    };
+  }, [view, ready, current.id, reloadToken, scopeToken]);
 
   // First page, again whenever the view, the filters, the profile or the reload token change.
   // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey stands for query.
@@ -161,10 +207,17 @@ export function WardrobeView({ view }: { view: ViewKey }) {
       // Kept as it is: the next change tries again.
     }
   }, [queryKey]);
-  useLiveRefresh(() => void refreshQuietly(), ready && !selecting && data.status === "ready");
+  useLiveRefresh(
+    () => {
+      setScopeToken((value) => value + 1);
+      void refreshQuietly();
+    },
+    ready && !selecting && data.status === "ready",
+  );
   const gone = useCallback((ids: readonly string[]) => {
     const away = new Set(ids);
     setData((previous) => ({ ...previous, items: previous.items.filter((item) => !away.has(item.id)) }));
+    setWishes((previous) => previous.filter((item) => !away.has(item.id)));
   }, []);
 
   // A card changed from its pill or its « … » menu: kept while it still belongs to the view and its filters.
@@ -174,6 +227,11 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: levelsKey stands for levels.
   const changed = useCallback(
     (item: ItemView) => {
+      setWishes((previous) =>
+        item.stage === "spotted"
+          ? previous.map((known) => (known.id === item.id ? item : known))
+          : previous.filter((known) => known.id !== item.id),
+      );
       const stays = stillShown(item, viewStage, current.id, { tag, levels, priority });
       setData((previous) => ({
         ...previous,
@@ -216,6 +274,48 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [selecting, leaveSelection]);
 
+  // The tabs and the budget card of « Mes envies »; the ticked wishes of the scope are counted here, once.
+  const activeList = lists.items.find((list) => list.id === listId) ?? null;
+  const scopeWishes = useMemo(() => {
+    if (!listId) return wishes;
+    const inList = new Set(activeList?.itemIds ?? []);
+    return wishes.filter((item) => inList.has(item.id));
+  }, [wishes, listId, activeList]);
+  const draftCents = draftTotals(scopeWishes, null).totalCents;
+  const budgetScope: BudgetScope | null = listId
+    ? { wishlistId: listId }
+    : current.id
+      ? { profileId: current.id }
+      : null;
+  const tabs = useMemo(
+    () =>
+      lists.items.map((list) => {
+        const inList = new Set(list.itemIds);
+        return { list, count: wishes.filter((item) => inList.has(item.id)).length };
+      }),
+    [lists.items, wishes],
+  );
+  const chooseList = (id: string | null) => {
+    const params = new URLSearchParams(search.toString());
+    if (id) params.set(LIST_PARAM, id);
+    else params.delete(LIST_PARAM);
+    const text = paramsText(params);
+    router.push(text ? `${pathname}?${text}` : pathname, { scroll: false });
+  };
+  // A list that no longer exists: back to « Toutes mes envies ».
+  useEffect(() => {
+    if (!listId || lists.status !== "ready" || activeList) return;
+    const params = new URLSearchParams(search.toString());
+    params.delete(LIST_PARAM);
+    const text = paramsText(params);
+    router.replace(text ? `${pathname}?${text}` : pathname, { scroll: false });
+  }, [listId, lists.status, activeList, search, router, pathname]);
+  const orderHref = (() => {
+    const base = profileHref("/envies/commande", current.id, current.isDefault);
+    if (!listId) return base;
+    return `${base}${base.includes("?") ? "&" : "?"}${LIST_PARAM}=${listId}`;
+  })();
+
   const count = activeFilterCount(filters);
   const label = t(`title.${view}`);
   const isEmpty = data.status === "ready" && data.items.length === 0;
@@ -226,10 +326,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
         <h1 className="font-display text-title font-strong">{label}</h1>
         <div className="flex flex-wrap gap-space-2">
           {view === "envies" && !filters.stage && !selecting && (
-            <Link
-              href={profileHref("/envies/commande", current.id, current.isDefault)}
-              className={`${buttonClass} ${touch}`}
-            >
+            <Link href={orderHref} className={`${buttonClass} ${touch}`}>
               {t("prepareOrder")}
             </Link>
           )}
@@ -244,6 +341,15 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           )}
         </div>
       </div>
+      {view === "envies" && <ListTabs lists={tabs} current={listId} allCount={wishes.length} onChange={chooseList} />}
+      {view === "envies" && budgetScope && (!listId || activeList) && (
+        <BudgetCard
+          scope={budgetScope}
+          draftCents={draftCents}
+          listName={activeList?.name}
+          reloadKey={reloadToken + scopeToken}
+        />
+      )}
       {selecting && selected.size === 0 && <p className="text-sm text-ink-muted">{t("selection.hint")}</p>}
       <FiltersBar
         filters={filters}

@@ -97,3 +97,43 @@ export function orderDraftErrorKey(error: string): "empty" | "tooLarge" | "faile
   if (error === "order_draft_too_large") return "tooLarge";
   return "failed";
 }
+
+/** What the budget card on « Mes envies » shows (spec §6). Bars are whole percents of the budget. */
+export type BudgetCardState =
+  | { kind: "none" }
+  | {
+      kind: "ok";
+      amount: number;
+      spent: number;
+      rest: number;
+      spentPct: number;
+      pickPct: number;
+      /** What is ticked would take the budget over (the second bar turns red). */
+      overBar: boolean;
+    }
+  | {
+      kind: "over";
+      amount: number;
+      spent: number;
+      over: number;
+      spentPct: number;
+      pickPct: number;
+      overBar: true;
+    };
+
+/**
+ * The card for a budget and the total of the ticked items (`draftCents`, unknown prices counting 0). « Reste » and
+ * « Dépassé de » are about what is already ordered; the ticked items only show in the second bar.
+ */
+export function budgetCardState(budget: BudgetView | null, draftCents: number): BudgetCardState {
+  if (!budget) return { kind: "none" };
+  const amount = budget.amountCents;
+  const spent = budget.current?.spentCents ?? 0;
+  const draft = Math.max(0, draftCents);
+  const spentPct = amount > 0 ? Math.min(100, Math.round((spent / amount) * 100)) : 0;
+  const pickPct = amount > 0 ? Math.max(0, Math.min(100 - spentPct, Math.round((draft / amount) * 100))) : 0;
+  const overBar = spent + draft > amount;
+  return spent > amount
+    ? { kind: "over", amount, spent, over: spent - amount, spentPct, pickPct, overBar: true }
+    : { kind: "ok", amount, spent, rest: amount - spent, spentPct, pickPct, overBar };
+}

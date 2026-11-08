@@ -1,6 +1,14 @@
 import type { BudgetView, ItemView } from "@closyria/shared";
 import { describe, expect, it } from "vitest";
-import { budgetInputFrom, budgetInputOf, draftTotals, formatAmount, orderDraftErrorKey, sortForOrder } from "./budget";
+import {
+  budgetCardState,
+  budgetInputFrom,
+  budgetInputOf,
+  draftTotals,
+  formatAmount,
+  orderDraftErrorKey,
+  sortForOrder,
+} from "./budget";
 
 const item = (id: string, priceCents: number | null, extra: Partial<ItemView> = {}) =>
   ({
@@ -136,5 +144,63 @@ describe("budgetInputOf", () => {
       startsOn: "2026-12-01",
       endsOn: "2026-12-15",
     });
+  });
+});
+
+describe("budgetCardState", () => {
+  const monthly = (amountCents: number, spentCents: number | null): BudgetView => ({
+    amountCents,
+    period: "month",
+    startsOn: null,
+    endsOn: null,
+    current:
+      spentCents === null
+        ? null
+        : {
+            start: "2026-11-01T00:00:00.000+01:00",
+            end: "2026-12-01T00:00:00.000+01:00",
+            spentCents,
+            remainingCents: amountCents - spentCents,
+          },
+    ended: spentCents === null,
+  });
+
+  it("has no budget: none", () => {
+    expect(budgetCardState(null, 12_000)).toEqual({ kind: "none" });
+  });
+  it("500 / 215 spent / 120 ticked: 285 left, bars 43 % and 24 %", () => {
+    expect(budgetCardState(monthly(50_000, 21_500), 12_000)).toEqual({
+      kind: "ok",
+      amount: 50_000,
+      spent: 21_500,
+      rest: 28_500,
+      spentPct: 43,
+      pickPct: 24,
+      overBar: false,
+    });
+  });
+  it("500 with 580 spent: over by 80, bar full", () => {
+    expect(budgetCardState(monthly(50_000, 58_000), 0)).toEqual({
+      kind: "over",
+      amount: 50_000,
+      spent: 58_000,
+      over: 8_000,
+      spentPct: 100,
+      pickPct: 0,
+      overBar: true,
+    });
+  });
+  it("what is ticked can push the bar over without the card saying « Dépassé »", () => {
+    const state = budgetCardState(monthly(50_000, 40_000), 20_000);
+    expect(state).toMatchObject({ kind: "ok", rest: 10_000, spentPct: 80, pickPct: 20, overBar: true });
+  });
+  it("an ended budget counts 0 spent, and a zero price never gives NaN", () => {
+    expect(budgetCardState(monthly(50_000, null), 0)).toMatchObject({
+      kind: "ok",
+      spent: 0,
+      rest: 50_000,
+      spentPct: 0,
+    });
+    expect(budgetCardState({ ...monthly(0, 0) }, 0)).toMatchObject({ spentPct: 0, pickPct: 0 });
   });
 });

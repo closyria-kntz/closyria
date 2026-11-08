@@ -14,9 +14,9 @@ import { useToastLift } from "@/lib/toast-lift";
 import { pushUndo } from "@/lib/undo";
 import {
   type BudgetScope,
+  fetchAllWishes,
   fetchBudget,
   fetchBudgetHistory,
-  fetchItemsPage,
   fetchWishlists,
   orderDraftOrdered,
   patchItem,
@@ -37,18 +37,6 @@ export const PREVIEW_PARAM = "apercu";
 
 type Items = { status: "loading" | "ready" | "error" | "missing"; items: ItemView[]; listName: string | null };
 type Budget = { status: "loading" | "ready" | "error"; view: BudgetView | null; history: BudgetHistory["periods"] };
-
-/** Every wish of the scope at « Repéré », page by page. Throws on failure. */
-async function fetchAllWishes(query: Record<string, string>): Promise<ItemView[]> {
-  const items: ItemView[] = [];
-  let cursor: string | null = null;
-  do {
-    const page = await fetchItemsPage(query, cursor);
-    items.push(...page.items);
-    cursor = page.nextCursor;
-  } while (cursor);
-  return items;
-}
 
 /**
  * « Préparer une commande » (spec §3.6): the wishes of the current profile, or of one list, « Ce que j'aime le plus »
@@ -469,7 +457,7 @@ function BudgetLines({ budget, money }: { budget: Budget; money: (cents: number)
 }
 
 /** « 1 décembre » from a calendar date (`2026-12-01`). */
-function dateOf(locale: string, date: string | null): string {
+export function dateOf(locale: string, date: string | null): string {
   if (!date) return "";
   return new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", timeZone: "UTC" }).format(
     new Date(`${date}T00:00:00Z`),

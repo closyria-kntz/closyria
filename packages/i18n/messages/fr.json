@@ -915,7 +915,25 @@
         "why": "Avis enregistré"
       }
     },
-    "prepareOrder": "Préparer une commande"
+    "prepareOrder": "Préparer une commande",
+    "listTabs": {
+      "label": "Mes listes",
+      "all": "Toutes mes envies"
+    },
+    "budgetCard": {
+      "label": "Budget",
+      "loadError": "Le budget ne s’affiche pas.",
+      "rest": "Reste {amount}",
+      "over": "Dépassé de {amount}",
+      "legendSpent": "Déjà commandé",
+      "legendDraft": "Ma commande en cours : {amount}",
+      "noneProfile": "Pas de budget",
+      "noneList": "Pas de budget pour « {list} »",
+      "add": "Ajouter un budget",
+      "edit": "Modifier le budget",
+      "listCountsAnyway": "Ces articles comptent quand même dans ton budget du mois.",
+      "listCountsToo": "Ces articles comptent aussi dans ton budget du mois."
+    }
   },
   "Lists": {
     "title": "Listes",

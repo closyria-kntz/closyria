@@ -480,3 +480,15 @@ export async function restoreOpinion(listId: string, opinion: ErasedOpinion, dep
 export async function fetchItemOpinions(itemId: string, deps: ClientDeps = defaultDeps) {
   return await call(deps, `/api/me/items/${itemId}/opinions`, { method: "GET", cache: "no-store" }, itemOpinionsSchema);
 }
+
+/** Every wish of the scope at « Repéré », page by page. Throws on failure. */
+export async function fetchAllWishes(query: Record<string, string>): Promise<ItemView[]> {
+  const items: ItemView[] = [];
+  let cursor: string | null = null;
+  do {
+    const page = await fetchItemsPage(query, cursor);
+    items.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return items;
+}

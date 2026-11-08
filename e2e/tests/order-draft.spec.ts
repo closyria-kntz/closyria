@@ -349,3 +349,68 @@ test("l’aperçu s’ouvre sans quitter la page : « Je le prends », Fermer, �
   await preview.getByRole("link", { name: "Ouvrir la fiche complète" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Robe Alma" })).toBeVisible();
 });
+
+test("Mes envies : un onglet par liste, la grille filtrée et le budget de la liste", async ({ page }) => {
+  await wishAt(page, "Pull Noël", "40");
+  await wishAt(page, "Jupe Été", "30");
+  await page.goto("/listes");
+  await page.getByLabel("Nom de la nouvelle liste").fill("Été");
+  await page.getByRole("button", { name: "Créer la liste" }).click();
+  await expect(toast(page)).toContainText("Liste « Été » créée");
+  await page.goto("/envies");
+  await page.getByRole("button", { name: "Sélectionner", exact: true }).click();
+  await page.getByTestId("item-card").getByRole("button", { name: "Jupe Été" }).click();
+  await page
+    .getByRole("region", { name: "Actions sur la sélection" })
+    .getByRole("button", { name: "Liste", exact: true })
+    .click();
+  await page.getByRole("dialog", { name: "Ajouter à une liste" }).getByRole("button", { name: "Été" }).click();
+  await expect(toast(page)).toContainText("1 article ajouté à Été");
+  await page.goto("/envies");
+
+  const tabs = page.getByRole("navigation", { name: "Mes listes" });
+  const all = tabs.getByRole("button", { name: /Toutes mes envies/ });
+  const summer = tabs.getByRole("button", { name: /^Été/ });
+  await expect(all).toHaveAttribute("aria-current", "true");
+  await expect(all).toContainText("2");
+  await expect(summer).toContainText("1");
+  expect((await summer.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  await expect(page.getByTestId("item-card")).toHaveCount(2);
+  const card = page.getByTestId("budget-card");
+  await expect(card).toContainText("Pas de budget");
+  await expect(card).toHaveCSS("font-variant-numeric", "tabular-nums");
+
+  await summer.click();
+  await expect(page).toHaveURL(/\/envies\?liste=[0-9a-f-]{36}$/);
+  await expect(summer).toHaveAttribute("aria-current", "true");
+  await expect(all).not.toHaveAttribute("aria-current", "true");
+  await expect(page.getByTestId("item-card")).toHaveCount(1);
+  await expect(page.getByTestId("item-card")).toContainText("Jupe Été");
+  await expect(tabs.getByTestId("nav-underline")).toHaveAttribute("data-shown", "true");
+  await expect(page.getByRole("link", { name: "Préparer une commande" })).toHaveAttribute(
+    "href",
+    /\/envies\/commande\?liste=[0-9a-f-]{36}$/,
+  );
+  // A list without a budget: said so, and its wishes still count in the profile's budget (Review Focus 1).
+  await expect(card).toContainText("Pas de budget pour « Été »");
+  await expect(card).toContainText("Ces articles comptent quand même dans ton budget du mois.");
+  await expect(card).not.toContainText("NaN");
+
+  await card.getByRole("button", { name: "Ajouter un budget" }).click();
+  const dialog = page.getByRole("dialog", { name: "Budget de la liste" });
+  await dialog.getByLabel("Montant (en euros)").fill("100");
+  await dialog.getByRole("radio", { name: "Par mois" }).check();
+  await dialog.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(card).toContainText(/Budget du mois : 100\s€/);
+  await expect(card).toContainText(/Déjà commandé : 0\s€/);
+  await expect(card).toContainText(/Reste 100\s€/);
+  await expect(card).toContainText("Ma commande en cours");
+  await expect(card).toContainText("Ces articles comptent aussi dans ton budget du mois.");
+  await axe(page);
+
+  await all.click();
+  await expect(page).toHaveURL(/\/envies$/);
+  await expect(page.getByTestId("item-card")).toHaveCount(2);
+  await expect(card).toContainText("Pas de budget");
+  await expect(card).not.toContainText("Budget du mois");
+});
