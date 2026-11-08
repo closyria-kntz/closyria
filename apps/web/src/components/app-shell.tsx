@@ -223,7 +223,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {t("skipToContent")}
       </a>
-      <div className="flex h-dvh overflow-hidden bg-surface text-ink">
+      <div className="flex h-dvh overflow-hidden text-ink">
         <aside className="hidden w-sidebar shrink-0 flex-col gap-space-5 overflow-y-auto border-r border-line bg-surface-sunken p-space-4 lg:flex">
           <Link href="/" className={`font-display text-title font-strong ${focusRing}`}>
             {t("brand")}

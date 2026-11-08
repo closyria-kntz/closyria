@@ -55,6 +55,27 @@ test("l'aurore bouge sinon, derrière le contenu", async ({ page }) => {
   expect(style.position).toBe("fixed");
   expect(style.events).toBe("none");
   expect(style.image.match(/radial-gradient/g)).toHaveLength(3);
+
+  // Nothing opaque sits between the aurora and the eye: shell wrapper transparent, aurora below the content.
+  const seen = await page.evaluate(() => {
+    const clear = (c: string) => {
+      const ctx = document.createElement("canvas").getContext("2d");
+      if (!ctx) throw new Error("no canvas");
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = c;
+      ctx.fillRect(0, 0, 1, 1);
+      return ctx.getImageData(0, 0, 1, 1).data[3] === 0;
+    };
+    const wrapper = [...document.querySelectorAll("div")].find((d) => d.classList.contains("h-dvh"));
+    return {
+      zIndex: Number(getComputedStyle(document.body, "::before").zIndex),
+      wrapperClear: wrapper ? clear(getComputedStyle(wrapper).backgroundColor) : null,
+      bodyOpaque: !clear(getComputedStyle(document.body).backgroundColor),
+    };
+  });
+  expect(seen.zIndex).toBeLessThan(0);
+  expect(seen.wrapperClear).toBe(true);
+  expect(seen.bodyOpaque).toBe(true);
 });
 
 test("sans backdrop-filter, la barre du haut est opaque", async ({ page }) => {
