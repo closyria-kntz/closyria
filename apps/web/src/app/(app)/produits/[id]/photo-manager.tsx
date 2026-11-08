@@ -17,7 +17,7 @@ export function PhotoPlaceholder({ label }: { label: string }) {
     <div
       role="img"
       aria-label={label}
-      className="arch flex aspect-3/4 w-full items-center justify-center border border-line bg-media-backdrop p-space-3 text-center text-sm text-ink-muted"
+      className="photo-shape flex aspect-3/4 w-full items-center justify-center border border-line bg-media-backdrop p-space-3 text-center text-sm text-ink-muted"
     >
       <span aria-hidden="true">{label}</span>
     </div>
@@ -151,7 +151,7 @@ export function PhotoManager({
         onClose={() => setAdding(false)}
         itemId={item.id}
         onChange={(next) => {
-          // The photo she just added shows in the big arch.
+          // The photo she just added shows in the big frame.
           const fresh = next.photos.find(
             (photo) => photo.source === "private" && !item.photos.some((p) => p.id === photo.id),
           );

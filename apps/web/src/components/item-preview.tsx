@@ -108,7 +108,7 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
                   src={url}
                   alt=""
                   decoding="async"
-                  className={`arch aspect-3/4 shrink-0 snap-start bg-media-backdrop object-cover ${photos.length > 1 ? "w-4/5" : "w-full"}`}
+                  className={`photo-shape aspect-3/4 shrink-0 snap-start bg-media-backdrop object-cover ${photos.length > 1 ? "w-4/5" : "w-full"}`}
                 />
               ))}
             </section>

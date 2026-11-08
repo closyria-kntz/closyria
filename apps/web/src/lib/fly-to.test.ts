@@ -36,10 +36,11 @@ describe("flyTo", () => {
     expect(createElement).not.toHaveBeenCalled();
   });
 
-  it("flies a temporary arch with the given colour, then removes it", async () => {
+  it("flies a temporary photo shape with the given colour, then removes it", async () => {
     const { el, appendChild, box } = setup({ reduced: false });
     await flyTo(box, box, "var(--color-accent)");
     expect(appendChild).toHaveBeenCalledWith(el);
+    expect(el.className).toBe("fly-photo");
     expect(el.style.setProperty).toHaveBeenCalledWith("--fly-color", "var(--color-accent)");
     expect(el.animate).toHaveBeenCalledTimes(1);
     expect(el.animate.mock.calls[0]?.[1]).toMatchObject({ duration: 600 });

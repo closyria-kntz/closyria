@@ -143,7 +143,12 @@ describe("Équilibré themes", () => {
     expect(base["radius-button"]).toBe("9999px");
     expect(base["radius-card"]).toBe("1.625rem");
     expect(base["radius-full"]).toBe("9999px");
-    expect(base["radius-arch"]).toBe("50%");
+    // Shape C of the photos: the top more rounded than the bottom (cards 44 / 14 px, thumbnails 20 / 8 px).
+    expect(base["radius-photo-top"]).toBe("2.75rem");
+    expect(base["radius-photo-bottom"]).toBe("0.875rem");
+    expect(base["radius-thumb-top"]).toBe("1.25rem");
+    expect(base["radius-thumb-bottom"]).toBe("0.5rem");
+    expect(base).not.toHaveProperty("radius-arch");
     expect(base["motion-duration-fast"]).toBe("150ms");
     expect(base["motion-duration-base"]).toBe("250ms");
     expect(base["motion-duration-slow"]).toBe("400ms");

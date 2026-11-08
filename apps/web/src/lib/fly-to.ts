@@ -9,28 +9,28 @@ function flyDuration(): number {
 }
 
 /**
- * A small arch of `color` (a CSS colour or `var(--token)`) flies from `from` to `to` and disappears. Decorative: it
+ * A small photo shape (shape C) of `color` (a CSS colour or `var(--token)`) flies from `from` to `to` and disappears. Decorative: it
  * resolves at once under reduced motion (nothing is created), never throws, and always removes its element.
  */
 export async function flyTo(from: Element, to: Element, color: string): Promise<void> {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const duration = flyDuration();
   if (duration <= 0) return;
-  const arch = document.createElement("span");
+  const shape = document.createElement("span");
   try {
-    arch.className = "fly-arch";
-    arch.style.setProperty("--fly-color", color);
-    document.body.appendChild(arch);
+    shape.className = "fly-photo";
+    shape.style.setProperty("--fly-color", color);
+    document.body.appendChild(shape);
     const a = from.getBoundingClientRect();
     const b = to.getBoundingClientRect();
-    // The arch is as wide as its CSS says (it starts at the top left corner): centre it on the card, then on the band.
+    // The shape is as wide as its CSS says (it starts at the top left corner): centre it on the card, then on the band.
     const startX = a.left + a.width / 2;
     const startY = a.top + a.height / 2;
     const dx = b.left + b.width / 2 - startX;
     const dy = b.top + b.height / 2 - startY;
     const at = (x: number, y: number, scale: number) =>
       `translate(${startX + x}px, ${startY + y}px) translate(-50%, -50%) scale(${scale})`;
-    const flight = arch.animate(
+    const flight = shape.animate(
       [
         { transform: at(0, 0, 1), opacity: 1 },
         { transform: at(dx / 2, dy / 2 - Math.abs(dy) / 4, 0.75), opacity: 1, offset: 0.5 },
@@ -42,6 +42,6 @@ export async function flyTo(from: Element, to: Element, color: string): Promise<
   } catch {
     // Decorative: a failed flight is no failure.
   } finally {
-    arch.remove();
+    shape.remove();
   }
 }

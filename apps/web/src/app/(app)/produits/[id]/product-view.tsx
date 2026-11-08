@@ -275,7 +275,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
             groupLabels={{ product: tItem("photos.title") }}
           />
         ) : noPhotoYet ? (
-          <Skeleton className="arch aspect-3/4 w-full" />
+          <Skeleton className="photo-shape aspect-3/4 w-full" />
         ) : !waiting ? (
           <PhotoPlaceholder label={t("product.noPhoto")} />
         ) : null}

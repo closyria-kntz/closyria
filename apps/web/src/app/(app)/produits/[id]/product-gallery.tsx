@@ -29,7 +29,7 @@ type Props = {
   footer?: (current: GalleryPhoto | null) => ReactNode;
   /** In place of the big photo when there is none. */
   empty?: ReactNode;
-  /** Shows this photo in the big arch whenever it changes (her photo just added). */
+  /** Shows this photo in the big frame whenever it changes (her photo just added). */
   selectId?: string | null;
 };
 
@@ -53,8 +53,8 @@ function Arrow({ back }: { back?: boolean }) {
 }
 
 /**
- * The sheet's gallery (spec §6): one big arch, the arrows and the dots that stretch for the photo on show, the
- * thumbnails in small arches below. A click on the big photo opens the full-screen viewer on its group (her photos,
+ * The sheet's gallery (spec §6): one big photo in shape C, the arrows and the dots that stretch for the photo on show, the
+ * thumbnails in the same shape, smaller, below. A click on the big photo opens the full-screen viewer on its group (her photos,
  * or the shop's); with `onDoubleTap`, the click waits a beat and a second one calls it instead.
  */
 export function ProductGallery({
@@ -118,14 +118,14 @@ export function ProductGallery({
   return (
     <div className="flex flex-col items-center gap-space-4">
       <div className="relative w-full max-w-narrow">
-        <div data-testid="gallery-main" className="arch relative aspect-3/4 overflow-hidden bg-media-backdrop">
+        <div data-testid="gallery-main" className="photo-shape relative aspect-3/4 overflow-hidden bg-media-backdrop">
           {current ? (
             <button
               type="button"
               data-testid="gallery-photo"
               aria-label={label(current, inGroup + 1, "open")}
               onClick={onPhotoClick}
-              className={`arch size-full ${focusRing}`}
+              className={`photo-shape size-full ${focusRing}`}
             >
               {/* biome-ignore lint/performance/noImgElement: photos come from our own API, sized by it. */}
               <img
@@ -133,7 +133,7 @@ export function ProductGallery({
                 width={current.width}
                 height={current.height}
                 alt={alt}
-                className="size-full object-contain"
+                className="size-full object-cover"
               />
             </button>
           ) : (
@@ -180,7 +180,7 @@ export function ProductGallery({
                     aria-label={label(photo, n + 1, "show")}
                     aria-pressed={photo === current}
                     onClick={() => setIndex(photos.indexOf(photo))}
-                    className={`arch block aspect-3/4 w-space-8 overflow-hidden bg-media-backdrop aria-pressed:outline-2 aria-pressed:outline-offset-2 aria-pressed:outline-ink aria-pressed:outline-solid ${focusRing}`}
+                    className={`thumb-shape block aspect-3/4 w-space-8 overflow-hidden bg-media-backdrop aria-pressed:outline-2 aria-pressed:outline-offset-2 aria-pressed:outline-ink aria-pressed:outline-solid ${focusRing}`}
                   >
                     {/* biome-ignore lint/performance/noImgElement: photos come from our own API, sized by it. */}
                     <img
@@ -189,7 +189,7 @@ export function ProductGallery({
                       height={photo.height}
                       alt={thumbAlt(n + 1)}
                       loading="lazy"
-                      className="size-full object-contain"
+                      className="size-full object-cover"
                     />
                   </button>
                 </li>

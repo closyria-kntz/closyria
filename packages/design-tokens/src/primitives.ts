@@ -80,7 +80,17 @@ export const primitives = {
     7: "3rem",
     8: "4rem",
   },
-  radius: { none: "0", sm: "0.25rem", md: "0.625rem", lg: "1.625rem", full: "9999px", arch: "50%" },
+  radius: {
+    none: "0",
+    sm: "0.25rem",
+    md: "0.625rem",
+    lg: "1.625rem",
+    full: "9999px",
+    photoTop: "2.75rem",
+    photoBottom: "0.875rem",
+    thumbTop: "1.25rem",
+    thumbBottom: "0.5rem",
+  },
   font: {
     body: '"Jost Variable", ui-sans-serif, system-ui, sans-serif',
     display: '"Fraunces Variable", ui-serif, Georgia, serif',

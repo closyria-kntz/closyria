@@ -139,11 +139,15 @@ body::before {
   }
 }
 
-/* The arch of an item photo: one smooth dome on top (half the width, half the height), small corners at the bottom. */
-@utility arch {
-  border-radius:
-    var(--radius-arch) var(--radius-arch) var(--radius-card) var(--radius-card) / var(--radius-arch) var(--radius-arch)
-    var(--radius-card) var(--radius-card);
+/* Shape C of an item photo (cards, big photo of the sheet): a rectangle whose top corners are much rounder than the
+   bottom ones. The photo always fills it (object-cover). */
+@utility photo-shape {
+  border-radius: var(--radius-photo-top) var(--radius-photo-top) var(--radius-photo-bottom) var(--radius-photo-bottom);
+}
+
+/* The same shape, smaller, for thumbnails (sheet gallery, preview strip). */
+@utility thumb-shape {
+  border-radius: var(--radius-thumb-top) var(--radius-thumb-top) var(--radius-thumb-bottom) var(--radius-thumb-bottom);
 }
 
 /* The grid arrives in a short cascade: each card rises and fades in, the first twelve one after the other (later ones
@@ -217,8 +221,8 @@ body::before {
   animation-delay: calc(11 * var(--motion-duration-stagger));
 }
 
-/* The little arch that flies from a card to « Ma commande » (lib/fly-to.ts sets --fly-color and moves it). */
-.fly-arch {
+/* The little photo shape that flies from a card to « Ma commande » (lib/fly-to.ts sets --fly-color and moves it). */
+.fly-photo {
   position: fixed;
   top: 0;
   left: 0;
@@ -227,9 +231,7 @@ body::before {
   aspect-ratio: 3 / 4;
   pointer-events: none;
   background: var(--fly-color);
-  border-radius:
-    var(--radius-arch) var(--radius-arch) var(--radius-card) var(--radius-card) / var(--radius-arch) var(--radius-arch)
-    var(--radius-card) var(--radius-card);
+  border-radius: var(--radius-thumb-top) var(--radius-thumb-top) var(--radius-thumb-bottom) var(--radius-thumb-bottom);
 }
 
 /* « Aperçu » and « Je le prends » on a card: under a mouse they show when the card is hovered or has the focus (the
@@ -415,6 +417,22 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   .price-curve-line,
   .price-curve-dot {
+    animation: none;
+  }
+}
+
+/* The search opens out of its magnifier: a short slide and fade (one effect), nothing under reduced motion. */
+.search-open {
+  animation: search-open var(--motion-duration-base) var(--ease-emphasized) both;
+}
+@keyframes search-open {
+  from {
+    opacity: 0;
+    transform: translateX(var(--spacing-space-4));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .search-open {
     animation: none;
   }
 }
