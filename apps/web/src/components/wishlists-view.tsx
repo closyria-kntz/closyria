@@ -127,13 +127,20 @@ export function WishlistsView() {
             >
               <Link
                 href={`/listes/${list.id}`}
-                className={`flex min-w-space-0 flex-1 flex-col rounded-button ${touch} justify-center ${focusRing}`}
+                className={`flex min-w-space-0 flex-1 flex-wrap items-center justify-between gap-x-space-3 gap-y-space-1 rounded-button ${touch} ${focusRing}`}
               >
-                <span className="truncate font-strong">{list.name}</span>
-                <span className="text-sm text-ink-muted">
-                  {t("count", { count: list.itemIds.length })}
-                  {list.shared && ` · ${t("shared")}`}
+                <span className="flex min-w-space-0 flex-col">
+                  <span className="truncate font-strong">{list.name}</span>
+                  <span className="text-sm text-ink-muted">
+                    {t("count", { count: list.itemIds.length })}
+                    {list.shared && ` · ${t("shared")}`}
+                  </span>
                 </span>
+                {list.newOpinions > 0 && (
+                  <span className="shrink-0 rounded-full border border-danger-edge bg-danger-soft px-space-2 text-caption font-strong text-danger">
+                    {t("newOpinions", { count: list.newOpinions })}
+                  </span>
+                )}
               </Link>
               <MoveButtons
                 id={list.id}

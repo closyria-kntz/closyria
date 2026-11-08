@@ -74,7 +74,10 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   const field = page.getByLabel("Lien de partage");
   await expect(field).toHaveValue(/\/l\/[A-Za-z0-9_-]{20,}$/);
   const shareUrl = await field.inputValue();
-  await expect(page.getByText("Cliquer de nouveau sur « Partager » crée un nouveau lien")).toBeVisible();
+  // The link stays on the page: back later, it is shown again, in full.
+  await page.reload();
+  await expect(field).toHaveValue(shareUrl);
+  await expect(field).toBeInViewport();
   await page.screenshot({ path: testInfo.outputPath("list-shared.png"), fullPage: true });
   await axe(page);
 
@@ -100,8 +103,16 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   await expect(other.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
   await axe(other);
 
-  // The old link stops working when sharing again; the new one is shown.
-  await page.getByRole("button", { name: "Partager", exact: true }).click();
+  // « Changer le lien » asks first; the old link stops working, the new one is shown.
+  await page.getByRole("button", { name: "Changer le lien" }).click();
+  const confirm = page.getByRole("dialog", { name: "Changer le lien ?" });
+  await expect(confirm.getByText("L'ancien lien ne marchera plus.")).toBeVisible();
+  await axe(page);
+  await confirm.getByRole("button", { name: "Annuler" }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(field).toHaveValue(shareUrl);
+  await page.getByRole("button", { name: "Changer le lien" }).click();
+  await confirm.getByRole("button", { name: "Changer le lien" }).click();
   await expect(field).not.toHaveValue(shareUrl);
   const second = await field.inputValue();
   expect((await other.goto(shareUrl))?.status()).toBe(404);
@@ -112,6 +123,85 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   const gone = await other.goto(second);
   expect(gone?.status()).toBe(404);
   await expect(other.getByRole("heading", { name: "Ce lien ne marche plus" })).toBeVisible();
+  await visitor.close();
+});
+
+/** A new list « {name} » with one wish, shared; its page is open. Returns the link. */
+async function sharedList(page: Page, name: string): Promise<string> {
+  await pasteAndWish(page);
+  await page.goto("/listes");
+  await page.getByLabel("Nom de la nouvelle liste").fill(name);
+  await page.getByRole("button", { name: "Créer la liste" }).click();
+  await expect(toast(page)).toContainText(`Liste « ${name} » créée`);
+  await page.getByRole("link", { name: new RegExp(name) }).click();
+  await page.getByRole("button", { name: "Partager", exact: true }).click();
+  const field = page.getByLabel("Lien de partage");
+  await expect(field).toHaveValue(/\/l\/[A-Za-z0-9_-]{20,}$/);
+  return field.inputValue();
+}
+
+test("le lien se copie, et « Envoyer… » n'apparaît que si le navigateur sait partager", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(baseURL ?? "").origin });
+  const shareUrl = await sharedList(page, "Copie");
+  await page.getByRole("button", { name: "Copier le lien" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Lien copié" })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(shareUrl);
+
+  const canShare = await page.evaluate(() => typeof navigator.share === "function");
+  await expect(page.getByRole("button", { name: "Envoyer…" })).toHaveCount(canShare ? 1 : 0);
+  // A browser with the share menu: the button shows and hands it the link.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: async (data: ShareData) => {
+        (window as unknown as { shared?: ShareData }).shared = data;
+      },
+    });
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "Envoyer…" }).click();
+  expect(await page.evaluate(() => (window as unknown as { shared?: ShareData }).shared?.url)).toBe(shareUrl);
+});
+
+test("une liste partagée avant que les liens soient gardés : « Créer un lien à garder »", async ({
+  page,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const shareUrl = await sharedList(page, "Ancienne");
+  // Shared before this version: only the link's hash was kept.
+  const listId = new URL(page.url()).pathname.split("/").pop();
+  await db.query("update wishlists set share_token_encrypted = null where id = $1", [listId]);
+  await page.reload();
+  await expect(page.getByText("Ce lien ne peut pas être réaffiché.")).toBeVisible();
+  await expect(page.getByLabel("Lien de partage")).toHaveCount(0);
+  await axe(page);
+
+  const visitor = await browser.newContext({
+    baseURL: baseURL ?? "",
+    extraHTTPHeaders: { [CLIENT_IP_HEADER]: "10.200.2.1" },
+  });
+  const other = await visitor.newPage();
+  // The old link works until she makes a new one.
+  expect((await other.goto(shareUrl))?.status()).toBe(200);
+
+  await page.getByRole("button", { name: "Créer un lien à garder" }).click();
+  const confirm = page.getByRole("dialog", { name: "Créer un lien à garder ?" });
+  await expect(confirm.getByText("L'ancien lien ne marchera plus.")).toBeVisible();
+  await confirm.getByRole("button", { name: "Créer le lien" }).click();
+  const field = page.getByLabel("Lien de partage");
+  await expect(field).toHaveValue(/\/l\/[A-Za-z0-9_-]{20,}$/);
+  await expect(page.getByText("Ce lien ne peut pas être réaffiché.")).toHaveCount(0);
+  const kept = await field.inputValue();
+  expect((await other.goto(shareUrl))?.status()).toBe(404);
+  expect((await other.goto(kept))?.status()).toBe(200);
+  await page.reload();
+  await expect(field).toHaveValue(kept);
   await visitor.close();
 });
 

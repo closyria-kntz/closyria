@@ -1,24 +1,30 @@
 "use client";
 
-import type { BudgetView, ItemView, WishlistView } from "@closyria/shared";
+import type { BudgetView, ItemView, OpinionView, WishlistView } from "@closyria/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { type FormEvent, useCallback, useEffect, useId, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useLiveRefresh } from "@/lib/live-changes";
+import { useLoveLevels } from "@/lib/profile-context";
 import { moveId } from "@/lib/reorder";
 import { pushUndo } from "@/lib/undo";
 import {
+  deleteOpinion,
   deleteWishlist,
   fetchBudget,
   fetchItemsPage,
+  fetchWishlistOpinions,
   fetchWishlists,
+  markOpinionsSeen,
   removeFromWishlist,
   renameWishlist,
   reorderWishlistItems,
+  restoreOpinion,
 } from "@/lib/wardrobe-client";
 import { BudgetDialog } from "./budget-dialog";
 import { Dialog } from "./dialog";
+import { FriendOpinions } from "./friend-opinions";
 import { ItemCard } from "./item-card";
 import { GRID_CLASS } from "./item-grid";
 import { focusMoved, MoveButtons, type MoveDirection } from "./move-buttons";
@@ -60,6 +66,38 @@ export function WishlistDetail({ id }: { id: string }) {
     void loadBudget();
   }, [loadBudget]);
 
+  // Friends' opinions by item (spec §4.2). Those new when she opened the page keep « nouveau » for this visit,
+  // even once marked seen (the next visit has none).
+  const levels = useLoveLevels();
+  const [opinions, setOpinions] = useState<Map<string, OpinionView[]>>(new Map());
+  const [opinionsFailed, setOpinionsFailed] = useState(false);
+  const newThisVisit = useRef(new Set<string>());
+  const seenSent = useRef(false);
+  const loadOpinions = useCallback(async () => {
+    const result = await fetchWishlistOpinions(id);
+    if (!result.ok) return setOpinionsFailed(true);
+    setOpinionsFailed(false);
+    for (const entry of result.items) {
+      for (const opinion of entry.opinions) if (opinion.isNew) newThisVisit.current.add(opinion.id);
+    }
+    setOpinions(
+      new Map(
+        result.items.map((entry) => [
+          entry.itemId,
+          entry.opinions.map((opinion) => ({ ...opinion, isNew: newThisVisit.current.has(opinion.id) })),
+        ]),
+      ),
+    );
+    // Opening the page is seeing them: once per visit, after they are shown.
+    if (!seenSent.current) {
+      seenSent.current = true;
+      void markOpinionsSeen(id);
+    }
+  }, [id]);
+  useEffect(() => {
+    void loadOpinions();
+  }, [loadOpinions]);
+
   /** `quiet`: back on the page, no loading state and the list kept when the read fails. */
   const load = useCallback(
     async (quiet = false) => {
@@ -96,6 +134,7 @@ export function WishlistDetail({ id }: { id: string }) {
     () => {
       void load(true);
       void loadBudget();
+      void loadOpinions();
     },
     state.status === "ready" && !renaming,
   );
@@ -207,6 +246,25 @@ export function WishlistDetail({ id }: { id: string }) {
     pushUndo(t("detail.removed", { name: nameOf(item) }), null);
   }
 
+  async function eraseOpinion(opinion: OpinionView) {
+    const result = await deleteOpinion(list.id, opinion.id);
+    if (!result.ok) return setError(t("opinions.eraseFailed"));
+    setError(null);
+    const erased = result.opinion;
+    setOpinions(
+      (previous) =>
+        new Map(
+          [...previous].map(([itemId, known]) => [itemId, known.filter((candidate) => candidate.id !== opinion.id)]),
+        ),
+    );
+    pushUndo(t("opinions.erased", { name: opinion.name }), async () => {
+      // Refused (409) when the same name gave a new opinion meanwhile: the toast says it did not work.
+      const restored = await restoreOpinion(list.id, erased);
+      void loadOpinions();
+      return restored.ok;
+    });
+  }
+
   async function destroy() {
     const result = await deleteWishlist(list.id);
     setConfirmDelete(false);
@@ -291,6 +349,11 @@ export function WishlistDetail({ id }: { id: string }) {
           {t("detail.itemsFailed")}
         </p>
       )}
+      {opinionsFailed && (
+        <p role="alert" className="text-sm text-danger">
+          {t("opinions.loadError")}
+        </p>
+      )}
       {items.length === 0 ? (
         <section className="flex max-w-measure flex-col gap-space-2 rounded-card border border-line bg-surface-raised p-space-5">
           <h2 className="font-display text-lead font-strong">{t("detail.empty.title")}</h2>
@@ -314,6 +377,13 @@ export function WishlistDetail({ id }: { id: string }) {
                   <span aria-hidden="true">×</span>
                   <span className="sr-only">{t("detail.remove", { name: nameOf(item) })}</span>
                 </button>
+              </div>
+              <div className="mt-space-3 empty:hidden">
+                <FriendOpinions
+                  opinions={opinions.get(item.id) ?? []}
+                  levels={levels}
+                  onDelete={(opinion) => void eraseOpinion(opinion)}
+                />
               </div>
             </ItemCard>
           ))}

@@ -3,11 +3,12 @@
 import { type OpinionView, opinionNameKey, type SharedWishlistView } from "@closyria/shared";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FriendOpinions } from "@/components/friend-opinions";
 import { buttonClass, focusRing } from "@/components/ui";
+import { formatAmount } from "@/lib/budget";
 import { type FriendDevice, friendDevice } from "@/lib/friend-device";
 import { levelOf } from "@/lib/love-levels";
-import { formatOptionalPrice, formatPrice } from "@/lib/price";
-import { relativeDate } from "@/lib/relative-date";
+import { formatOptionalPrice } from "@/lib/price";
 import { deleteOpinion, fetchSharedView, putOpinion } from "@/lib/shared-list";
 import { CoverPhoto } from "./cover-photo";
 import { OpinionSheet, type SheetOutcome } from "./opinion-sheet";
@@ -28,15 +29,6 @@ function localStorageOrNull(): Storage | null {
     return null;
   }
 }
-
-/** The first letter of a name, for the round badge. */
-function initialOf(name: string): string {
-  const first = new Intl.Segmenter("fr", { granularity: "grapheme" }).segment(name.trim())[Symbol.iterator]().next();
-  return first.done ? "?" : first.value.segment.toLocaleUpperCase("fr");
-}
-
-const newestFirst = (opinions: OpinionView[]) =>
-  [...opinions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.name.localeCompare(b.name));
 
 /**
  * The shared list as a friend sees it (spec §3): the owner's opinion on each item, the friends' opinions, and
@@ -176,7 +168,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
 
       {view.budget && (
         <p className="flex items-center justify-between gap-space-3 self-start rounded-card border-2 border-selected-line bg-surface-raised px-space-4 py-space-3 font-strong tabular-nums">
-          {t("budget", { amount: formatPrice(locale, view.budget.amountCents, view.budget.currency) })}
+          {t("budget", { amount: formatAmount(locale, view.budget.amountCents, view.budget.currency) })}
         </p>
       )}
 
@@ -263,11 +255,9 @@ function ItemCard({
   const tOpinions = useTranslations("SharedList.opinions");
   const locale = useLocale();
   const name = item.name?.trim() || t("noName");
-  const opinions = newestFirst(item.opinions);
   const mine = deviceName !== null && item.opinions.some((o) => opinionNameKey(o.name) === opinionNameKey(deviceName));
   const owner = item.ownerOpinion;
   const ownerLevel = owner?.level ? levelOf(view.levels, owner.level) : null;
-  const now = new Date();
 
   return (
     <li className="card flex flex-col gap-space-3 rounded-card border border-card-border bg-card-bg p-space-3">
@@ -329,33 +319,7 @@ function ItemCard({
         </div>
       )}
 
-      {opinions.length > 0 && (
-        <ul aria-label={tOpinions("listLabel")} className="flex flex-col gap-space-2">
-          {opinions.map((opinion) => {
-            const level = levelOf(view.levels, opinion.level);
-            return (
-              <li key={opinion.id} className="flex items-start gap-space-2 text-sm">
-                <span
-                  aria-hidden="true"
-                  className="flex size-space-6 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-caption font-strong"
-                >
-                  {initialOf(opinion.name)}
-                </span>
-                <div className="flex min-w-space-0 flex-col">
-                  <p>
-                    <span className="font-strong break-words">{opinion.name}</span>{" "}
-                    <span aria-hidden="true">{level.emoji}</span> {level.label}
-                  </p>
-                  {opinion.note && <p className="break-words">{opinion.note}</p>}
-                  <time dateTime={opinion.updatedAt} suppressHydrationWarning className="text-caption text-ink-muted">
-                    {relativeDate(opinion.updatedAt, now, locale)}
-                  </time>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <FriendOpinions opinions={item.opinions} levels={view.levels} />
 
       {view.allowOpinions && (
         <button
