@@ -52,3 +52,13 @@ Ce document liste ce qu'on corrige avant d'aller plus loin.
 ## Méthode
 
 Captures du site comparées à la maquette avant chaque mise en dev ; rien en dev sans l'accord de la fondatrice.
+
+## Recalage et suite (2026-11-09)
+
+Recalage sur les valeurs de la maquette fait (0c4aa52, eebd339). La fondatrice arrête là la refonte : on construit les
+fonctions, une nouvelle passe de design viendra quand l'app aura beaucoup plus de contenu.
+
+Reportés (à reprendre lors de cette passe) : « Retour aux envies » ; bloc Taille (« Ta taille est en stock », interrupteur
+d'alerte prix, taille choisie en bordeaux) ; ordre des boutons de la fiche (« Voir chez » d'abord) ; aide « Double-clique
+sur la photo » ; « Avis des amies » avant « Mon article » ; bande des nouvelles sur Mes envies ; menu du bas et en-tête
+téléphone de la maquette.
