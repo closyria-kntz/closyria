@@ -448,3 +448,96 @@ test("deux réglages enregistrés coup sur coup : la réponse en retard ne défa
   await expect(lea.getByText(/La liste de/)).toHaveCount(0);
   await lea.context().close();
 });
+
+// Avis des amies, task 9: the opinions on the item page and in the order preview (spec §4.3).
+
+test("l'aperçu de commande et la fiche montrent « Avis des amies », avec le nom de la liste s'il y en a plusieurs", async ({
+  page,
+  browser,
+  baseURL,
+  db,
+  userAgentTag,
+}, testInfo) => {
+  test.slow();
+  const shareUrl = await sharedList(page, db, userAgentTag);
+  const preview = page.getByRole("dialog", { name: `Aperçu de ${PRODUCT.name}` });
+  // The sheet body only: its photo strip has an older scroll-focus finding of its own. */
+  const axeSheet = async (page: Page) => {
+    const { violations } = await new AxeBuilder({ page })
+      .include("[data-testid=preview-body]")
+      .disableRules("scrollable-region-focusable")
+      .analyze();
+    expect(violations.map((v) => v.id)).toEqual([]);
+  };
+
+  const section = (scope: Page | ReturnType<Page["getByRole"]>) =>
+    scope.getByRole("heading", { name: "Avis des amies" });
+
+  // No opinion yet: no section, no empty state.
+  await page.goto("/envies/commande");
+  await page.getByRole("button", { name: new RegExp(PRODUCT.name) }).click();
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Fermer" })).toBeVisible();
+  await expect(section(preview)).toHaveCount(0);
+
+  const lea = await friend(browser, baseURL, `10.205.${testInfo.workerIndex % 250}.1`);
+  await lea.goto(shareUrl);
+  await giveOpinion(lea, "Léa", "En feu", "elle t'irait trop bien");
+
+  // One shared list: her opinion, no list name.
+  await page.goto("/envies/commande");
+  await page.getByRole("button", { name: new RegExp(PRODUCT.name) }).click();
+  await expect(section(preview)).toBeVisible();
+  const opinions = preview.getByRole("list", { name: "Avis des amies" }).getByRole("listitem");
+  await expect(opinions).toHaveCount(1);
+  await expect(opinions.first()).toContainText("Léa");
+  await expect(opinions.first()).toContainText("🔥 En feu");
+  await expect(opinions.first()).toContainText("elle t'irait trop bien");
+  await expect(preview.getByText("Mariage", { exact: true })).toHaveCount(0);
+  await expect(opinions.first().getByRole("button")).toHaveCount(0);
+  // The section only: the sheet's photo strip has its own (older) scroll-focus finding.
+  await axeSheet(page);
+  await page.screenshot({ path: testInfo.outputPath("preview-opinions-light.png") });
+
+  // The item page shows the same.
+  await preview.getByRole("link", { name: "Ouvrir la fiche complète" }).click();
+  await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
+  await expect(section(page)).toBeVisible();
+  const pageOpinions = page.getByRole("list", { name: "Avis des amies" }).getByRole("listitem");
+  await expect(pageOpinions).toHaveCount(1);
+  await expect(pageOpinions.first()).toContainText("elle t'irait trop bien");
+  await expect(page.getByText("Mariage", { exact: true }).first()).toBeVisible();
+
+  // A second shared list with another friend's opinion: each list is named.
+  await page.goto("/listes");
+  await page.getByLabel("Nom de la nouvelle liste").fill("Cadeaux");
+  await page.getByRole("button", { name: "Créer la liste" }).click();
+  await expect(appToast(page)).toContainText("Liste « Cadeaux » créée");
+  await page.goto("/envies");
+  const card = page.getByTestId("item-card").first();
+  await card.getByRole("button", { name: "Plus d’actions" }).click();
+  await page
+    .getByRole("dialog", { name: `Actions sur ${PRODUCT.name}` })
+    .getByRole("button", { name: "Ajouter à une liste" })
+    .click();
+  await page.getByRole("dialog").getByRole("button", { name: "Cadeaux" }).click();
+  await expect(appToast(page)).toContainText("Ajouté à Cadeaux");
+  await page.goto("/listes");
+  await page.getByRole("link", { name: /Cadeaux/ }).click();
+  await page.getByRole("button", { name: "Partager", exact: true }).click();
+  const field = page.getByLabel("Lien de partage");
+  await expect(field).toHaveValue(/\/l\/[A-Za-z0-9_-]{20,}$/);
+  const mia = await friend(browser, baseURL, `10.206.${testInfo.workerIndex % 250}.1`);
+  await mia.goto(await field.inputValue());
+  await giveOpinion(mia, "Mia", "Mims", "la couleur est parfaite");
+
+  await page.goto("/envies/commande");
+  await page.getByRole("button", { name: new RegExp(PRODUCT.name) }).click();
+  await expect(preview.getByText("Mariage", { exact: true })).toBeVisible();
+  await expect(preview.getByText("Cadeaux", { exact: true })).toBeVisible();
+  await expect(preview.getByRole("list", { name: "Avis des amies" }).getByRole("listitem")).toHaveCount(2);
+  await axeSheet(page);
+
+  await lea.context().close();
+  await mia.context().close();
+});

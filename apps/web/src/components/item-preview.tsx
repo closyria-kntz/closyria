@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useId } from "react";
 import { levelOf } from "@/lib/love-levels";
+import { ItemOpinionsSection } from "./item-opinions-section";
 import { Sheet } from "./sheet";
 import { SquareCheck } from "./square-check";
 import { focusRing } from "./ui";
@@ -142,6 +143,7 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
                 )}
               </dl>
             )}
+            <ItemOpinionsSection itemId={item.id} />
             <Link
               href={`/produits/${item.product.id}`}
               className={`self-start rounded-sm text-sm text-ink-muted underline underline-offset-2 hover:text-ink ${focusRing}`}

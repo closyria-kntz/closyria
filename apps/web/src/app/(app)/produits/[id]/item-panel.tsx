@@ -15,6 +15,7 @@ import {
 } from "@closyria/shared";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
+import { ItemOpinionsSection } from "@/components/item-opinions-section";
 import { LoveLevelPicker } from "@/components/love-level-picker";
 import { buttonClass, inputClass, primaryButtonClass, toggleButtonClass } from "@/components/ui";
 import { levelOf } from "@/lib/love-levels";
@@ -361,6 +362,8 @@ export function ItemPanel({ item, onChange, onGone, reload, shop }: Props) {
             {t("panel.save")}
           </button>
         </form>
+
+        <ItemOpinionsSection itemId={item.id} />
 
         {extrasFailed && (
           <div className="flex flex-col items-start gap-space-2">
