@@ -146,7 +146,7 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
       >
         <span
           aria-hidden="true"
-          className="flex size-space-6 items-center justify-center rounded-full bg-surface-raised/85 text-sm font-strong text-ink shadow-soft"
+          className="flex size-space-6 items-center justify-center rounded-full bg-surface-raised/85 text-sm font-strong text-ink border border-line"
         >
           …
         </span>

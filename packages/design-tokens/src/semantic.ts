@@ -88,11 +88,21 @@ export const defaultSemanticTokens = {
   "motion-duration-fast": duration.fast,
   "motion-duration-base": duration.base,
   "motion-duration-slow": duration.slow,
+  // The aurora behind the page drifts very slowly (zeroed with the others under reduced motion; also stopped in CSS).
+  "motion-duration-aurora": "60s",
   "ease-standard": easing.standard,
   "ease-emphasized": easing.emphasized,
   // Elevation
   "shadow-soft": shadow.soft,
   "shadow-lifted": shadow.lifted,
+  // Frosted glass and aurora (theme-independent)
+  "blur-glass": "20px",
+  "saturate-glass": "1.6",
+  "aurora-at-1": "15% 10%",
+  "aurora-at-2": "85% 25%",
+  "aurora-at-3": "50% 95%",
+  "aurora-reach": "55%",
+  "aurora-drift-shift": "4%",
   // Layout
   "breakpoint-sm": breakpoint.sm,
   "breakpoint-md": breakpoint.md,

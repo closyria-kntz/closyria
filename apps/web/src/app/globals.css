@@ -33,6 +33,52 @@ body {
   font-family: var(--font-body);
 }
 
+/* Aurora: three soft light patches fixed behind everything, drifting very slowly. Reduced motion stops it. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at var(--aurora-at-1), var(--color-aurora-1), transparent var(--aurora-reach)),
+    radial-gradient(circle at var(--aurora-at-2), var(--color-aurora-2), transparent var(--aurora-reach)),
+    radial-gradient(circle at var(--aurora-at-3), var(--color-aurora-3), transparent var(--aurora-reach));
+  animation: aurora-drift var(--motion-duration-aurora) var(--ease-standard) infinite alternate;
+}
+
+@keyframes aurora-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(var(--aurora-drift-shift), var(--aurora-drift-shift), 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    animation: none;
+  }
+}
+
+/* Frosted glass for floating bars and panels. Without backdrop-filter (old browser, or the no-backdrop class on
+   <html>), the panel falls back to the opaque raised surface so the text stays readable. */
+@utility glass {
+  background: var(--color-glass);
+  @apply border border-glass-line;
+  backdrop-filter: blur(var(--blur-glass)) saturate(var(--saturate-glass));
+
+  @supports not (backdrop-filter: blur(1px)) {
+    background: var(--color-surface-raised);
+  }
+
+  html.no-backdrop & {
+    background: var(--color-surface-raised);
+    backdrop-filter: none;
+  }
+}
+
 /* Skeleton: a slow breathing, on motion tokens only. Reduced motion zeroes the durations (tokens) and drops it here too. */
 @keyframes skeleton-breathe {
   from {

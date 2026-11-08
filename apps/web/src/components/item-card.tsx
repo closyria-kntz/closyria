@@ -78,14 +78,14 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
             </span>
           )}
           {item.priority && (
-            <span className="absolute bottom-space-2 left-space-2 rounded-full bg-accent px-space-2 py-space-1 text-caption font-strong text-accent-ink shadow-soft">
+            <span className="absolute bottom-space-2 left-space-2 rounded-full bg-accent px-space-2 py-space-1 text-caption font-strong text-accent-ink">
               {t("priority")}
             </span>
           )}
           {selection && (
             <span
               aria-hidden="true"
-              className={`absolute top-space-2 right-space-2 flex size-space-6 items-center justify-center rounded-full border-2 shadow-soft ${
+              className={`absolute top-space-2 right-space-2 flex size-space-6 items-center justify-center rounded-full border-2 ${
                 selection.selected ? "border-accent bg-accent text-accent-ink" : "border-surface-raised bg-ink/20"
               }`}
             >

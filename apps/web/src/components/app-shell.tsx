@@ -250,7 +250,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </aside>
 
         <div className="flex min-h-space-0 min-w-space-0 flex-1 flex-col">
-          <header className="relative z-10 shrink-0 border-b border-line bg-surface-raised">
+          <header className="glass relative z-10 shrink-0">
             <div className="relative flex items-center justify-between gap-space-3 px-space-4 py-space-2 md:px-space-5">
               <Link href="/" className={`font-display text-lead font-strong lg:invisible ${focusRing}`}>
                 {t("brand")}

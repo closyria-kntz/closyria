@@ -11,7 +11,7 @@ import { focusRing } from "./ui";
 
 /** The look of the pill: emoji and name on translucent white, top left of the photo (spec §3.2). */
 export const pillClass =
-  "inline-flex min-w-space-0 max-w-full items-center gap-space-1 overflow-hidden whitespace-nowrap rounded-full bg-surface-raised/85 px-space-2 py-space-1 text-caption font-strong text-ink shadow-soft";
+  "inline-flex min-w-space-0 max-w-full items-center gap-space-1 overflow-hidden whitespace-nowrap rounded-full bg-surface-raised/85 px-space-2 py-space-1 text-caption font-strong text-ink border border-line";
 
 /** Her level, shown without a way to change it (the trash). */
 export function LoveLevelBadge({ item }: { item: ItemView }) {
