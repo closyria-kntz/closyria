@@ -98,8 +98,8 @@ et l'effet de cercle au passage clair/sombre.
   budget du mois ».
 - **Filtres** : pastilles qui se cochent (coche qui se dessine) ; dès un filtre actif, « Effacer le filtre » /
   « Effacer les N filtres » au bout de la ligne (efface aussi la recherche).
-- **Carte d'article** : photo en arche (zoom léger au survol), émoji posé en haut à droite (clic = choisir le niveau),
-  « −20 € » sur la photo s'il y a baisse, au survol « Aperçu » et « Je le prends » / « Retirer » (toujours visibles
+- **Carte d'article** : photo en forme C (zoom léger au survol), émoji posé en haut à gauche, « … » en haut à droite
+  (clic sur l'émoji = choisir le niveau), « −20 € » à côté du prix sous la photo s'il y a baisse (palier 3 bis), au survol « Aperçu » et « Je le prends » / « Retirer » (toujours visibles
   sur téléphone), coche bordeaux quand l'article est pris ; dessous marque, nom (Fraunces), prix, ancien prix barré,
   « Prix noté à la main » pour une boutique non lisible.
 - **Choix du niveau** : bulle en verre avec les 4 émojis de la fondatrice, le niveau actuel mis en avant ; s'ouvre
@@ -107,7 +107,7 @@ et l'effet de cercle au passage clair/sombre.
 - **Aperçu** (« Aperçu » sur une carte) : panneau en verre à droite (feuille sur téléphone) avec toutes les photos à
   faire défiler, prix et baisse, envie et priorité, taille et stock, pourquoi, avis, « Je le prends » et « Voir la
   fiche complète ». Reprend `item-preview` existant, restylé.
-- **Fiche article** : galerie (grande arche, flèches, points qui s'étirent, vignettes en arches dessous), puis blocs :
+- **Fiche article** : galerie (grande photo en forme C, flèches, points qui s'étirent, vignettes de même forme dessous), puis blocs :
   **l'article** (marque, nom, prix, ancien prix barré, courbe sur 3 mois, une seule mention de baisse : « −20 € depuis
   mardi, le plus bas depuis 3 mois ») ; **ton envie** (4 niveaux au style actuel de l'app : carte blanche, trait fin,
   choisi = bord framboise + fond `color-hint` ; « Prioritaire » avec coche ; pourquoi en italique) ; **taille** (tailles,

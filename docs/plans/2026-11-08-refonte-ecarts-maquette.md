@@ -1,6 +1,6 @@
 # Refonte « Cocon lumineux » — écarts avec la maquette (palier 3 bis)
 
-> Statut : **validé par la fondatrice le 2026-11-08**. Spec : `docs/specs/2026-11-08-refonte-design.md`.
+> Statut : **validé par la fondatrice le 2026-11-08** ; **codé (palier 3 bis) sur `refonte-design`, pas encore en dev**. Spec : `docs/specs/2026-11-08-refonte-design.md`.
 > Maquette : `docs/maquettes/refonte-a2.html`. Comparaison des formes : https://claude.ai/artifact/2vsadNzN2387JVYUZerfWg
 
 Le palier 3 est en dev (7d6c6f9). La fondatrice trouve que le site ne correspond pas à la maquette et n'aime pas l'arche.
@@ -40,6 +40,14 @@ Ce document liste ce qu'on corrige avant d'aller plus loin.
 ### Liste partagée (validé)
 11. Sur un onglet de liste, la grille affiche les envies de **tous les profils** du compte qui sont dans la liste
     (comme « Ma commande » et la page de commande). « Toutes mes envies » reste limité au profil courant.
+
+## Mise en œuvre (palier 3 bis, 2026-11-08)
+
+- [x] 1 à 11 codés sur la branche `refonte-design` (rapport : `.superpowers/sdd/2026-11-08-refonte-design/p3bis-report.md`).
+- Écarts restants : sur un téléphone étroit, « −20 € » passe sous le prix quand le prix et l'ancien prix prennent
+  toute la largeur de la carte ; « Aperçu » y devient un œil (le nom du bouton reste « Aperçu de … ») pour que
+  « Je le prends » tienne sur une ligne. La recherche porte sur le nom, la marque et la boutique (nouveau paramètre
+  `q` de l'API).
 
 ## Méthode
 
