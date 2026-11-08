@@ -334,9 +334,13 @@ test("la fondatrice voit la pastille, l'avis « nouveau », l'efface et l'annule
     lea.getByRole("list", { name: "Articles" }).getByRole("list", { name: "Avis des amies" }).getByRole("listitem"),
   ).toHaveCount(1);
 
-  // Stopping the share erases the opinions: the page stops showing them at once, without reloading.
+  // Stopping the share keeps the opinions: still on the page, and after a reload.
   await stopSharing(page);
-  await expect(card.getByRole("list", { name: "Avis des amies" })).toHaveCount(0);
+  await expect(card.getByRole("list", { name: "Avis des amies" }).getByRole("listitem")).toHaveCount(1);
+  await page.reload();
+  await expect(
+    page.getByRole("list", { name: "Avis des amies" }).getByRole("listitem").filter({ hasText: "Léa" }),
+  ).toHaveCount(1);
   await lea.context().close();
 });
 

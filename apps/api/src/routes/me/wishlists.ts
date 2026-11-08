@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, schema, sql } from "@closyria/db";
+import { and, asc, eq, isNull, schema, sql } from "@closyria/db";
 import {
   containsWebAddress,
   erasedOpinionSchema,
@@ -207,7 +207,8 @@ const unshareRoute = defineAccess(
     method: "delete",
     path: "/me/wishlists/{id}/share",
     summary: "Stop sharing a list",
-    description: "The link stops working. Not shared: nothing changes.",
+    description:
+      "The link stops working; the friends' opinions stay (she still reads them, a new share shows them). Not shared: nothing changes.",
     request: { params: idParams },
     responses: {
       204: { description: "Stopped" },
@@ -256,7 +257,7 @@ const opinionRestoreRoute = defineAccess(
     method: "post",
     path: "/me/wishlists/{id}/opinions/restore",
     summary: "Put back an opinion she erased",
-    description: "Body: the erased opinion as `DELETE` returned it. Same id and dates. Only while the list is shared.",
+    description: "Body: the erased opinion as `DELETE` returned it. Same id and dates. Shared or not.",
     request: { params: idParams, ...body(z.object({ opinion: erasedOpinionSchema }).or(erasedOpinionSchema)) },
     responses: {
       201: json("Restored", z.object({ opinion: erasedOpinionSchema })),
@@ -289,7 +290,7 @@ const itemOpinionsRoute = defineAccess(
     method: "get",
     path: "/me/items/{id}/opinions",
     summary: "Friends' opinions of an item",
-    description: "In her shared lists that hold it, by list name; lists without opinion are left out.",
+    description: "In her lists that hold it (shared or no longer), by list name; lists without opinion are left out.",
     request: { params: idParams },
     responses: {
       200: json("The opinions", itemOpinionsSchema),
@@ -429,7 +430,7 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
       const lists = await db
         .select({ id: schema.wishlists.id, name: schema.wishlists.name, seenAt: schema.wishlists.opinionsSeenAt })
         .from(schema.wishlists)
-        .where(and(eq(schema.wishlists.userId, userId), isNotNull(schema.wishlists.shareTokenHash)))
+        .where(eq(schema.wishlists.userId, userId))
         .orderBy(asc(schema.wishlists.id));
       const out: { wishlistId: string; wishlistName: string; opinions: OpinionView[] }[] = [];
       for (const list of lists) {
@@ -562,10 +563,8 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
           .set({ shareTokenHash: null, shareTokenEncrypted: null, sharedAt: null })
           .where(own(userId, id))
           .returning({ id: schema.wishlists.id });
-        if (!row) return false;
-        await tx.delete(schema.wishlistOpinions).where(eq(schema.wishlistOpinions.wishlistId, id));
-        await tx.delete(schema.wishlistOpinionDevices).where(eq(schema.wishlistOpinionDevices.wishlistId, id));
-        return true;
+        // The friends' opinions and devices stay: she still reads them, and a new share shows them again.
+        return row !== undefined;
       });
       return found ? c.body(null, 204) : c.json(notFound, 404);
     });

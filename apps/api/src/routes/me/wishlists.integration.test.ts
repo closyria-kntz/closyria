@@ -380,7 +380,7 @@ describe("sharing", () => {
     expect((await call("GET", `/api/me/wishlists/${UNKNOWN_ID}/share`, cookie)).status).toBe(404);
   });
 
-  it("stopping the share clears the encrypted token and the list's opinions and devices", async () => {
+  it("stopping the share clears the encrypted token but keeps the opinions and devices", async () => {
     const { cookie, userId } = await t.signIn();
     const list = await createList(cookie);
     const { item } = await newItem(cookie, userId, {}, 0);
@@ -400,13 +400,13 @@ describe("sharing", () => {
     expect(row?.shareTokenEncrypted).toBeNull();
     expect(
       await t.db.select().from(schema.wishlistOpinions).where(eq(schema.wishlistOpinions.wishlistId, list.id)),
-    ).toEqual([]);
+    ).toHaveLength(1);
     expect(
       await t.db
         .select()
         .from(schema.wishlistOpinionDevices)
         .where(eq(schema.wishlistOpinionDevices.wishlistId, list.id)),
-    ).toEqual([]);
+    ).toHaveLength(1);
   });
 
   it("answers 404 to a malformed or unknown token, with the noindex and no-store headers", async () => {

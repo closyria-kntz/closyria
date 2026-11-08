@@ -1005,7 +1005,7 @@
       "close": "Fermer",
       "stop": "Arrêter le partage",
       "stopTitle": "Arrêter le partage ?",
-      "stopBody": "L'ancien lien ne marchera plus et les avis des amies seront effacés.",
+      "stopBody": "L'ancien lien ne marchera plus. Les avis des amies restent visibles pour toi.",
       "stopConfirm": "Arrêter",
       "stopped": "Partage arrêté : le lien ne marche plus.",
       "failed": "Le partage n’a pas abouti. Réessaie.",

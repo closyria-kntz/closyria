@@ -129,7 +129,7 @@
   - note `"www.zara.com"` → 422 `web_address` ;
   - 31e écriture en une heure avec la même clé → 429 ;
   - deux `PUT` simultanés (`Promise.all`) même prénom, même clé → deux 200, un seul avis en base (Review Focus 1) ;
-  - retirer l'article de la liste efface ses avis ; arrêter le partage efface tous les avis ;
+  - retirer l'article de la liste efface ses avis ; arrêter le partage garde les avis (revu le 2026-11-08) ;
   - la vue publique ne contient ni `notes`, ni `sizeLabel`, ni photos privées, ni période du budget (vérifier les clés JSON) ; `budget` null tant que `showBudget` est faux ;
   - renommer un niveau via `PUT /api/me/love-levels` → `levels` du `GET` public suit (Review Focus 5).
 - [x] **Step 2:** Lancer → échec.

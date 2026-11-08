@@ -101,8 +101,10 @@ des amies doivent arriver là où elle choisit ses achats (sa liste, l'aperçu d
 
 ## 5. Règles
 
-- Un avis porte sur **un article d'une liste** ; retirer l'article de la liste, supprimer la liste ou arrêter le
-  partage efface ses avis. « Changer le lien » les garde.
+- Un avis porte sur **un article d'une liste** ; retirer l'article de la liste ou supprimer la liste efface ses avis.
+  Arrêter le partage **garde** les avis (décision de la fondatrice, 2026-11-08) : elle les voit toujours, peut les
+  effacer et « Annuler » ; un nouveau partage les montre à nouveau, et l'amie garde la main sur le sien depuis le même
+  appareil. « Changer le lien » les garde aussi.
 - Un article déplacé à « Commandé » reste dans la liste et garde ses avis.
 - Unicité : un avis par (liste, article, prénom), le prénom comparé sans majuscules ni espaces en trop.
 - L'amie n'agit sur un avis (modifier, effacer) qu'avec la clé d'appareil qui l'a écrit, ou qui a été rattachée à
@@ -174,14 +176,14 @@ des amies doivent arriver là où elle choisit ses achats (sa liste, l'aperçu d
 
 ## 9. Écarts et précisions (2026-11-08)
 Décidés ou constatés pendant la réalisation ; ils complètent ou corrigent ce qui précède.
-- Arrêter le partage (DELETE) efface aussi les avis et les appareils des amies ; « Changer le lien » garde les avis.
+- ~~Arrêter le partage efface les avis~~ → remplacé le 2026-11-08 : arrêter le partage (DELETE) garde les avis et les appareils des amies ; l'aperçu d'un article et « Annuler » marchent aussi sur une liste qui n'est plus partagée.
 - Deux codes d'erreur en plus : `forbidden` (effacer l'avis d'une autre personne) et `opinion_exists` (conflit à la restauration).
 - Une amie peut reprendre un prénom avec « Oui, c'est moi » (risque accepté, décision A3) ; changer le lien coupe l'accès à toutes les autres.
 - Textes choisis pendant le développement, absents de la spec, à relire par la fondatrice : « Tu en penses quoi ? », « Son avis » / « Liste partagée » quand son prénom est masqué, les noms des champs, les messages d'erreur.
 - L'aperçu de commande ne se rafraîchit pas en direct tant qu'il est ouvert (la mise à jour automatique est en pause pendant les fenêtres) ; il relit les avis à chaque ouverture. Les pages, elles, se rafraîchissent en direct.
 - La bande de photos de l'aperçu de commande est maintenant atteignable au clavier (défaut qui existait déjà).
 - Le budget sur le lien public est toujours en euros (pas de colonne de devise).
-- « Arrêter le partage » demande d'abord : « Arrêter le partage ? », « L'ancien lien ne marchera plus et les avis des amies seront effacés. », boutons « Arrêter » / « Annuler » (validé par la fondatrice). La page de la liste retire les avis aussitôt.
+- « Arrêter le partage » demande d'abord : « Arrêter le partage ? », « L'ancien lien ne marchera plus. Les avis des amies restent visibles pour toi. », boutons « Arrêter » / « Annuler » (validé par la fondatrice, texte revu le 2026-11-08). La page de la liste garde les avis.
 - Décision A : les listes déjà partagées avant cette version ne se mettent pas à montrer ses avis (`show_owner_opinions` passe à faux pour elles dans la migration) ; les nouveaux partages gardent le défaut (vrai).
 - Adresse web : `http(s)://` et `www.` sont reconnus quelle que soit la casse ; une adresse nue n'est reconnue qu'avec une fin en minuscules (« zara.com », « Shop.fr » oui ; « Trop belle.Ca te va », « Shop.FR » non), pour ne pas bloquer une phrase collée à une majuscule.
 - Un prénom qui contient une adresse web est refusé aussi (erreur `web_address`, même message que pour le petit mot) ; de même à la restauration d'un avis effacé, qui exige en plus que la liste soit toujours partagée.

@@ -184,19 +184,27 @@ describe("public opinions", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("erases opinions when the item leaves the list, and all of them when sharing stops", async () => {
+  it("erases opinions when the item leaves the list", async () => {
     const s = await setup();
     await putOpinion(s.token, s.item.id, opinion());
     await call("DELETE", `/api/me/wishlists/${s.list.id}/items/${s.item.id}`, s.cookie);
     expect(
       await t.db.select().from(schema.wishlistOpinions).where(eq(schema.wishlistOpinions.wishlistId, s.list.id)),
     ).toHaveLength(0);
-    const s2 = await setup();
-    await putOpinion(s2.token, s2.item.id, opinion());
-    await call("DELETE", `/api/me/wishlists/${s2.list.id}/share`, s2.cookie);
+  });
+
+  it("keeps opinions when sharing stops; a new share shows them and the same device still edits hers", async () => {
+    const s = await setup();
+    expect((await putOpinion(s.token, s.item.id, opinion())).status).toBe(200);
+    expect((await call("DELETE", `/api/me/wishlists/${s.list.id}/share`, s.cookie)).status).toBe(204);
     expect(
-      await t.db.select().from(schema.wishlistOpinions).where(eq(schema.wishlistOpinions.wishlistId, s2.list.id)),
-    ).toHaveLength(0);
+      await t.db.select().from(schema.wishlistOpinions).where(eq(schema.wishlistOpinions.wishlistId, s.list.id)),
+    ).toHaveLength(1);
+    const again = await call("POST", `/api/me/wishlists/${s.list.id}/share`, s.cookie);
+    const token = ((await again.json()) as { url: string }).url.slice("/l/".length);
+    const view = (await (await getShared(token)).json()) as { items: { opinions: { name: string }[] }[] };
+    expect(view.items.flatMap((i) => i.opinions.map((o) => o.name))).toEqual(["Camille"]);
+    expect((await putOpinion(token, s.item.id, opinion({ level: 4 }))).status).toBe(200);
   });
 });
 

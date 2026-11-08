@@ -124,7 +124,9 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   // « Arrêter le partage » asks first: « Annuler » changes nothing.
   await page.getByRole("button", { name: "Arrêter le partage" }).click();
   const stop = page.getByRole("dialog", { name: "Arrêter le partage ?" });
-  await expect(stop.getByText("L'ancien lien ne marchera plus et les avis des amies seront effacés.")).toBeVisible();
+  await expect(
+    stop.getByText("L'ancien lien ne marchera plus. Les avis des amies restent visibles pour toi."),
+  ).toBeVisible();
   await axe(page);
   await stop.getByRole("button", { name: "Annuler" }).click();
   await expect(stop).toHaveCount(0);
