@@ -324,3 +324,43 @@ test("téléphone partagé, article retiré, pris elle-même", async ({
   await phone.context().close();
   await zoe.context().close();
 });
+
+test("tablette partagée : « Ce n'est pas toi ? », puis « Je participe »", async ({
+  page,
+  browser,
+  baseURL,
+  db,
+  userAgentTag,
+}, testInfo) => {
+  test.slow();
+  const owner = await giftList(page, db, userAgentTag);
+  const tablet = await friend(browser, baseURL, `10.216.${testInfo.workerIndex % 250}.1`);
+
+  await tablet.goto(owner.shareUrl);
+  await give(tablet, FIRST, "Je lui offre", "Léa");
+  await expect(itemOf(tablet, FIRST).getByRole("button", { name: "Me retirer" })).toBeVisible();
+  await expect(tablet.getByTestId("friend-switch")).toContainText("Tu es Léa");
+
+  // Inès takes the tablet: Léa's gift is no longer hers, she joins it under her own name.
+  await tablet.getByRole("button", { name: "Ce n'est pas toi ?" }).click();
+  await expect(appToast(tablet)).toContainText("Ce n'est plus Léa sur cet appareil");
+  await expect(tablet.getByTestId("friend-switch")).toHaveCount(0);
+  await expect(tablet.getByRole("heading", { level: 1 })).toBeFocused();
+  await expect(itemOf(tablet, FIRST).getByRole("button", { name: "Me retirer" })).toHaveCount(0);
+  await give(tablet, FIRST, "Je participe", "Inès");
+  await expect(itemOf(tablet, FIRST).getByText("Tu participes")).toBeVisible();
+  await expect(tablet.getByTestId("friend-switch")).toContainText("Tu es Inès");
+  await axe(tablet);
+
+  // Back as Léa on the tablet: her name is known (« C'est toi ? »), and her gift is hers again.
+  await tablet.getByRole("button", { name: "Ce n'est pas toi ?" }).click();
+  await itemOf(tablet, SECOND).getByRole("button", { name: "Je lui offre" }).click();
+  const sheet = tablet.getByRole("dialog");
+  await sheet.getByLabel("Ton prénom").fill("Léa");
+  await sheet.getByRole("button", { name: "Je lui offre" }).click();
+  await sheet.getByRole("button", { name: "Oui, c'est moi" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(itemOf(tablet, FIRST).getByRole("button", { name: "Me retirer" })).toBeVisible();
+
+  await tablet.context().close();
+});

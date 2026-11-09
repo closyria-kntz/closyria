@@ -12,6 +12,8 @@ export type FriendDevice = {
   /** Her first name, once she gave it on this device. */
   readonly name: string | null;
   setName(name: string): void;
+  /** « Ce n'est pas toi ? »: another friend on this device (a shared tablet). A new key, no name. */
+  reset(): void;
 };
 
 function randomKey(): string {
@@ -49,12 +51,19 @@ export function friendDevice(storage: Storage | null): FriendDevice {
   const state = stored ?? { key: randomKey(), name: null };
   if (!stored) write(storage, state);
   return {
-    key: state.key,
+    get key() {
+      return state.key;
+    },
     get name() {
       return state.name;
     },
     setName(name: string) {
       state.name = name;
+      write(storage, state);
+    },
+    reset() {
+      state.key = randomKey();
+      state.name = null;
       write(storage, state);
     },
   };

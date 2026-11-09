@@ -1241,7 +1241,10 @@
       "notMe": "Ce n'est pas moi",
       "itsMe": "Oui, c'est moi",
       "notHer": "Non",
-      "nameTaken": "Une {name} est déjà passée sur cette liste. C'est toi ?"
+      "nameTaken": "Une {name} est déjà passée sur cette liste. C'est toi ?",
+      "youAre": "Tu es {name} ·",
+      "switch": "Ce n'est pas toi ?",
+      "switched": "Ce n'est plus {name} sur cet appareil. Ton prénom te sera demandé."
     },
     "opinions": {
       "closed": "Les avis sont fermés sur cette liste.",

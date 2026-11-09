@@ -53,6 +53,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
   const tOpinions = useTranslations("SharedList.opinions");
   const tGone = useTranslations("SharedList.notFound");
   const tGifts = useTranslations("SharedList.gifts");
+  const tFriend = useTranslations("SharedList.friend");
   const locale = useLocale();
   const [view, setView] = useState(initial);
   // Made in the browser only (local storage): before that, no « Modifier mon avis ».
@@ -78,6 +79,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
   // The link stopped working while she was on the page.
   const [gone, setGone] = useState(false);
   const goneTitle = useRef<HTMLHeadingElement>(null);
+  const title = useRef<HTMLHeadingElement>(null);
 
   /** Reads the list again: the view, null once the link stopped working, undefined when it could not be read. */
   const reload = useCallback(async (): Promise<SharedWishlistView | null | undefined> => {
@@ -209,6 +211,23 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
     }
   }
 
+  /**
+   * « Ce n'est pas toi ? »: another friend on this device (a shared tablet). A new key, no name: what the previous
+   * friend gave or said no longer shows as hers, and the new one gives her own name at her first opinion or gift.
+   */
+  async function switchFriend() {
+    if (!device) return;
+    const previous = deviceName;
+    device.reset();
+    deviceKey.current = device.key;
+    setDeviceName(null);
+    setSheet(null);
+    setGiftSheet(null);
+    title.current?.focus();
+    if (previous) show(tFriend("switched", { name: previous }), null);
+    await reload();
+  }
+
   /** Given: the new state is announced (« Tu lui offres {article} ») and her next step takes the focus. */
   async function giftDone(item: Item, name: string, role: GiftRole) {
     setDeviceName(name);
@@ -278,8 +297,22 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
         <p className="font-display text-lead font-strong text-accent">
           {view.ownerName ? t("ownerList", { name: view.ownerName }) : t("metadata")}
         </p>
-        <h1 className="font-display text-title font-strong">{view.name}</h1>
+        <h1 ref={title} tabIndex={-1} className="font-display text-title font-strong focus:outline-none">
+          {view.name}
+        </h1>
         <p className="text-ink-muted">{view.allowOpinions ? t("invite") : tOpinions("closed")}</p>
+        {device && deviceName && (
+          <p data-testid="friend-switch" className="flex flex-wrap items-center gap-x-space-1 text-sm text-ink-muted">
+            <span>{tFriend("youAre", { name: deviceName })}</span>
+            <button
+              type="button"
+              onClick={() => void switchFriend()}
+              className={`rounded-button px-space-2 text-accent underline min-h-touch-target ${focusRing}`}
+            >
+              {tFriend("switch")}
+            </button>
+          </p>
+        )}
       </header>
 
       <GiftBanner gifts={view.gifts} ownerName={view.ownerName} />

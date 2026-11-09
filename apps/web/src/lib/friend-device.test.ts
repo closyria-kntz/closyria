@@ -46,6 +46,20 @@ describe("friendDevice", () => {
     expect(JSON.parse(storage.getItem(FRIEND_DEVICE_KEY) ?? "")).toEqual({ key: first.key, name: "Léa" });
   });
 
+  it("becomes another friend on « Ce n'est pas toi ? »: a new key, no name, kept for the next visit", () => {
+    const storage = memoryStorage();
+    const device = friendDevice(storage);
+    device.setName("Léa");
+    const before = device.key;
+    device.reset();
+    expect(device.key).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(device.key).not.toBe(before);
+    expect(device.name).toBeNull();
+    const again = friendDevice(storage);
+    expect(again.key).toBe(device.key);
+    expect(again.name).toBeNull();
+  });
+
   it("replaces a stored value it cannot read", () => {
     const storage = memoryStorage();
     storage.setItem(FRIEND_DEVICE_KEY, "{not json");
