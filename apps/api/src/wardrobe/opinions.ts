@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { and, asc, type Database, eq, isNull, schema, sql } from "@closyria/db";
 import {
   type ErasedOpinion,
@@ -7,8 +6,7 @@ import {
   type OpinionView,
   opinionNameKey,
 } from "@closyria/shared";
-
-const hashDeviceKey = (deviceKey: string) => createHash("sha256").update(deviceKey).digest("hex");
+import { ensureFriendDevice, hashDeviceKey, isFriendDevice, lockFriendName } from "./friend-device";
 
 type OpinionRow = typeof schema.wishlistOpinions.$inferSelect;
 
@@ -60,7 +58,7 @@ export async function upsertOpinion(
   const nameKey = opinionNameKey(input.name);
   const deviceKeyHash = hashDeviceKey(input.deviceKey);
   return db.transaction(async (tx): Promise<UpsertResult> => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${input.wishlistId}:${nameKey}`}, 0))`);
+    await lockFriendName(tx, input.wishlistId, nameKey);
     // Lock the list and the item's membership until we commit: stopping the share or taking the item out waits for
     // us (and then erases what we wrote), or we find them gone. Opinions cannot outlive either.
     const [list] = await tx
@@ -83,23 +81,8 @@ export async function upsertOpinion(
       )
       .for("share", { of: schema.wishlistItems });
     if (!member) return { ok: false, error: "not_found" };
-    const devices = await tx
-      .select({ hash: schema.wishlistOpinionDevices.deviceKeyHash })
-      .from(schema.wishlistOpinionDevices)
-      .where(
-        and(
-          eq(schema.wishlistOpinionDevices.wishlistId, input.wishlistId),
-          eq(schema.wishlistOpinionDevices.authorNameKey, nameKey),
-        ),
-      );
-    const known = devices.some((d) => d.hash === deviceKeyHash);
-    if (devices.length > 0 && !known && !input.claim) return { ok: false, error: "name_taken" };
-    if (!known) {
-      await tx
-        .insert(schema.wishlistOpinionDevices)
-        .values({ wishlistId: input.wishlistId, authorNameKey: nameKey, deviceKeyHash })
-        .onConflictDoNothing();
-    }
+    if ((await ensureFriendDevice(tx, input.wishlistId, nameKey, deviceKeyHash, input.claim)) === "name_taken")
+      return { ok: false, error: "name_taken" };
     const [row] = await tx
       .insert(schema.wishlistOpinions)
       .values({
@@ -130,17 +113,7 @@ export async function deleteOpinion(
   input: OpinionDelete & { wishlistId: string; itemId: string },
 ): Promise<"deleted" | "forbidden"> {
   const nameKey = opinionNameKey(input.name);
-  const [device] = await db
-    .select({ hash: schema.wishlistOpinionDevices.deviceKeyHash })
-    .from(schema.wishlistOpinionDevices)
-    .where(
-      and(
-        eq(schema.wishlistOpinionDevices.wishlistId, input.wishlistId),
-        eq(schema.wishlistOpinionDevices.authorNameKey, nameKey),
-        eq(schema.wishlistOpinionDevices.deviceKeyHash, hashDeviceKey(input.deviceKey)),
-      ),
-    );
-  if (!device) return "forbidden";
+  if (!(await isFriendDevice(db, input.wishlistId, nameKey, input.deviceKey))) return "forbidden";
   await db
     .delete(schema.wishlistOpinions)
     .where(
@@ -170,7 +143,7 @@ export async function restoreOpinion(
 ): Promise<"restored" | "not_found" | "exists"> {
   const nameKey = opinionNameKey(opinion.name);
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${wishlistId}:${nameKey}`}, 0))`);
+    await lockFriendName(tx, wishlistId, nameKey);
     // Shared or not: the opinions outlive the share. The lock keeps the list from going away under us.
     const [list] = await tx
       .select({ id: schema.wishlists.id })

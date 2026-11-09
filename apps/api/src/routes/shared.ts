@@ -3,6 +3,8 @@ import { eq, schema } from "@closyria/db";
 import {
   containsWebAddress,
   deviceKeySchema,
+  giftDeleteSchema,
+  giftInputSchema,
   opinionDeleteSchema,
   opinionInputSchema,
   opinionViewSchema,
@@ -15,6 +17,7 @@ import { bodyLimit } from "hono/body-limit";
 import { type AccessEnv, defineAccess } from "../access";
 import { clientAddress, rateLimit } from "../rate-limit";
 import type { WardrobeDeps } from "../wardrobe/deps";
+import { giveGift, leaveGift } from "../wardrobe/gifts";
 import { deleteOpinion, upsertOpinion } from "../wardrobe/opinions";
 import { hashShareToken, SHARE_TOKEN_PATTERN } from "../wardrobe/share-token";
 import { loadSharedView } from "../wardrobe/wishlists";
@@ -30,9 +33,14 @@ const sharedRoute = defineAccess(
     path: "/shared/{token}",
     summary: "A shared list",
     description:
-      "Public. Product data and her friends' opinions only (no notes, sizes, profiles or private photos). " +
-      "Never cached, never indexed. A malformed, unknown or stopped token answers 404.",
-    request: { params: z.object({ token: z.string() }) },
+      "Public. Product data and her friends' opinions only (no notes, profiles or private photos; her size only " +
+      "when the list is open to gifts). Never cached, never indexed. A malformed, unknown or stopped token " +
+      "answers 404. The optional `x-device-key` header names the friend's device, so her own gifts show as hers " +
+      "(`mine`); without it, or malformed, `mine` is null.",
+    request: {
+      params: z.object({ token: z.string() }),
+      headers: z.object({ "x-device-key": z.string().optional() }),
+    },
     responses: {
       200: { description: "The list", content: { "application/json": { schema: sharedWishlistViewSchema } } },
       404: errorContent("Unknown or stopped share (not_found)"),
@@ -124,6 +132,87 @@ const deleteOpinionRoute = defineAccess(
   "public",
 );
 
+const giftParams = opinionParams;
+const MAX_GIFT_BODY_BYTES = 4 * 1024;
+const GIFTS_PER_HOUR_PER_DEVICE = 30;
+const GIFTS_PER_HOUR_PER_ADDRESS = 120;
+// One count for reserving, contributing and leaving alike, so both gift routes share these two limiters.
+const giftLimits = [
+  rateLimit(
+    {
+      max: GIFTS_PER_HOUR_PER_DEVICE,
+      windowMs: HOUR_MS,
+      key: async (c) => `d:${c.req.param("token")}:${await deviceKeyOf(c)}`,
+    },
+    rateLimited,
+  ),
+  rateLimit(
+    {
+      max: GIFTS_PER_HOUR_PER_ADDRESS,
+      windowMs: HOUR_MS,
+      key: (c) => `a:${c.req.param("token")}:${clientAddress(c.req.raw.headers)}`,
+    },
+    rateLimited,
+  ),
+] as const;
+const giftBodyLimit = bodyLimit({
+  maxSize: MAX_GIFT_BODY_BYTES,
+  onError: (c) => c.json({ error: "invalid_request" }, 413),
+});
+
+const putGiftRoute = defineAccess(
+  createRoute({
+    method: "put",
+    path: "/shared/{token}/items/{itemId}/gift",
+    summary: "A friend offers an item of a shared list",
+    description:
+      "Public. Reserves the item when nobody has, contributes otherwise (`raced`: who reserved it first). Same name " +
+      "rule as the opinions (`claim`). 30 gift actions an hour per device and list, 120 per address and list.",
+    middleware: [giftBodyLimit, ...giftLimits] as const,
+    request: {
+      params: giftParams,
+      body: { required: true, content: { "application/json": { schema: giftInputSchema } } },
+    },
+    responses: {
+      200: {
+        description: "Her role",
+        content: {
+          "application/json": {
+            schema: z.object({ role: z.enum(["reserver", "contributor"]), raced: z.string().nullable() }),
+          },
+        },
+      },
+      403: errorContent("The list is closed to gifts (gifts_closed)"),
+      404: errorContent("Unknown share, or item not offered on the list (not_found)"),
+      409: errorContent("Name used by another device (name_taken), or she took it herself (owner_took)"),
+      422: errorContent("Web address in the name (web_address)"),
+      429: errorContent("Too many gift actions (rate_limited)"),
+    },
+  }),
+  "public",
+);
+
+const deleteGiftRoute = defineAccess(
+  createRoute({
+    method: "delete",
+    path: "/shared/{token}/items/{itemId}/gift",
+    summary: "A friend takes back her gift",
+    description: "Public. With the device attached to the name. Counts in the same limits as offering.",
+    middleware: [giftBodyLimit, ...giftLimits] as const,
+    request: {
+      params: giftParams,
+      body: { required: true, content: { "application/json": { schema: giftDeleteSchema } } },
+    },
+    responses: {
+      204: { description: "Taken back (or nothing to take back)" },
+      403: errorContent("The device is not attached to the name (forbidden)"),
+      404: errorContent("Unknown or stopped share (not_found)"),
+      429: errorContent("Too many gift actions (rate_limited)"),
+    },
+  }),
+  "public",
+);
+
 /** A stopped share must not be served from a cache, and the page must stay out of search engines. */
 function privateHeaders(c: { header: (name: string, value: string) => unknown }) {
   c.header("X-Robots-Tag", "noindex");
@@ -147,6 +236,9 @@ export function sharedRoutes(deps: WardrobeDeps) {
         showOwnerName: schema.wishlists.showOwnerName,
         showOwnerOpinions: schema.wishlists.showOwnerOpinions,
         showBudget: schema.wishlists.showBudget,
+        allowGifts: schema.wishlists.allowGifts,
+        giftOccasion: schema.wishlists.giftOccasion,
+        giftDate: schema.wishlists.giftDate,
       })
       .from(schema.wishlists)
       .where(eq(schema.wishlists.shareTokenHash, hashShareToken(token)));
@@ -158,7 +250,9 @@ export function sharedRoutes(deps: WardrobeDeps) {
       privateHeaders(c);
       const list = await findList(c.req.valid("param").token);
       if (!list) return c.json({ error: "not_found" } as const, 404);
-      return c.json(await loadSharedView(db, list), 200);
+      // Optional and never an error: a malformed key is no key.
+      const deviceKey = deviceKeySchema.safeParse(c.req.valid("header")["x-device-key"]);
+      return c.json(await loadSharedView(db, list, deviceKey.success ? deviceKey.data : null), 200);
     })
     .openapi(putOpinionRoute, async (c) => {
       privateHeaders(c);
@@ -189,5 +283,40 @@ export function sharedRoutes(deps: WardrobeDeps) {
       if (!list) return c.json({ error: "not_found" } as const, 404);
       const outcome = await deleteOpinion(db, { ...c.req.valid("json"), wishlistId: list.id, itemId });
       return outcome === "forbidden" ? c.json({ error: "forbidden" } as const, 403) : c.body(null, 204);
+    })
+    .openapi(putGiftRoute, async (c) => {
+      privateHeaders(c);
+      const { token, itemId } = c.req.valid("param");
+      const input = c.req.valid("json");
+      const list = await findList(token);
+      if (!list) return c.json({ error: "not_found" } as const, 404);
+      if (!list.allowGifts) return c.json({ error: "gifts_closed" } as const, 403);
+      if (containsWebAddress(input.name)) return c.json({ error: "web_address" } as const, 422);
+      const result = await giveGift(db, {
+        ...input,
+        wishlistId: list.id,
+        shareTokenHash: hashShareToken(token),
+        itemId,
+      });
+      if (result.ok) return c.json({ role: result.role, raced: result.raced }, 200);
+      if (result.error === "not_found") return c.json({ error: "not_found" } as const, 404);
+      if (result.error === "gifts_closed") return c.json({ error: "gifts_closed" } as const, 403);
+      if (result.error === "owner_took") return c.json({ error: "owner_took" } as const, 409);
+      return c.json({ error: "name_taken" } as const, 409);
+    })
+    .openapi(deleteGiftRoute, async (c) => {
+      privateHeaders(c);
+      const { token, itemId } = c.req.valid("param");
+      const list = await findList(token);
+      if (!list) return c.json({ error: "not_found" } as const, 404);
+      const result = await leaveGift(db, {
+        ...c.req.valid("json"),
+        wishlistId: list.id,
+        shareTokenHash: hashShareToken(token),
+        itemId,
+      });
+      if (result.ok) return c.body(null, 204);
+      if (result.error === "not_found") return c.json({ error: "not_found" } as const, 404);
+      return c.json({ error: "forbidden" } as const, 403);
     });
 }

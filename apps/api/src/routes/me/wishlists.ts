@@ -22,6 +22,7 @@ import type { Context } from "hono";
 import { type AccessEnv, defineAccess } from "../../access";
 import { runBulk } from "../../wardrobe/bulk";
 import { trackWishlistShared, type WardrobeDeps } from "../../wardrobe/deps";
+import { markGiftsRemoved } from "../../wardrobe/gifts";
 import { eraseOpinion, opinionsByItem, restoreOpinion } from "../../wardrobe/opinions";
 import { decryptShareToken, encryptShareToken } from "../../wardrobe/share-link";
 import { newShareToken } from "../../wardrobe/share-token";
@@ -490,6 +491,8 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
         await tx
           .delete(schema.wishlistOpinions)
           .where(and(eq(schema.wishlistOpinions.wishlistId, id), eq(schema.wishlistOpinions.itemId, itemId)));
+        // Her friends' gifts stay, marked, so the givers learn she took it off; putting it back restores them.
+        await markGiftsRemoved(tx, id, [itemId]);
         return true;
       });
       const view = found ? await viewOf(userId, id) : undefined;

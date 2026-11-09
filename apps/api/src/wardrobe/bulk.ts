@@ -9,6 +9,7 @@ import {
 } from "@closyria/shared";
 import { pgCode } from "../pg-code";
 import type { Tx } from "./events";
+import { clearGiftsRemoved, markGiftsRemoved } from "./gifts";
 import { AMOUNT_COLUMN, type Item, lockProductOfUser } from "./items";
 import { mergeItemInto } from "./merge-items";
 import { spentCentsFor } from "./spent";
@@ -256,6 +257,7 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
         .onConflictDoNothing()
         .returning({ itemId: schema.wishlistItems.itemId });
       const addedIds = added.map((r) => r.itemId);
+      await clearGiftsRemoved(tx, op.wishlistId, addedIds);
       return result(
         addedIds,
         addedIds.length ? [{ ids: addedIds, op: "removeFromList", wishlistId: op.wishlistId }] : [],
@@ -268,6 +270,7 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
         .where(and(eq(schema.wishlistItems.wishlistId, op.wishlistId), inArray(schema.wishlistItems.itemId, op.ids)))
         .returning({ itemId: schema.wishlistItems.itemId });
       const ids = removed.map((r) => r.itemId);
+      await markGiftsRemoved(tx, op.wishlistId, ids);
       return result(ids, ids.length ? [{ ids, op: "addToList", wishlistId: op.wishlistId }] : []);
     }
     case "addTag": {

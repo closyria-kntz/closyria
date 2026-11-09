@@ -1,8 +1,10 @@
 import { and, asc, type Database, eq, gt, inArray, isNull, or, schema, sql } from "@closyria/db";
-import type { SharedWishlistView, WishlistView } from "@closyria/shared";
+import type { SharedGiftState, SharedWishlistView, WishlistView } from "@closyria/shared";
 
 import { catalogImageUrl } from "../catalog/product-view";
 import type { Tx } from "./events";
+import { friendNameKeysOf } from "./friend-device";
+import { giftStatesForList, isGiven } from "./gifts";
 import { readLoveLevels } from "./love-levels";
 import { opinionsByItem } from "./opinions";
 
@@ -89,31 +91,79 @@ const imageUrlOf = (image: { id: string } | undefined) => (image ? catalogImageU
  */
 export type SharedList = Pick<
   WishlistRow,
-  "id" | "name" | "userId" | "allowOpinions" | "showOwnerName" | "showOwnerOpinions" | "showBudget"
+  | "id"
+  | "name"
+  | "userId"
+  | "allowOpinions"
+  | "showOwnerName"
+  | "showOwnerOpinions"
+  | "showBudget"
+  | "allowGifts"
+  | "giftOccasion"
+  | "giftDate"
 >;
 
-export async function loadSharedView(db: Database, list: SharedList): Promise<SharedWishlistView> {
-  // Narrow: only the public columns, and the first shop photo of each product (not all images, not the sizes).
-  const members = await db
-    .select({
-      itemId: schema.items.id,
-      productId: schema.products.id,
-      name: schema.products.name,
-      brand: schema.products.brand,
-      priceCents: schema.products.priceCents,
-      currency: schema.products.currency,
-      url: schema.products.canonicalUrl,
-      shopName: schema.shops.name,
-      loveLevel: schema.items.loveLevel,
-      priority: schema.items.priority,
-      why: schema.items.why,
-    })
+// Narrow: only the public columns. The size, stage and gift_from are for the gifts only (never sent otherwise).
+const sharedItemColumns = {
+  itemId: schema.items.id,
+  productId: schema.products.id,
+  name: schema.products.name,
+  brand: schema.products.brand,
+  priceCents: schema.products.priceCents,
+  currency: schema.products.currency,
+  url: schema.products.canonicalUrl,
+  shopName: schema.shops.name,
+  loveLevel: schema.items.loveLevel,
+  priority: schema.items.priority,
+  why: schema.items.why,
+  sizeLabel: schema.items.sizeLabel,
+  stage: schema.items.stage,
+  giftFrom: schema.items.giftFrom,
+};
+
+/**
+ * `deviceKey` (optional, already validated): the friend's device, so her own gifts show as hers (`mine`) and the
+ * items taken off the list that she gives still show to her.
+ */
+export async function loadSharedView(
+  db: Database,
+  list: SharedList,
+  deviceKey: string | null = null,
+): Promise<SharedWishlistView> {
+  const onList = await db
+    .select(sharedItemColumns)
     .from(schema.wishlistItems)
     .innerJoin(schema.items, eq(schema.items.id, schema.wishlistItems.itemId))
     .innerJoin(schema.products, eq(schema.products.id, schema.items.productId))
     .innerJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
     .where(and(eq(schema.wishlistItems.wishlistId, list.id), isNull(schema.items.deletedAt)))
     .orderBy(asc(schema.wishlistItems.position), asc(schema.wishlistItems.addedAt), asc(schema.wishlistItems.itemId));
+  const gifts = list.allowGifts
+    ? await giftStatesForList(db, list.id, deviceKey ? await friendNameKeysOf(db, list.id, deviceKey) : null)
+    : new Map<string, SharedGiftState>();
+  // Taken off the list but given by this device: shown to her only, after the others. Never from the trash.
+  const onListIds = new Set(onList.map((m) => m.itemId));
+  const removedIds = [...gifts]
+    .filter(([itemId, gift]) => gift.state === "removed" && !onListIds.has(itemId))
+    .map(([itemId]) => itemId);
+  const removed =
+    removedIds.length === 0
+      ? []
+      : await db
+          .select(sharedItemColumns)
+          .from(schema.items)
+          .innerJoin(schema.products, eq(schema.products.id, schema.items.productId))
+          .innerJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
+          .where(
+            and(
+              inArray(schema.items.id, removedIds),
+              eq(schema.items.userId, list.userId),
+              isNull(schema.items.deletedAt),
+            ),
+          )
+          .orderBy(asc(schema.items.id));
+  const given = list.allowGifts ? onList.filter(isGiven) : [];
+  const members = [...(list.allowGifts ? onList.filter((m) => !isGiven(m)) : onList), ...removed];
   const productIds = [...new Set(members.map((m) => m.productId))];
   const firstImages =
     productIds.length === 0
@@ -157,8 +207,10 @@ export async function loadSharedView(db: Database, list: SharedList): Promise<Sh
     name: list.name,
     ownerName,
     allowOpinions: list.allowOpinions,
-    gifts: { open: false, occasion: null, date: null },
-    givenItems: [],
+    gifts: list.allowGifts
+      ? { open: true, occasion: list.giftOccasion, date: list.giftDate }
+      : { open: false, occasion: null, date: null },
+    givenItems: given.map((m) => ({ name: m.name ?? "" })),
     levels,
     budget,
     items: members.map((m) => ({
@@ -176,8 +228,8 @@ export async function loadSharedView(db: Database, list: SharedList): Promise<Sh
       imageUrl: imageUrlOf(imageOf.get(m.productId)),
       imageWidth: imageOf.get(m.productId)?.width ?? null,
       imageHeight: imageOf.get(m.productId)?.height ?? null,
-      gift: null,
-      size: null,
+      gift: list.allowGifts ? (gifts.get(m.itemId) ?? { state: "free" }) : null,
+      size: list.allowGifts ? m.sizeLabel : null,
       shopName: m.shopName,
       url: m.url,
     })),
