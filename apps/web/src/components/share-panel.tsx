@@ -1,6 +1,6 @@
 "use client";
 
-import type { WishlistSettings, WishlistView } from "@closyria/shared";
+import type { WishlistView } from "@closyria/shared";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { requestAccountPrompt } from "@/lib/account-prompt-request";
@@ -14,7 +14,9 @@ const touch = "min-h-touch-target";
 
 /** The four settings, in the order she reads them (spec §4.2). */
 const SETTINGS = ["allowOpinions", "showOwnerName", "showOwnerOpinions", "showBudget"] as const;
-type Setting = (typeof SETTINGS)[number];
+/** The four, and « Mes amies peuvent m'offrir des articles » (spec 2b § 4), after them. */
+type Setting = (typeof SETTINGS)[number] | "allowGifts";
+type Switches = Pick<WishlistView, Setting>;
 
 /** The kept link: read from the API while the list is shared; `legacy`, shared before links were kept. */
 type Link = { status: "loading" } | { status: "error" } | { status: "ready"; url: string | null; legacy: boolean };
@@ -31,10 +33,11 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [confirmingStop, setConfirmingStop] = useState(false);
+  const [confirmingGiftsOff, setConfirmingGiftsOff] = useState(false);
   // The browser's share menu (phones mostly): known only in the browser.
   const [canShare, setCanShare] = useState(false);
   // A setting being saved shows its new value until the API answers; it goes back if the save fails.
-  const [pending, setPending] = useState<Partial<WishlistSettings>>({});
+  const [pending, setPending] = useState<Partial<Switches>>({});
   const field = useRef<HTMLTextAreaElement>(null);
   const copyButton = useRef<HTMLButtonElement>(null);
   // After « Créer le lien », the button she pressed is gone: the focus goes to « Copier le lien » once it shows.
@@ -144,7 +147,18 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
     setPending(({ [key]: _done, ...rest }) => rest);
     if (!result.ok) return setMessage({ text: t("settingFailed"), kind: "error" });
     // Only this setting: another one saved meanwhile may have answered first, and this answer predates it.
-    onChange({ ...latest.current, [key]: result[key] });
+    onChange({
+      ...latest.current,
+      [key]: result[key],
+      ...(key === "allowGifts" ? { giftReminderDue: result.giftReminderDue } : {}),
+    });
+  }
+
+  /** Off: she is told first that her friends' gifts disappear from the link (they are kept for when she turns it back on). */
+  function toggleGifts() {
+    if (pending.allowGifts !== undefined) return;
+    if (list.allowGifts) setConfirmingGiftsOff(true);
+    else void toggle("allowGifts");
   }
 
   const since = list.sharedAt
@@ -257,6 +271,7 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
             <p>{t("alsoSees", { things: new Intl.ListFormat(locale, { type: "conjunction" }).format(sees) })}</p>
           )}
           <p>{value("allowOpinions") ? t("opinionsOpen") : t("opinionsClosed")}</p>
+          {value("allowGifts") && <p>{t("giftsOpen")}</p>}
           <p>{t("never")}</p>
         </div>
         <ul className="mt-space-2 flex max-w-narrow flex-col">
@@ -265,7 +280,11 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
               <Switch label={t(`settings.${key}`)} on={value(key)} onToggle={() => void toggle(key)} />
             </li>
           ))}
+          <li>
+            <Switch label={t("settings.allowGifts")} on={value("allowGifts")} onToggle={toggleGifts} />
+          </li>
         </ul>
+        {value("allowGifts") && <GiftFields list={list} latest={latest} onChange={onChange} />}
       </div>
 
       {list.shared && (
@@ -308,6 +327,7 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
         closeLabel={t("close")}
       >
         <p className="text-ink-muted">{t("stopBody")}</p>
+        {list.allowGifts && <p className="text-ink-muted">{t("giftsOffBody")}</p>}
         <div className="flex flex-wrap gap-space-2">
           <button
             type="button"
@@ -322,7 +342,127 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
           </button>
         </div>
       </Dialog>
+      <Dialog
+        open={confirmingGiftsOff}
+        onClose={() => setConfirmingGiftsOff(false)}
+        title={t("giftsOffTitle")}
+        closeLabel={t("close")}
+      >
+        <p className="text-ink-muted">{t("giftsOffBody")}</p>
+        <div className="flex flex-wrap gap-space-2">
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmingGiftsOff(false);
+              void toggle("allowGifts");
+            }}
+            className={`${primaryButtonClass} ${touch}`}
+          >
+            {t("giftsOffConfirm")}
+          </button>
+          <button type="button" onClick={() => setConfirmingGiftsOff(false)} className={`${buttonClass} ${touch}`}>
+            {t("cancel")}
+          </button>
+        </div>
+      </Dialog>
     </section>
+  );
+}
+
+/**
+ * The occasion and the date her friends see on the link (both optional). The occasion is saved when she leaves the
+ * field (or presses Entrée), the date when she picks it; emptied, each is cleared.
+ */
+function GiftFields({
+  list,
+  latest,
+  onChange,
+}: {
+  list: WishlistView;
+  latest: { current: WishlistView };
+  onChange: (list: WishlistView) => void;
+}) {
+  const t = useTranslations("Lists.share");
+  const id = useId();
+  const [occasion, setOccasion] = useState(list.giftOccasion ?? "");
+  const [date, setDate] = useState(list.giftDate ?? "");
+  const [error, setError] = useState<string | null>(null);
+  // Changed elsewhere (another device, an undo): the fields follow.
+  useEffect(() => setOccasion(list.giftOccasion ?? ""), [list.giftOccasion]);
+  useEffect(() => setDate(list.giftDate ?? ""), [list.giftDate]);
+
+  async function save(patch: { giftOccasion: string | null } | { giftDate: string | null }) {
+    setError(null);
+    const result = await patchWishlistSettings(list.id, patch);
+    if (!result.ok) {
+      setError(t(result.error === "invalid_request" && "giftOccasion" in patch ? "occasionInvalid" : "settingFailed"));
+      return;
+    }
+    onChange({
+      ...latest.current,
+      giftOccasion: result.giftOccasion,
+      giftDate: result.giftDate,
+      giftReminderDue: result.giftReminderDue,
+    });
+  }
+
+  function saveOccasion() {
+    const next = occasion.trim() || null;
+    if (next === list.giftOccasion) return;
+    void save({ giftOccasion: next });
+  }
+
+  return (
+    <div className="mt-space-2 flex max-w-narrow flex-col gap-space-2">
+      <div className="grid grid-cols-1 gap-space-3 sm:grid-cols-3">
+        <div className="flex min-w-space-0 flex-col gap-space-1 sm:col-span-2">
+          <label htmlFor={`${id}-occasion`} className="text-sm font-strong">
+            {t("occasion")}
+          </label>
+          <input
+            id={`${id}-occasion`}
+            value={occasion}
+            placeholder={t("occasionPlaceholder")}
+            aria-describedby={`${id}-hint`}
+            enterKeyHint="done"
+            onChange={(event) => setOccasion(event.target.value)}
+            onBlur={saveOccasion}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                saveOccasion();
+              }
+            }}
+            className={`${inputClass} ${touch}`}
+          />
+        </div>
+        <div className="flex min-w-space-0 flex-col gap-space-1">
+          <label htmlFor={`${id}-date`} className="text-sm font-strong">
+            {t("date")}
+          </label>
+          <input
+            id={`${id}-date`}
+            type="date"
+            value={date}
+            aria-describedby={`${id}-hint`}
+            onChange={(event) => {
+              setDate(event.target.value);
+              const next = event.target.value || null;
+              if (next !== list.giftDate) void save({ giftDate: next });
+            }}
+            className={`${inputClass} ${touch}`}
+          />
+        </div>
+      </div>
+      <p id={`${id}-hint`} className="text-sm text-ink-muted">
+        {t("giftHint")}
+      </p>
+      {error && (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 

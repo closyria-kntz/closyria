@@ -9,6 +9,7 @@ import { flushSync } from "react-dom";
 import { z } from "zod";
 import { draftTotals, formatAmount } from "@/lib/budget";
 import { flyTo } from "@/lib/fly-to";
+import { createTakeGuard } from "@/lib/gift-check";
 import { useLiveRefresh } from "@/lib/live-changes";
 import { profileHref, useCurrentProfile, useLoveLevels, useProfilesReady } from "@/lib/profile-context";
 import { createTickQueue, type TickQueue } from "@/lib/tick-queue";
@@ -41,6 +42,7 @@ import {
 import { BudgetCard } from "./budget-card";
 import { CaptureForm } from "./capture-form";
 import { FilterChips, FiltersMenu, SearchField } from "./filters-bar";
+import { GiftReminder } from "./gift-reminder";
 import { ItemGrid } from "./item-grid";
 import { ItemPreview } from "./item-preview";
 import { ListTabs } from "./list-tabs";
@@ -315,13 +317,17 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   changedRef.current = changed;
   const tItemRef = useRef(tItem);
   tItemRef.current = tItem;
+  // « Je le prends » shows at once, then asks whether a friend plans to give it (« Attends un peu 🎁 »): saved only
+  // once she goes on, put back if she waits. « Retirer » never asks.
+  const takeGuard = useRef(createTakeGuard());
   const take = useCallback(
     async (item: ItemView, photo?: Element | null) => {
       const next = !item.inOrderDraft;
+      // A second tap while the first is being checked: the first is taken back, nothing was saved.
+      if (!next && takeGuard.current.cancel(item.id)) return setTick(item.id, false);
       // The tick is state at once, saved in the background; the flight is only a flourish and waits for nothing.
       // The band shows first (it is hidden while nothing is ticked), then the photo shape flies to it.
       flushSync(() => setTick(item.id, next));
-      ticks.current?.set(item.id, next, item.inOrderDraft);
       const band = document.querySelector("[data-testid=order-band]");
       if (next && photo && band) {
         // One effect per moment: the flight is it, so the count's roll and the checks' draw stand still.
@@ -331,6 +337,12 @@ export function WardrobeView({ view }: { view: ViewKey }) {
         }
         void flyTo(photo, band, "var(--color-accent)");
       }
+      if (next) {
+        const outcome = await takeGuard.current.check(item.id);
+        if (outcome === "cancelled") return;
+        if (outcome === "wait") return setTick(item.id, false);
+      }
+      ticks.current?.set(item.id, next, item.inOrderDraft);
     },
     [setTick],
   );
@@ -462,6 +474,22 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   return (
     <div className="flex flex-col gap-space-4 pt-space-5 pb-space-6">
       {view === "envies" && <ListTabs lists={tabs} current={listId} allCount={wishes.length} onChange={chooseList} />}
+      {view === "envies" &&
+        lists.items
+          .filter((list) => list.giftReminderDue)
+          .map((list) => (
+            <GiftReminder
+              key={list.id}
+              list={list}
+              linked
+              onAnswered={(answered) =>
+                setLists((previous) => ({
+                  ...previous,
+                  items: previous.items.map((known) => (known.id === answered.id ? answered : known)),
+                }))
+              }
+            />
+          ))}
       {/* Positioned: the filters menu opens against this row (full width on a phone, under the tools from sm up). */}
       <div className="relative flex flex-wrap items-end justify-between gap-x-space-5 gap-y-space-4">
         <div className="flex min-w-space-0 flex-col gap-space-3">

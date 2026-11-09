@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { formatAmount, sortForOrder } from "@/lib/budget";
+import { createTakeGuard } from "@/lib/gift-check";
 import { useLiveRefresh } from "@/lib/live-changes";
 import { levelOf } from "@/lib/love-levels";
 import { profileHref, useCurrentProfile, useLoveLevels, useProfilesReady } from "@/lib/profile-context";
@@ -143,10 +144,19 @@ export function OrderDraft() {
     );
   }
 
-  function toggle(item: ItemView) {
+  // Ticking is « Je le prends »: shown at once, then asked whether a friend plans to give it (saved only once she
+  // goes on, put back if she waits); unticking never asks.
+  const takeGuard = useRef(createTakeGuard());
+  async function toggle(item: ItemView) {
     const next = !item.inOrderDraft;
     setError(null);
+    if (!next && takeGuard.current.cancel(item.id)) return setTicked(item.id, false);
     setTicked(item.id, next);
+    if (next) {
+      const outcome = await takeGuard.current.check(item.id);
+      if (outcome === "cancelled") return;
+      if (outcome === "wait") return setTicked(item.id, false);
+    }
     ticks.current?.set(item.id, next, item.inOrderDraft);
   }
 

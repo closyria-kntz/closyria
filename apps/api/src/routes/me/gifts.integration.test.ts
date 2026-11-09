@@ -241,7 +241,7 @@ describe("« Reçu en cadeau »", () => {
     const res = await call("POST", `/api/me/items/${s.item.id}/received-as-gift`, s.cookie);
     expect(res.status).toBe(200);
     const body = (await res.json()) as ItemMutationResult;
-    expect(body.item).toMatchObject({ stage: "owned", giftFrom: "Léa et Inès" });
+    expect(body.item).toMatchObject({ stage: "owned", giftFrom: "Léa et Inès", receivedAsGift: true });
     expect(body.undo?.ops.at(-1)).toEqual({ ids: [s.item.id], op: "unreceiveGift" });
     // The undo never carries a name.
     expect(JSON.stringify(body.undo)).not.toMatch(/Léa|Inès/);
@@ -264,7 +264,7 @@ describe("« Reçu en cadeau »", () => {
     const undo = await call("POST", "/api/me/items/undo", s.cookie, body.undo);
     expect(undo.status).toBe(200);
     const back = (await (await call("GET", `/api/me/items/${s.item.id}`, s.cookie)).json()) as ItemView;
-    expect(back).toMatchObject({ stage: "spotted", giftFrom: null });
+    expect(back).toMatchObject({ stage: "spotted", giftFrom: null, receivedAsGift: false });
     const restored = await giftRowsOfItem(s.item.id);
     expect(restored.map((r) => [r.giverName, r.role, r.receivedAt]).sort()).toEqual([
       ["Inès", "contributor", null],
@@ -284,7 +284,11 @@ describe("« Reçu en cadeau »", () => {
     const s = await setup();
     const res = await call("POST", `/api/me/items/${s.item.id}/received-as-gift`, s.cookie);
     expect(res.status).toBe(200);
-    expect(((await res.json()) as ItemMutationResult).item).toMatchObject({ stage: "owned", giftFrom: null });
+    expect(((await res.json()) as ItemMutationResult).item).toMatchObject({
+      stage: "owned",
+      giftFrom: null,
+      receivedAsGift: true,
+    });
 
     const two = await setup();
     const second = (await (
@@ -384,7 +388,11 @@ describe("« Reçu en cadeau »", () => {
       at: new Date().toISOString(),
     });
     expect(res.status).toBe(200);
-    expect(await getItem(s.cookie, s.item.id)).toMatchObject({ stage: "for_sale", giftFrom: null });
+    expect(await getItem(s.cookie, s.item.id)).toMatchObject({
+      stage: "for_sale",
+      giftFrom: null,
+      receivedAsGift: false,
+    });
     const { undo } = (await res.json()) as { undo: unknown };
     expect((await call("POST", "/api/me/items/undo", s.cookie, undo)).status).toBe(200);
     expect(await getItem(s.cookie, s.item.id)).toMatchObject({ stage: "owned", giftFrom: "Léa" });
@@ -435,7 +443,14 @@ describe("nothing leaks to her", () => {
     await friend("DELETE", s.token, s.item.id, ines);
     expect(await stamp()).toBe(before);
 
-    const allowed = new Set(["allowGifts", "giftOccasion", "giftDate", "giftReminderDue", "giftFrom"]);
+    const allowed = new Set([
+      "allowGifts",
+      "giftOccasion",
+      "giftDate",
+      "giftReminderDue",
+      "giftFrom",
+      "receivedAsGift",
+    ]);
     for (const path of ["/api/me/wishlists", "/api/me/items", `/api/me/items/${s.item.id}`]) {
       const res = await call("GET", path, s.cookie);
       expect(res.status).toBe(200);

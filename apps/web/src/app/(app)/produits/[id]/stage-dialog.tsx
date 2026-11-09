@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Dialog } from "@/components/dialog";
 import { inputClass, primaryButtonClass } from "@/components/ui";
+import { confirmUnlessReserved, isPurchaseMove } from "@/lib/gift-check";
 import { parsePriceCents } from "@/lib/price";
 import { pushUndo } from "@/lib/undo";
 import { changeStage, undoWith } from "@/lib/wardrobe-client";
@@ -55,6 +56,12 @@ function StageForm({
     const parsed = parsePriceCents(amount);
     if (!parsed.ok) return setError(t("stageDialog.invalidAmount"));
     setBusy(true);
+    // To « Commandé » or « Reçu »: a friend may plan to give it (« Attendre » leaves it as it is).
+    if (isPurchaseMove(item.stage, stage) && !(await confirmUnlessReserved([item.id], "stage"))) {
+      setBusy(false);
+      onClose();
+      return;
+    }
     const trimmed = channel.trim();
     const result = await changeStage(item.id, {
       stage,

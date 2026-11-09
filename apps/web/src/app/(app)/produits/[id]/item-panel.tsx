@@ -19,6 +19,7 @@ import { ItemOpinionsSection } from "@/components/item-opinions-section";
 import { LoveLevelPicker } from "@/components/love-level-picker";
 import { Tick } from "@/components/tick";
 import { blockClass, blockTitleClass, buttonClass, focusRing, inputClass, primaryButtonClass } from "@/components/ui";
+import { canReceiveAsGift } from "@/lib/gift-check";
 import { levelOf } from "@/lib/love-levels";
 import { formatPrice } from "@/lib/price";
 import { useLoveLevels, useProfiles } from "@/lib/profile-context";
@@ -31,6 +32,7 @@ import {
   fetchWishlists,
   moveItem,
   patchItem,
+  receiveAsGift,
   trashItem,
   undoWith,
   whyOrNull,
@@ -63,6 +65,7 @@ type Props = {
 export function ItemPanel({ item, onChange, onGone, reload, beside, middle, shop }: Props) {
   const t = useTranslations("Item");
   const tMenu = useTranslations("Views.menu");
+  const tGifts = useTranslations("Gifts.received");
   const levels = useLoveLevels();
   const locale = useLocale();
   const profiles = useProfiles();
@@ -140,6 +143,15 @@ export function ItemPanel({ item, onChange, onGone, reload, beside, middle, shop
         undoWith(result.undo, reload),
       );
     }, "wish");
+
+  // « Reçu en cadeau »: to « Reçu », « Offert par … » under the stages, « Annuler » for a few seconds.
+  const receive = () =>
+    run(async () => {
+      const result = await receiveAsGift(item.id);
+      if (!result.ok) return fail(result.error);
+      onChange(result.item);
+      pushUndo(tGifts("toast"), undoWith(result.undo, reload));
+    });
 
   const togglePriority = () =>
     run(async () => {
@@ -407,7 +419,25 @@ export function ItemPanel({ item, onChange, onGone, reload, beside, middle, shop
                 </li>
               );
             })}
+            {canReceiveAsGift(item) && (
+              <li>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void receive()}
+                  className={`${buttonClass} ${touch} inline-flex items-center`}
+                >
+                  {tGifts("action")}
+                </button>
+              </li>
+            )}
           </ol>
+          {item.receivedAsGift && (
+            <p className="text-sm font-strong">
+              <span aria-hidden="true">🎁 </span>
+              {item.giftFrom ? tGifts("from", { names: item.giftFrom }) : tGifts("fromFriend")}
+            </p>
+          )}
         </section>
         <StageDialog item={item} stage={stage} onClose={() => setStage(null)} onDone={onChange} reload={reload} />
 

@@ -229,6 +229,7 @@ const itemView = {
   sizeNote: null,
   notes: null,
   giftFrom: null,
+  receivedAsGift: false,
   pricePaidCents: null,
   salePriceCents: null,
   saleChannel: null,

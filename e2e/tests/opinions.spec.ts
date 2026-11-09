@@ -401,6 +401,7 @@ test("les réglages du partage changent ce que voit le lien", async ({
     "Montrer mon prénom",
     "Montrer mes avis",
     "Montrer le budget",
+    "Mes amies peuvent m'offrir des articles",
   ]);
   for (const [name, on] of [
     ["Autoriser les avis", true],

@@ -10,6 +10,7 @@ import {
 } from "@closyria/shared";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
+import { confirmUnlessReserved, isPurchaseMove } from "@/lib/gift-check";
 import { levelOf } from "@/lib/love-levels";
 import { useLoveLevels, useProfiles } from "@/lib/profile-context";
 import { pushUndo } from "@/lib/undo";
@@ -82,12 +83,20 @@ export function SelectionBar({ currentStage, ids, onClear, onSelectAll, onGone, 
 
   const count = ids.length;
   const list = [...ids];
-  const stage = (target: ItemStage) =>
-    run(
+  const stage = async (target: ItemStage) => {
+    // Bought (to « Commandé » or « Reçu » from the wishes or the orders): asked first, one window for all.
+    if (isPurchaseMove(currentStage, target)) {
+      setBusy(true);
+      const go = await confirmUnlessReserved(list, "stage");
+      setBusy(false);
+      if (!go) return setChoice(null);
+    }
+    return run(
       { op: "stage", ids: list, stage: target, at: new Date().toISOString() },
       (n) => t("toast.stage", { count: n, stage: tStage(target) }),
       "leave",
     );
+  };
   const setLevel = (level: LoveLevel | null) =>
     run(
       { op: "setFields", ids: list, fields: { loveLevel: level } },

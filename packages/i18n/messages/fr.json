@@ -1097,9 +1097,19 @@
         "allowOpinions": "Autoriser les avis",
         "showOwnerName": "Montrer mon prénom",
         "showOwnerOpinions": "Montrer mes avis",
-        "showBudget": "Montrer le budget"
+        "showBudget": "Montrer le budget",
+        "allowGifts": "Mes amies peuvent m'offrir des articles"
       },
-      "settingFailed": "Le réglage n’a pas pu être enregistré. Réessaie."
+      "settingFailed": "Le réglage n’a pas pu être enregistré. Réessaie.",
+      "giftsOpen": "Elle peut réserver un article pour te l'offrir : tu ne sauras jamais lequel.",
+      "occasion": "Occasion",
+      "occasionPlaceholder": "mon anniversaire",
+      "date": "Date",
+      "giftHint": "Les deux sont facultatifs. Tes amies les voient en haut de la liste.",
+      "occasionInvalid": "L'occasion tient en 40 caractères, sans adresse web.",
+      "giftsOffTitle": "Couper les cadeaux ?",
+      "giftsOffBody": "Si des amies avaient prévu des cadeaux, elles ne pourront plus les voir.",
+      "giftsOffConfirm": "Couper"
     },
     "newOpinions": "{count, plural, one {# nouvel avis} other {# nouveaux avis}}",
     "opinions": {
@@ -1511,5 +1521,31 @@
     "addressLabel": "Adresse à écrire dans l’action",
     "address": "https://closyria.com/partager?url=",
     "note": "Le fichier du raccourci n’est pas fourni : tu le crées toi-même, en quelques secondes."
+  },
+  "Gifts": {
+    "warning": {
+      "title": "Attends un peu 🎁",
+      "one": "Quelqu'un a peut-être prévu de te l'offrir.",
+      "many": "Quelqu'un a peut-être prévu de t'offrir {count} de ces articles.",
+      "wait": "Attendre",
+      "take": "Je le prends quand même",
+      "order": "Commander quand même",
+      "close": "Fermer"
+    },
+    "received": {
+      "action": "Reçu en cadeau",
+      "from": "Offert par {names}",
+      "fromFriend": "Offert par une amie",
+      "toast": "Reçu en cadeau"
+    },
+    "reminder": {
+      "label": "Rappel des cadeaux",
+      "occasion": "{occasion} est passé : tu as reçu des cadeaux de ta liste « {list} » ?",
+      "date": "Le {date} est passé : tu as reçu des cadeaux de ta liste « {list} » ?",
+      "open": "Ouvrir la liste",
+      "later": "Plus tard",
+      "done": "C'est fait",
+      "failed": "Le rappel n'a pas pu être masqué. Réessaie."
+    }
   }
 }

@@ -12,6 +12,7 @@ import { fetchLoveLevels } from "@/lib/wardrobe-client";
 import { AccountPrompt } from "./account-prompt";
 import { type AppNavItem, isCurrent, moreNav, phoneTabs, pillMoreNav, pillNav, tabletTabs } from "./app-nav";
 import { CaptureForm } from "./capture-form";
+import { GiftWarning } from "./gift-warning";
 import { NavUnderline } from "./nav-underline";
 import { ProfileSwitcher } from "./profile-switcher";
 import { ThemeButton } from "./theme-button";
@@ -357,6 +358,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </div>
       <UndoToast />
+      <GiftWarning />
     </ProfilesContext.Provider>
   );
 }

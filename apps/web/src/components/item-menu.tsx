@@ -11,10 +11,20 @@ import {
 import { useTranslations } from "next-intl";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { StageDialog } from "@/app/(app)/produits/[id]/stage-dialog";
+import { canReceiveAsGift } from "@/lib/gift-check";
 import { levelOf, MENU_STAGES } from "@/lib/love-levels";
 import { useLoveLevels, useProfiles } from "@/lib/profile-context";
 import { pushUndo } from "@/lib/undo";
-import { bulkItems, fetchTags, fetchWishlists, moveItem, patchItem, trashItem, undoWith } from "@/lib/wardrobe-client";
+import {
+  bulkItems,
+  fetchTags,
+  fetchWishlists,
+  moveItem,
+  patchItem,
+  receiveAsGift,
+  trashItem,
+  undoWith,
+} from "@/lib/wardrobe-client";
 import { Dialog } from "./dialog";
 import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
 
@@ -43,6 +53,7 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
   const t = useTranslations("Views.menu");
   const tItem = useTranslations("Item");
   const tCard = useTranslations("Views.card");
+  const tGifts = useTranslations("Gifts.received");
   const levels = useLoveLevels();
   const profiles = useProfiles();
   const [open, setOpen] = useState(false);
@@ -122,6 +133,15 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
       if (!result.ok) return fail(result.error);
       onChanged(result.item);
       pushUndo(t(item.priority ? "toast.priorityOff" : "toast.priorityOn"), undoWith(result.undo, reload));
+    });
+
+  // « Reçu en cadeau »: to « Reçu » with her friends' names on its sheet, « Annuler » brings it back.
+  const receive = () =>
+    act(async () => {
+      const result = await receiveAsGift(item.id);
+      if (!result.ok) return fail(result.error);
+      onChanged(result.item);
+      pushUndo(tGifts("toast"), undoWith(result.undo, reload));
     });
 
   const trash = () =>
@@ -204,6 +224,7 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
                     {t(`toStage.${target}`)}
                   </Entry>
                 ))}
+                {canReceiveAsGift(item) && <Entry onClick={() => void receive()}>{tGifts("action")}</Entry>}
                 <Entry onClick={() => openChoice("list")}>{t("list")}</Entry>
                 {profiles.length > 1 && <Entry onClick={() => openChoice("profile")}>{t("profile")}</Entry>}
                 <Entry onClick={() => openChoice("tags")}>{t("tags")}</Entry>

@@ -25,6 +25,7 @@ import {
 import { BudgetDialog } from "./budget-dialog";
 import { Dialog } from "./dialog";
 import { FriendOpinions } from "./friend-opinions";
+import { GiftReminder } from "./gift-reminder";
 import { ItemCard } from "./item-card";
 import { GRID_CLASS } from "./item-grid";
 import { focusMoved, MoveButtons, type MoveDirection } from "./move-buttons";
@@ -342,6 +343,7 @@ export function WishlistDetail({ id }: { id: string }) {
         </p>
       )}
 
+      {list.giftReminderDue && <GiftReminder list={list} linked={false} onAnswered={apply} />}
       <SharePanel list={list} onChange={apply} />
 
       {partial && (

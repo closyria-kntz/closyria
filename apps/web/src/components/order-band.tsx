@@ -4,6 +4,7 @@ import type { BudgetView, ItemView } from "@closyria/shared";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useId, useState } from "react";
 import { budgetCardState, draftTotals, formatAmount, orderDraftErrorKey } from "@/lib/budget";
+import { confirmUnlessReserved } from "@/lib/gift-check";
 import { useToastLift } from "@/lib/toast-lift";
 import { pushUndo } from "@/lib/undo";
 import { type BudgetScope, orderDraftOrdered, undoWith } from "@/lib/wardrobe-client";
@@ -78,6 +79,13 @@ export function OrderBand({
     setOrdering(true);
     onOrderingChange?.(true);
     await settle?.();
+    // A friend may plan to give some of them: one window for all (« Attendre » orders nothing).
+    const ticked = items.filter((item) => item.inOrderDraft).map((item) => item.id);
+    if (!(await confirmUnlessReserved(ticked, "order"))) {
+      setOrdering(false);
+      onOrderingChange?.(false);
+      return;
+    }
     const result = await orderDraftOrdered(scope).finally(() => {
       setOrdering(false);
       onOrderingChange?.(false);

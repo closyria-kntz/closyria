@@ -14,6 +14,7 @@ import { Dialog } from "@/components/dialog";
 import { LoveLevelPicker } from "@/components/love-level-picker";
 import { buttonClass, inputClass, primaryButtonClass, toggleButtonClass } from "@/components/ui";
 import { requestAccountPrompt } from "@/lib/account-prompt-request";
+import { confirmUnlessReserved, isPurchaseMove } from "@/lib/gift-check";
 import { pushUndo } from "@/lib/undo";
 import {
   bulkItems,
@@ -110,7 +111,12 @@ export function KeepActions({ product, profileId, onKept, reload }: Props) {
     let item = result.item;
     let undo = result.undo;
     if (!result.created && item.stage !== "ordered") {
-      // The API returned her existing item as it was: the stage is ours to set.
+      // The API returned her existing item as it was: the stage is ours to set (asked first, as any purchase).
+      if (isPurchaseMove(item.stage, "ordered") && !(await confirmUnlessReserved([item.id], "stage"))) {
+        onKept(item);
+        setBusy(false);
+        return;
+      }
       const moved = await changeStage(item.id, { stage: "ordered", at: new Date().toISOString() });
       if (!moved.ok) {
         fail(moved.error);

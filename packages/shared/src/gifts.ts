@@ -102,3 +102,4 @@ export const giftSettingsPatchSchema = z.object({
   giftOccasion: giftOccasionSchema.nullable().optional(),
   giftDate: giftDateSchema.nullable().optional(),
 });
+export type GiftSettingsPatch = z.infer<typeof giftSettingsPatchSchema>;

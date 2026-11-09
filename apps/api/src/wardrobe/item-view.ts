@@ -77,6 +77,7 @@ export async function loadItemViews(db: Database | Tx, userId: string, itemIds: 
       notes: item.notes,
       // Only while it is a gift (« Reçu » after « Reçu en cadeau »): moved out of « Reçu », the names wait hidden.
       giftFrom: item.stage === "owned" && item.giftReceivedAt !== null ? item.giftFrom : null,
+      receivedAsGift: item.stage === "owned" && item.giftReceivedAt !== null,
       pricePaidCents: item.pricePaidCents,
       salePriceCents: item.salePriceCents,
       saleChannel: item.saleChannel,

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { Tick } from "@/components/tick";
 import { focusRing } from "@/components/ui";
+import { confirmUnlessReserved } from "@/lib/gift-check";
 import { COPIED_FEEDBACK_MS } from "@/lib/timing";
 import { pushUndo } from "@/lib/undo";
 import { patchItem, undoWith } from "@/lib/wardrobe-client";
@@ -48,6 +49,8 @@ export function ProductActions({
 
   async function take(current: ItemView) {
     setBusy(true);
+    // Taking it (not putting it back) asks first whether a friend plans to give it.
+    if (!current.inOrderDraft && !(await confirmUnlessReserved([current.id], "take"))) return setBusy(false);
     const result = await patchItem(current.id, { inOrderDraft: !current.inOrderDraft });
     setBusy(false);
     if (!result.ok) return pushUndo(tItem(`errors.${result.error}` as "errors.failed"), null);

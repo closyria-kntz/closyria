@@ -339,8 +339,10 @@ export const itemViewSchema = z.object({
   sizeLabel: z.string().nullable(),
   sizeNote: z.string().nullable(),
   notes: z.string().nullable(),
-  /** Who gave it to her, when it was a gift. */
+  /** Who gave it to her, when it was a gift (her friends' names, frozen at « Reçu en cadeau »). */
   giftFrom: z.string().nullable(),
+  /** « Reçu en cadeau » (and still « Reçu »): « Offert par {giftFrom} », or « Offert par une amie » without names. */
+  receivedAsGift: z.boolean(),
   pricePaidCents: centsSchema.nullable(),
   salePriceCents: centsSchema.nullable(),
   saleChannel: z.string().nullable(),
@@ -375,7 +377,7 @@ export const wishlistViewSchema = z.object({
   allowGifts: z.boolean(),
   giftOccasion: z.string().nullable(),
   giftDate: z.string().nullable(),
-  /** The gift date is near and friends have reserved something: ask her to wait. */
+  /** The day after her occasion (until « Plus tard » or « C'est fait »): « {occasion} est passé … ». Reveals nothing. */
   giftReminderDue: z.boolean(),
 });
 export type WishlistView = z.infer<typeof wishlistViewSchema>;

@@ -11,6 +11,9 @@ import {
   erasedOpinionSchema,
   type FacetsView,
   facetsViewSchema,
+  type GiftReminderAction,
+  type GiftSettingsPatch,
+  giftCheckSchema,
   type ItemBulk,
   type ItemCreate,
   type ItemPage,
@@ -437,10 +440,10 @@ export async function orderDraftOrdered(scope: BudgetScope, deps: ClientDeps = d
   return await call(deps, "/api/me/order-draft/ordered", jsonInit("POST", scope), mutationResultSchema);
 }
 
-/** Changes how a list is shared (any of the four settings). */
+/** Changes how a list is shared (any of the four settings, and the gift ones). */
 export async function patchWishlistSettings(
   id: string,
-  patch: Partial<WishlistSettings>,
+  patch: Partial<WishlistSettings> & GiftSettingsPatch,
   deps: ClientDeps = defaultDeps,
 ) {
   return await call(deps, `/api/me/wishlists/${id}`, jsonInit("PATCH", patch), wishlistViewSchema);
@@ -499,4 +502,35 @@ export async function fetchAllWishes(query: Record<string, string>): Promise<Ite
     cursor = page.nextCursor;
   } while (cursor);
   return items;
+}
+
+/**
+ * Which of these items a friend plans to give her (ids only). Asked only right before she buys (`confirmUnlessReserved`),
+ * never to show anything. Throws on any failure (the purchase goes on without asking).
+ */
+export async function fetchReservedIds(ids: readonly string[], deps: ClientDeps = defaultDeps): Promise<string[]> {
+  await deps.ensure();
+  const params = new URLSearchParams({ ids: ids.join(",") });
+  const response = await deps.fetch(`/api/me/items/gift-check?${params}`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`gift-check ${response.status}`);
+  return giftCheckSchema.parse(await response.json()).reserved;
+}
+
+/** « Je le prends quand même »: her friends see she took these items herself. */
+export async function markGiftTook(ids: readonly string[], deps: ClientDeps = defaultDeps) {
+  return await callNoContent(deps, "/api/me/items/gift-took", jsonInit("POST", { ids }));
+}
+
+/** « Reçu en cadeau »: to « Reçu », marked a gift; the undo brings back the stage and her friends' gifts. */
+export async function receiveAsGift(id: string, deps: ClientDeps = defaultDeps) {
+  return await mutation(deps, `/api/me/items/${id}/received-as-gift`, jsonInit("POST", {}));
+}
+
+/** The reminder after the occasion: « Plus tard » (`snooze`, 7 days) or « C'est fait » (`dismiss`). */
+export async function answerGiftReminder(
+  id: string,
+  action: GiftReminderAction["action"],
+  deps: ClientDeps = defaultDeps,
+) {
+  return await callNoContent(deps, `/api/me/wishlists/${id}/gift-reminder`, jsonInit("POST", { action }));
 }
