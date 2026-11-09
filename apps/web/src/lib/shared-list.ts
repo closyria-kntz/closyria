@@ -1,4 +1,7 @@
 import {
+  type GiftDelete,
+  type GiftInput,
+  type GiftRole,
   type OpinionDelete,
   type OpinionInput,
   type OpinionView,
@@ -25,13 +28,21 @@ export async function fetchSharedList(api: InternalApi, token: string): Promise<
   return fetchAdminJson({ ...api, cookie: "" }, `/api/shared/${token}`, sharedWishlistViewSchema);
 }
 
-/** The list as the friend's browser reads it again after a change; null when the link stopped working. */
+/**
+ * The list as the friend's browser reads it again after a change; null when the link stopped working. With her
+ * device key, her own gifts show as hers (`mine`): the server's first paint never has it.
+ */
 export async function fetchSharedView(
   token: string,
+  deviceKey: string | null = null,
   fetcher: typeof fetch = fetch,
 ): Promise<SharedWishlistView | null> {
   if (!TOKEN.test(token)) return null;
-  const res = await fetcher(`/api/shared/${token}`, { credentials: "same-origin", cache: "no-store" });
+  const res = await fetcher(`/api/shared/${token}`, {
+    credentials: "same-origin",
+    cache: "no-store",
+    ...(deviceKey ? { headers: { "x-device-key": deviceKey } } : {}),
+  });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`/api/shared answered ${res.status}`);
   return sharedWishlistViewSchema.parse(await res.json());
@@ -99,4 +110,81 @@ export async function deleteOpinion(
   const res = await opinionCall(fetcher, token, itemId, "DELETE", input);
   if (typeof res === "string") return { ok: false, error: res };
   return res.ok ? { ok: true } : { ok: false, error: await errorOf(res) };
+}
+
+export const giftErrorCodes = [
+  "not_found",
+  "gifts_closed",
+  "owner_took",
+  "web_address",
+  "name_taken",
+  "rate_limited",
+  "forbidden",
+  "failed",
+] as const;
+export type GiftError = (typeof giftErrorCodes)[number];
+export type GiveResult =
+  | { ok: true; role: GiftRole }
+  | { ok: false; error: "already_reserved"; reserver: string }
+  | { ok: false; error: GiftError };
+
+const roleSchema = z.object({ role: z.enum(["reserver", "contributor"]) });
+const alreadyReservedSchema = z.object({ error: z.literal("already_reserved"), reserver: z.string() });
+
+async function giftCall(
+  fetcher: typeof fetch,
+  token: string,
+  itemId: string,
+  method: "PUT" | "DELETE",
+  body: GiftInput | GiftDelete,
+): Promise<Response | GiftError> {
+  if (!TOKEN.test(token)) return "not_found";
+  try {
+    return await fetcher(`/api/shared/${token}/items/${encodeURIComponent(itemId)}/gift`, {
+      method,
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return "failed";
+  }
+}
+
+function giftErrorOf(body: unknown): GiftError {
+  const parsed = errorSchema.safeParse(body);
+  const code = parsed.success ? parsed.data.error : "";
+  return (giftErrorCodes as readonly string[]).includes(code) ? (code as GiftError) : "failed";
+}
+
+/** « Je lui offre » (`reserve`) or « Je participe » (`join`) on one item of the list. */
+export async function giveGift(
+  token: string,
+  itemId: string,
+  input: GiftInput,
+  fetcher: typeof fetch = fetch,
+): Promise<GiveResult> {
+  const res = await giftCall(fetcher, token, itemId, "PUT", input);
+  if (typeof res === "string") return { ok: false, error: res };
+  const body: unknown = await res.json().catch(() => null);
+  if (res.ok) {
+    const parsed = roleSchema.safeParse(body);
+    return parsed.success ? { ok: true, role: parsed.data.role } : { ok: false, error: "failed" };
+  }
+  const already = alreadyReservedSchema.safeParse(body);
+  if (already.success) return { ok: false, error: "already_reserved", reserver: already.data.reserver };
+  return { ok: false, error: giftErrorOf(body) };
+}
+
+/** « Me retirer »: she takes back her gift (only with the device attached to her name). */
+export async function leaveGift(
+  token: string,
+  itemId: string,
+  input: GiftDelete,
+  fetcher: typeof fetch = fetch,
+): Promise<{ ok: true } | { ok: false; error: GiftError }> {
+  const res = await giftCall(fetcher, token, itemId, "DELETE", input);
+  if (typeof res === "string") return { ok: false, error: res };
+  if (res.ok) return { ok: true };
+  return { ok: false, error: giftErrorOf(await res.json().catch(() => null)) };
 }

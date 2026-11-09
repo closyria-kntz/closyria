@@ -1225,6 +1225,13 @@
     "ownerList": "La liste de {name}",
     "invite": "Dis-lui ce que tu en penses 💬",
     "budget": "Budget de la liste : {amount}",
+    "friend": {
+      "nameLabel": "Ton prénom (retenu sur cet appareil)",
+      "nameKnown": "Ton prénom",
+      "notMe": "Ce n'est pas moi",
+      "itsMe": "Oui, c'est moi",
+      "notHer": "Non"
+    },
     "opinions": {
       "closed": "Les avis sont fermés sur cette liste.",
       "give": "Donner mon avis",
@@ -1235,9 +1242,6 @@
       "sheetTitle": "Ton avis sur {name}",
       "close": "Fermer",
       "closeHint": "Glisse vers le bas pour fermer",
-      "nameLabel": "Ton prénom (retenu sur cet appareil)",
-      "nameKnown": "Ton prénom",
-      "notMe": "Ce n'est pas moi",
       "levels": "Tu en penses quoi ?",
       "noteLabel": "Un petit mot (facultatif)",
       "counter": "{count} / {max}",
@@ -1245,8 +1249,6 @@
       "visible": "Visible par toutes celles qui ont le lien.",
       "erase": "Effacer mon avis",
       "nameTaken": "Une {name} a déjà donné son avis sur cette liste. C'est toi ?",
-      "itsMe": "Oui, c'est moi",
-      "notHer": "Non",
       "errors": {
         "name": "Écris ton prénom (40 caractères au plus).",
         "level": "Choisis un niveau.",
@@ -1264,6 +1266,53 @@
         "undo": "Annuler",
         "undoFailed": "L'annulation n'a pas marché. Réessaie."
       }
+    },
+    "gifts": {
+      "occasionDateName": "Pour {occasion} de {name}, le {date} 🎁",
+      "occasionDate": "Pour {occasion}, le {date} 🎁",
+      "occasionName": "Pour {occasion} de {name} 🎁",
+      "occasion": "Pour {occasion} 🎁",
+      "dateName": "Pour {name}, le {date} 🎁",
+      "date": "Pour le {date} 🎁",
+      "none": "Tu peux offrir un article de cette liste 🎁",
+      "give": "Je lui offre",
+      "giveHidden": "Je l'offre",
+      "join": "Je participe",
+      "reservedBy": "Réservé par {name}",
+      "givenBy": "Offert par {names}",
+      "mineReserver": "Tu lui offres",
+      "mineReserverHidden": "Tu l'offres",
+      "mineContributor": "Tu participes",
+      "leave": "Me retirer",
+      "forItem": "— {name}",
+      "size": "Sa taille : {size}",
+      "noSize": "Taille non précisée",
+      "removed": "{name} l'a retiré de sa liste",
+      "removedHidden": "Elle l'a retiré de sa liste",
+      "ownerTook": "{name} l'a pris elle-même",
+      "ownerTookHidden": "Elle l'a pris elle-même",
+      "sheetTitle": "{action} : {name}",
+      "visible": "Visible par les autres amies qui ont le lien, jamais par {name}.",
+      "visibleHidden": "Visible par les autres amies qui ont le lien, jamais par elle.",
+      "nameTaken": "Une {name} est déjà passée sur cette liste. C'est toi ?",
+      "justReserved": "{name} vient de le réserver",
+      "given": "Déjà offerts",
+      "givenLine": "{name} — Offert ✓",
+      "givenFallback": "Un article",
+      "errors": {
+        "name": "Écris ton prénom (40 caractères au plus).",
+        "webAddress": "Les liens ne sont pas acceptés dans les prénoms.",
+        "rateLimited": "Tu as fait beaucoup de changements d'un coup. Réessaie dans un moment.",
+        "closed": "Les cadeaux sont fermés sur cette liste.",
+        "ownerTook": "Elle l'a pris elle-même : plus besoin de le lui offrir.",
+        "gone": "Cet article n'est plus dans la liste.",
+        "failed": "Ça n'a pas marché. Réessaie."
+      },
+      "toast": {
+        "left": "Tu t'es retirée"
+      },
+      "close": "Fermer",
+      "closeHint": "Glisse vers le bas pour fermer"
     }
   },
   "Settings": {

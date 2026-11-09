@@ -1,7 +1,7 @@
 import { DEFAULT_LOVE_LEVELS } from "@closyria/shared";
 import { describe, expect, it, vi } from "vitest";
 import type { InternalApi } from "./admin-api";
-import { deleteOpinion, fetchSharedList, fetchSharedView, putOpinion } from "./shared-list";
+import { deleteOpinion, fetchSharedList, fetchSharedView, giveGift, leaveGift, putOpinion } from "./shared-list";
 
 const TOKEN = "AbCdEfGhIjKlMnOpQrStUv";
 const view = {
@@ -81,11 +81,18 @@ const browserFetch = (response: Response) => vi.fn(async (_url: string, _init?: 
 describe("the friend's calls", () => {
   it("reads the list again with same-origin credentials (dev's password), null once the link stopped", async () => {
     const fetcher = browserFetch(Response.json(view));
-    expect(await fetchSharedView(TOKEN, fetcher as unknown as typeof fetch)).toEqual(view);
+    expect(await fetchSharedView(TOKEN, null, fetcher as unknown as typeof fetch)).toEqual(view);
     expect(fetcher.mock.calls[0]?.[0]).toBe(`/api/shared/${TOKEN}`);
     expect(fetcher.mock.calls[0]?.[1]?.credentials).toBe("same-origin");
     const gone = browserFetch(Response.json({ error: "not_found" }, { status: 404 }));
-    expect(await fetchSharedView(TOKEN, gone as unknown as typeof fetch)).toBeNull();
+    expect(await fetchSharedView(TOKEN, null, gone as unknown as typeof fetch)).toBeNull();
+    expect(fetcher.mock.calls[0]?.[1]?.headers).toBeUndefined();
+  });
+
+  it("sends her device key when it has one, so her gifts show as hers", async () => {
+    const fetcher = browserFetch(Response.json(view));
+    await fetchSharedView(TOKEN, KEY, fetcher as unknown as typeof fetch);
+    expect(fetcher.mock.calls[0]?.[1]?.headers).toEqual({ "x-device-key": KEY });
   });
 
   it("puts an opinion and reads back the saved one", async () => {
@@ -131,6 +138,56 @@ describe("the friend's calls", () => {
     expect(done.mock.calls[0]?.[1]?.method).toBe("DELETE");
     const other = browserFetch(Response.json({ error: "forbidden" }, { status: 403 }));
     expect(await deleteOpinion(TOKEN, ITEM, input, other as unknown as typeof fetch)).toEqual({
+      ok: false,
+      error: "forbidden",
+    });
+  });
+});
+
+describe("the friend's gifts", () => {
+  const input = { name: "Léa", deviceKey: KEY, intent: "reserve" as const };
+
+  it("offers an item and reads back her role", async () => {
+    const fetcher = browserFetch(Response.json({ role: "reserver" }));
+    expect(await giveGift(TOKEN, ITEM, input, fetcher as unknown as typeof fetch)).toEqual({
+      ok: true,
+      role: "reserver",
+    });
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`/api/shared/${TOKEN}/items/${ITEM}/gift`);
+    expect(init.method).toBe("PUT");
+    expect(init.credentials).toBe("same-origin");
+    expect(JSON.parse(String(init.body))).toEqual(input);
+  });
+
+  it("says who reserved just before, and names the other refusals", async () => {
+    const race = browserFetch(Response.json({ error: "already_reserved", reserver: "Inès" }, { status: 409 }));
+    expect(await giveGift(TOKEN, ITEM, input, race as unknown as typeof fetch)).toEqual({
+      ok: false,
+      error: "already_reserved",
+      reserver: "Inès",
+    });
+    for (const [status, error] of [
+      [409, "name_taken"],
+      [409, "owner_took"],
+      [403, "gifts_closed"],
+      [404, "not_found"],
+      [429, "rate_limited"],
+    ] as const) {
+      const fetcher = browserFetch(Response.json({ error }, { status }));
+      expect(await giveGift(TOKEN, ITEM, input, fetcher as unknown as typeof fetch)).toEqual({ ok: false, error });
+    }
+    const odd = browserFetch(Response.json({ error: "invalid_request" }, { status: 400 }));
+    expect(await giveGift(TOKEN, ITEM, input, odd as unknown as typeof fetch)).toEqual({ ok: false, error: "failed" });
+  });
+
+  it("takes back her gift", async () => {
+    const done = browserFetch(new Response(null, { status: 204 }));
+    const leave = { name: "Léa", deviceKey: KEY };
+    expect(await leaveGift(TOKEN, ITEM, leave, done as unknown as typeof fetch)).toEqual({ ok: true });
+    expect(done.mock.calls[0]?.[1]?.method).toBe("DELETE");
+    const other = browserFetch(Response.json({ error: "forbidden" }, { status: 403 }));
+    expect(await leaveGift(TOKEN, ITEM, leave, other as unknown as typeof fetch)).toEqual({
       ok: false,
       error: "forbidden",
     });

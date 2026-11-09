@@ -4,18 +4,18 @@ import {
   containsWebAddress,
   type LoveLevel,
   type LoveLevelView,
-  OPINION_NAME_MAX,
   OPINION_NOTE_MAX,
   type OpinionView,
   opinionNameKey,
   textLength,
 } from "@closyria/shared";
 import { useTranslations } from "next-intl";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Sheet } from "@/components/sheet";
-import { buttonClass, focusRing, inputClass, levelButtonClass, primaryButtonClass } from "@/components/ui";
+import { focusRing, inputClass, levelButtonClass, primaryButtonClass } from "@/components/ui";
 import type { FriendDevice } from "@/lib/friend-device";
 import { deleteOpinion, type OpinionError, putOpinion } from "@/lib/shared-list";
+import { cleanName, clip, FriendNameStep, NameTakenQuestion, nameFits } from "./friend-name";
 
 /** A multi-line field: the input's look with softer corners (a pill does not suit several lines). */
 const noteClass = inputClass.replace("rounded-button", "rounded-md");
@@ -42,15 +42,6 @@ type Props = {
   onFailed: () => void;
 };
 
-/** The first `max` characters (graphemes) of `value`. */
-function clip(value: string, max: number): string {
-  if (textLength(value) <= max) return value;
-  const segments = new Intl.Segmenter("fr", { granularity: "grapheme" }).segment(value);
-  return Array.from(segments, (s) => s.segment)
-    .slice(0, max)
-    .join("");
-}
-
 const errorKey: Record<OpinionError, "webAddress" | "rateLimited" | "closed" | "gone" | "failed"> = {
   web_address: "webAddress",
   rate_limited: "rateLimited",
@@ -75,7 +66,6 @@ export function OpinionSheet({ open, onClose, token, item, listOpinions, levels,
   const noteId = useId();
   const counterId = useId();
   const nameInput = useRef<HTMLInputElement>(null);
-  const itsMeButton = useRef<HTMLButtonElement>(null);
   // This device's opinion on the item, under the name it remembers.
   const own = device.name ? findByName(item.opinions, device.name) : undefined;
 
@@ -92,18 +82,14 @@ export function OpinionSheet({ open, onClose, token, item, listOpinions, levels,
   const mine = askName ? undefined : own;
   const noteLength = textLength(note);
 
-  useEffect(() => {
-    if (taken) itsMeButton.current?.focus();
-  }, [taken]);
-
   function focusName() {
     requestAnimationFrame(() => nameInput.current?.focus());
   }
 
   async function send(claim: boolean) {
-    const chosen = (askName ? name : (device.name ?? "")).trim().replace(/\s+/g, " ");
+    const chosen = cleanName(askName ? name : (device.name ?? ""));
     const text = note.trim();
-    if (textLength(chosen) < 1 || textLength(chosen) > OPINION_NAME_MAX) {
+    if (!nameFits(chosen)) {
       setError(t("errors.name"));
       if (askName) focusName();
       return;
@@ -173,30 +159,13 @@ export function OpinionSheet({ open, onClose, token, item, listOpinions, levels,
       footer={
         <div className="flex flex-col gap-space-2 border-t border-line p-space-4">
           {taken ? (
-            <fieldset className="flex min-w-space-0 flex-col gap-space-2" aria-labelledby={`${titleId}-taken`}>
-              <p id={`${titleId}-taken`} role="alert" className="font-strong">
-                {t("nameTaken", { name: taken })}
-              </p>
-              <div className="grid grid-cols-2 gap-space-2">
-                <button
-                  ref={itsMeButton}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void send(true)}
-                  className={`${primaryButtonClass} min-h-touch-target`}
-                >
-                  {t("itsMe")}
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={notHer}
-                  className={`${buttonClass} min-h-touch-target justify-center font-strong`}
-                >
-                  {t("notHer")}
-                </button>
-              </div>
-            </fieldset>
+            <NameTakenQuestion
+              id={`${titleId}-taken`}
+              question={t("nameTaken", { name: taken })}
+              busy={busy}
+              onItsMe={() => void send(true)}
+              onNotHer={notHer}
+            />
           ) : (
             <>
               <button
@@ -236,40 +205,18 @@ export function OpinionSheet({ open, onClose, token, item, listOpinions, levels,
         }}
         className="flex flex-col gap-space-4"
       >
-        {askName ? (
-          <div className="flex flex-col gap-space-1">
-            <label htmlFor={nameId} className="text-sm text-ink-muted">
-              {t("nameLabel")}
-            </label>
-            <input
-              ref={nameInput}
-              id={nameId}
-              type="text"
-              autoComplete="given-name"
-              enterKeyHint="next"
-              value={name}
-              onChange={(event) => {
-                setName(clip(event.target.value, OPINION_NAME_MAX));
-                setTaken(null);
-              }}
-              className={`${inputClass} min-h-touch-target`}
-            />
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center justify-between gap-space-2">
-            <p className="flex flex-col">
-              <span className="text-sm text-ink-muted">{t("nameKnown")}</span>
-              <span className="font-strong">{device.name}</span>
-            </p>
-            <button
-              type="button"
-              onClick={notMe}
-              className={`rounded-button px-space-2 text-sm text-accent underline min-h-touch-target ${focusRing}`}
-            >
-              {t("notMe")}
-            </button>
-          </div>
-        )}
+        <FriendNameStep
+          askName={askName}
+          knownName={device.name}
+          name={name}
+          onNameChange={(value) => {
+            setName(value);
+            setTaken(null);
+          }}
+          onNotMe={notMe}
+          inputId={nameId}
+          inputRef={nameInput}
+        />
 
         <fieldset className="flex min-w-space-0 flex-col gap-space-2">
           <legend className="pb-space-2 text-sm text-ink-muted">{t("levels")}</legend>
