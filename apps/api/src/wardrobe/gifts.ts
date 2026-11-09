@@ -8,7 +8,7 @@ export type GiveResult =
   | { ok: false; error: "not_found" | "gifts_closed" | "name_taken" | "owner_took" }
   | { ok: false; error: "already_reserved"; reserver: string };
 
-export type LeaveResult = { ok: true } | { ok: false; error: "not_found" | "forbidden" };
+export type LeaveResult = { ok: true } | { ok: false; error: "not_found" | "forbidden" | "no_gift" };
 
 type GiftTarget = { wishlistId: string; shareTokenHash: string; itemId: string };
 
@@ -116,6 +116,8 @@ export async function leaveGift(db: Database, input: GiftDelete & GiftTarget): P
       .delete(schema.wishlistGifts)
       .where(and(activeGiftsOf(input.wishlistId, input.itemId), eq(schema.wishlistGifts.giverNameKey, nameKey)))
       .returning({ role: schema.wishlistGifts.role });
+    // Nothing under her name on this item: say so, the page must not tell her she left.
+    if (!left) return { ok: false, error: "no_gift" };
     if (left?.role === "reserver") {
       const [next] = await tx
         .select({ id: schema.wishlistGifts.id })
@@ -136,7 +138,7 @@ export const isGiven = (item: { stage: string; giftReceivedAt: Date | null }) =>
 
 /**
  * The gift state of each item of a list that has givers (free items are left out). `mine` is the role of one of
- * the device's names (null without a device). Items taken off the list show only to their givers (`removed`).
+ * the device's names with the name she gives under (null without a device). Items taken off the list show only to their givers (`removed`).
  */
 export async function giftStatesForList(
   db: Database | Tx,
@@ -153,7 +155,8 @@ export async function giftStatesForList(
   const keys = new Set(deviceNameKeys ?? []);
   const states = new Map<string, SharedGiftState>();
   for (const [itemId, givers] of byItem) {
-    const mine = (givers.find((g) => keys.has(g.giverNameKey))?.role ?? null) as GiftRole | null;
+    const own = givers.find((g) => keys.has(g.giverNameKey));
+    const mine = own ? { role: own.role as GiftRole, name: own.giverName } : null;
     // Reserver first, then contributors by age (a missing reserver cannot happen; the oldest stands in for it).
     const ordered = [...givers.filter((g) => g.role === "reserver"), ...givers.filter((g) => g.role !== "reserver")];
     const names = ordered.map((g) => g.giverName);

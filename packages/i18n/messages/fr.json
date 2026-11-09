@@ -1230,7 +1230,8 @@
       "nameKnown": "Ton prénom",
       "notMe": "Ce n'est pas moi",
       "itsMe": "Oui, c'est moi",
-      "notHer": "Non"
+      "notHer": "Non",
+      "nameTaken": "Une {name} a déjà donné son avis sur cette liste. C'est toi ?"
     },
     "opinions": {
       "closed": "Les avis sont fermés sur cette liste.",
@@ -1248,7 +1249,6 @@
       "send": "Envoyer mon avis",
       "visible": "Visible par toutes celles qui ont le lien.",
       "erase": "Effacer mon avis",
-      "nameTaken": "Une {name} a déjà donné son avis sur cette liste. C'est toi ?",
       "errors": {
         "name": "Écris ton prénom (40 caractères au plus).",
         "level": "Choisis un niveau.",
@@ -1260,7 +1260,6 @@
         "eraseFailed": "L'avis n'a pas pu être effacé. Réessaie."
       },
       "toast": {
-        "label": "Notifications",
         "sent": "Avis envoyé",
         "erased": "Avis effacé",
         "undo": "Annuler",
@@ -1294,7 +1293,6 @@
       "sheetTitle": "{action} : {name}",
       "visible": "Visible par les autres amies qui ont le lien, jamais par {name}.",
       "visibleHidden": "Visible par les autres amies qui ont le lien, jamais par elle.",
-      "nameTaken": "Une {name} est déjà passée sur cette liste. C'est toi ?",
       "justReserved": "{name} vient de le réserver",
       "given": "Déjà offerts",
       "givenLine": "{name} — Offert ✓",
@@ -1306,14 +1304,22 @@
         "closed": "Les cadeaux sont fermés sur cette liste.",
         "ownerTook": "Elle l'a pris elle-même : plus besoin de le lui offrir.",
         "gone": "Cet article n'est plus dans la liste.",
-        "failed": "Ça n'a pas marché. Réessaie."
+        "failed": "Ça n'a pas marché. Réessaie.",
+        "noGift": "Ce cadeau n'était plus à ton nom.",
+        "unchecked": "Tes cadeaux n'ont pas pu être vérifiés. Recharge la page."
       },
       "toast": {
         "left": "Tu t'es retirée"
       },
       "close": "Fermer",
-      "closeHint": "Glisse vers le bas pour fermer"
-    }
+      "closeHint": "Glisse vers le bas pour fermer",
+      "announce": {
+        "reserver": "Tu lui offres {name}",
+        "reserverHidden": "Tu offres {name}",
+        "contributor": "Tu participes : {name}"
+      }
+    },
+    "toastLabel": "Notifications"
   },
   "Settings": {
     "title": "Réglages",

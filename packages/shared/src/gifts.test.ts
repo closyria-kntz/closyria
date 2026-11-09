@@ -55,10 +55,17 @@ describe("sharedGiftStateSchema", () => {
       sharedGiftStateSchema.safeParse({ state: "reserved", reserver: "Léa", contributors: ["Zoé"], mine: null })
         .success,
     ).toBe(true);
-    expect(sharedGiftStateSchema.safeParse({ state: "owner_took", givers: ["Léa"], mine: "contributor" }).success).toBe(
+    expect(
+      sharedGiftStateSchema.safeParse({
+        state: "owner_took",
+        givers: ["Léa"],
+        mine: { role: "contributor", name: "Léa" },
+      }).success,
+    ).toBe(true);
+    expect(sharedGiftStateSchema.safeParse({ state: "removed", mine: { role: "reserver", name: "Léa" } }).success).toBe(
       true,
     );
-    expect(sharedGiftStateSchema.safeParse({ state: "removed", mine: "reserver" }).success).toBe(true);
+    expect(sharedGiftStateSchema.safeParse({ state: "removed", mine: "reserver" }).success).toBe(false);
     expect(sharedGiftStateSchema.safeParse({ state: "removed", mine: null }).success).toBe(false);
     expect(sharedGiftStateSchema.safeParse({ state: "weird" }).success).toBe(false);
   });

@@ -1,6 +1,12 @@
 "use client";
 
-import { type GiftIntent, type OpinionView, opinionNameKey, type SharedWishlistView } from "@closyria/shared";
+import {
+  type GiftIntent,
+  type GiftRole,
+  type OpinionView,
+  opinionNameKey,
+  type SharedWishlistView,
+} from "@closyria/shared";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FriendOpinions } from "@/components/friend-opinions";
@@ -16,7 +22,13 @@ import { GivenItems } from "./given";
 import { OpinionSheet, type SheetOutcome } from "./opinion-sheet";
 
 type Item = SharedWishlistView["items"][number];
-type Toast = { id: number; label: string; undo: (() => Promise<boolean>) | null };
+type Toast = {
+  id: number;
+  label: string;
+  undo: (() => Promise<boolean>) | null;
+  /** The item whose gift block takes the focus after « Annuler » (the toast and its button go away). */
+  itemId?: string;
+};
 
 /** How long « Avis envoyé · Annuler » stays (same as the app's undo toast). */
 const TOAST_MS = 8_000;
@@ -56,6 +68,10 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
   // The item whose « Me retirer » is on its way (one tap only).
   const [leaving, setLeaving] = useState<string | null>(null);
   const deviceKey = useRef<string | null>(null);
+  // Read with her device key yet? Until then her own gifts look like anyone's: the gift buttons wait.
+  const [checked, setChecked] = useState<"pending" | "ok" | "failed">("pending");
+  // The item whose gift block takes the focus once the list read after a change shows.
+  const focusAfterRead = useRef<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastCounter = useRef(0);
@@ -68,8 +84,10 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
     try {
       // With her device key: her own gifts show as hers (the server's first paint cannot know them).
       const next = await fetchSharedView(token, deviceKey.current);
-      if (next) setView(next);
-      else {
+      if (next) {
+        setView(next);
+        if (deviceKey.current) setChecked("ok");
+      } else {
         setGone(true);
         setSheet(null);
         setGiftSheet(null);
@@ -87,8 +105,24 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
     deviceKey.current = made.key;
     setDevice(made);
     setDeviceName(made.name);
-    if (initial.gifts.open) void reload();
+    if (!initial.gifts.open) return;
+    void (async () => {
+      // Once more on a failure; then the buttons stay off, with a word, rather than show a state that may be wrong.
+      if ((await reload()) !== undefined) return;
+      if ((await reload()) === undefined) setChecked((current) => (current === "ok" ? current : "failed"));
+    })();
   }, [initial.gifts.open, reload]);
+
+  // After a gift changed: her next step (« Me retirer », « Je lui offre ») once the new state shows.
+  useEffect(() => {
+    const itemId = focusAfterRead.current;
+    if (!itemId || !view) return;
+    focusAfterRead.current = null;
+    // Gone from the page (she left an item taken off the list): nothing to focus.
+    const block = document.getElementById(giftBlockId(itemId));
+    if (!block) return;
+    (block.querySelector<HTMLElement>("button:not([disabled])") ?? block).focus();
+  }, [view]);
 
   useEffect(
     () => () => {
@@ -116,16 +150,17 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
     }
   }
 
-  function show(label: string, undo: Toast["undo"]) {
+  function show(label: string, undo: Toast["undo"], itemId?: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastCounter.current += 1;
-    setToast({ id: toastCounter.current, label, undo });
+    setToast({ id: toastCounter.current, label, undo, ...(itemId ? { itemId } : {}) });
     toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
   }
 
   async function runUndo() {
     const undo = toast?.undo;
     if (!undo) return;
+    if (toast.itemId) focusAfterRead.current = toast.itemId;
     setToast(null);
     const ok = await undo();
     await reload();
@@ -174,22 +209,42 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
     }
   }
 
-  function giftDone(name: string) {
+  /** Given: the new state is announced (« Tu lui offres {article} ») and her next step takes the focus. */
+  async function giftDone(item: Item, name: string, role: GiftRole) {
     setDeviceName(name);
     closeGiftSheet();
-    void reload();
+    const itemName = item.name?.trim() || t("noName");
+    show(
+      role === "contributor"
+        ? tGifts("announce.contributor", { name: itemName })
+        : tGifts(view.ownerName ? "announce.reserver" : "announce.reserverHidden", { name: itemName }),
+      null,
+    );
+    focusAfterRead.current = item.itemId;
+    await reload();
   }
 
   /** « Me retirer », then « Tu t'es retirée · Annuler » (Annuler: she gives again, alongside the others). */
   async function leave(item: Item) {
-    if (!device?.name || !item.gift || leaving) return;
-    const name = device.name;
+    const mine = item.gift && item.gift.state !== "free" ? item.gift.mine : null;
+    if (!device || !item.gift || !mine || leaving) return;
+    // The name she gives this item under (this device may know several: « Ce n'est pas moi »).
+    const name = mine.name;
     const key = device.key;
     setLeaving(item.itemId);
     const result = await leaveGift(token, item.itemId, { name, deviceKey: key });
     setLeaving(null);
     if (!result.ok) {
-      show(tGifts(result.error === "rate_limited" ? "errors.rateLimited" : "errors.failed"), null);
+      show(
+        tGifts(
+          result.error === "rate_limited"
+            ? "errors.rateLimited"
+            : result.error === "no_gift"
+              ? "errors.noGift"
+              : "errors.failed",
+        ),
+        null,
+      );
       void reload();
       return;
     }
@@ -198,8 +253,9 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
       item.gift.state === "reserved"
         ? async () => (await giveGift(token, item.itemId, { name, deviceKey: key, intent: "join" })).ok
         : null;
-    show(tGifts("toast.left"), undo);
-    void reload();
+    show(tGifts("toast.left"), undo, item.itemId);
+    focusAfterRead.current = item.itemId;
+    await reload();
   }
 
   const giftItem = giftSheet ? view.items.find((item) => item.itemId === giftSheet.itemId) : undefined;
@@ -251,7 +307,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
               onGive={() =>
                 setSheet((current) => ({ itemId: item.itemId, session: (current?.session ?? 0) + 1, open: true }))
               }
-              giftsReady={device !== null}
+              giftsChecked={checked}
               leaving={leaving === item.itemId}
               onGift={(intent) =>
                 setGiftSheet((current) => ({
@@ -280,7 +336,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
           ownerName={view.ownerName}
           knownNames={knownNames(view)}
           device={device}
-          onDone={({ name }) => giftDone(name)}
+          onDone={({ name, role }) => void giftDone(giftItem, name, role)}
           onFailed={(error) => void giftFailed(giftItem.itemId, error)}
         />
       )}
@@ -307,7 +363,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
       <div
         role="status"
         aria-live="polite"
-        aria-label={tOpinions("toast.label")}
+        aria-label={t("toastLabel")}
         className="pointer-events-none fixed inset-x-space-4 bottom-space-5 z-40 flex justify-center"
       >
         {toast && (
@@ -336,7 +392,7 @@ function ItemCard({
   view,
   deviceName,
   onGive,
-  giftsReady,
+  giftsChecked,
   leaving,
   onGift,
   onLeave,
@@ -345,8 +401,7 @@ function ItemCard({
   view: SharedWishlistView;
   deviceName: string | null;
   onGive: () => void;
-  /** Her device is known (browser only): before that, the gift buttons wait. */
-  giftsReady: boolean;
+  giftsChecked: "pending" | "ok" | "failed";
   leaving: boolean;
   onGift: (intent: GiftIntent) => void;
   onLeave: () => void;
@@ -429,7 +484,9 @@ function ItemCard({
         gift={gift}
         size={item.size}
         ownerName={view.ownerName}
-        busy={!giftsReady || leaving}
+        blockId={giftBlockId(item.itemId)}
+        checked={giftsChecked}
+        busy={leaving}
         onGive={onGift}
         onLeave={onLeave}
       />
@@ -447,6 +504,8 @@ function ItemCard({
     </li>
   );
 }
+
+const giftBlockId = (itemId: string) => `gift-${itemId}`;
 
 /** Every name on the list (opinions and gifts), as written there: how « Une Léa… » spells a name already used. */
 function knownNames(view: SharedWishlistView): string[] {

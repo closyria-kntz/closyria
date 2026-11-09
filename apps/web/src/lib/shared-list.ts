@@ -120,6 +120,7 @@ export const giftErrorCodes = [
   "name_taken",
   "rate_limited",
   "forbidden",
+  "no_gift",
   "failed",
 ] as const;
 export type GiftError = (typeof giftErrorCodes)[number];

@@ -364,7 +364,7 @@ describe("« Reçu en cadeau »", () => {
     expect(second).toMatchObject({ receivedAt: null, itemRemovedAt: null, giverName: "Inès" });
     expect((await publicView(s.token, keyLea)).items.find((i) => i.itemId === s.item.id)?.gift).toEqual({
       state: "removed",
-      mine: "reserver",
+      mine: { role: "reserver", name: "Léa" },
     });
     expect((await publicView(other.token)).items.find((i) => i.itemId === s.item.id)?.gift).toMatchObject({
       state: "reserved",

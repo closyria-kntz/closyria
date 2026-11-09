@@ -217,9 +217,9 @@ const deleteGiftRoute = defineAccess(
       body: { required: true, content: { "application/json": { schema: giftDeleteSchema } } },
     },
     responses: {
-      204: { description: "Taken back (or nothing to take back)" },
+      204: { description: "Taken back" },
       403: errorContent("The device is not attached to the name (forbidden)"),
-      404: errorContent("Unknown or stopped share (not_found)"),
+      404: errorContent("Unknown or stopped share (not_found), or no gift under this name on the item (no_gift)"),
       429: errorContent("Too many gift actions (rate_limited)"),
     },
   }),
@@ -332,6 +332,7 @@ export function sharedRoutes(deps: WardrobeDeps) {
       });
       if (result.ok) return c.body(null, 204);
       if (result.error === "not_found") return c.json({ error: "not_found" } as const, 404);
+      if (result.error === "no_gift") return c.json({ error: "no_gift" } as const, 404);
       return c.json({ error: "forbidden" } as const, 403);
     });
 }

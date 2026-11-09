@@ -128,8 +128,36 @@ test("des amies offrent des articles de la liste", async ({ page, browser, baseU
   await expect(sheet).toBeHidden();
   await expect(leaFirst.getByText("Tu lui offres")).toBeVisible();
   await expect(leaFirst.getByRole("button", { name: "Me retirer" })).toBeVisible();
+  // Announced, and her next step takes the focus.
+  await expect(appToast(lea)).toContainText(`Tu lui offres ${FIRST}`);
+  await expect(leaFirst.getByRole("button", { name: "Me retirer" })).toBeFocused();
   await expect(leaFirst.getByRole("button", { name: "Je lui offre" })).toHaveCount(0);
-  // Still hers after a reload (the page reads it again with her device).
+  // Still hers after a reload (the page reads it again with her device). Until that read is back, the first
+  // paint cannot tell hers from anyone's: « Je participe » shows but never works.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await lea.route(/\/api\/shared\/[^/]+$/, async (route) => {
+    if (route.request().headers()["x-device-key"]) await held;
+    await route.continue();
+  });
+  await lea.reload();
+  await expect(leaFirst.getByText("Réservé par Léa")).toBeVisible();
+  await expect(leaFirst.getByRole("button", { name: "Je participe" })).toBeDisabled();
+  release();
+  await expect(leaFirst.getByText("Tu lui offres")).toBeVisible();
+  await expect(leaFirst.getByRole("button", { name: "Je participe" })).toHaveCount(0);
+  await lea.unroute(/\/api\/shared\/[^/]+$/);
+  // The keyed read fails twice: the buttons stay off, with a word.
+  await lea.route(/\/api\/shared\/[^/]+$/, (route) =>
+    route.request().headers()["x-device-key"] ? route.abort() : route.continue(),
+  );
+  await lea.reload();
+  await expect(leaFirst.getByText("Tes cadeaux n'ont pas pu être vérifiés. Recharge la page.")).toBeVisible();
+  await expect(leaFirst.getByRole("button", { name: "Je participe" })).toBeDisabled();
+  await expect(itemOf(lea, SECOND).getByRole("button", { name: "Je lui offre" })).toBeDisabled();
+  await lea.unroute(/\/api\/shared\/[^/]+$/);
   await lea.reload();
   await expect(leaFirst.getByText("Tu lui offres")).toBeVisible();
   await lea.screenshot({ path: testInfo.outputPath("page-light.png"), fullPage: true });
@@ -158,6 +186,7 @@ test("des amies offrent des articles de la liste", async ({ page, browser, baseU
   const toast = appToast(lea);
   await expect(toast).toContainText("Tu t'es retirée");
   await expect(leaFirst.getByRole("button", { name: "Me retirer" })).toHaveCount(0);
+  await expect(leaFirst.getByRole("button", { name: "Je participe" })).toBeFocused();
   await toast.getByRole("button", { name: "Annuler" }).click();
   await expect(leaFirst.getByRole("button", { name: "Me retirer" })).toBeVisible();
   await expect(leaFirst.getByText("Offert par Inès et Léa")).toBeVisible();
@@ -224,5 +253,71 @@ test("le prénom de la fondatrice caché : « Je l'offre »", async ({
   await setGifts(page, owner.listId, { giftDate: null });
   await zoe.reload();
   await expect(zoe.getByText("Tu peux offrir un article de cette liste 🎁")).toBeVisible();
+  await zoe.context().close();
+});
+
+test("téléphone partagé, article retiré, pris elle-même", async ({
+  page,
+  browser,
+  baseURL,
+  db,
+  userAgentTag,
+}, testInfo) => {
+  test.slow();
+  const owner = await giftList(page, db, userAgentTag);
+  const phone = await friend(browser, baseURL, `10.214.${testInfo.workerIndex % 250}.1`);
+  const zoe = await friend(browser, baseURL, `10.215.${testInfo.workerIndex % 250}.1`);
+
+  // One phone, two friends: Léa gives the first item, then « Ce n'est pas moi », Inès gives the second.
+  await phone.goto(owner.shareUrl);
+  await give(phone, FIRST, "Je lui offre", "Léa");
+  await itemOf(phone, SECOND).getByRole("button", { name: "Je lui offre" }).click();
+  const sheet = phone.getByRole("dialog");
+  await expect(sheet.getByText("Léa", { exact: true })).toBeVisible();
+  await sheet.getByRole("button", { name: "Ce n'est pas moi" }).click();
+  await sheet.getByLabel("Ton prénom").fill("Inès");
+  await sheet.getByRole("button", { name: "Je lui offre" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(itemOf(phone, SECOND).getByText("Réservé par Inès")).toBeVisible();
+  await expect(itemOf(phone, FIRST).getByText("Réservé par Léa")).toBeVisible();
+  // « Me retirer » on the first item takes back Léa's gift, not Inès's.
+  await itemOf(phone, FIRST).getByRole("button", { name: "Me retirer" }).click();
+  await expect(appToast(phone)).toContainText("Tu t'es retirée");
+  await expect(itemOf(phone, FIRST).getByRole("button", { name: "Je lui offre" })).toBeVisible();
+  await zoe.goto(owner.shareUrl);
+  await expect(itemOf(zoe, FIRST).getByRole("button", { name: "Je lui offre" })).toBeVisible();
+  await expect(itemOf(zoe, SECOND).getByText("Réservé par Inès")).toBeVisible();
+
+  // Zoé reserves the first item, Camille takes it herself: everyone sees it, only Zoé can leave.
+  await give(zoe, FIRST, "Je lui offre", "Zoé");
+  const took = await page.request.post("/api/me/items/gift-took", { data: { ids: [owner.itemIds[0]] } });
+  expect(took.status()).toBe(204);
+  await zoe.reload();
+  await phone.reload();
+  await expect(itemOf(zoe, FIRST).getByText("Camille l'a pris elle-même")).toBeVisible();
+  await expect(itemOf(zoe, FIRST).getByRole("button", { name: "Me retirer" })).toBeVisible();
+  await expect(itemOf(phone, FIRST).getByText("Camille l'a pris elle-même")).toBeVisible();
+  await expect(itemOf(phone, FIRST).getByRole("button", { name: /Je lui offre|Je participe|Me retirer/ })).toHaveCount(
+    0,
+  );
+
+  // Camille takes the second item off her list: only its giver (the phone, as Inès) still sees it, struck through.
+  const removed = await page.request.delete(`/api/me/wishlists/${owner.listId}/items/${owner.itemIds[1]}`, {
+    data: {},
+  });
+  expect(removed.status()).toBe(200);
+  await zoe.reload();
+  await phone.reload();
+  await expect(itemOf(zoe, SECOND)).toHaveCount(0);
+  const struck = itemOf(phone, SECOND);
+  await expect(struck.getByText("Camille l'a retiré de sa liste")).toBeVisible();
+  await expect(struck.getByRole("heading", { name: SECOND })).toHaveCSS("text-decoration-line", "line-through");
+  await expect(struck.getByRole("button", { name: "Donner mon avis" })).toHaveCount(0);
+  await axe(phone);
+  await struck.getByRole("button", { name: "Me retirer" }).click();
+  await expect(appToast(phone)).toContainText("Tu t'es retirée");
+  await expect(itemOf(phone, SECOND)).toHaveCount(0);
+
+  await phone.context().close();
   await zoe.context().close();
 });

@@ -117,7 +117,7 @@ describe("gifts on a shared list", () => {
       state: "reserved",
       reserver: "Léa",
       contributors: [],
-      mine: "reserver",
+      mine: { role: "reserver", name: "Léa" },
     });
     expect(itemOf(await view(s.token), s.item.id)?.gift).toMatchObject({ state: "reserved", mine: null });
     const second = await putGift(s.token, s.item.id, join(ines));
@@ -127,7 +127,7 @@ describe("gifts on a shared list", () => {
       state: "reserved",
       reserver: "Léa",
       contributors: ["Inès"],
-      mine: "contributor",
+      mine: { role: "contributor", name: "Inès" },
     });
   });
 
@@ -173,7 +173,7 @@ describe("gifts on a shared list", () => {
       state: "reserved",
       reserver: "Inès",
       contributors: ["Sarah"],
-      mine: "reserver",
+      mine: { role: "reserver", name: "Inès" },
     });
   });
 
@@ -186,7 +186,7 @@ describe("gifts on a shared list", () => {
       state: "reserved",
       reserver: "Inès",
       contributors: [],
-      mine: "reserver",
+      mine: { role: "reserver", name: "Inès" },
     });
     expect((await delGift(s.token, s.item.id, ines)).status).toBe(204);
     expect(itemOf(await view(s.token), s.item.id)?.gift).toEqual({ state: "free" });
@@ -205,6 +205,18 @@ describe("gifts on a shared list", () => {
     expect(await giftRowsOf(s.list.id)).toHaveLength(1);
   });
 
+  it("says when there is nothing to take back under that name", async () => {
+    const s = await setup();
+    await putGift(s.token, s.item.id, reserve(lea));
+    // Inès's device is attached to her name (an opinion or another gift), but she gives nothing here.
+    await putGift(s.token, s.item.id, join(ines));
+    expect((await delGift(s.token, s.item.id, ines)).status).toBe(204);
+    const res = await delGift(s.token, s.item.id, ines);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "no_gift" });
+    expect(await giftRowsOf(s.list.id)).toHaveLength(1);
+  });
+
   it("forbids another key to take back Léa's gift", async () => {
     const s = await setup();
     await putGift(s.token, s.item.id, reserve(lea));
@@ -217,7 +229,10 @@ describe("gifts on a shared list", () => {
     const s = await setup();
     await putGift(s.token, s.item.id, reserve(lea));
     expect((await call("DELETE", `/api/me/wishlists/${s.list.id}/items/${s.item.id}`, s.cookie)).status).toBe(200);
-    expect(itemOf(await view(s.token, keyLea), s.item.id)?.gift).toEqual({ state: "removed", mine: "reserver" });
+    expect(itemOf(await view(s.token, keyLea), s.item.id)?.gift).toEqual({
+      state: "removed",
+      mine: { role: "reserver", name: "Léa" },
+    });
     expect(itemOf(await view(s.token), s.item.id)).toBeUndefined();
     expect(itemOf(await view(s.token, keyInes), s.item.id)).toBeUndefined();
     expect((await putGift(s.token, s.item.id, join(ines))).status).toBe(404);
@@ -252,7 +267,10 @@ describe("gifts on a shared list", () => {
     });
     expect(res.status).toBe(200);
     expect((await giftRowsOf(s.list.id))[0]?.itemRemovedAt).not.toBeNull();
-    expect(itemOf(await view(s.token, keyLea), s.item.id)?.gift).toEqual({ state: "removed", mine: "reserver" });
+    expect(itemOf(await view(s.token, keyLea), s.item.id)?.gift).toEqual({
+      state: "removed",
+      mine: { role: "reserver", name: "Léa" },
+    });
     const back = await call("POST", "/api/me/items/bulk", s.cookie, {
       op: "addToList",
       ids: [s.item.id],
@@ -274,7 +292,7 @@ describe("gifts on a shared list", () => {
       state: "reserved",
       reserver: "Léa",
       contributors: [],
-      mine: "reserver",
+      mine: { role: "reserver", name: "Léa" },
     });
   });
 
@@ -303,7 +321,7 @@ describe("gifts on a shared list", () => {
     expect(itemOf(await view(s.token, keyLea), s.item.id)?.gift).toEqual({
       state: "owner_took",
       givers: ["Léa"],
-      mine: "reserver",
+      mine: { role: "reserver", name: "Léa" },
     });
   });
 

@@ -68,6 +68,8 @@ export function GiftActions({
   gift,
   size,
   ownerName,
+  blockId,
+  checked,
   busy,
   onGive,
   onLeave,
@@ -76,6 +78,13 @@ export function GiftActions({
   gift: SharedGiftState | null;
   size: string | null;
   ownerName: string | null;
+  /** Where the page puts the focus back after a gift changes (her next step is in it). */
+  blockId: string;
+  /**
+   * Whether the page read the list with her device key: until then it cannot tell her gifts from the others', so
+   * every button waits (`pending`); `failed` says so instead of showing a state that may be wrong.
+   */
+  checked: "pending" | "ok" | "failed";
   busy: boolean;
   onGive: (intent: GiftIntent) => void;
   onLeave: () => void;
@@ -84,7 +93,8 @@ export function GiftActions({
   const locale = useLocale();
   if (!gift) return null;
   const hidden = ownerName === null;
-  const mine = gift.state === "free" ? null : gift.mine;
+  const mine = gift.state === "free" ? null : (gift.mine?.role ?? null);
+  const disabled = busy || checked !== "ok";
   const givers =
     gift.state === "reserved" ? [gift.reserver, ...gift.contributors] : gift.state === "owner_took" ? gift.givers : [];
 
@@ -106,7 +116,12 @@ export function GiftActions({
   const forItem = <span className="sr-only"> {t("forItem", { name: itemName })}</span>;
 
   return (
-    <div className="flex flex-col gap-space-2">
+    <div
+      id={blockId}
+      tabIndex={-1}
+      aria-busy={checked === "pending" || undefined}
+      className={`flex flex-col gap-space-2 rounded-md ${focusRing}`}
+    >
       <div
         data-testid="gift"
         className={`flex flex-col gap-space-1 rounded-md border px-space-3 py-space-2 text-sm ${
@@ -118,7 +133,7 @@ export function GiftActions({
         {mineLabel && (
           <p className="flex flex-wrap items-center justify-between gap-x-space-3 gap-y-space-1">
             <span className="font-strong text-accent">{mineLabel}</span>
-            <button type="button" disabled={busy} onClick={onLeave} className={linkButtonClass}>
+            <button type="button" disabled={disabled} onClick={onLeave} className={linkButtonClass}>
               {t("leave")}
               {forItem}
             </button>
@@ -126,22 +141,26 @@ export function GiftActions({
         )}
       </div>
       {gift.state === "free" && (
-        <button type="button" disabled={busy} onClick={() => onGive("reserve")} className={actionButtonClass}>
+        <button type="button" disabled={disabled} onClick={() => onGive("reserve")} className={actionButtonClass}>
           {t(hidden ? "giveHidden" : "give")}
           {forItem}
         </button>
       )}
       {gift.state === "reserved" && !mine && (
-        <button type="button" disabled={busy} onClick={() => onGive("join")} className={actionButtonClass}>
+        <button type="button" disabled={disabled} onClick={() => onGive("join")} className={actionButtonClass}>
           {t("join")}
           {forItem}
         </button>
       )}
+      {checked === "failed" && <p className="text-sm text-danger">{t("errors.unchecked")}</p>}
     </div>
   );
 }
 
-const errorKey: Record<GiftError, "webAddress" | "rateLimited" | "closed" | "ownerTook" | "gone" | "failed"> = {
+const errorKey: Record<
+  GiftError,
+  "webAddress" | "rateLimited" | "closed" | "ownerTook" | "gone" | "noGift" | "failed"
+> = {
   web_address: "webAddress",
   rate_limited: "rateLimited",
   gifts_closed: "closed",
@@ -149,6 +168,7 @@ const errorKey: Record<GiftError, "webAddress" | "rateLimited" | "closed" | "own
   not_found: "gone",
   name_taken: "failed",
   forbidden: "failed",
+  no_gift: "noGift",
   failed: "failed",
 };
 
@@ -183,6 +203,7 @@ export function GiftSheet({
   onFailed: (error: GiftError | "already_reserved") => void;
 }) {
   const t = useTranslations("SharedList.gifts");
+  const tFriend = useTranslations("SharedList.friend");
   const titleId = useId();
   const nameId = useId();
   const nameInput = useRef<HTMLInputElement>(null);
@@ -268,7 +289,7 @@ export function GiftSheet({
           {taken ? (
             <NameTakenQuestion
               id={`${titleId}-taken`}
-              question={t("nameTaken", { name: taken })}
+              question={tFriend("nameTaken", { name: taken })}
               busy={busy}
               onItsMe={() => void send(true)}
               onNotHer={notHer}

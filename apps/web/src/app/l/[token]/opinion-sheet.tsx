@@ -61,6 +61,7 @@ const findByName = (opinions: OpinionView[], name: string) =>
  */
 export function OpinionSheet({ open, onClose, token, item, listOpinions, levels, device, onDone, onFailed }: Props) {
   const t = useTranslations("SharedList.opinions");
+  const tFriend = useTranslations("SharedList.friend");
   const titleId = useId();
   const nameId = useId();
   const noteId = useId();
@@ -161,7 +162,7 @@ export function OpinionSheet({ open, onClose, token, item, listOpinions, levels,
           {taken ? (
             <NameTakenQuestion
               id={`${titleId}-taken`}
-              question={t("nameTaken", { name: taken })}
+              question={tFriend("nameTaken", { name: taken })}
               busy={busy}
               onItsMe={() => void send(true)}
               onNotHer={notHer}

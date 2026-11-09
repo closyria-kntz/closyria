@@ -37,16 +37,20 @@ export const giftDateSchema = z.iso.date();
 const giftRoleSchema = z.enum(["reserver", "contributor"]);
 export type GiftRole = z.infer<typeof giftRoleSchema>;
 
+/** This device's part in a gift: her role and the name she gives under (what « Me retirer » sends back). */
+const giftMineSchema = z.object({ role: giftRoleSchema, name: z.string() });
+export type GiftMine = z.infer<typeof giftMineSchema>;
+
 export const sharedGiftStateSchema = z.discriminatedUnion("state", [
   z.object({ state: z.literal("free") }),
   z.object({
     state: z.literal("reserved"),
     reserver: z.string(),
     contributors: z.array(z.string()),
-    mine: giftRoleSchema.nullable(),
+    mine: giftMineSchema.nullable(),
   }),
-  z.object({ state: z.literal("owner_took"), givers: z.array(z.string()), mine: giftRoleSchema.nullable() }),
-  z.object({ state: z.literal("removed"), mine: giftRoleSchema }),
+  z.object({ state: z.literal("owner_took"), givers: z.array(z.string()), mine: giftMineSchema.nullable() }),
+  z.object({ state: z.literal("removed"), mine: giftMineSchema }),
 ]);
 export type SharedGiftState = z.infer<typeof sharedGiftStateSchema>;
 
