@@ -11,7 +11,12 @@ import { opinionsByItem } from "./opinions";
 type WishlistRow = typeof schema.wishlists.$inferSelect;
 
 /** Her lists as the API shows them: by position, items in list order, items in the trash left out. */
-export async function listWishlistViews(db: Database | Tx, userId: string, onlyId?: string): Promise<WishlistView[]> {
+export async function listWishlistViews(
+  db: Database | Tx,
+  userId: string,
+  onlyId?: string,
+  now: Date = new Date(),
+): Promise<WishlistView[]> {
   const rows = await db
     .select()
     .from(schema.wishlists)
@@ -58,11 +63,35 @@ export async function listWishlistViews(db: Database | Tx, userId: string, onlyI
       row,
       members.filter((m) => m.wishlistId === row.id).map((m) => m.itemId),
       newCount.get(row.id) ?? 0,
+      now,
     ),
   );
 }
 
-function toWishlistView(row: WishlistRow, itemIds: string[], newOpinions: number): WishlistView {
+/** Today in Paris, `YYYY-MM-DD` (the day of her occasion is a Paris day). */
+export const parisDay = (at: Date) =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Paris",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(at);
+
+/**
+ * The reminder « {occasion} est passé … » is due from the day after her occasion (Paris), while gifts are open,
+ * until she says « C'est fait » (dismissed) and except for the 7 days after « Plus tard » (snoozed).
+ */
+export function giftReminderDue(row: WishlistRow, now: Date): boolean {
+  return (
+    row.allowGifts &&
+    row.giftDate !== null &&
+    parisDay(now) > row.giftDate &&
+    row.giftReminderDismissedAt === null &&
+    (row.giftReminderSnoozedUntil === null || row.giftReminderSnoozedUntil <= now)
+  );
+}
+
+function toWishlistView(row: WishlistRow, itemIds: string[], newOpinions: number, now: Date): WishlistView {
   return {
     id: row.id,
     name: row.name,
@@ -78,7 +107,7 @@ function toWishlistView(row: WishlistRow, itemIds: string[], newOpinions: number
     allowGifts: row.allowGifts,
     giftOccasion: row.giftOccasion,
     giftDate: row.giftDate,
-    giftReminderDue: false,
+    giftReminderDue: giftReminderDue(row, now),
   };
 }
 

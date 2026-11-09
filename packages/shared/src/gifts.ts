@@ -57,6 +57,35 @@ export const sharedGiftsSchema = z.object({
 });
 export type SharedGifts = z.infer<typeof sharedGiftsSchema>;
 
+/** Most items a gift check or « pris elle-même » covers in one call (as the bulk actions). */
+export const MAX_GIFT_CHECK_ITEMS = 200;
+
+/** `GET /me/items/gift-check?ids=a,b`: up to 200 distinct item ids, comma-separated. */
+export const giftCheckQuerySchema = z.object({
+  ids: z
+    .string()
+    .max(MAX_GIFT_CHECK_ITEMS * 37)
+    .transform((value) => value.split(","))
+    .pipe(
+      z
+        .array(z.uuid())
+        .min(1)
+        .max(MAX_GIFT_CHECK_ITEMS)
+        .refine((ids) => new Set(ids).size === ids.length, "ids must be unique"),
+    ),
+});
+
+/** `POST /me/items/gift-took`: she takes these items herself (« Je le prends quand même »). */
+export const giftTookSchema = z.object({
+  ids: z
+    .array(z.uuid())
+    .min(1)
+    .max(MAX_GIFT_CHECK_ITEMS)
+    .refine((ids) => new Set(ids).size === ids.length, "ids must be unique"),
+});
+export type GiftTook = z.infer<typeof giftTookSchema>;
+
+/** Only ids: never who reserved. */
 export const giftCheckSchema = z.object({ reserved: z.array(z.uuid()) });
 export type GiftCheck = z.infer<typeof giftCheckSchema>;
 

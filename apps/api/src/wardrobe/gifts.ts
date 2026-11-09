@@ -12,6 +12,14 @@ export type LeaveResult = { ok: true } | { ok: false; error: "not_found" | "forb
 
 type GiftTarget = { wishlistId: string; shareTokenHash: string; itemId: string };
 
+/** The gifts of an item on a list that are not over (a received row counts as absent everywhere). */
+const activeGiftsOf = (wishlistId: string, itemId: string) =>
+  and(
+    eq(schema.wishlistGifts.wishlistId, wishlistId),
+    eq(schema.wishlistGifts.itemId, itemId),
+    isNull(schema.wishlistGifts.receivedAt),
+  );
+
 /** Serialises every gift change on one item of one list (who reserves is decided under it). */
 async function lockGiftItem(tx: Tx, wishlistId: string, itemId: string) {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`gift:${wishlistId}:${itemId}`}, 0))`);
@@ -68,7 +76,7 @@ export async function giveGift(db: Database, input: GiftInput & GiftTarget): Pro
         ownerTookAt: schema.wishlistGifts.ownerTookAt,
       })
       .from(schema.wishlistGifts)
-      .where(and(eq(schema.wishlistGifts.wishlistId, input.wishlistId), eq(schema.wishlistGifts.itemId, input.itemId)));
+      .where(activeGiftsOf(input.wishlistId, input.itemId));
     const mine = rows.find((r) => r.giverNameKey === nameKey);
     const reserver = rows.find((r) => r.role === "reserver");
     // Refusals that write nothing come before the name check, which may attach the device.
@@ -106,21 +114,13 @@ export async function leaveGift(db: Database, input: GiftDelete & GiftTarget): P
       return { ok: false, error: "forbidden" };
     const [left] = await tx
       .delete(schema.wishlistGifts)
-      .where(
-        and(
-          eq(schema.wishlistGifts.wishlistId, input.wishlistId),
-          eq(schema.wishlistGifts.itemId, input.itemId),
-          eq(schema.wishlistGifts.giverNameKey, nameKey),
-        ),
-      )
+      .where(and(activeGiftsOf(input.wishlistId, input.itemId), eq(schema.wishlistGifts.giverNameKey, nameKey)))
       .returning({ role: schema.wishlistGifts.role });
     if (left?.role === "reserver") {
       const [next] = await tx
         .select({ id: schema.wishlistGifts.id })
         .from(schema.wishlistGifts)
-        .where(
-          and(eq(schema.wishlistGifts.wishlistId, input.wishlistId), eq(schema.wishlistGifts.itemId, input.itemId)),
-        )
+        .where(activeGiftsOf(input.wishlistId, input.itemId))
         .orderBy(asc(schema.wishlistGifts.createdAt), asc(schema.wishlistGifts.id))
         .limit(1);
       if (next)
@@ -146,7 +146,7 @@ export async function giftStatesForList(
   const rows = await db
     .select()
     .from(schema.wishlistGifts)
-    .where(eq(schema.wishlistGifts.wishlistId, wishlistId))
+    .where(and(eq(schema.wishlistGifts.wishlistId, wishlistId), isNull(schema.wishlistGifts.receivedAt)))
     .orderBy(asc(schema.wishlistGifts.createdAt), asc(schema.wishlistGifts.id));
   const byItem = new Map<string, (typeof rows)[number][]>();
   for (const row of rows) byItem.set(row.itemId, [...(byItem.get(row.itemId) ?? []), row]);
@@ -184,6 +184,7 @@ export async function markGiftsRemoved(tx: Tx, wishlistId: string, itemIds: stri
         eq(schema.wishlistGifts.wishlistId, wishlistId),
         inArray(schema.wishlistGifts.itemId, itemIds),
         isNull(schema.wishlistGifts.itemRemovedAt),
+        isNull(schema.wishlistGifts.receivedAt),
       ),
     );
 }
@@ -200,6 +201,134 @@ export async function clearGiftsRemoved(tx: Tx, wishlistId: string, itemIds: str
         eq(schema.wishlistGifts.wishlistId, wishlistId),
         inArray(schema.wishlistGifts.itemId, itemIds),
         isNotNull(schema.wishlistGifts.itemRemovedAt),
+        isNull(schema.wishlistGifts.receivedAt),
       ),
     );
+}
+
+/** Her side: the item locks of every (list, item) pair, in one fixed order (no deadlock between two of her calls). */
+async function lockGiftPairs(tx: Tx, pairs: { wishlistId: string; itemId: string }[]) {
+  const keys = [...new Set(pairs.map((p) => `${p.wishlistId}:${p.itemId}`))].sort();
+  for (const key of keys) await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`gift:${key}`}, 0))`);
+}
+
+/** The (list, item) pairs that have gift rows, received ones included, for these items. */
+async function giftPairsOf(tx: Tx, itemIds: string[]) {
+  return tx
+    .selectDistinct({ wishlistId: schema.wishlistGifts.wishlistId, itemId: schema.wishlistGifts.itemId })
+    .from(schema.wishlistGifts)
+    .where(inArray(schema.wishlistGifts.itemId, itemIds));
+}
+
+/**
+ * `gift-check`: which of her items a friend has planned to give — an active gift, not taken by herself, on a list
+ * of hers that is shared and open to gifts. Ids only, in the order asked: never who.
+ */
+export async function reservedItemIds(db: Database, userId: string, itemIds: string[]): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ itemId: schema.wishlistGifts.itemId })
+    .from(schema.wishlistGifts)
+    .innerJoin(schema.wishlists, eq(schema.wishlists.id, schema.wishlistGifts.wishlistId))
+    .innerJoin(schema.items, eq(schema.items.id, schema.wishlistGifts.itemId))
+    .where(
+      and(
+        inArray(schema.wishlistGifts.itemId, itemIds),
+        eq(schema.wishlists.userId, userId),
+        eq(schema.items.userId, userId),
+        eq(schema.wishlists.allowGifts, true),
+        isNotNull(schema.wishlists.shareTokenHash),
+        isNull(schema.wishlistGifts.ownerTookAt),
+        isNull(schema.wishlistGifts.itemRemovedAt),
+        isNull(schema.wishlistGifts.receivedAt),
+      ),
+    );
+  const reserved = new Set(rows.map((r) => r.itemId));
+  return itemIds.filter((id) => reserved.has(id));
+}
+
+/**
+ * « Je le prends quand même »: her friends' active gifts of these items (hers only) show « pris elle-même » on the
+ * link, on every list. Under the item locks, so a friend giving at the same moment is refused or marked too.
+ */
+export async function markOwnerTook(db: Database, userId: string, itemIds: string[]): Promise<void> {
+  await db.transaction(async (tx) => {
+    const own = tx.select({ id: schema.items.id }).from(schema.items).where(eq(schema.items.userId, userId));
+    const scope = and(
+      inArray(schema.wishlistGifts.itemId, itemIds),
+      inArray(schema.wishlistGifts.itemId, own),
+      isNull(schema.wishlistGifts.ownerTookAt),
+      isNull(schema.wishlistGifts.receivedAt),
+    );
+    const pairs = await tx
+      .selectDistinct({ wishlistId: schema.wishlistGifts.wishlistId, itemId: schema.wishlistGifts.itemId })
+      .from(schema.wishlistGifts)
+      .where(scope);
+    if (pairs.length === 0) return;
+    await lockGiftPairs(tx, pairs);
+    await tx.update(schema.wishlistGifts).set({ ownerTookAt: sql`now()` }).where(scope);
+  });
+}
+
+/** « Offert par … »: « Léa », « Léa et Inès », « Léa, Inès et Sarah »; null without anyone. */
+export function joinGiverNames(names: string[]): string | null {
+  if (names.length === 0) return null;
+  if (names.length === 1) return names[0] ?? null;
+  return `${names.slice(0, -1).join(", ")} et ${names.at(-1)}`;
+}
+
+/**
+ * « Reçu en cadeau », gift side, on her item already locked: every active gift of the item, on all her lists, is
+ * over (`received_at`); the givers' names come back, frozen for `gift_from`: reservers first, then contributors by
+ * age, one name per person. Rows received earlier (an older « Reçu en cadeau » not undone) are deleted first, so
+ * the received rows are only this one's, for its undo.
+ */
+export async function receiveGifts(tx: Tx, itemId: string): Promise<string | null> {
+  const listed = await tx
+    .select({ wishlistId: schema.wishlistItems.wishlistId, itemId: schema.wishlistItems.itemId })
+    .from(schema.wishlistItems)
+    .where(eq(schema.wishlistItems.itemId, itemId));
+  await lockGiftPairs(tx, [...listed, ...(await giftPairsOf(tx, [itemId]))]);
+  await tx
+    .delete(schema.wishlistGifts)
+    .where(and(eq(schema.wishlistGifts.itemId, itemId), isNotNull(schema.wishlistGifts.receivedAt)));
+  const givers = await tx
+    .update(schema.wishlistGifts)
+    .set({ receivedAt: sql`now()` })
+    .where(and(eq(schema.wishlistGifts.itemId, itemId), isNull(schema.wishlistGifts.receivedAt)))
+    .returning({
+      giverName: schema.wishlistGifts.giverName,
+      giverNameKey: schema.wishlistGifts.giverNameKey,
+      role: schema.wishlistGifts.role,
+      createdAt: schema.wishlistGifts.createdAt,
+      id: schema.wishlistGifts.id,
+    });
+  const byAge = givers.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+  const ordered = [...byAge.filter((g) => g.role === "reserver"), ...byAge.filter((g) => g.role !== "reserver")];
+  const seen = new Set<string>();
+  const names = ordered.flatMap((g) => {
+    if (seen.has(g.giverNameKey)) return [];
+    seen.add(g.giverNameKey);
+    return [g.giverName];
+  });
+  return joinGiverNames(names);
+}
+
+/**
+ * Undo of « Reçu en cadeau », gift side, on her items already locked: their received gifts are active again, with
+ * their roles. A (list, item) that has active gifts meanwhile keeps them and its received rows stay over (they
+ * would clash). Returns the items whose gifts came back.
+ */
+export async function unreceiveGifts(tx: Tx, itemIds: string[]): Promise<string[]> {
+  const pairs = await giftPairsOf(tx, itemIds);
+  if (pairs.length === 0) return [];
+  await lockGiftPairs(tx, pairs);
+  const back = await tx.execute<{ item_id: string }>(sql`
+    update ${schema.wishlistGifts} g set received_at = null
+    where ${inArray(sql`g.item_id`, itemIds)} and g.received_at is not null
+      and not exists (
+        select 1 from ${schema.wishlistGifts} a
+        where a.wishlist_id = g.wishlist_id and a.item_id = g.item_id and a.received_at is null
+      )
+    returning g.item_id`);
+  return [...new Set(back.rows.map((r) => r.item_id))];
 }

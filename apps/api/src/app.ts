@@ -17,6 +17,7 @@ import { budgetsRoutes } from "./routes/me/budgets";
 import { bulkRoutes } from "./routes/me/bulk";
 import { changesRoutes } from "./routes/me/changes";
 import { facetsRoutes } from "./routes/me/facets";
+import { giftsRoutes } from "./routes/me/gifts";
 import { itemMediaRoutes } from "./routes/me/item-media";
 import { itemsRoutes } from "./routes/me/items";
 import { loveLevelsRoutes } from "./routes/me/love-levels";
@@ -126,6 +127,7 @@ export function createApp(deps: AppDeps) {
     .route("/", loveLevelsRoutes(deps.wardrobe))
     .route("/", changesRoutes(deps.wardrobe))
     .route("/", bulkRoutes(deps.wardrobe))
+    .route("/", giftsRoutes(deps.wardrobe))
     .route("/", orderDraftRoutes(deps.wardrobe))
     .route("/", itemsRoutes(deps.wardrobe, importAttacher))
     .route(

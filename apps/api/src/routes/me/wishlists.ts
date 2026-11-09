@@ -2,6 +2,7 @@ import { and, asc, eq, isNull, schema, sql } from "@closyria/db";
 import {
   containsWebAddress,
   erasedOpinionSchema,
+  giftReminderActionSchema,
   giftSettingsPatchSchema,
   itemOpinionsSchema,
   type OpinionView,
@@ -79,7 +80,9 @@ const patchListRoute = defineAccess(
     path: "/me/wishlists/{id}",
     summary: "Rename a list or change how it is shared",
     description:
-      "`name` and/or the sharing settings (`allowOpinions`, `showOwnerName`, `showOwnerOpinions`, `showBudget`); at least one.",
+      "`name` and/or the sharing settings (`allowOpinions`, `showOwnerName`, `showOwnerOpinions`, `showBudget`) " +
+      "and the gift settings (`allowGifts`, `giftOccasion`, `giftDate`; occasion and date can be cleared with null); " +
+      "at least one. Another `giftDate` forgets « Plus tard » and « C'est fait » of the reminder.",
     request: { params: idParams, ...body(wishlistPatchSchema) },
     responses: {
       200: json("Changed", wishlistViewSchema),
@@ -304,6 +307,26 @@ const itemOpinionsRoute = defineAccess(
   "user",
 );
 
+const giftReminderRoute = defineAccess(
+  createRoute({
+    method: "post",
+    path: "/me/wishlists/{id}/gift-reminder",
+    summary: "Hide the reminder after the occasion",
+    description:
+      "« Plus tard » (`snooze`): hidden for 7 days. « C'est fait » (`dismiss`): hidden for this occasion (until " +
+      "another `giftDate`).",
+    request: { params: idParams, ...body(giftReminderActionSchema) },
+    responses: {
+      204: { description: "Hidden" },
+      400: errorContent("Invalid body (invalid_request)"),
+      404: notFoundContent,
+    },
+  }),
+  "user",
+);
+
+const SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
+
 /** `user` access ran first: the session is there. */
 function userIdOf(c: Context<AccessEnv>): string {
   const id = c.var.session?.user.id;
@@ -318,10 +341,12 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
     defaultHook: (result, c) => (result.success ? undefined : c.json(invalidRequest, 400)),
   });
   const own = (userId: string, id: string) => and(eq(schema.wishlists.id, id), eq(schema.wishlists.userId, userId));
-  const viewOf = async (userId: string, id: string) => (await listWishlistViews(db, userId, id))[0];
+  const viewOf = async (userId: string, id: string) => (await listWishlistViews(db, userId, id, now()))[0];
 
   return app
-    .openapi(listRoute, async (c) => c.json({ wishlists: await listWishlistViews(db, userIdOf(c)) }, 200))
+    .openapi(listRoute, async (c) =>
+      c.json({ wishlists: await listWishlistViews(db, userIdOf(c), undefined, now()) }, 200),
+    )
     .openapi(createListRoute, async (c) => {
       const userId = userIdOf(c);
       const { name } = c.req.valid("json");
@@ -367,18 +392,41 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
       });
       if (outcome === "not_found") return c.json(notFound, 404);
       if (outcome === "invalid_request") return c.json(invalidRequest, 400);
-      return c.json({ wishlists: await listWishlistViews(db, userId) }, 200);
+      return c.json({ wishlists: await listWishlistViews(db, userId, undefined, now()) }, 200);
     })
     .openapi(patchListRoute, async (c) => {
       const userId = userIdOf(c);
       const { id } = c.req.valid("param");
+      const patch = c.req.valid("json");
+      // Another date is another occasion: « Plus tard » and « C'est fait » of the old one are forgotten.
+      const reminderReset =
+        patch.giftDate === undefined
+          ? {}
+          : {
+              giftReminderDismissedAt: sql`case when ${schema.wishlists.giftDate} is distinct from ${patch.giftDate}::date then null else ${schema.wishlists.giftReminderDismissedAt} end`,
+              giftReminderSnoozedUntil: sql`case when ${schema.wishlists.giftDate} is distinct from ${patch.giftDate}::date then null else ${schema.wishlists.giftReminderSnoozedUntil} end`,
+            };
       const [row] = await db
         .update(schema.wishlists)
-        .set(c.req.valid("json"))
+        .set({ ...patch, ...reminderReset })
         .where(own(userId, id))
         .returning({ id: schema.wishlists.id });
       const view = row ? await viewOf(userId, id) : undefined;
       return view ? c.json(view, 200) : c.json(notFound, 404);
+    })
+    .openapi(giftReminderRoute, async (c) => {
+      const { action } = c.req.valid("json");
+      const at = now();
+      const [row] = await db
+        .update(schema.wishlists)
+        .set(
+          action === "snooze"
+            ? { giftReminderSnoozedUntil: new Date(at.getTime() + SNOOZE_MS) }
+            : { giftReminderDismissedAt: at },
+        )
+        .where(own(userIdOf(c), c.req.valid("param").id))
+        .returning({ id: schema.wishlists.id });
+      return row ? c.body(null, 204) : c.json(notFound, 404);
     })
     .openapi(opinionsRoute, async (c) => {
       const [list] = await db

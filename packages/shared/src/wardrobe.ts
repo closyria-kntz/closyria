@@ -243,6 +243,8 @@ export const itemBulkSchema = z.discriminatedUnion("op", [
   z.object({ ids: bulkIds, op: z.literal("delete") }),
   z.object({ ids: bulkIds, op: z.literal("restore") }),
   z.object({ ids: bulkIds, op: z.literal("setFields"), fields: itemFieldsSchema }),
+  /** Undo of « Reçu en cadeau »: her friends' gifts of the items are active again and `giftFrom` is cleared. */
+  z.object({ ids: bulkIds, op: z.literal("unreceiveGift") }),
 ]);
 export type ItemBulk = z.infer<typeof itemBulkSchema>;
 

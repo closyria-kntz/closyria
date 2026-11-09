@@ -365,7 +365,8 @@ export const wishlistOpinionDevices = pgTable(
 
 /**
  * A friend's gift on an item of a shared list: one `reserver` per (list, item), any number of `contributor`s.
- * Never read by her routes. Goes with the list or the item.
+ * Never read by her routes. Goes with the list or the item. A row with `received_at` is over (she marked the item
+ * « Reçu en cadeau »): every read and write treats it as absent; it is kept only so that the undo can bring it back.
  */
 export const wishlistGifts = pgTable(
   "wishlist_gifts",
@@ -384,11 +385,18 @@ export const wishlistGifts = pgTable(
     itemRemovedAt: timestamp("item_removed_at", { withTimezone: true }),
     /** Set when she marked the item as taken by herself. */
     ownerTookAt: timestamp("owner_took_at", { withTimezone: true }),
+    /** Set when she marked the item « Reçu en cadeau » (cleared by its undo). */
+    receivedAt: timestamp("received_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [
-    uniqueIndex("wishlist_gifts_giver_idx").on(t.wishlistId, t.itemId, t.giverNameKey),
-    uniqueIndex("wishlist_gifts_reserver_idx").on(t.wishlistId, t.itemId).where(sql`${t.role} = 'reserver'`),
+    // Active rows only: a received row never blocks a new gift.
+    uniqueIndex("wishlist_gifts_giver_idx")
+      .on(t.wishlistId, t.itemId, t.giverNameKey)
+      .where(sql`${t.receivedAt} IS NULL`),
+    uniqueIndex("wishlist_gifts_reserver_idx")
+      .on(t.wishlistId, t.itemId)
+      .where(sql`${t.role} = 'reserver' AND ${t.receivedAt} IS NULL`),
     index("wishlist_gifts_item_id_idx").on(t.itemId),
     check("wishlist_gifts_role_check", oneOf(t.role, ["reserver", "contributor"])),
     check("wishlist_gifts_giver_name_check", lengthBetween(t.giverName, OPINION_NAME_MAX_CODE_POINTS)),

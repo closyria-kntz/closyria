@@ -9,7 +9,7 @@ import {
 } from "@closyria/shared";
 import { pgCode } from "../pg-code";
 import type { Tx } from "./events";
-import { clearGiftsRemoved, markGiftsRemoved } from "./gifts";
+import { clearGiftsRemoved, markGiftsRemoved, unreceiveGifts } from "./gifts";
 import { AMOUNT_COLUMN, type Item, lockProductOfUser } from "./items";
 import { mergeItemInto } from "./merge-items";
 import { spentCentsFor } from "./spent";
@@ -304,6 +304,14 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
       const ids = changed.map((item) => item.id);
       await setItems(tx, ids, { ...values, updatedAt: now });
       return result(ids, setFieldsUndo(changed, values));
+    }
+    case "unreceiveGift": {
+      // Undo of « Reçu en cadeau » (after the stage op that puts the item back): gifts active again, names cleared.
+      requireActive(items);
+      const back = new Set(await unreceiveGifts(tx, op.ids));
+      const named = items.filter((item) => item.giftFrom !== null).map((item) => item.id);
+      await setItems(tx, named, { giftFrom: null, updatedAt: now });
+      return result(op.ids.filter((id) => back.has(id) || named.includes(id)));
     }
     case "delete": {
       const trashed = items.filter((item) => !item.deletedAt);
