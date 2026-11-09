@@ -465,12 +465,22 @@ describe("sharing", () => {
       expect(raw).not.toContain(secret);
     }
     const parsed = JSON.parse(raw) as SharedWishlistView;
-    expect(Object.keys(parsed).toSorted()).toEqual(["allowOpinions", "budget", "items", "levels", "name", "ownerName"]);
+    expect(Object.keys(parsed).toSorted()).toEqual([
+      "allowOpinions",
+      "budget",
+      "gifts",
+      "givenItems",
+      "items",
+      "levels",
+      "name",
+      "ownerName",
+    ]);
     expect(parsed.name).toBe("Mes envies");
     expect(parsed.items).toHaveLength(1);
     expect(Object.keys(parsed.items[0] ?? {}).toSorted()).toEqual([
       "brand",
       "currency",
+      "gift",
       "imageHeight",
       "imageUrl",
       "imageWidth",
@@ -480,6 +490,7 @@ describe("sharing", () => {
       "ownerOpinion",
       "priceCents",
       "shopName",
+      "size",
       "url",
     ]);
     expect(parsed.items[0]).toEqual({
@@ -493,6 +504,8 @@ describe("sharing", () => {
       imageUrl: `/api/catalog-images/${made.images[0]?.id}`,
       imageWidth: made.images[0]?.width,
       imageHeight: made.images[0]?.height,
+      gift: null,
+      size: null,
       shopName: made.shop.name,
       url: made.product.canonicalUrl,
     });

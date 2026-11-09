@@ -75,6 +75,7 @@ export async function loadItemViews(db: Database | Tx, userId: string, itemIds: 
       sizeLabel: item.sizeLabel,
       sizeNote: item.sizeNote,
       notes: item.notes,
+      giftFrom: null,
       pricePaidCents: item.pricePaidCents,
       salePriceCents: item.salePriceCents,
       saleChannel: item.saleChannel,

@@ -2,6 +2,7 @@ import { and, asc, eq, isNull, schema, sql } from "@closyria/db";
 import {
   containsWebAddress,
   erasedOpinionSchema,
+  giftSettingsPatchSchema,
   itemOpinionsSchema,
   type OpinionView,
   shareLinkSchema,
@@ -42,6 +43,7 @@ const body = <S extends z.ZodType>(schema: S) => ({
 const wishlistPatchSchema = wishlistInputSchema
   .partial()
   .extend(wishlistSettingsSchema.partial().shape)
+  .extend(giftSettingsPatchSchema.shape)
   .refine((patch) => Object.values(patch).some((v) => v !== undefined), "empty patch");
 const idParams = z.object({ id: z.uuid() });
 const itemParams = z.object({ id: z.uuid(), itemId: z.uuid() });

@@ -73,6 +73,10 @@ function toWishlistView(row: WishlistRow, itemIds: string[], newOpinions: number
     showOwnerOpinions: row.showOwnerOpinions,
     showBudget: row.showBudget,
     newOpinions,
+    allowGifts: row.allowGifts,
+    giftOccasion: row.giftOccasion,
+    giftDate: row.giftDate,
+    giftReminderDue: false,
   };
 }
 
@@ -153,6 +157,8 @@ export async function loadSharedView(db: Database, list: SharedList): Promise<Sh
     name: list.name,
     ownerName,
     allowOpinions: list.allowOpinions,
+    gifts: { open: false, occasion: null, date: null },
+    givenItems: [],
     levels,
     budget,
     items: members.map((m) => ({
@@ -170,6 +176,8 @@ export async function loadSharedView(db: Database, list: SharedList): Promise<Sh
       imageUrl: imageUrlOf(imageOf.get(m.productId)),
       imageWidth: imageOf.get(m.productId)?.width ?? null,
       imageHeight: imageOf.get(m.productId)?.height ?? null,
+      gift: null,
+      size: null,
       shopName: m.shopName,
       url: m.url,
     })),

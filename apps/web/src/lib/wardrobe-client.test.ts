@@ -72,6 +72,7 @@ const item = {
   sizeLabel: null,
   sizeNote: null,
   notes: null,
+  giftFrom: null,
   pricePaidCents: null,
   salePriceCents: null,
   saleChannel: null,

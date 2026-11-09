@@ -42,7 +42,8 @@ export const deviceKeySchema = z
   .max(64)
   .regex(/^[A-Za-z0-9_-]+$/);
 
-const opinionNameSchema = z
+/** A friend's first name, shared by opinions and gifts. */
+export const friendNameSchema = z
   .string()
   .trim()
   .refine(
@@ -61,7 +62,7 @@ const opinionNoteSchema = z
   );
 
 export const opinionInputSchema = z.object({
-  name: opinionNameSchema,
+  name: friendNameSchema,
   level: loveLevelSchema,
   note: opinionNoteSchema.nullable(),
   deviceKey: deviceKeySchema,
@@ -69,7 +70,7 @@ export const opinionInputSchema = z.object({
 });
 export type OpinionInput = z.infer<typeof opinionInputSchema>;
 
-export const opinionDeleteSchema = z.object({ name: opinionNameSchema, deviceKey: deviceKeySchema });
+export const opinionDeleteSchema = z.object({ name: friendNameSchema, deviceKey: deviceKeySchema });
 export type OpinionDelete = z.infer<typeof opinionDeleteSchema>;
 
 export const opinionViewSchema = z.object({
@@ -87,7 +88,7 @@ export type OpinionView = z.infer<typeof opinionViewSchema>;
 /** An opinion she erased, with its list item: what « Annuler » sends back to restore it as it was. */
 export const erasedOpinionSchema = opinionViewSchema.extend({
   itemId: z.uuid(),
-  name: opinionNameSchema,
+  name: friendNameSchema,
   note: opinionNoteSchema.nullable(),
 });
 export type ErasedOpinion = z.infer<typeof erasedOpinionSchema>;

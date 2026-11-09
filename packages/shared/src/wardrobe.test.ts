@@ -228,6 +228,7 @@ const itemView = {
   sizeLabel: null,
   sizeNote: null,
   notes: null,
+  giftFrom: null,
   pricePaidCents: null,
   salePriceCents: null,
   saleChannel: null,
@@ -266,6 +267,10 @@ describe("views", () => {
       showOwnerOpinions: true,
       showBudget: false,
       newOpinions: 0,
+      allowGifts: false,
+      giftOccasion: null,
+      giftDate: null,
+      giftReminderDue: false,
     };
     expect(wishlistViewSchema.safeParse(w).success).toBe(true);
     expect(wishlistViewSchema.safeParse({ ...w, shared: true, sharedAt: "2026-11-05T10:00:00.000Z" }).success).toBe(

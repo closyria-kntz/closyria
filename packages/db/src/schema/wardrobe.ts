@@ -2,6 +2,7 @@ import {
   audienceSchema,
   budgetPeriodSchema,
   childDetailSchema,
+  GIFT_OCCASION_MAX_CODE_POINTS,
   itemEventTypeSchema,
   itemStageSchema,
   MAX_LOVE_LEVEL_LABEL,
@@ -101,6 +102,8 @@ export const items = pgTable(
     sizeLabel: text("size_label"),
     sizeNote: text("size_note"),
     notes: text("notes"),
+    /** Who gave it to her (a friend's name or « une amie »), when she got it as a gift. */
+    giftFrom: text("gift_from"),
     pricePaidCents: integer("price_paid_cents"),
     salePriceCents: integer("sale_price_cents"),
     saleChannel: text("sale_channel"),
@@ -200,12 +203,22 @@ export const wishlists = pgTable(
     showBudget: boolean("show_budget").notNull().default(false),
     /** When she last looked at the opinions; newer ones are « new ». */
     opinionsSeenAt: timestamp("opinions_seen_at", { withTimezone: true }),
+    /** Friends may reserve gifts on the shared list. */
+    allowGifts: boolean("allow_gifts").notNull().default(false),
+    giftOccasion: text("gift_occasion"),
+    giftDate: date("gift_date", { mode: "string" }),
+    giftReminderDismissedAt: timestamp("gift_reminder_dismissed_at", { withTimezone: true }),
+    giftReminderSnoozedUntil: timestamp("gift_reminder_snoozed_until", { withTimezone: true }),
     position: integer("position").notNull().default(0),
     createdAt: createdAt(),
   },
   (t) => [
     index("wishlists_user_id_idx").on(t.userId),
     check("wishlists_name_check", lengthBetween(t.name, MAX_WISHLIST_NAME)),
+    check(
+      "wishlists_gift_occasion_check",
+      sql`${t.giftOccasion} IS NULL OR char_length(${t.giftOccasion}) BETWEEN 1 AND ${sql.raw(String(GIFT_OCCASION_MAX_CODE_POINTS))}`,
+    ),
   ],
 );
 
@@ -347,6 +360,38 @@ export const wishlistOpinionDevices = pgTable(
   },
   (t) => [
     primaryKey({ name: "wishlist_opinion_devices_pk", columns: [t.wishlistId, t.authorNameKey, t.deviceKeyHash] }),
+  ],
+);
+
+/**
+ * A friend's gift on an item of a shared list: one `reserver` per (list, item), any number of `contributor`s.
+ * Never read by her routes. Goes with the list or the item.
+ */
+export const wishlistGifts = pgTable(
+  "wishlist_gifts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    wishlistId: uuid("wishlist_id")
+      .notNull()
+      .references(() => wishlists.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    giverName: text("giver_name").notNull(),
+    giverNameKey: text("giver_name_key").notNull(),
+    role: text("role").notNull(),
+    /** Set when she took the item off the list. */
+    itemRemovedAt: timestamp("item_removed_at", { withTimezone: true }),
+    /** Set when she marked the item as taken by herself. */
+    ownerTookAt: timestamp("owner_took_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("wishlist_gifts_giver_idx").on(t.wishlistId, t.itemId, t.giverNameKey),
+    uniqueIndex("wishlist_gifts_reserver_idx").on(t.wishlistId, t.itemId).where(sql`${t.role} = 'reserver'`),
+    index("wishlist_gifts_item_id_idx").on(t.itemId),
+    check("wishlist_gifts_role_check", oneOf(t.role, ["reserver", "contributor"])),
+    check("wishlist_gifts_giver_name_check", lengthBetween(t.giverName, OPINION_NAME_MAX_CODE_POINTS)),
   ],
 );
 

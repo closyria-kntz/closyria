@@ -128,10 +128,21 @@ describe("sharedWishlistViewSchema", () => {
     imageUrl: null,
     imageWidth: null,
     imageHeight: null,
+    gift: null,
+    size: null,
     shopName: "Boutique",
     url: "https://shop.test/robe",
   };
-  const view = { name: "Été", ownerName: null, allowOpinions: true, levels: [], budget: null, items: [item] };
+  const view = {
+    name: "Été",
+    ownerName: null,
+    allowOpinions: true,
+    gifts: { open: false, occasion: null, date: null },
+    givenItems: [],
+    levels: [],
+    budget: null,
+    items: [item],
+  };
   it("accepts empty owner fields", () => {
     expect(sharedWishlistViewSchema.safeParse(view).success).toBe(true);
   });

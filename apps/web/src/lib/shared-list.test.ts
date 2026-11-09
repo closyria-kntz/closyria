@@ -8,6 +8,8 @@ const view = {
   name: "Été",
   ownerName: null,
   allowOpinions: true,
+  gifts: { open: false, occasion: null, date: null },
+  givenItems: [],
   levels: DEFAULT_LOVE_LEVELS,
   budget: null,
   items: [
@@ -22,6 +24,8 @@ const view = {
       imageUrl: "/api/catalog-images/x",
       imageWidth: 600,
       imageHeight: 800,
+      gift: null,
+      size: null,
       shopName: "Boutique",
       url: "https://shop.test/robe",
     },

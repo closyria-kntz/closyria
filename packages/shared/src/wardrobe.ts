@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { audienceSchema, childDetailSchema, currencySchema, productViewSchema, seasonSchema } from "./catalog";
+import { sharedGiftStateSchema, sharedGiftsSchema } from "./gifts";
 import { type LoveLevel, loveLevelSchema } from "./love-level";
 import { opinionViewSchema, wishlistSettingsSchema } from "./opinions";
 
@@ -336,6 +337,8 @@ export const itemViewSchema = z.object({
   sizeLabel: z.string().nullable(),
   sizeNote: z.string().nullable(),
   notes: z.string().nullable(),
+  /** Who gave it to her, when it was a gift. */
+  giftFrom: z.string().nullable(),
   pricePaidCents: centsSchema.nullable(),
   salePriceCents: centsSchema.nullable(),
   saleChannel: z.string().nullable(),
@@ -367,6 +370,11 @@ export const wishlistViewSchema = z.object({
   ...wishlistSettingsSchema.shape,
   /** Opinions left since she last looked. */
   newOpinions: z.number().int().nonnegative(),
+  allowGifts: z.boolean(),
+  giftOccasion: z.string().nullable(),
+  giftDate: z.string().nullable(),
+  /** The gift date is near and friends have reserved something: ask her to wait. */
+  giftReminderDue: z.boolean(),
 });
 export type WishlistView = z.infer<typeof wishlistViewSchema>;
 
@@ -375,6 +383,9 @@ export const sharedWishlistViewSchema = z.object({
   name: z.string(),
   ownerName: z.string().nullable(),
   allowOpinions: z.boolean(),
+  gifts: sharedGiftsSchema,
+  /** Items given to her already (names only), shown under « Déjà offerts ». */
+  givenItems: z.array(z.object({ name: z.string() })),
   /** Her level names, so friends see the same emojis she does. */
   levels: z.array(loveLevelViewSchema),
   budget: z.object({ amountCents: centsSchema, currency: currencySchema }).nullable(),
@@ -393,6 +404,10 @@ export const sharedWishlistViewSchema = z.object({
       /** Natural size of `imageUrl` (for the viewer's « actual size »); null with it. */
       imageWidth: z.number().int().positive().nullable(),
       imageHeight: z.number().int().positive().nullable(),
+      /** Null when the list is closed to gifts. */
+      gift: sharedGiftStateSchema.nullable(),
+      /** Her size for the item; null when the list is closed to gifts. */
+      size: z.string().nullable(),
       shopName: z.string(),
       url: z.string(),
     }),
