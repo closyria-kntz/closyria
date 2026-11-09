@@ -137,6 +137,7 @@ describe("sharedWishlistViewSchema", () => {
     name: "Été",
     ownerName: null,
     allowOpinions: true,
+    viewerIsOwner: false,
     gifts: { open: false, occasion: null, date: null },
     givenItems: [],
     levels: [],

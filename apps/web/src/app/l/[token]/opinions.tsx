@@ -226,7 +226,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
 
   /** « Me retirer », then « Tu t'es retirée · Annuler » (Annuler: she gives again, alongside the others). */
   async function leave(item: Item) {
-    const mine = item.gift && item.gift.state !== "free" ? item.gift.mine : null;
+    const mine = item.gift && "mine" in item.gift ? item.gift.mine : null;
     if (!device || !item.gift || !mine || leaving) return;
     // The name she gives this item under (this device may know several: « Ce n'est pas moi »).
     const name = mine.name;
@@ -283,6 +283,12 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
       </header>
 
       <GiftBanner gifts={view.gifts} ownerName={view.ownerName} />
+
+      {view.gifts.open && view.viewerIsOwner && (
+        <p data-testid="owner-gifts-note" className="self-start text-ink-muted">
+          {tGifts("ownerNote")}
+        </p>
+      )}
 
       {view.budget && (
         <p className="flex items-center justify-between gap-space-3 self-start rounded-card border-2 border-selected-line bg-surface-raised px-space-4 py-space-3 font-strong tabular-nums">
@@ -413,7 +419,8 @@ function ItemCard({
   const mine = deviceName !== null && item.opinions.some((o) => opinionNameKey(o.name) === opinionNameKey(deviceName));
   const owner = item.ownerOpinion;
   const ownerLevel = owner?.level ? levelOf(view.levels, owner.level) : null;
-  const gift = view.gifts.open ? item.gift : null;
+  // Her own link: no gift part at all (the page says why once, under the banner).
+  const gift = view.gifts.open && !view.viewerIsOwner ? item.gift : null;
   // Taken off her list while this device gives it: shown to her only, struck through.
   const removed = gift?.state === "removed";
 

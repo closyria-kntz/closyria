@@ -9,7 +9,7 @@ import {
 } from "@closyria/shared";
 import { pgCode } from "../pg-code";
 import type { Tx } from "./events";
-import { clearGiftsRemoved, markGiftsRemoved, unreceiveGifts } from "./gifts";
+import { clearGiftsRemoved, clearOwnerTook, markGiftsRemoved, unreceiveGifts, untakeUndo } from "./gifts";
 import { AMOUNT_COLUMN, type Item, lockProductOfUser } from "./items";
 import { mergeItemInto } from "./merge-items";
 import { spentCentsFor } from "./spent";
@@ -200,6 +200,7 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
           ([stage, stageIds]): ItemBulk => ({ ids: stageIds, op: "stage", stage, at: now.toISOString() }),
         ),
         ...setFieldsUndo(changed, values),
+        ...untakeUndo(changed, op.stage),
       ];
       return {
         ...result(ids, undoOps, eventIds),
@@ -303,6 +304,12 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
       const changed = items.filter((item) => changedFields(item, values).length > 0);
       const ids = changed.map((item) => item.id);
       await setItems(tx, ids, { ...values, updatedAt: now });
+      // Out of her selection while still a wish (untick, or the undo of « Je le prends »): the take is withdrawn.
+      if (values.inOrderDraft === false)
+        await clearOwnerTook(
+          tx,
+          changed.filter((item) => item.inOrderDraft && item.stage === "spotted").map((item) => item.id),
+        );
       return result(ids, setFieldsUndo(changed, values));
     }
     case "unreceiveGift": {
@@ -314,6 +321,12 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
         .map((item) => item.id);
       await setItems(tx, named, { giftFrom: null, giftReceivedAt: null, updatedAt: now });
       return result(op.ids.filter((id) => back.has(id) || named.includes(id)));
+    }
+    case "untakeGift": {
+      // Undo of a purchase from her wishes (after the stage op): her friends no longer see « pris elle-même ».
+      requireActive(items);
+      await clearOwnerTook(tx, op.ids);
+      return result([]);
     }
     case "delete": {
       const trashed = items.filter((item) => !item.deletedAt);

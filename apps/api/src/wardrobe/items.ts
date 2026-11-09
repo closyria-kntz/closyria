@@ -11,6 +11,7 @@ import {
 } from "@closyria/shared";
 import { pgCode } from "../pg-code";
 import { recordEvent, type Tx } from "./events";
+import { clearOwnerTook, untakeUndo } from "./gifts";
 import { mergeItemInto } from "./merge-items";
 import { ensureDefaultProfile, findOwnProfile } from "./profiles";
 import { type ItemFieldValues, reselectUndo, setFieldsUndo } from "./undo";
@@ -175,6 +176,8 @@ export async function patchItem(
       .update(schema.items)
       .set({ ...set, updatedAt: now })
       .where(eq(schema.items.id, item.id));
+    // Unticked while still a wish: « Je le prends » is withdrawn, her friends no longer see « pris elle-même ».
+    if (set.inOrderDraft === false && item.stage === "spotted") await clearOwnerTook(tx, [item.id]);
     return {
       itemId: item.id,
       itemIds: [item.id],
@@ -240,6 +243,7 @@ export async function changeStage(
         ops: [
           { ids: [item.id], op: "stage", stage: item.stage as ItemStage, at: previousAt },
           ...setFieldsUndo([item], values),
+          ...untakeUndo([item], input.stage),
         ],
         removeEventIds: [eventId],
       },

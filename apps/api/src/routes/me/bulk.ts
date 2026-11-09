@@ -1,4 +1,4 @@
-import { itemBulkSchema, mutationResultSchema, undoPayloadSchema, wardrobeErrorSchema } from "@closyria/shared";
+import { itemBulkActionSchema, mutationResultSchema, undoPayloadSchema, wardrobeErrorSchema } from "@closyria/shared";
 import { createRoute, OpenAPIHono, type z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { type AccessEnv, defineAccess } from "../../access";
@@ -33,7 +33,7 @@ const bulkRoute = defineAccess(
       "for the same product meanwhile. `stage` and `move` write one history row per item changed. Items already " +
       "in the requested state are left as they are; `itemIds` lists the ones changed. `undo`: the inverse ops, " +
       "grouped by previous value, and the history rows to delete — to send back to `/me/items/undo`.",
-    request: body(itemBulkSchema),
+    request: body(itemBulkActionSchema),
     responses: { 200: mutation("Done"), ...errors },
   }),
   "user",

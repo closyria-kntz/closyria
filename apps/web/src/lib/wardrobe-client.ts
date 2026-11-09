@@ -14,7 +14,7 @@ import {
   type GiftReminderAction,
   type GiftSettingsPatch,
   giftCheckSchema,
-  type ItemBulk,
+  type ItemBulkAction,
   type ItemCreate,
   type ItemPage,
   type ItemPatch,
@@ -145,7 +145,7 @@ export async function trashItem(id: string, deps: ClientDeps = defaultDeps) {
 }
 
 /** Lists, tags and other batch edits on one item; the answer has no item, only what changed and the undo. */
-export async function bulkItems(body: ItemBulk, deps: ClientDeps = defaultDeps) {
+export async function bulkItems(body: ItemBulkAction, deps: ClientDeps = defaultDeps) {
   return await call(deps, "/api/me/items/bulk", jsonInit("POST", body), mutationResultSchema);
 }
 
@@ -504,14 +504,21 @@ export async function fetchAllWishes(query: Record<string, string>): Promise<Ite
   return items;
 }
 
+/** How long the gift check may take before her purchase goes on without it. */
+export const GIFT_CHECK_TIMEOUT_MS = 4_000;
+
 /**
  * Which of these items a friend plans to give her (ids only). Asked only right before she buys (`confirmUnlessReserved`),
- * never to show anything. Throws on any failure (the purchase goes on without asking).
+ * never to show anything. Throws on any failure or after 4 s (the purchase goes on without asking).
  */
 export async function fetchReservedIds(ids: readonly string[], deps: ClientDeps = defaultDeps): Promise<string[]> {
   await deps.ensure();
   const params = new URLSearchParams({ ids: ids.join(",") });
-  const response = await deps.fetch(`/api/me/items/gift-check?${params}`, { cache: "no-store" });
+  // A slow check never holds her purchase: past the wait, it fails and she goes on without the window.
+  const response = await deps.fetch(`/api/me/items/gift-check?${params}`, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(GIFT_CHECK_TIMEOUT_MS),
+  });
   if (!response.ok) throw new Error(`gift-check ${response.status}`);
   return giftCheckSchema.parse(await response.json()).reserved;
 }

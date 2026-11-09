@@ -7,6 +7,7 @@ import {
   ITEM_STAGE_ORDER,
   ITEMS_PAGE_SIZE,
   isSingleEmoji,
+  itemBulkActionSchema,
   itemBulkSchema,
   itemCreateSchema,
   itemEventTypeSchema,
@@ -307,11 +308,19 @@ describe("views", () => {
     expect(undoPayloadSchema.safeParse({ ...undo, ops: [{ ids: [], op: "delete" }] }).success).toBe(false);
     const ids = (n: number, k: number) =>
       Array.from({ length: n }, (_, i) => `00000000-0000-4000-8${k}00-${String(i).padStart(12, "0")}`);
-    const ops = (k: number) => [0, 1].map((j) => ({ ids: ids(200, k + j), op: "delete" }));
+    const ops = (k: number) => [0, 1, 2].map((j) => ({ ids: ids(200, k + j), op: "delete" }));
     expect(undoPayloadSchema.safeParse({ ops: ops(0), removeEventIds: [] }).success).toBe(true);
     expect(
       undoPayloadSchema.safeParse({ ops: [...ops(0), { ids: [id], op: "restore" }], removeEventIds: [] }).success,
     ).toBe(false);
+  });
+
+  it("keeps the undo-only ops out of the bulk actions", () => {
+    for (const op of ["unreceiveGift", "untakeGift"]) {
+      expect(itemBulkSchema.safeParse({ ids: [id], op }).success).toBe(true);
+      expect(itemBulkActionSchema.safeParse({ ids: [id], op }).success).toBe(false);
+    }
+    expect(itemBulkActionSchema.safeParse({ ids: [id], op: "delete" }).success).toBe(true);
   });
 });
 

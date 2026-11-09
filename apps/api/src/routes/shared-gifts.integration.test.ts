@@ -325,6 +325,41 @@ describe("gifts on a shared list", () => {
     });
   });
 
+  it("hides every gift from the owner reading her own link in her session, even with a giver's device key", async () => {
+    const s = await setup();
+    const other = await setup();
+    await putGift(s.token, s.item.id, reserve(lea));
+    await putGift(s.token, s.item.id, join(ines));
+    await putGift(other.token, other.item.id, reserve(lea));
+    for (const deviceKey of [undefined, keyLea]) {
+      const res = await t.app.request(`/api/shared/${s.token}`, {
+        headers: { cookie: s.cookie, ...(deviceKey ? { "x-device-key": deviceKey } : {}) },
+      });
+      expect(res.status).toBe(200);
+      const raw = await res.text();
+      expect(raw).not.toContain("Léa");
+      expect(raw).not.toContain("Inès");
+      const seen = JSON.parse(raw) as SharedWishlistView;
+      expect(seen.viewerIsOwner).toBe(true);
+      expect(seen.items.map((i) => i.gift)).toEqual([{ state: "hidden" }]);
+    }
+    // She took it herself: still nothing said, no « pris elle-même ».
+    await t.db
+      .update(schema.wishlistGifts)
+      .set({ ownerTookAt: new Date() })
+      .where(eq(schema.wishlistGifts.wishlistId, s.list.id));
+    const took = (await (
+      await t.app.request(`/api/shared/${s.token}`, { headers: { cookie: s.cookie } })
+    ).json()) as SharedWishlistView;
+    expect(took.items.map((i) => i.gift)).toEqual([{ state: "hidden" }]);
+    // Another user's session, or none: a friend's view.
+    const stranger = await t.app.request(`/api/shared/${s.token}`, { headers: { cookie: other.cookie } });
+    const seenByStranger = (await stranger.json()) as SharedWishlistView;
+    expect(seenByStranger.viewerIsOwner).toBe(false);
+    expect(itemOf(seenByStranger, s.item.id)?.gift).toMatchObject({ state: "owner_took", givers: ["Léa", "Inès"] });
+    expect((await view(s.token)).viewerIsOwner).toBe(false);
+  });
+
   it("limits to 30 gift actions an hour per key and list", async () => {
     const s = await setup();
     for (let i = 0; i < 30; i++) {

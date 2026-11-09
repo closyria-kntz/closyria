@@ -36,7 +36,8 @@ const sharedRoute = defineAccess(
       "Public. Product data and her friends' opinions only (no notes, profiles or private photos; her size only " +
       "when the list is open to gifts). Never cached, never indexed. A malformed, unknown or stopped token " +
       "answers 404. The optional `x-device-key` header names the friend's device, so her own gifts show as hers " +
-      "(`mine`); without it, or malformed, `mine` is null.",
+      "(`mine`); without it, or malformed, `mine` is null. Read in the session of the list's owner, every gift is " +
+      "`hidden` and `viewerIsOwner` is true: she never sees who offers what.",
     request: {
       params: z.object({ token: z.string() }),
       headers: z.object({ "x-device-key": z.string().optional() }),
@@ -265,6 +266,9 @@ export function sharedRoutes(deps: WardrobeDeps) {
       if (!list) return c.json({ error: "not_found" } as const, 404);
       // Optional and never an error: a malformed key is no key.
       const deviceKey = deviceKeySchema.safeParse(c.req.valid("header")["x-device-key"]);
+      // Her own link opened in her session: every gift hidden, whatever device she reads it from.
+      const session = await c.var.getSession();
+      if (session?.user.id === list.userId) return c.json(await loadSharedView(db, list, null, true), 200);
       return c.json(await loadSharedView(db, list, deviceKey.success ? deviceKey.data : null), 200);
     })
     .openapi(putOpinionRoute, async (c) => {

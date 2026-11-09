@@ -181,7 +181,7 @@ test("une amie donne son avis", async ({ page, browser, baseURL, db, userAgentTa
   await otherSheet.getByLabel("Ton prénom").fill("léa");
   await otherSheet.getByRole("button", { name: "Mims" }).click();
   await otherSheet.getByRole("button", { name: "Envoyer mon avis" }).click();
-  await expect(otherSheet.getByText("Une Léa a déjà donné son avis sur cette liste. C'est toi ?")).toBeVisible();
+  await expect(otherSheet.getByText("Une Léa est déjà passée sur cette liste. C'est toi ?")).toBeVisible();
   // The question is announced and takes the focus from the send button it replaces.
   await expect(otherSheet.getByRole("alert")).toContainText("C'est toi ?");
   await expect(otherSheet.getByRole("button", { name: "Oui, c'est moi" })).toBeFocused();

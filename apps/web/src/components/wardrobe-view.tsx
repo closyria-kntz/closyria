@@ -693,7 +693,11 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           items={scopeWishes}
           budget={budgetOfScope}
           listName={activeList?.name}
-          settle={() => ticks.current?.idle() ?? Promise.resolve()}
+          settle={async () => {
+            // A tick still being checked (« Attends un peu 🎁 ») is saved, or put back, before the order.
+            await takeGuard.current.idle();
+            await ticks.current?.idle();
+          }}
           onOrderingChange={setOrdering}
           onOrdered={async () => {
             setScopeToken((value) => value + 1);

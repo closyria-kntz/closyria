@@ -15,9 +15,11 @@ import {
   fetchPhotoImport,
   fetchRecents,
   fetchReference,
+  fetchReservedIds,
   fetchShareLink,
   fetchWishlistOpinions,
   forgetRecent,
+  GIFT_CHECK_TIMEOUT_MS,
   importPhoto,
   markOpinionsSeen,
   orderDraftOrdered,
@@ -450,5 +452,37 @@ describe("opinions of her friends", () => {
       ok: false,
       error: "opinion_exists",
     });
+  });
+});
+
+describe("fetchReservedIds", () => {
+  it("reads the reserved ids", async () => {
+    const d = deps(Response.json({ reserved: ["00000000-0000-4000-8000-00000000000a"] }));
+    await expect(fetchReservedIds(["00000000-0000-4000-8000-00000000000a"], d)).resolves.toEqual([
+      "00000000-0000-4000-8000-00000000000a",
+    ]);
+  });
+
+  it("gives up after 4 s, so the purchase goes on without the window", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn(
+        (_url: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+          }),
+      );
+      const pending = fetchReservedIds(["00000000-0000-4000-8000-00000000000a"], {
+        fetch,
+        ensure: vi.fn(async () => {}),
+      });
+      const outcome = expect(pending).rejects.toThrow();
+      await vi.advanceTimersByTimeAsync(GIFT_CHECK_TIMEOUT_MS - 1);
+      expect(fetch.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await outcome;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

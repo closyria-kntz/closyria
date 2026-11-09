@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  type ItemBulk,
+  type ItemBulkAction,
   type ItemStage,
   itemStageSchema,
   type LoveLevel,
@@ -65,7 +65,7 @@ export function SelectionBar({ currentStage, ids, onClear, onSelectAll, onGone, 
     };
   }, [choice, t]);
 
-  async function run(body: ItemBulk, label: (changed: number) => string, after: After) {
+  async function run(body: ItemBulkAction, label: (changed: number) => string, after: After) {
     setBusy(true);
     setError(null);
     const result = await bulkItems(body);

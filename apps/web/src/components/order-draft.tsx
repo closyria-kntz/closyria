@@ -382,7 +382,11 @@ export function OrderDraft() {
           budget={budget.view}
           listName={isList ? items.listName : null}
           showWhenEmpty
-          settle={() => ticks.current?.idle() ?? Promise.resolve()}
+          settle={async () => {
+            // A tick still being checked (« Attends un peu 🎁 ») is saved, or put back, before the order.
+            await takeGuard.current.idle();
+            await ticks.current?.idle();
+          }}
           onOrderingChange={setOrdering}
           onOrdered={load}
           onToggle={(item) => void toggle(item)}

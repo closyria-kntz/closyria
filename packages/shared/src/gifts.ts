@@ -51,6 +51,8 @@ export const sharedGiftStateSchema = z.discriminatedUnion("state", [
   }),
   z.object({ state: z.literal("owner_took"), givers: z.array(z.string()), mine: giftMineSchema.nullable() }),
   z.object({ state: z.literal("removed"), mine: giftMineSchema }),
+  // Nothing said: the server's first paint of the link (before the device re-read), and the owner on her own link.
+  z.object({ state: z.literal("hidden") }),
 ]);
 export type SharedGiftState = z.infer<typeof sharedGiftStateSchema>;
 

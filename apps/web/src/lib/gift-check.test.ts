@@ -52,7 +52,7 @@ describe("confirmUnlessReserved", () => {
     const answer = confirmUnlessReserved([A, B, C], "order", { check: async () => [A, B], took });
     await settle();
     const open = getGiftWarning();
-    expect(open).toMatchObject({ count: 2, kind: "order" });
+    expect(open).toMatchObject({ count: 2, total: 3, kind: "order" });
     answerGiftWarning(open?.id ?? 0, false);
     await expect(answer).resolves.toBe(false);
     expect(took).not.toHaveBeenCalled();
@@ -68,10 +68,25 @@ describe("confirmUnlessReserved", () => {
     });
     await settle();
     const open = getGiftWarning();
-    expect(open).toMatchObject({ count: 1, kind: "take" });
+    expect(open).toMatchObject({ count: 1, total: 2, kind: "take" });
     answerGiftWarning(open?.id ?? 0, true);
     await expect(answer).resolves.toBe(true);
     expect(took).toHaveBeenCalledWith([A]);
+  });
+
+  it("counts the items of the action: one alone, or 1 of several", async () => {
+    mount();
+    const deps = { check: async () => [A], took: vi.fn(async () => undefined) };
+    const single = confirmUnlessReserved([A], "take", deps);
+    await settle();
+    expect(getGiftWarning()).toMatchObject({ count: 1, total: 1 });
+    answerGiftWarning(getGiftWarning()?.id ?? 0, false);
+    await single;
+    const several = confirmUnlessReserved([A, B], "order", deps);
+    await settle();
+    expect(getGiftWarning()).toMatchObject({ count: 1, total: 2 });
+    answerGiftWarning(getGiftWarning()?.id ?? 0, false);
+    await several;
   });
 
   it("goes on even when marking fails", async () => {
@@ -153,5 +168,64 @@ describe("createTakeGuard", () => {
 
   it("says « wait » when she waits", async () => {
     await expect(createTakeGuard(async () => false).check(A)).resolves.toBe("wait");
+  });
+
+  it("idle waits for every check still running, after what its caller does with the outcome", async () => {
+    const releases: ((go: boolean) => void)[] = [];
+    const guard = createTakeGuard(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releases.push(resolve);
+        }),
+    );
+    await expect(guard.idle()).resolves.toBeUndefined();
+    const saved: string[] = [];
+    const tap = async (id: string) => {
+      if ((await guard.check(id)) === "go") saved.push(id);
+    };
+    void tap(A);
+    void tap(B);
+    let idle = false;
+    const waiting = guard.idle().then(() => {
+      idle = true;
+    });
+    releases[0]?.(true);
+    await settle();
+    expect(idle).toBe(false);
+    releases[1]?.(true);
+    await waiting;
+    expect(saved).toEqual([A, B]);
+  });
+
+  it("taking it back closes its window, and nothing is marked", async () => {
+    mount();
+    const took = vi.fn(async () => undefined);
+    const guard = createTakeGuard((ids, signal) =>
+      confirmUnlessReserved(ids, "take", { check: async () => [A], took }, signal),
+    );
+    const first = guard.check(A);
+    await settle();
+    expect(getGiftWarning()).not.toBeNull();
+    expect(guard.cancel(A)).toBe(true);
+    expect(getGiftWarning()).toBeNull();
+    await expect(first).resolves.toBe("cancelled");
+    expect(took).not.toHaveBeenCalled();
+  });
+
+  it("taken back before the check answers: no window at all", async () => {
+    mount();
+    let answer: (ids: string[]) => void = () => {};
+    const check = () =>
+      new Promise<string[]>((resolve) => {
+        answer = resolve;
+      });
+    const guard = createTakeGuard((ids, signal) =>
+      confirmUnlessReserved(ids, "take", { check, took: vi.fn() }, signal),
+    );
+    const first = guard.check(A);
+    guard.cancel(A);
+    answer([A]);
+    await expect(first).resolves.toBe("cancelled");
+    expect(getGiftWarning()).toBeNull();
   });
 });

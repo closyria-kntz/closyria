@@ -21,7 +21,7 @@ export function GiftWarning() {
     <Dialog open={request !== null} onClose={() => answer(false)} title={t("title")} closeLabel={t("close")}>
       {request && (
         <>
-          <p className="text-ink-muted">{request.count > 1 ? t("many", { count: request.count }) : t("one")}</p>
+          <p className="text-ink-muted">{request.total > 1 ? t("many", { count: request.count }) : t("one")}</p>
           <div className="flex flex-wrap gap-space-2">
             <button type="button" onClick={() => answer(false)} className={`${primaryButtonClass} ${touch}`}>
               {t("wait")}

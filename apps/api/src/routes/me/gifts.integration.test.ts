@@ -233,6 +233,84 @@ describe("« Je le prends quand même »", () => {
   });
 });
 
+describe("« pris elle-même » withdrawn", () => {
+  const took = (s: { cookie: string; item: { id: string } }) =>
+    call("POST", "/api/me/items/gift-took", s.cookie, { ids: [s.item.id] });
+  const giftOf = async (s: { token: string; item: { id: string } }) =>
+    (await publicView(s.token)).items.find((i) => i.itemId === s.item.id)?.gift;
+  const reservedByLea = { state: "reserved", reserver: "Léa", contributors: [] };
+
+  it("is cleared when she unticks the item, or undoes « Je le prends »", async () => {
+    const s = await setup();
+    await reserve(s.token, s.item.id, lea);
+    expect((await took(s)).status).toBe(204);
+    const ticked = await call("PATCH", `/api/me/items/${s.item.id}`, s.cookie, { inOrderDraft: true });
+    expect(ticked.status).toBe(200);
+    expect(await giftOf(s)).toMatchObject({ state: "owner_took" });
+    // Unticked: the link says « Réservé par Léa » again, « Je participe » is open.
+    expect((await call("PATCH", `/api/me/items/${s.item.id}`, s.cookie, { inOrderDraft: false })).status).toBe(200);
+    expect(await giftOf(s)).toMatchObject(reservedByLea);
+    expect((await join(s.token, s.item.id, ines)).status).toBe(200);
+    // « Annuler » of « Je le prends » (the undo of the tick).
+    await took(s);
+    const again = (await (
+      await call("PATCH", `/api/me/items/${s.item.id}`, s.cookie, { inOrderDraft: true })
+    ).json()) as ItemMutationResult;
+    expect(await giftOf(s)).toMatchObject({ state: "owner_took" });
+    expect((await call("POST", "/api/me/items/undo", s.cookie, again.undo)).status).toBe(200);
+    expect(await giftOf(s)).toMatchObject({ state: "reserved", reserver: "Léa", contributors: ["Inès"] });
+  });
+
+  it("is cleared by the undo of a purchase from her wishes, kept while the purchase stands", async () => {
+    const s = await setup();
+    await reserve(s.token, s.item.id, lea);
+    await took(s);
+    const at = new Date().toISOString();
+    const moved = await call("POST", `/api/me/items/${s.item.id}/stage`, s.cookie, { stage: "ordered", at });
+    expect(moved.status).toBe(200);
+    const { undo } = (await moved.json()) as ItemMutationResult;
+    expect(JSON.stringify(undo)).not.toContain("Léa");
+    expect(undo?.ops).toContainEqual({ ids: [s.item.id], op: "untakeGift" });
+    expect(await giftOf(s)).toMatchObject({ state: "owner_took" });
+    expect((await call("POST", "/api/me/items/undo", s.cookie, undo)).status).toBe(200);
+    expect(await giftOf(s)).toMatchObject(reservedByLea);
+
+    // The same in bulk; an order from « Commandé » to « Reçu » keeps it on undo (the order stands).
+    await took(s);
+    const bulk = await call("POST", "/api/me/items/bulk", s.cookie, {
+      op: "stage",
+      ids: [s.item.id],
+      stage: "owned",
+      at,
+    });
+    const bulkUndo = ((await bulk.json()) as { undo: unknown }).undo;
+    expect((await call("POST", "/api/me/items/undo", s.cookie, bulkUndo)).status).toBe(200);
+    expect(await giftOf(s)).toMatchObject(reservedByLea);
+    await took(s);
+    await call("POST", `/api/me/items/${s.item.id}/stage`, s.cookie, { stage: "ordered", at });
+    const received = await call("POST", `/api/me/items/${s.item.id}/stage`, s.cookie, { stage: "owned", at });
+    const receivedUndo = ((await received.json()) as ItemMutationResult).undo;
+    expect(receivedUndo?.ops.some((op) => op.op === "untakeGift")).toBe(false);
+    expect((await call("POST", "/api/me/items/undo", s.cookie, receivedUndo)).status).toBe(200);
+    expect(await giftOf(s)).toMatchObject({ state: "owner_took" });
+  });
+
+  it("refuses the undo-only ops on a plain bulk action", async () => {
+    const s = await setup();
+    await reserve(s.token, s.item.id, lea);
+    const got = await receive(s.cookie, s.item.id);
+    for (const op of ["unreceiveGift", "untakeGift"]) {
+      const res = await call("POST", "/api/me/items/bulk", s.cookie, { op, ids: [s.item.id] });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "invalid_request" });
+    }
+    expect((await getItem(s.cookie, s.item.id)).giftFrom).toBe("Léa");
+    // Through the undo, as designed.
+    expect((await call("POST", "/api/me/items/undo", s.cookie, got.undo)).status).toBe(200);
+    expect((await getItem(s.cookie, s.item.id)).giftFrom).toBeNull();
+  });
+});
+
 describe("« Reçu en cadeau »", () => {
   it("freezes the givers' names, ends the gifts, and the undo brings everything back", async () => {
     const s = await setup();
@@ -306,27 +384,31 @@ describe("« Reçu en cadeau »", () => {
     expect((await giftRowsOfItem(two.item.id)).every((r) => r.receivedAt !== null)).toBe(true);
   });
 
-  it("lets friends give it again once she puts it back, without the old gifts in the way", async () => {
+  it("never offers a gift again, whatever its stage since, until the undo of « Reçu en cadeau »", async () => {
     const s = await setup();
     await reserve(s.token, s.item.id, lea);
     const first = (await (
       await call("POST", `/api/me/items/${s.item.id}/received-as-gift`, s.cookie)
     ).json()) as ItemMutationResult;
-    const at = new Date().toISOString();
-    expect((await call("POST", `/api/me/items/${s.item.id}/stage`, s.cookie, { stage: "spotted", at })).status).toBe(
-      200,
-    );
-    // The received row does not block the same person, nor a new reserver.
-    expect((await reserve(s.token, s.item.id, lea)).status).toBe(200);
-    // A late undo of the first one leaves the new gift alone (the old row stays over).
+    for (const stage of ["returned", "for_sale", "spotted"] as const) {
+      const at = new Date().toISOString();
+      expect((await call("POST", `/api/me/items/${s.item.id}/stage`, s.cookie, { stage, at })).status).toBe(200);
+      const seen = await publicView(s.token);
+      expect(seen.items.find((i) => i.itemId === s.item.id)).toBeUndefined();
+      expect(seen.givenItems).toHaveLength(1);
+      expect((await reserve(s.token, s.item.id, ines)).status).toBe(404);
+      expect((await reserve(s.token, s.item.id, lea)).status).toBe(404);
+    }
+    // The undo of « Reçu en cadeau » (late, the item moved since): offered again, Léa's gift back.
     expect((await call("POST", "/api/me/items/undo", s.cookie, { ...first.undo, removeEventIds: [] })).status).toBe(
       200,
     );
-    const rows = await giftRowsOfItem(s.item.id);
-    expect(rows.filter((r) => r.receivedAt === null)).toHaveLength(1);
+    expect((await publicView(s.token)).items.find((i) => i.itemId === s.item.id)?.gift).toMatchObject({
+      state: "reserved",
+      reserver: "Léa",
+    });
     const again = await call("POST", `/api/me/items/${s.item.id}/received-as-gift`, s.cookie);
     expect(((await again.json()) as ItemMutationResult).item.giftFrom).toBe("Léa");
-    // Only this reception's rows are kept, for its undo.
     expect(await giftRowsOfItem(s.item.id)).toHaveLength(1);
   });
 

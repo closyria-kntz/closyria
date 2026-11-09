@@ -2,7 +2,7 @@
 
 import type { BudgetView, ItemView } from "@closyria/shared";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { budgetCardState, draftTotals, formatAmount, orderDraftErrorKey } from "@/lib/budget";
 import { confirmUnlessReserved } from "@/lib/gift-check";
 import { useToastLift } from "@/lib/toast-lift";
@@ -56,6 +56,9 @@ export function OrderBand({
   // The undo toast rises above the band instead of covering the totals.
   useToastLift(element);
 
+  // The ticks as they are when the order goes (after `settle`), not when the button was pressed.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const totals = draftTotals(items, budget);
   useEffect(() => {
     if (!open) return setKept(new Set());
@@ -79,8 +82,14 @@ export function OrderBand({
     setOrdering(true);
     onOrderingChange?.(true);
     await settle?.();
-    // A friend may plan to give some of them: one window for all (« Attendre » orders nothing).
-    const ticked = items.filter((item) => item.inOrderDraft).map((item) => item.id);
+    // A friend may plan to give some of them: one window for all (« Attendre » orders nothing). Read after `settle`:
+    // a tick put back meanwhile (« Attendre » on its own check) is not in it.
+    const ticked = itemsRef.current.filter((item) => item.inOrderDraft).map((item) => item.id);
+    if (ticked.length === 0) {
+      setOrdering(false);
+      onOrderingChange?.(false);
+      return;
+    }
     if (!(await confirmUnlessReserved(ticked, "order"))) {
       setOrdering(false);
       onOrderingChange?.(false);

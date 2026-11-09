@@ -1101,7 +1101,7 @@
         "allowGifts": "Mes amies peuvent m'offrir des articles"
       },
       "settingFailed": "Le réglage n’a pas pu être enregistré. Réessaie.",
-      "giftsOpen": "Elle peut réserver un article pour te l'offrir : tu ne sauras jamais lequel.",
+      "giftsOpen": "Tes amies peuvent réserver un article pour te l'offrir. Tu ne sauras pas qui, ni lequel, sauf si tu vas l'acheter toi-même.",
       "occasion": "Occasion",
       "occasionPlaceholder": "mon anniversaire",
       "date": "Date",
@@ -1241,7 +1241,7 @@
       "notMe": "Ce n'est pas moi",
       "itsMe": "Oui, c'est moi",
       "notHer": "Non",
-      "nameTaken": "Une {name} a déjà donné son avis sur cette liste. C'est toi ?"
+      "nameTaken": "Une {name} est déjà passée sur cette liste. C'est toi ?"
     },
     "opinions": {
       "closed": "Les avis sont fermés sur cette liste.",
@@ -1301,8 +1301,8 @@
       "ownerTook": "{name} l'a pris elle-même",
       "ownerTookHidden": "Elle l'a pris elle-même",
       "sheetTitle": "{action} : {name}",
-      "visible": "Visible par les autres amies qui ont le lien, jamais par {name}.",
-      "visibleHidden": "Visible par les autres amies qui ont le lien, jamais par elle.",
+      "visible": "Visible par les autres amies qui ont le lien. {name} le découvrira quand elle aura reçu son cadeau.",
+      "visibleHidden": "Visible par les autres amies qui ont le lien. Elle le découvrira quand elle aura reçu son cadeau.",
       "justReserved": "{name} vient de le réserver",
       "given": "Déjà offerts",
       "givenLine": "{name} — Offert ✓",
@@ -1318,6 +1318,7 @@
         "noGift": "Ce cadeau n'était plus à ton nom.",
         "unchecked": "Tes cadeaux n'ont pas pu être vérifiés. Recharge la page."
       },
+      "ownerNote": "C'est ta liste : les cadeaux restent cachés",
       "toast": {
         "left": "Tu t'es retirée"
       },
@@ -1540,7 +1541,7 @@
     },
     "reminder": {
       "label": "Rappel des cadeaux",
-      "occasion": "{occasion} est passé : tu as reçu des cadeaux de ta liste « {list} » ?",
+      "occasion": "Le {date} est passé ({occasion}) : tu as reçu des cadeaux de ta liste « {list} » ?",
       "date": "Le {date} est passé : tu as reçu des cadeaux de ta liste « {list} » ?",
       "open": "Ouvrir la liste",
       "later": "Plus tard",

@@ -4,7 +4,7 @@ import type { SharedGiftState, SharedWishlistView, WishlistView } from "@closyri
 import { catalogImageUrl } from "../catalog/product-view";
 import type { Tx } from "./events";
 import { friendNameKeysOf } from "./friend-device";
-import { giftStatesForList, isGiven } from "./gifts";
+import { giftStatesForList, wasGiven } from "./gifts";
 import { readLoveLevels } from "./love-levels";
 import { opinionsByItem } from "./opinions";
 
@@ -158,6 +158,7 @@ export async function loadSharedView(
   db: Database,
   list: SharedList,
   deviceKey: string | null = null,
+  viewerIsOwner = false,
 ): Promise<SharedWishlistView> {
   const onList = await db
     .select(sharedItemColumns)
@@ -167,9 +168,12 @@ export async function loadSharedView(
     .innerJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
     .where(and(eq(schema.wishlistItems.wishlistId, list.id), isNull(schema.items.deletedAt)))
     .orderBy(asc(schema.wishlistItems.position), asc(schema.wishlistItems.addedAt), asc(schema.wishlistItems.itemId));
-  const gifts = list.allowGifts
-    ? await giftStatesForList(db, list.id, deviceKey ? await friendNameKeysOf(db, list.id, deviceKey) : null)
-    : new Map<string, SharedGiftState>();
+  // Her own link: no state, no name, no device of hers (spec: she never sees who before « Reçu en cadeau »).
+  const gifts = viewerIsOwner
+    ? new Map<string, SharedGiftState>()
+    : list.allowGifts
+      ? await giftStatesForList(db, list.id, deviceKey ? await friendNameKeysOf(db, list.id, deviceKey) : null)
+      : new Map<string, SharedGiftState>();
   // Taken off the list but given by this device: shown to her only, after the others. Never from the trash.
   const onListIds = new Set(onList.map((m) => m.itemId));
   const removedIds = [...gifts]
@@ -191,8 +195,8 @@ export async function loadSharedView(
             ),
           )
           .orderBy(asc(schema.items.id));
-  const given = list.allowGifts ? onList.filter(isGiven) : [];
-  const members = [...(list.allowGifts ? onList.filter((m) => !isGiven(m)) : onList), ...removed];
+  const given = list.allowGifts ? onList.filter(wasGiven) : [];
+  const members = [...(list.allowGifts ? onList.filter((m) => !wasGiven(m)) : onList), ...removed];
   const productIds = [...new Set(members.map((m) => m.productId))];
   const firstImages =
     productIds.length === 0
@@ -236,6 +240,7 @@ export async function loadSharedView(
     name: list.name,
     ownerName,
     allowOpinions: list.allowOpinions,
+    viewerIsOwner,
     gifts: list.allowGifts
       ? { open: true, occasion: list.giftOccasion, date: list.giftDate }
       : { open: false, occasion: null, date: null },
@@ -257,7 +262,7 @@ export async function loadSharedView(
       imageUrl: imageUrlOf(imageOf.get(m.productId)),
       imageWidth: imageOf.get(m.productId)?.width ?? null,
       imageHeight: imageOf.get(m.productId)?.height ?? null,
-      gift: list.allowGifts ? (gifts.get(m.itemId) ?? { state: "free" }) : null,
+      gift: list.allowGifts ? (viewerIsOwner ? { state: "hidden" } : (gifts.get(m.itemId) ?? { state: "free" })) : null,
       size: list.allowGifts ? m.sizeLabel : null,
       shopName: m.shopName,
       url: m.url,

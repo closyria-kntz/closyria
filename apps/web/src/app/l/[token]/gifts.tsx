@@ -93,7 +93,8 @@ export function GiftActions({
   const locale = useLocale();
   if (!gift) return null;
   const hidden = ownerName === null;
-  const mine = gift.state === "free" ? null : (gift.mine?.role ?? null);
+  // `hidden`: the server's paint, before the browser's re-read says what is what.
+  const mine = "mine" in gift ? (gift.mine?.role ?? null) : null;
   const disabled = busy || checked !== "ok";
   const givers =
     gift.state === "reserved" ? [gift.reserver, ...gift.contributors] : gift.state === "owner_took" ? gift.givers : [];

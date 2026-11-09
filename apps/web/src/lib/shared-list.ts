@@ -29,6 +29,20 @@ export async function fetchSharedList(api: InternalApi, token: string): Promise<
 }
 
 /**
+ * The list as the server may paint it: no gift state and no giver's name, ever. The server cannot tell her friend
+ * from the owner (the link page reads no cookie), so the gift states come only from the browser's re-read.
+ */
+export function withGiftsHidden(view: SharedWishlistView): SharedWishlistView {
+  return {
+    ...view,
+    items: view.items
+      // Taken off the list and shown to its givers only: never on the server's paint.
+      .filter((item) => item.gift?.state !== "removed")
+      .map((item) => (item.gift ? { ...item, gift: { state: "hidden" } } : item)),
+  };
+}
+
+/**
  * The list as the friend's browser reads it again after a change; null when the link stopped working. With her
  * device key, her own gifts show as hers (`mine`): the server's first paint never has it.
  */

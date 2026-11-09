@@ -9,12 +9,6 @@ import { buttonClass, primaryButtonClass } from "./ui";
 
 const touch = "min-h-touch-target";
 
-/** « mon anniversaire » → « Mon anniversaire »: the occasion opens the sentence. */
-export function sentenceCase(text: string): string {
-  const [first = "", ...rest] = [...text];
-  return first.toLocaleUpperCase("fr") + rest.join("");
-}
-
 /** `YYYY-MM-DD` as « 12 mars » (the day itself, whatever her time zone). */
 export function occasionDay(date: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", timeZone: "UTC" }).format(
@@ -23,7 +17,7 @@ export function occasionDay(date: string, locale: string): string {
 }
 
 /**
- * The day after her occasion (spec § 4): « {occasion} est passé : tu as reçu des cadeaux de ta liste « {liste} » ? »,
+ * The day after her occasion (spec § 4): « Le {date} est passé ({occasion}) : tu as reçu des cadeaux de ta liste « {liste} » ? »,
  * on « Mes envies » (with « Ouvrir la liste ») and on the list. « Plus tard » hides it 7 days, « C'est fait » for this
  * occasion. It says nothing of what her friends reserved.
  */
@@ -42,9 +36,11 @@ export function GiftReminder({
   const locale = useLocale();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  // Neutral on the occasion's gender: « Le 12 mars est passé (mon anniversaire) ».
+  const date = occasionDay(list.giftDate ?? "", locale);
   const text = list.giftOccasion
-    ? t("occasion", { occasion: sentenceCase(list.giftOccasion), list: list.name })
-    : t("date", { date: occasionDay(list.giftDate ?? "", locale), list: list.name });
+    ? t("occasion", { date, occasion: list.giftOccasion.trim(), list: list.name })
+    : t("date", { date, list: list.name });
 
   async function answer(action: "snooze" | "dismiss") {
     setBusy(true);

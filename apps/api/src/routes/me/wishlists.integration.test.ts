@@ -474,6 +474,7 @@ describe("sharing", () => {
       "levels",
       "name",
       "ownerName",
+      "viewerIsOwner",
     ]);
     expect(parsed.name).toBe("Mes envies");
     expect(parsed.items).toHaveLength(1);

@@ -233,7 +233,7 @@ const bulkIds = z
   .min(1)
   .max(MAX_BULK_ITEMS)
   .refine((ids) => new Set(ids).size === ids.length, { error: "ids must be unique" });
-export const itemBulkSchema = z.discriminatedUnion("op", [
+const itemBulkActionOps = [
   z.object({ ids: bulkIds, op: z.literal("stage"), ...itemStageInputSchema.shape }),
   z.object({ ids: bulkIds, op: z.literal("addToList"), wishlistId: z.uuid() }),
   z.object({ ids: bulkIds, op: z.literal("removeFromList"), wishlistId: z.uuid() }),
@@ -243,8 +243,20 @@ export const itemBulkSchema = z.discriminatedUnion("op", [
   z.object({ ids: bulkIds, op: z.literal("delete") }),
   z.object({ ids: bulkIds, op: z.literal("restore") }),
   z.object({ ids: bulkIds, op: z.literal("setFields"), fields: itemFieldsSchema }),
+] as const;
+/** What `POST /me/items/bulk` accepts: her actions, never an undo-only op. */
+export const itemBulkActionSchema = z.discriminatedUnion("op", [...itemBulkActionOps]);
+export type ItemBulkAction = z.infer<typeof itemBulkActionSchema>;
+/** Every op: her actions and the ops that only an undo (`POST /me/items/undo`) replays. */
+export const itemBulkSchema = z.discriminatedUnion("op", [
+  ...itemBulkActionOps,
   /** Undo of « Reçu en cadeau »: her friends' gifts of the items are active again and `giftFrom` is cleared. */
   z.object({ ids: bulkIds, op: z.literal("unreceiveGift") }),
+  /**
+   * Undo of a purchase from her wishes (« Commandé » / « Reçu ») that leaves the item out of her selection: her
+   * friends no longer see « pris elle-même » (if she had said she took it). Says nothing of any gift.
+   */
+  z.object({ ids: bulkIds, op: z.literal("untakeGift") }),
 ]);
 export type ItemBulk = z.infer<typeof itemBulkSchema>;
 
@@ -387,6 +399,8 @@ export const sharedWishlistViewSchema = z.object({
   name: z.string(),
   ownerName: z.string().nullable(),
   allowOpinions: z.boolean(),
+  /** The session reading the link owns the list: every gift is `hidden` and the page says why. */
+  viewerIsOwner: z.boolean(),
   gifts: sharedGiftsSchema,
   /** Items given to her already (names only), shown under « Déjà offerts ». */
   givenItems: z.array(z.object({ name: z.string() })),
@@ -432,11 +446,12 @@ export const undoPayloadSchema = z
     ops: z
       .array(itemBulkSchema)
       .min(1)
-      .max(2 * MAX_BULK_ITEMS),
+      .max(3 * MAX_BULK_ITEMS),
     removeEventIds: z.array(z.uuid()).max(2 * MAX_BULK_ITEMS),
   })
-  // An action changes at most 200 items and writes at most two inverse ops per item (stage + amounts).
-  .refine((undo) => undo.ops.reduce((n, op) => n + op.ids.length, 0) <= 2 * MAX_BULK_ITEMS, {
+  // An action changes at most 200 items and writes at most three inverse ops per item (stage, amounts, and the
+  // friends' « pris elle-même » or gifts).
+  .refine((undo) => undo.ops.reduce((n, op) => n + op.ids.length, 0) <= 3 * MAX_BULK_ITEMS, {
     error: "too many ids",
     path: ["ops"],
   });

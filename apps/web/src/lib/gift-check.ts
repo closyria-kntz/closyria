@@ -4,8 +4,11 @@ import { fetchReservedIds, markGiftTook } from "./wardrobe-client";
 /** What she was about to do: « Je le prends », « J'ai commandé », or a move to « Commandé » / « Reçu ». */
 export type GiftWarningKind = "take" | "order" | "stage";
 
-/** The window « Attends un peu 🎁 » on screen: how many of the items a friend plans to give, and for what. */
-export type GiftWarningRequest = { id: number; count: number; kind: GiftWarningKind };
+/**
+ * The window « Attends un peu 🎁 » on screen: how many of the items a friend plans to give (`count`), out of how many
+ * the action covers (`total`: several → « 1 de ces articles », even for one), and for what.
+ */
+export type GiftWarningRequest = { id: number; count: number; total: number; kind: GiftWarningKind };
 
 type Pending = { request: GiftWarningRequest; resolve: (go: boolean) => void };
 
@@ -34,13 +37,16 @@ export function answerGiftWarning(id: number, go: boolean): void {
 }
 
 /** Opens the window and waits for her answer; without a window mounted, nothing to ask: she goes on. */
-function ask(count: number, kind: GiftWarningKind): Promise<boolean> {
+function ask(count: number, total: number, kind: GiftWarningKind, signal?: AbortSignal): Promise<boolean> {
   if (listeners.size === 0) return Promise.resolve(true);
   // A window already up (a second purchase meanwhile): that one waits.
   if (pending) answerGiftWarning(pending.request.id, false);
   return new Promise((resolve) => {
-    pending = { request: { id: ++counter, count, kind }, resolve };
+    const id = ++counter;
+    pending = { request: { id, count, total, kind }, resolve };
     emit();
+    // Taken back meanwhile (a second tap on the tick): the window goes, as « Attendre ».
+    signal?.addEventListener("abort", () => answerGiftWarning(id, false), { once: true });
   });
 }
 
@@ -60,6 +66,8 @@ export async function confirmUnlessReserved(
   ids: readonly string[],
   kind: GiftWarningKind,
   deps: GiftCheckDeps = defaultDeps,
+  /** Aborted: she took the action back while it was checked; false, no window, nothing marked. */
+  signal?: AbortSignal,
 ): Promise<boolean> {
   const unique = [...new Set(ids)];
   if (unique.length === 0) return true;
@@ -71,8 +79,9 @@ export async function confirmUnlessReserved(
   } catch {
     return true;
   }
+  if (signal?.aborted) return false;
   if (reserved.length === 0) return true;
-  if (!(await ask(reserved.length, kind))) return false;
+  if (!(await ask(reserved.length, unique.length, kind, signal)) || signal?.aborted) return false;
   try {
     for (let start = 0; start < reserved.length; start += MAX_GIFT_CHECK_ITEMS) {
       await deps.took(reserved.slice(start, start + MAX_GIFT_CHECK_ITEMS));
@@ -104,23 +113,41 @@ export type TakeOutcome = "go" | "wait" | "cancelled";
  * the ticks.
  */
 export function createTakeGuard(
-  confirm: (ids: readonly string[]) => Promise<boolean> = (ids) => confirmUnlessReserved(ids, "take"),
+  confirm: (ids: readonly string[], signal: AbortSignal) => Promise<boolean> = (ids, signal) =>
+    confirmUnlessReserved(ids, "take", defaultDeps, signal),
 ) {
-  const checking = new Map<string, { cancelled: boolean }>();
+  const checking = new Map<string, { cancelled: boolean; abort: AbortController }>();
+  // Every check still running (cancelled ones too, until they end).
+  const running = new Set<Promise<TakeOutcome>>();
+  async function run(id: string): Promise<TakeOutcome> {
+    const entry = { cancelled: false, abort: new AbortController() };
+    checking.set(id, entry);
+    const go = await confirm([id], entry.abort.signal);
+    if (checking.get(id) === entry) checking.delete(id);
+    if (entry.cancelled) return "cancelled";
+    return go ? "go" : "wait";
+  }
   return {
-    async check(id: string): Promise<TakeOutcome> {
-      const entry = { cancelled: false };
-      checking.set(id, entry);
-      const go = await confirm([id]);
-      if (checking.get(id) === entry) checking.delete(id);
-      if (entry.cancelled) return "cancelled";
-      return go ? "go" : "wait";
+    check(id: string): Promise<TakeOutcome> {
+      const outcome = run(id);
+      running.add(outcome);
+      void outcome.finally(() => running.delete(outcome));
+      return outcome;
+    },
+    /**
+     * Resolves once no check runs any more (« J'ai commandé » waits for it). The caller of `check` sees its outcome
+     * first: it awaited it before `idle` was asked, so what it does then (save the tick) is done before this resolves.
+     */
+    async idle(): Promise<void> {
+      while (running.size > 0) await Promise.allSettled([...running]);
     },
     /** A check runs for `id`: it is taken back (true). */
     cancel(id: string): boolean {
       const entry = checking.get(id);
       if (!entry) return false;
       entry.cancelled = true;
+      // Its window, if up, closes: « pris elle-même » is never told for a take she took back.
+      entry.abort.abort();
       checking.delete(id);
       return true;
     },

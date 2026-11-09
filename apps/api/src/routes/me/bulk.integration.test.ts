@@ -583,7 +583,7 @@ describe("POST /api/me/items/undo", () => {
   it("refuses an invalid payload with 400", async () => {
     const { cookie } = await t.signIn();
     expect((await call("POST", "/api/me/items/undo", cookie, { ops: [], removeEventIds: [] })).status).toBe(400);
-    const tooMany = Array.from({ length: 3 }, () => ({
+    const tooMany = Array.from({ length: 4 }, () => ({
       op: "delete",
       ids: Array.from({ length: 200 }, () => randomUUID()),
     }));
@@ -603,6 +603,8 @@ describe("POST /api/me/items/undo", () => {
     expect(staged.undo?.ops).toEqual([
       { ids: [id], op: "stage", stage: "spotted", at: created.item.createdAt },
       { ids: [id], op: "setFields", fields: { pricePaidCents: null } },
+      // Bought from her wishes, out of her selection: the undo also withdraws « pris elle-même » (nothing else).
+      { ids: [id], op: "untakeGift" },
     ]);
     await undo(cookie, staged.undo);
     expect((await rowsOf([id]))[0]).toMatchObject({ stage: "spotted", pricePaidCents: null });

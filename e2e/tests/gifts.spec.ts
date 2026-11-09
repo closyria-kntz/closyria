@@ -133,7 +133,7 @@ test("des amies offrent des articles de la liste", async ({ page, browser, baseU
   await expect(leaFirst.getByRole("button", { name: "Me retirer" })).toBeFocused();
   await expect(leaFirst.getByRole("button", { name: "Je lui offre" })).toHaveCount(0);
   // Still hers after a reload (the page reads it again with her device). Until that read is back, the first
-  // paint cannot tell hers from anyone's: « Je participe » shows but never works.
+  // paint says nothing of the gift (the server's page never has a gift state nor a name): no button either.
   let release: () => void = () => {};
   const held = new Promise<void>((resolve) => {
     release = resolve;
@@ -143,20 +143,23 @@ test("des amies offrent des articles de la liste", async ({ page, browser, baseU
     await route.continue();
   });
   await lea.reload();
-  await expect(leaFirst.getByText("Réservé par Léa")).toBeVisible();
-  await expect(leaFirst.getByRole("button", { name: "Je participe" })).toBeDisabled();
+  await expect(leaFirst.getByText("Sa taille : 38")).toBeVisible();
+  await expect(leaFirst.locator("[aria-busy=true]")).toHaveCount(1);
+  await expect(leaFirst.getByText("Réservé par Léa")).toHaveCount(0);
+  await expect(leaFirst.getByRole("button", { name: /Je participe|Je lui offre/ })).toHaveCount(0);
   release();
   await expect(leaFirst.getByText("Tu lui offres")).toBeVisible();
   await expect(leaFirst.getByRole("button", { name: "Je participe" })).toHaveCount(0);
   await lea.unroute(/\/api\/shared\/[^/]+$/);
-  // The keyed read fails twice: the buttons stay off, with a word.
+  // The keyed read fails twice: no gift state, no button, a word instead.
   await lea.route(/\/api\/shared\/[^/]+$/, (route) =>
     route.request().headers()["x-device-key"] ? route.abort() : route.continue(),
   );
   await lea.reload();
   await expect(leaFirst.getByText("Tes cadeaux n'ont pas pu être vérifiés. Recharge la page.")).toBeVisible();
-  await expect(leaFirst.getByRole("button", { name: "Je participe" })).toBeDisabled();
-  await expect(itemOf(lea, SECOND).getByRole("button", { name: "Je lui offre" })).toBeDisabled();
+  await expect(leaFirst.getByRole("button", { name: /Je participe|Je lui offre/ })).toHaveCount(0);
+  await expect(leaFirst.getByText("Réservé par Léa")).toHaveCount(0);
+  await expect(itemOf(lea, SECOND).getByRole("button", { name: "Je lui offre" })).toHaveCount(0);
   await lea.unroute(/\/api\/shared\/[^/]+$/);
   await lea.reload();
   await expect(leaFirst.getByText("Tu lui offres")).toBeVisible();

@@ -56,7 +56,7 @@ export async function giveGift(db: Database, input: GiftInput & GiftTarget): Pro
     if (!list.allowGifts) return { ok: false, error: "gifts_closed" };
     // The item must be on the list, out of the trash and not given already; taking it out waits for us.
     const [member] = await tx
-      .select({ stage: schema.items.stage, giftReceivedAt: schema.items.giftReceivedAt })
+      .select({ giftReceivedAt: schema.items.giftReceivedAt })
       .from(schema.wishlistItems)
       .innerJoin(schema.items, eq(schema.items.id, schema.wishlistItems.itemId))
       .where(
@@ -67,7 +67,7 @@ export async function giveGift(db: Database, input: GiftInput & GiftTarget): Pro
         ),
       )
       .for("share", { of: schema.wishlistItems });
-    if (!member || isGiven(member)) return { ok: false, error: "not_found" };
+    if (!member || wasGiven(member)) return { ok: false, error: "not_found" };
     const rows = await tx
       .select({
         role: schema.wishlistGifts.role,
@@ -132,9 +132,15 @@ export async function leaveGift(db: Database, input: GiftDelete & GiftTarget): P
   });
 }
 
-/** Received as a gift already: shown under « Déjà offerts », no longer offered. */
+/** Received as a gift and still « Reçu »: « Reçu en cadeau » is done (the fiche says « Offert par … »). */
 export const isGiven = (item: { stage: string; giftReceivedAt: Date | null }) =>
   item.stage === "owned" && item.giftReceivedAt !== null;
+
+/**
+ * Received as a gift once, whatever its stage since (returned, on sale, back to her wishes): shown under « Déjà
+ * offerts » and never offered again. Only the undo of « Reçu en cadeau » makes it giftable again.
+ */
+export const wasGiven = (item: { giftReceivedAt: Date | null }) => item.giftReceivedAt !== null;
 
 /**
  * The gift state of each item of a list that has givers (free items are left out). `mine` is the role of one of
@@ -270,6 +276,40 @@ export async function markOwnerTook(db: Database, userId: string, itemIds: strin
     await lockGiftPairs(tx, pairs);
     await tx.update(schema.wishlistGifts).set({ ownerTookAt: sql`now()` }).where(scope);
   });
+}
+
+/**
+ * She no longer takes these items herself (the take is withdrawn before any order, or the purchase undone): her
+ * friends' active gifts of them stop saying « pris elle-même ». On her items, already locked (lock order as
+ * `receiveGifts`). Items without such gifts are left as they are: nothing says whether there were any.
+ */
+export async function clearOwnerTook(tx: Tx, itemIds: string[]): Promise<void> {
+  if (itemIds.length === 0) return;
+  const scope = and(
+    inArray(schema.wishlistGifts.itemId, itemIds),
+    isNotNull(schema.wishlistGifts.ownerTookAt),
+    isNull(schema.wishlistGifts.receivedAt),
+  );
+  const pairs = await tx
+    .selectDistinct({ wishlistId: schema.wishlistGifts.wishlistId, itemId: schema.wishlistGifts.itemId })
+    .from(schema.wishlistGifts)
+    .where(scope);
+  if (pairs.length === 0) return;
+  await lockGiftPairs(tx, pairs);
+  await tx.update(schema.wishlistGifts).set({ ownerTookAt: null }).where(scope);
+}
+
+/**
+ * Undo of moving these items (before the move) to `to`: when a purchase from her wishes leaves them out of her
+ * selection, the undo also withdraws « pris elle-même » (`untakeGift`). Every such item, gift or not: the undo
+ * says nothing of her friends' gifts. A purchase from her selection keeps it (the undo ticks them again: she still
+ * takes them), as does one from « Commandé » (the order stands).
+ */
+export function untakeUndo(items: { id: string; stage: string; inOrderDraft: boolean }[], to: string) {
+  const ids = items
+    .filter((item) => item.stage === "spotted" && !item.inOrderDraft && (to === "ordered" || to === "owned"))
+    .map((item) => item.id);
+  return ids.length > 0 ? [{ ids, op: "untakeGift" as const }] : [];
 }
 
 /** « Offert par … »: « Léa », « Léa et Inès », « Léa, Inès et Sarah »; null without anyone. */

@@ -1,13 +1,22 @@
-import { DEFAULT_LOVE_LEVELS } from "@closyria/shared";
+import { DEFAULT_LOVE_LEVELS, sharedWishlistViewSchema } from "@closyria/shared";
 import { describe, expect, it, vi } from "vitest";
 import type { InternalApi } from "./admin-api";
-import { deleteOpinion, fetchSharedList, fetchSharedView, giveGift, leaveGift, putOpinion } from "./shared-list";
+import {
+  deleteOpinion,
+  fetchSharedList,
+  fetchSharedView,
+  giveGift,
+  leaveGift,
+  putOpinion,
+  withGiftsHidden,
+} from "./shared-list";
 
 const TOKEN = "AbCdEfGhIjKlMnOpQrStUv";
 const view = {
   name: "Été",
   ownerName: null,
   allowOpinions: true,
+  viewerIsOwner: false,
   gifts: { open: false, occasion: null, date: null },
   givenItems: [],
   levels: DEFAULT_LOVE_LEVELS,
@@ -35,6 +44,35 @@ const api = (response: Response): InternalApi & { fetch: ReturnType<typeof vi.fn
   fetch: vi.fn(async () => response),
   baseUrl: "http://127.0.0.1:3001",
   cookie: "session=secret",
+});
+
+describe("withGiftsHidden", () => {
+  it("keeps no gift state nor giver name for the server's paint", () => {
+    const [base] = view.items;
+    if (!base) throw new Error("no item");
+    const open = {
+      ...view,
+      gifts: { open: true, occasion: null, date: null },
+      items: [
+        { ...base, gift: { state: "reserved" as const, reserver: "Léa", contributors: ["Inès"], mine: null } },
+        {
+          ...base,
+          itemId: "5b1f3c0e-7c1a-4d58-9a39-0a3f2f3a1b12",
+          gift: { state: "owner_took" as const, givers: ["Zoé"], mine: null },
+        },
+        {
+          ...base,
+          itemId: "5b1f3c0e-7c1a-4d58-9a39-0a3f2f3a1b13",
+          gift: { state: "removed" as const, mine: { role: "reserver" as const, name: "Léa" } },
+        },
+        { ...base, itemId: "5b1f3c0e-7c1a-4d58-9a39-0a3f2f3a1b14", gift: { state: "free" as const } },
+      ],
+    };
+    const hidden = withGiftsHidden(sharedWishlistViewSchema.parse(open));
+    expect(hidden.items.map((i) => i.gift)).toEqual([{ state: "hidden" }, { state: "hidden" }, { state: "hidden" }]);
+    for (const name of ["Léa", "Inès", "Zoé"]) expect(JSON.stringify(hidden)).not.toContain(name);
+    expect(withGiftsHidden(sharedWishlistViewSchema.parse(view)).items[0]?.gift).toBeNull();
+  });
 });
 
 describe("fetchSharedList", () => {

@@ -346,6 +346,7 @@ describe("POST /api/me/items/:id/stage", () => {
       ops: [
         { ids: [item.id], op: "stage", stage: "spotted", at: item.createdAt },
         { ids: [item.id], op: "setFields", fields: { pricePaidCents: null } },
+        { ids: [item.id], op: "untakeGift" },
       ],
       removeEventIds: [events[0]?.id],
     });

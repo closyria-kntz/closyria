@@ -302,18 +302,133 @@ test("passer à Commandé avertit aussi (fiche et sélection)", async ({
   for (const name of NAMES) await card(page, name).getByRole("button").first().click();
   await page.getByRole("region", { name: "Actions sur la sélection" }).getByRole("button", { name: "Étape" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Reçu" }).click();
-  await expect(warning(page).getByText("Quelqu'un a peut-être prévu de te l'offrir.")).toBeVisible();
+  // Three items, one reserved: the plural, never « te l'offrir » (that would say which).
+  await expect(warning(page).getByText("Quelqu'un a peut-être prévu de t'offrir 1 de ces articles.")).toBeVisible();
   await warning(page).getByRole("button", { name: "Je le prends quand même" }).click();
   await expect(appToast(page)).toContainText("3 articles passés à « Reçu »");
   await expect.poll(stageOf).toBe("owned");
   await lea.context().close();
 });
 
+test("sa propre liste : les cadeaux restent cachés, même dans la source de la page", async ({
+  page,
+  browser,
+  baseURL,
+  db,
+  userAgentTag,
+}, testInfo) => {
+  test.slow();
+  const owner = await ownerList(page, db, userAgentTag);
+  await setGifts(page, owner.listId, { allowGifts: true, giftOccasion: "mon anniversaire" });
+  const [first, second] = owner.items as [Owner["items"][0], Owner["items"][0]];
+  const lea = await friend(browser, baseURL, `10.224.${testInfo.workerIndex % 250}.1`);
+  await gift(lea, owner.token, first.id, "Léa", "reserve");
+  await gift(lea, owner.token, second.id, "Léa", "reserve");
+  await db.query("update wishlist_gifts set owner_took_at = now() where item_id = $1", [second.id]);
+
+  // The HTML the server sends (to anyone: it reads no cookie) never has a gift state nor a giver's name.
+  for (const reader of [page, lea]) {
+    const source = await (await reader.request.get(`/l/${owner.token}`)).text();
+    expect(source).toContain(NAMES[0]);
+    // (The page's messages are in it, « Réservé par {name} » included: the state and the name are what must not be.)
+    expect(source).not.toContain("Léa");
+    expect(source).not.toContain("owner_took");
+    expect(source).not.toMatch(/state\\?":\\?"reserved/);
+  }
+
+  // Opened in her session: the note, no gift buttons, nobody named.
+  await page.goto(`/l/${owner.token}`);
+  await expect(page.getByTestId("owner-gifts-note")).toHaveText("C'est ta liste : les cadeaux restent cachés");
+  await expect(page.getByTestId("gift")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Je lui offre|Je participe/ })).toHaveCount(0);
+  const text = await page.locator("body").innerText();
+  expect(text).not.toContain("Léa");
+  expect(text).not.toContain("Réservé");
+  expect(text).not.toContain("pris elle-même");
+  await capture(page, "own-link", (name) => testInfo.outputPath(name));
+
+  // Her friend still sees it all, once her browser read the list.
+  await lea.goto(`/l/${owner.token}`);
+  const items = lea.getByRole("list", { name: "Articles" }).getByRole("listitem");
+  await expect(items.filter({ hasText: NAMES[0] })).toContainText("Réservé par Léa");
+  await expect(items.filter({ hasText: NAMES[1] })).toContainText("Camille l'a pris elle-même");
+  await expect(lea.getByTestId("owner-gifts-note")).toHaveCount(0);
+  await lea.context().close();
+});
+
+test("« J'ai commandé » attend la vérification d'une envie cochée juste avant", async ({ page, db, userAgentTag }) => {
+  test.slow();
+  const owner = await ownerList(page, db, userAgentTag);
+  const [first] = owner.items as [Owner["items"][0]];
+  // The take's check is slow; the ones after it answer at once.
+  let delayed = false;
+  await page.route("**/api/me/items/gift-check**", async (route) => {
+    if (!delayed) {
+      delayed = true;
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+    await route.continue();
+  });
+  await page.goto("/envies");
+  await card(page, NAMES[0]).getByTestId("card-take").click();
+  await page.getByRole("button", { name: "J’ai commandé (1)" }).click();
+  await expect(appToast(page)).toContainText("1 article passé en Commandé", { timeout: 10_000 });
+  const stageOf = async (id: string) =>
+    (await db.query<{ stage: string }>("select stage from items where id = $1", [id])).rows[0]?.stage;
+  await expect.poll(() => stageOf(first.id)).toBe("ordered");
+  expect(delayed).toBe(true);
+});
+
+test("« pris elle-même » s'efface quand elle décoche avant de commander", async ({
+  page,
+  browser,
+  baseURL,
+  db,
+  userAgentTag,
+}, testInfo) => {
+  test.slow();
+  const owner = await ownerList(page, db, userAgentTag);
+  await setGifts(page, owner.listId, { allowGifts: true });
+  const [first] = owner.items as [Owner["items"][0]];
+  const lea = await friend(browser, baseURL, `10.225.${testInfo.workerIndex % 250}.1`);
+  const ines = await friend(browser, baseURL, `10.226.${testInfo.workerIndex % 250}.1`);
+  await gift(lea, owner.token, first.id, "Léa", "reserve");
+  const onLink = () => ines.getByRole("list", { name: "Articles" }).getByRole("listitem").filter({ hasText: NAMES[0] });
+
+  await page.goto("/envies");
+  await card(page, NAMES[0]).getByTestId("card-take").click();
+  await warning(page).getByRole("button", { name: "Je le prends quand même" }).click();
+  const ticked = async () =>
+    (await db.query<{ in_order_draft: boolean }>("select in_order_draft from items where id = $1", [first.id])).rows[0]
+      ?.in_order_draft;
+  await expect.poll(ticked).toBe(true);
+  await ines.goto(`/l/${owner.token}`);
+  await expect(onLink()).toContainText("Camille l'a pris elle-même");
+  await expect(onLink().getByRole("button", { name: /Je participe/ })).toHaveCount(0);
+
+  // She changes her mind before ordering: her friends see Léa's gift again, and can join it.
+  await card(page, NAMES[0]).getByTestId("card-take").click();
+  await expect(card(page, NAMES[0]).getByTestId("card-take")).toHaveAttribute("aria-pressed", "false");
+  await expect.poll(ticked).toBe(false);
+  await ines.reload();
+  await expect(onLink()).toContainText("Réservé par Léa");
+  await expect(onLink()).not.toContainText("pris elle-même");
+  await expect(onLink().getByRole("button", { name: /Je participe/ })).toBeEnabled();
+  await lea.context().close();
+  await ines.context().close();
+});
+
 test("rappel après la date de l'occasion", async ({ page, db, userAgentTag }, testInfo) => {
   test.slow();
   const owner = await ownerList(page, db, userAgentTag);
   await setGifts(page, owner.listId, { allowGifts: true, giftOccasion: "mon anniversaire", giftDate: parisDay(-1) });
-  const text = "Mon anniversaire est passé : tu as reçu des cadeaux de ta liste « Anniversaire » ?";
+  const day = (date: string) =>
+    new Intl.DateTimeFormat("fr", { day: "numeric", month: "long", timeZone: "UTC" }).format(
+      new Date(`${date}T00:00:00Z`),
+    );
+  const textOn = (date: string) =>
+    `Le ${day(date)} est passé (mon anniversaire) : tu as reçu des cadeaux de ta liste « Anniversaire » ?`;
+  const text = textOn(parisDay(-1));
 
   await page.goto("/envies");
   const banner = page.getByRole("region", { name: "Rappel des cadeaux" });
@@ -325,10 +440,12 @@ test("rappel après la date de l'occasion", async ({ page, db, userAgentTag }, t
   await expect(page.getByTestId("item-card").first()).toBeVisible();
   await expect(banner).toHaveCount(0);
 
-  // Another date: due again, on the list's page; « C'est fait » ends it for this occasion.
-  await setGifts(page, owner.listId, { giftDate: parisDay(-2) });
+  // Another date, without an occasion (the date alone): due again, on the list's page; « C'est fait » ends it.
+  await setGifts(page, owner.listId, { giftOccasion: null, giftDate: parisDay(-2) });
   await page.goto(`/listes/${owner.listId}`);
-  await expect(banner).toContainText(text);
+  await expect(banner).toContainText(
+    `Le ${day(parisDay(-2))} est passé : tu as reçu des cadeaux de ta liste « Anniversaire » ?`,
+  );
   await capture(page, "reminder-list", (name) => testInfo.outputPath(name));
   await banner.getByRole("button", { name: "C'est fait" }).click();
   await expect(banner).toHaveCount(0);
