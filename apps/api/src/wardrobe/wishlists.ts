@@ -132,7 +132,7 @@ export type SharedList = Pick<
   | "giftDate"
 >;
 
-// Narrow: only the public columns. The size, stage and gift_from are for the gifts only (never sent otherwise).
+// Narrow: only the public columns. The size, stage and gift marker are for the gifts only (never sent otherwise).
 const sharedItemColumns = {
   itemId: schema.items.id,
   productId: schema.products.id,
@@ -147,7 +147,7 @@ const sharedItemColumns = {
   why: schema.items.why,
   sizeLabel: schema.items.sizeLabel,
   stage: schema.items.stage,
-  giftFrom: schema.items.giftFrom,
+  giftReceivedAt: schema.items.giftReceivedAt,
 };
 
 /**

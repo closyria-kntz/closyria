@@ -118,6 +118,24 @@ const shiftDay = (day: string, days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
+/** Another list of hers with the item, shared and open to gifts: its token. */
+async function shareAnother(s: { cookie: string; item: { id: string } }, name: string) {
+  const list = (await (await call("POST", "/api/me/wishlists", s.cookie, { name })).json()) as WishlistView;
+  await call("POST", `/api/me/wishlists/${list.id}/items`, s.cookie, { itemId: s.item.id });
+  const share = await call("POST", `/api/me/wishlists/${list.id}/share`, s.cookie);
+  await t.db.update(schema.wishlists).set({ allowGifts: true }).where(eq(schema.wishlists.id, list.id));
+  return { list, token: ((await share.json()) as { url: string }).url.slice("/l/".length) };
+}
+
+const receive = async (cookie: string, itemId: string) => {
+  const res = await call("POST", `/api/me/items/${itemId}/received-as-gift`, cookie);
+  expect(res.status).toBe(200);
+  return (await res.json()) as ItemMutationResult;
+};
+const getItem = async (cookie: string, itemId: string) =>
+  (await (await call("GET", `/api/me/items/${itemId}`, cookie)).json()) as ItemView;
+const sarah = { name: "Sarah", deviceKey: "S".repeat(22) };
+
 describe("gift settings on her list", () => {
   it("saves the occasion and the date, refuses a web address, clears with null", async () => {
     const s = await setup({});
@@ -277,7 +295,7 @@ describe("« Reçu en cadeau »", () => {
     const token2 = ((await share.json()) as { url: string }).url.slice("/l/".length);
     await t.db.update(schema.wishlists).set({ allowGifts: true }).where(eq(schema.wishlists.id, second.id));
     await reserve(two.token, two.item.id, ines);
-    await reserve(token2, two.item.id, { name: "Sarah", deviceKey: "S".repeat(22) });
+    await reserve(token2, two.item.id, sarah);
     await join(token2, two.item.id, lea);
     const got = await call("POST", `/api/me/items/${two.item.id}/received-as-gift`, two.cookie);
     expect(((await got.json()) as ItemMutationResult).item.giftFrom).toBe("Inès, Sarah et Léa");
@@ -306,6 +324,85 @@ describe("« Reçu en cadeau »", () => {
     expect(((await again.json()) as ItemMutationResult).item.giftFrom).toBe("Léa");
     // Only this reception's rows are kept, for its undo.
     expect(await giftRowsOfItem(s.item.id)).toHaveLength(1);
+  });
+
+  it("takes a gift nobody had planned off the link too, until the undo", async () => {
+    const s = await setup();
+    const got = await receive(s.cookie, s.item.id);
+    expect(got.item.giftFrom).toBeNull();
+    const seen = await publicView(s.token);
+    expect(seen.givenItems).toHaveLength(1);
+    expect(seen.items.find((i) => i.itemId === s.item.id)).toBeUndefined();
+    expect((await reserve(s.token, s.item.id, lea)).status).toBe(404);
+    expect((await call("POST", `/api/me/items/${s.item.id}/received-as-gift`, s.cookie)).status).toBe(400);
+    expect((await call("POST", "/api/me/items/undo", s.cookie, got.undo)).status).toBe(200);
+    expect((await publicView(s.token)).givenItems).toEqual([]);
+    expect((await reserve(s.token, s.item.id, lea)).status).toBe(200);
+  });
+
+  it("brings a gift back as « retiré » when the item left that list meanwhile, and ordinary when it came back", async () => {
+    const s = await setup();
+    const other = await shareAnother(s, "Noël");
+    await reserve(s.token, s.item.id, lea);
+    await reserve(other.token, s.item.id, ines);
+    // On the second list: taken off before, put back after.
+    expect(
+      (await call("DELETE", `/api/me/wishlists/${other.list.id}/items/${s.item.id}`, s.cookie)).status,
+    ).toBeLessThan(300);
+    const got = await receive(s.cookie, s.item.id);
+    expect(got.item.giftFrom).toBe("Léa et Inès");
+    expect((await call("DELETE", `/api/me/wishlists/${s.list.id}/items/${s.item.id}`, s.cookie)).status).toBeLessThan(
+      300,
+    );
+    await call("POST", `/api/me/wishlists/${other.list.id}/items`, s.cookie, { itemId: s.item.id });
+    expect((await call("POST", "/api/me/items/undo", s.cookie, got.undo)).status).toBe(200);
+    const rows = await giftRowsOfItem(s.item.id);
+    const first = rows.find((r) => r.wishlistId === s.list.id);
+    const second = rows.find((r) => r.wishlistId === other.list.id);
+    expect(first).toMatchObject({ receivedAt: null, giverName: "Léa" });
+    expect(first?.itemRemovedAt).not.toBeNull();
+    expect(second).toMatchObject({ receivedAt: null, itemRemovedAt: null, giverName: "Inès" });
+    expect((await publicView(s.token, keyLea)).items.find((i) => i.itemId === s.item.id)?.gift).toEqual({
+      state: "removed",
+      mine: "reserver",
+    });
+    expect((await publicView(other.token)).items.find((i) => i.itemId === s.item.id)?.gift).toMatchObject({
+      state: "reserved",
+      reserver: "Inès",
+    });
+    expect(await reservedOf(s.cookie, [s.item.id])).toEqual([s.item.id]);
+  });
+
+  it("hides « Offert par » while the item is out of « Reçu », and shows it again on undo", async () => {
+    const s = await setup();
+    await reserve(s.token, s.item.id, lea);
+    await receive(s.cookie, s.item.id);
+    const res = await call("POST", "/api/me/items/bulk", s.cookie, {
+      op: "stage",
+      ids: [s.item.id],
+      stage: "for_sale",
+      at: new Date().toISOString(),
+    });
+    expect(res.status).toBe(200);
+    expect(await getItem(s.cookie, s.item.id)).toMatchObject({ stage: "for_sale", giftFrom: null });
+    const { undo } = (await res.json()) as { undo: unknown };
+    expect((await call("POST", "/api/me/items/undo", s.cookie, undo)).status).toBe(200);
+    expect(await getItem(s.cookie, s.item.id)).toMatchObject({ stage: "owned", giftFrom: "Léa" });
+  });
+
+  it("names nobody from a list where she said she took it herself; a list it left still counts", async () => {
+    const s = await setup();
+    await reserve(s.token, s.item.id, lea);
+    expect((await call("POST", "/api/me/items/gift-took", s.cookie, { ids: [s.item.id] })).status).toBe(204);
+    const second = await shareAnother(s, "Noël");
+    const third = await shareAnother(s, "Fête");
+    await reserve(second.token, s.item.id, ines);
+    await reserve(third.token, s.item.id, sarah);
+    expect(
+      (await call("DELETE", `/api/me/wishlists/${third.list.id}/items/${s.item.id}`, s.cookie)).status,
+    ).toBeLessThan(300);
+    expect((await receive(s.cookie, s.item.id)).item.giftFrom).toBe("Inès et Sarah");
+    expect((await giftRowsOfItem(s.item.id)).every((r) => r.receivedAt !== null)).toBe(true);
   });
 
   it("404 for another account's item, 409 in the trash", async () => {

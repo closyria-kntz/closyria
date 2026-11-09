@@ -309,8 +309,10 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
       // Undo of « Reçu en cadeau » (after the stage op that puts the item back): gifts active again, names cleared.
       requireActive(items);
       const back = new Set(await unreceiveGifts(tx, op.ids));
-      const named = items.filter((item) => item.giftFrom !== null).map((item) => item.id);
-      await setItems(tx, named, { giftFrom: null, updatedAt: now });
+      const named = items
+        .filter((item) => item.giftFrom !== null || item.giftReceivedAt !== null)
+        .map((item) => item.id);
+      await setItems(tx, named, { giftFrom: null, giftReceivedAt: null, updatedAt: now });
       return result(op.ids.filter((id) => back.has(id) || named.includes(id)));
     }
     case "delete": {

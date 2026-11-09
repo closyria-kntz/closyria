@@ -102,8 +102,13 @@ export const items = pgTable(
     sizeLabel: text("size_label"),
     sizeNote: text("size_note"),
     notes: text("notes"),
-    /** Who gave it to her (a friend's name or « une amie »), when she got it as a gift. */
+    /** The givers' first names, frozen by « Reçu en cadeau » (null: « une amie »). Shown only with the marker below. */
     giftFrom: text("gift_from"),
+    /**
+     * Set by « Reçu en cadeau », cleared by its undo: with stage `owned`, the item is a gift (no longer offered on her
+     * links, « Offert par … » on her sheet). Kept through other stage changes, so their undo brings the gift back.
+     */
+    giftReceivedAt: timestamp("gift_received_at", { withTimezone: true }),
     pricePaidCents: integer("price_paid_cents"),
     salePriceCents: integer("sale_price_cents"),
     saleChannel: text("sale_channel"),

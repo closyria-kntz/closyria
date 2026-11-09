@@ -1,5 +1,5 @@
 {
-  "id": "bb8afc5e-31be-4f9d-81e3-647e110ac6bb",
+  "id": "ee18d74a-7cf6-452b-9c3c-5e0a21c8b1f2",
   "prevId": "9a9fd873-9469-4be1-8948-06fadd47c3e3",
   "version": "7",
   "dialect": "postgresql",
@@ -2960,6 +2960,12 @@
         "gift_from": {
           "name": "gift_from",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gift_received_at": {
+          "name": "gift_received_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },

@@ -56,7 +56,7 @@ export async function giveGift(db: Database, input: GiftInput & GiftTarget): Pro
     if (!list.allowGifts) return { ok: false, error: "gifts_closed" };
     // The item must be on the list, out of the trash and not given already; taking it out waits for us.
     const [member] = await tx
-      .select({ stage: schema.items.stage, giftFrom: schema.items.giftFrom })
+      .select({ stage: schema.items.stage, giftReceivedAt: schema.items.giftReceivedAt })
       .from(schema.wishlistItems)
       .innerJoin(schema.items, eq(schema.items.id, schema.wishlistItems.itemId))
       .where(
@@ -131,8 +131,8 @@ export async function leaveGift(db: Database, input: GiftDelete & GiftTarget): P
 }
 
 /** Received as a gift already: shown under « Déjà offerts », no longer offered. */
-export const isGiven = (item: { stage: string; giftFrom: string | null }) =>
-  item.stage === "owned" && item.giftFrom !== null;
+export const isGiven = (item: { stage: string; giftReceivedAt: Date | null }) =>
+  item.stage === "owned" && item.giftReceivedAt !== null;
 
 /**
  * The gift state of each item of a list that has givers (free items are left out). `mine` is the role of one of
@@ -279,7 +279,8 @@ export function joinGiverNames(names: string[]): string | null {
 /**
  * « Reçu en cadeau », gift side, on her item already locked: every active gift of the item, on all her lists, is
  * over (`received_at`); the givers' names come back, frozen for `gift_from`: reservers first, then contributors by
- * age, one name per person. Rows received earlier (an older « Reçu en cadeau » not undone) are deleted first, so
+ * age, one name per person. Gifts of a list where she said she took it herself give no name (they were told);
+ * gifts of a list she took it off still do. Rows received earlier (an older « Reçu en cadeau » not undone) are deleted first, so
  * the received rows are only this one's, for its undo.
  */
 export async function receiveGifts(tx: Tx, itemId: string): Promise<string | null> {
@@ -299,10 +300,13 @@ export async function receiveGifts(tx: Tx, itemId: string): Promise<string | nul
       giverName: schema.wishlistGifts.giverName,
       giverNameKey: schema.wishlistGifts.giverNameKey,
       role: schema.wishlistGifts.role,
+      ownerTookAt: schema.wishlistGifts.ownerTookAt,
       createdAt: schema.wishlistGifts.createdAt,
       id: schema.wishlistGifts.id,
     });
-  const byAge = givers.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+  const byAge = givers
+    .filter((g) => g.ownerTookAt === null)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
   const ordered = [...byAge.filter((g) => g.role === "reserver"), ...byAge.filter((g) => g.role !== "reserver")];
   const seen = new Set<string>();
   const names = ordered.flatMap((g) => {
@@ -316,14 +320,21 @@ export async function receiveGifts(tx: Tx, itemId: string): Promise<string | nul
 /**
  * Undo of « Reçu en cadeau », gift side, on her items already locked: their received gifts are active again, with
  * their roles. A (list, item) that has active gifts meanwhile keeps them and its received rows stay over (they
- * would clash). Returns the items whose gifts came back.
+ * would clash). A gift of a list the item has left meanwhile comes back as « retiré de sa liste » (and one of a
+ * list it is back on, as ordinary). Returns the items whose gifts came back.
  */
 export async function unreceiveGifts(tx: Tx, itemIds: string[]): Promise<string[]> {
   const pairs = await giftPairsOf(tx, itemIds);
   if (pairs.length === 0) return [];
   await lockGiftPairs(tx, pairs);
   const back = await tx.execute<{ item_id: string }>(sql`
-    update ${schema.wishlistGifts} g set received_at = null
+    update ${schema.wishlistGifts} g set received_at = null,
+      item_removed_at = case
+        when exists (
+          select 1 from ${schema.wishlistItems} wi where wi.wishlist_id = g.wishlist_id and wi.item_id = g.item_id
+        ) then null
+        else coalesce(g.item_removed_at, now())
+      end
     where ${inArray(sql`g.item_id`, itemIds)} and g.received_at is not null
       and not exists (
         select 1 from ${schema.wishlistGifts} a
