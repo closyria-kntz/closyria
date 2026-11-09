@@ -593,6 +593,7 @@ export const wardrobeErrorCodes = [
   "opinion_exists",
   "gifts_closed",
   "owner_took",
+  "already_reserved",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];

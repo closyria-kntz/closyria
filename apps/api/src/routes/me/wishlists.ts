@@ -484,6 +484,9 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
           .from(schema.items)
           .where(and(eq(schema.items.id, itemId), eq(schema.items.userId, userId)));
         if (!list || !item) return false;
+        // Her friends' gifts stay, marked, so the givers learn she took it off; putting it back restores them.
+        // Before the delete (lock order, see markGiftsRemoved).
+        await markGiftsRemoved(tx, id, [itemId]);
         await tx
           .delete(schema.wishlistItems)
           .where(and(eq(schema.wishlistItems.wishlistId, id), eq(schema.wishlistItems.itemId, itemId)));
@@ -491,8 +494,6 @@ export function wishlistsRoutes(deps: WardrobeDeps) {
         await tx
           .delete(schema.wishlistOpinions)
           .where(and(eq(schema.wishlistOpinions.wishlistId, id), eq(schema.wishlistOpinions.itemId, itemId)));
-        // Her friends' gifts stay, marked, so the givers learn she took it off; putting it back restores them.
-        await markGiftsRemoved(tx, id, [itemId]);
         return true;
       });
       const view = found ? await viewOf(userId, id) : undefined;

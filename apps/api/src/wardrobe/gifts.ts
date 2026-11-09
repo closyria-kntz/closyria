@@ -4,8 +4,9 @@ import type { Tx } from "./events";
 import { ensureFriendDevice, hashDeviceKey, isFriendDevice, lockFriendName } from "./friend-device";
 
 export type GiveResult =
-  | { ok: true; role: GiftRole; raced: string | null }
-  | { ok: false; error: "not_found" | "gifts_closed" | "name_taken" | "owner_took" };
+  | { ok: true; role: GiftRole }
+  | { ok: false; error: "not_found" | "gifts_closed" | "name_taken" | "owner_took" }
+  | { ok: false; error: "already_reserved"; reserver: string };
 
 export type LeaveResult = { ok: true } | { ok: false; error: "not_found" | "forbidden" };
 
@@ -14,6 +15,11 @@ type GiftTarget = { wishlistId: string; shareTokenHash: string; itemId: string }
 /** Serialises every gift change on one item of one list (who reserves is decided under it). */
 async function lockGiftItem(tx: Tx, wishlistId: string, itemId: string) {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`gift:${wishlistId}:${itemId}`}, 0))`);
+}
+
+/** Several item locks, by id (a fixed order: no deadlock between two of her batches). */
+async function lockGiftItems(tx: Tx, wishlistId: string, itemIds: string[]) {
+  for (const itemId of [...new Set(itemIds)].sort()) await lockGiftItem(tx, wishlistId, itemId);
 }
 
 /** The shared list, locked until commit so stopping the share waits for us (or we find it gone). */
@@ -27,10 +33,10 @@ async function lockSharedList(tx: Tx, wishlistId: string, shareTokenHash: string
 }
 
 /**
- * A friend offers an item: she reserves it when nobody has, she contributes otherwise. `raced` names the friend
- * who reserved it first (when she becomes a contributor), so the page can say « {nom} vient de le réserver » if it
- * offered « Je lui offre ». Already a giver: her role, unchanged. Locks: the name (one person per name, shared with
- * opinions), then the item (who reserves), always in that order.
+ * A friend offers an item. `reserve` (« Je lui offre »): she reserves it, or `already_reserved` names who did just
+ * before (nothing written: the page says « {nom} vient de le réserver » and offers « Je participe »). `join`
+ * (« Je participe »): she contributes, or reserves when nobody has. Already a giver: her role, unchanged. Locks:
+ * the name (one person per name, shared with opinions), then the item (who reserves), always in that order.
  */
 export async function giveGift(db: Database, input: GiftInput & GiftTarget): Promise<GiveResult> {
   const nameKey = opinionNameKey(input.name);
@@ -54,9 +60,6 @@ export async function giveGift(db: Database, input: GiftInput & GiftTarget): Pro
       )
       .for("share", { of: schema.wishlistItems });
     if (!member || isGiven(member)) return { ok: false, error: "not_found" };
-    const deviceKeyHash = hashDeviceKey(input.deviceKey);
-    if ((await ensureFriendDevice(tx, input.wishlistId, nameKey, deviceKeyHash, input.claim)) === "name_taken")
-      return { ok: false, error: "name_taken" };
     const rows = await tx
       .select({
         role: schema.wishlistGifts.role,
@@ -67,30 +70,25 @@ export async function giveGift(db: Database, input: GiftInput & GiftTarget): Pro
       .from(schema.wishlistGifts)
       .where(and(eq(schema.wishlistGifts.wishlistId, input.wishlistId), eq(schema.wishlistGifts.itemId, input.itemId)));
     const mine = rows.find((r) => r.giverNameKey === nameKey);
-    if (mine) return { ok: true, role: mine.role as GiftRole, raced: null };
-    if (rows.some((r) => r.ownerTookAt !== null)) return { ok: false, error: "owner_took" };
-    const giver = { wishlistId: input.wishlistId, itemId: input.itemId, giverName: input.name, giverNameKey: nameKey };
-    const reserved = await tx
-      .insert(schema.wishlistGifts)
-      .values({ ...giver, role: "reserver" })
-      .onConflictDoNothing({
-        target: [schema.wishlistGifts.wishlistId, schema.wishlistGifts.itemId],
-        where: sql`${schema.wishlistGifts.role} = 'reserver'`,
-      })
-      .returning({ id: schema.wishlistGifts.id });
-    if (reserved.length > 0) return { ok: true, role: "reserver", raced: null };
-    await tx.insert(schema.wishlistGifts).values({ ...giver, role: "contributor" });
-    const [reserver] = await tx
-      .select({ name: schema.wishlistGifts.giverName })
-      .from(schema.wishlistGifts)
-      .where(
-        and(
-          eq(schema.wishlistGifts.wishlistId, input.wishlistId),
-          eq(schema.wishlistGifts.itemId, input.itemId),
-          eq(schema.wishlistGifts.role, "reserver"),
-        ),
-      );
-    return { ok: true, role: "contributor", raced: reserver?.name ?? null };
+    const reserver = rows.find((r) => r.role === "reserver");
+    // Refusals that write nothing come before the name check, which may attach the device.
+    if (!mine && rows.some((r) => r.ownerTookAt !== null)) return { ok: false, error: "owner_took" };
+    if (!mine && reserver && input.intent === "reserve")
+      return { ok: false, error: "already_reserved", reserver: reserver.giverName };
+    const deviceKeyHash = hashDeviceKey(input.deviceKey);
+    if ((await ensureFriendDevice(tx, input.wishlistId, nameKey, deviceKeyHash, input.claim)) === "name_taken")
+      return { ok: false, error: "name_taken" };
+    if (mine) return { ok: true, role: mine.role as GiftRole };
+    const role: GiftRole = reserver ? "contributor" : "reserver";
+    // Under the item lock nobody else can reserve meanwhile; the partial unique index guards it all the same.
+    await tx.insert(schema.wishlistGifts).values({
+      wishlistId: input.wishlistId,
+      itemId: input.itemId,
+      giverName: input.name,
+      giverNameKey: nameKey,
+      role,
+    });
+    return { ok: true, role };
   });
 }
 
@@ -170,9 +168,14 @@ export async function giftStatesForList(
   return states;
 }
 
-/** She took items off a list: their gifts stay (for « l'a retiré de sa liste ») until every giver leaves. */
+/**
+ * She takes items off a list: their gifts stay (for « l'a retiré de sa liste ») until every giver leaves. Call it
+ * before deleting the `wishlist_items` rows: a giver's transaction holds the item lock and then waits for that row,
+ * so taking the lock after the delete would deadlock.
+ */
 export async function markGiftsRemoved(tx: Tx, wishlistId: string, itemIds: string[]) {
   if (itemIds.length === 0) return;
+  await lockGiftItems(tx, wishlistId, itemIds);
   await tx
     .update(schema.wishlistGifts)
     .set({ itemRemovedAt: sql`now()` })
@@ -185,9 +188,10 @@ export async function markGiftsRemoved(tx: Tx, wishlistId: string, itemIds: stri
     );
 }
 
-/** She put items back on a list: their gifts are ordinary again. */
+/** She puts items back on a list: their gifts are ordinary again. Call it before inserting the rows (same reason). */
 export async function clearGiftsRemoved(tx: Tx, wishlistId: string, itemIds: string[]) {
   if (itemIds.length === 0) return;
+  await lockGiftItems(tx, wishlistId, itemIds);
   await tx
     .update(schema.wishlistGifts)
     .set({ itemRemovedAt: null })

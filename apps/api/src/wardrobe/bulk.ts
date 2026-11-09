@@ -251,13 +251,14 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
         .from(schema.wishlistItems)
         .where(eq(schema.wishlistItems.wishlistId, op.wishlistId));
       const base = last?.max === null || last?.max === undefined ? 0 : Number(last.max) + 1;
+      // Her friends' gifts kept from when she took them off are ordinary again.
+      await clearGiftsRemoved(tx, op.wishlistId, ids);
       const added = await tx
         .insert(schema.wishlistItems)
         .values(ids.map((itemId, i) => ({ wishlistId: op.wishlistId, itemId, position: base + i, addedAt: now })))
         .onConflictDoNothing()
         .returning({ itemId: schema.wishlistItems.itemId });
       const addedIds = added.map((r) => r.itemId);
-      await clearGiftsRemoved(tx, op.wishlistId, addedIds);
       return result(
         addedIds,
         addedIds.length ? [{ ids: addedIds, op: "removeFromList", wishlistId: op.wishlistId }] : [],
@@ -265,12 +266,13 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
     }
     case "removeFromList": {
       requireActive(items);
+      // Before the delete (lock order, see markGiftsRemoved). Only items on the list have unmarked gifts.
+      await markGiftsRemoved(tx, op.wishlistId, op.ids);
       const removed = await tx
         .delete(schema.wishlistItems)
         .where(and(eq(schema.wishlistItems.wishlistId, op.wishlistId), inArray(schema.wishlistItems.itemId, op.ids)))
         .returning({ itemId: schema.wishlistItems.itemId });
       const ids = removed.map((r) => r.itemId);
-      await markGiftsRemoved(tx, op.wishlistId, ids);
       return result(ids, ids.length ? [{ ids, op: "addToList", wishlistId: op.wishlistId }] : []);
     }
     case "addTag": {

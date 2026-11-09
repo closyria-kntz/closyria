@@ -166,8 +166,9 @@ const putGiftRoute = defineAccess(
     path: "/shared/{token}/items/{itemId}/gift",
     summary: "A friend offers an item of a shared list",
     description:
-      "Public. Reserves the item when nobody has, contributes otherwise (`raced`: who reserved it first). Same name " +
-      "rule as the opinions (`claim`). 30 gift actions an hour per device and list, 120 per address and list.",
+      "Public. `reserve` (« Je lui offre ») reserves the item, or answers 409 `already_reserved` with who did, " +
+      "writing nothing; `join` (« Je participe ») contributes, or reserves when nobody has. Same name rule as the " +
+      "opinions (`claim`). 30 gift actions an hour per device and list, 120 per address and list.",
     middleware: [giftBodyLimit, ...giftLimits] as const,
     request: {
       params: giftParams,
@@ -178,13 +179,25 @@ const putGiftRoute = defineAccess(
         description: "Her role",
         content: {
           "application/json": {
-            schema: z.object({ role: z.enum(["reserver", "contributor"]), raced: z.string().nullable() }),
+            schema: z.object({ role: z.enum(["reserver", "contributor"]) }),
           },
         },
       },
       403: errorContent("The list is closed to gifts (gifts_closed)"),
       404: errorContent("Unknown share, or item not offered on the list (not_found)"),
-      409: errorContent("Name used by another device (name_taken), or she took it herself (owner_took)"),
+      409: {
+        description:
+          "Name used by another device (name_taken), she took it herself (owner_took), or another friend " +
+          "reserved it just before (already_reserved, with her name)",
+        content: {
+          "application/json": {
+            schema: z.union([
+              z.object({ error: z.literal("already_reserved"), reserver: z.string() }),
+              wardrobeErrorSchema,
+            ]),
+          },
+        },
+      },
       422: errorContent("Web address in the name (web_address)"),
       429: errorContent("Too many gift actions (rate_limited)"),
     },
@@ -298,7 +311,9 @@ export function sharedRoutes(deps: WardrobeDeps) {
         shareTokenHash: hashShareToken(token),
         itemId,
       });
-      if (result.ok) return c.json({ role: result.role, raced: result.raced }, 200);
+      if (result.ok) return c.json({ role: result.role }, 200);
+      if (result.error === "already_reserved")
+        return c.json({ error: "already_reserved", reserver: result.reserver } as const, 409);
       if (result.error === "not_found") return c.json({ error: "not_found" } as const, 404);
       if (result.error === "gifts_closed") return c.json({ error: "gifts_closed" } as const, 403);
       if (result.error === "owner_took") return c.json({ error: "owner_took" } as const, 409);

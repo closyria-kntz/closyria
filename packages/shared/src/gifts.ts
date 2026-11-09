@@ -5,9 +5,14 @@ export const GIFT_OCCASION_MAX = 40;
 /** Code-point cap for the database check (one grapheme can be several code points). */
 export const GIFT_OCCASION_MAX_CODE_POINTS = GIFT_OCCASION_MAX * 8;
 
+/** What she clicked: « Je lui offre » (`reserve`) or « Je participe » (`join`). */
+export const giftIntentSchema = z.enum(["reserve", "join"]);
+export type GiftIntent = z.infer<typeof giftIntentSchema>;
+
 export const giftInputSchema = z.object({
   name: friendNameSchema,
   deviceKey: deviceKeySchema,
+  intent: giftIntentSchema,
   claim: z.boolean().optional(),
 });
 export type GiftInput = z.infer<typeof giftInputSchema>;

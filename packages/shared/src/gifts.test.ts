@@ -33,9 +33,11 @@ describe("giftDateSchema", () => {
 
 describe("gift inputs", () => {
   it("validates name and device key", () => {
-    expect(giftInputSchema.safeParse({ name: "Léa", deviceKey }).success).toBe(true);
-    expect(giftInputSchema.safeParse({ name: "Léa", deviceKey, claim: true }).success).toBe(true);
-    expect(giftInputSchema.safeParse({ name: "", deviceKey }).success).toBe(false);
+    expect(giftInputSchema.safeParse({ name: "Léa", deviceKey, intent: "reserve" }).success).toBe(true);
+    expect(giftInputSchema.safeParse({ name: "Léa", deviceKey, intent: "join", claim: true }).success).toBe(true);
+    expect(giftInputSchema.safeParse({ name: "Léa", deviceKey }).success).toBe(false);
+    expect(giftInputSchema.safeParse({ name: "Léa", deviceKey, intent: "take" }).success).toBe(false);
+    expect(giftInputSchema.safeParse({ name: "", deviceKey, intent: "reserve" }).success).toBe(false);
     expect(giftDeleteSchema.safeParse({ name: "Léa", deviceKey: "x" }).success).toBe(false);
   });
   it("check and reminder action", () => {
