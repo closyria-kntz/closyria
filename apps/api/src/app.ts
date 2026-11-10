@@ -145,7 +145,7 @@ export function createApp(deps: AppDeps) {
     .route("/", facetsRoutes(deps.wardrobe))
     .route("/", referenceRoutes(deps.wardrobe))
     .route("/", wishlistsRoutes(deps.wardrobe))
-    .route("/", groupOrdersRoutes(deps.wardrobe))
+    .route("/", groupOrdersRoutes({ ...deps.wardrobe, queue: deps.catalog.queue }, captureLimiter))
     .route("/", budgetsRoutes(deps.wardrobe))
     .route("/", sharedRoutes({ ...deps.wardrobe, queue: deps.catalog.queue }))
     .route("/", overviewRoutes(deps.admin))

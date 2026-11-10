@@ -94,6 +94,14 @@ export const groupOrderOwnLinesSchema = z.object({
 });
 export type GroupOrderOwnLines = z.infer<typeof groupOrderOwnLinesSchema>;
 
+/** Her own link of the order's shop: its item (found or created) goes to her wishes, the list and her lines. */
+export const groupOrderOwnLinkSchema = z.object({
+  url: webUrlSchema,
+  sizeLabel: sizeLabelSchema,
+  quantity: quantitySchema,
+});
+export type GroupOrderOwnLink = z.infer<typeof groupOrderOwnLinkSchema>;
+
 /** « Payé » ticked (true) or unticked (false) for one friend. */
 export const groupOrderPaymentInputSchema = z.object({ paid: z.boolean() });
 

@@ -3,6 +3,7 @@ import {
   groupOrderCreateSchema,
   groupOrderOrderSchema,
   groupOrderOwnLinesSchema,
+  groupOrderOwnLinkSchema,
   groupOrderPastListSchema,
   groupOrderPatchSchema,
   groupOrderPaymentInputSchema,
@@ -13,12 +14,15 @@ import {
   wardrobeErrorSchema,
 } from "@closyria/shared";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import type { Context } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { type AccessEnv, defineAccess } from "../../access";
+import type { CaptureQueue } from "../../catalog/capture-queue";
 import { listShippingOptions } from "../../catalog/shipping-options";
 import type { WardrobeDeps } from "../../wardrobe/deps";
 import {
   actOnGroupOrder,
+  addOwnLink,
   currentGroupOrder,
   groupOrderById,
   openGroupOrder,
@@ -162,6 +166,42 @@ const ownLinesRoute = defineAccess(
   "user",
 );
 
+const ownLinkRoute = (limiter: MiddlewareHandler<AccessEnv>) =>
+  defineAccess(
+    createRoute({
+      method: "post",
+      path: "/me/group-orders/{id}/own-link",
+      summary: "« Ajouter un autre article »: her link of the order's shop",
+      description:
+        "The link must be of the order's shop (found by its domain, never created). Its page is read as for any " +
+        "paste (same hourly count); her item for the product is found or created (« Repéré ») and put in the " +
+        "order's list, then her line for that item is written or replaced (size and quantity).",
+      middleware: [limiter, bodyLimit({ maxSize: 32 * 1024, onError: (c) => c.json(invalidRequest, 400) })],
+      request: { params: orderParams, ...body(groupOrderOwnLinkSchema) },
+      responses: {
+        201: view("Her line written"),
+        400: {
+          description: "Invalid body (invalid_request), a link of another or unknown shop (not_in_shop, with the shop)",
+          content: {
+            "application/json": {
+              schema: z.union([
+                z.object({ error: z.literal("not_in_shop"), shopName: z.string() }),
+                wardrobeErrorSchema,
+              ]),
+            },
+          },
+        },
+        404: notFoundContent,
+        409: errorContent(
+          "Ordered or cancelled (group_order_locked), 20 lines of hers already (too_many_lines), another currency " +
+            "(currency_mismatch), her item trashed meanwhile (item_deleted)",
+        ),
+        429: errorContent("Too many captures (rate_limited)"),
+      },
+    }),
+    "user",
+  );
+
 const removeLineRoute = defineAccess(
   createRoute({
     method: "delete",
@@ -271,8 +311,11 @@ const STATUS_OF: Partial<Record<WardrobeErrorCode, 400 | 404 | 409>> = {
   item_deleted: 409,
 };
 
-export function groupOrdersRoutes(deps: WardrobeDeps) {
-  const { db } = deps;
+export function groupOrdersRoutes(
+  deps: WardrobeDeps & { queue: CaptureQueue },
+  captureLimiter: MiddlewareHandler<AccessEnv>,
+) {
+  const { db, queue } = deps;
   const now = () => deps.now?.() ?? new Date();
   const app = new OpenAPIHono<AccessEnv>({
     defaultHook: (result, c) => (result.success ? undefined : c.json(invalidRequest, 400)),
@@ -322,6 +365,20 @@ export function groupOrdersRoutes(deps: WardrobeDeps) {
     .openapi(ownLinesRoute, async (c) =>
       respond(c, await replaceOwnLines(db, userIdOf(c), c.req.valid("param").id, c.req.valid("json"), now())),
     )
+    .openapi(ownLinkRoute(captureLimiter), async (c) => {
+      const outcome = await addOwnLink(db, queue, userIdOf(c), c.req.valid("param").id, c.req.valid("json"), now);
+      if ("error" in outcome) {
+        if (outcome.error === "not_in_shop")
+          return c.json(
+            { error: "not_in_shop", shopName: "shopName" in outcome ? outcome.shopName : "" } as const,
+            400,
+          );
+        const status = STATUS_OF[outcome.error];
+        if (!status) throw new Error(`unexpected group order error ${outcome.error}`);
+        return c.json({ error: outcome.error }, status);
+      }
+      return c.json(outcome, 201);
+    })
     .openapi(removeLineRoute, async (c) => {
       const { id, lineId } = c.req.valid("param");
       return respond(c, await setLineRemoved(db, userIdOf(c), id, lineId, true, now()));

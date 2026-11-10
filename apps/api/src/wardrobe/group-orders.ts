@@ -11,10 +11,12 @@ import {
   type GroupOrderLineStatus,
   type GroupOrderOrder,
   type GroupOrderOwnLines,
+  type GroupOrderOwnLink,
   type GroupOrderPastList,
   type GroupOrderPatch,
   type GroupOrderPerson,
   type GroupOrderStatus,
+  type ItemStage,
   type OwnerGroupOrder,
   opinionNameKey,
   type SharedGroupOrder,
@@ -26,10 +28,11 @@ import { catalogImageUrl } from "../catalog/product-view";
 import { listShippingOptions } from "../catalog/shipping-options";
 import { findShopByHost, type Shop } from "../catalog/shops";
 import { pgCode } from "../pg-code";
-import { bulkRefusal, runBulkIn } from "./bulk";
-import { trackItemEvents } from "./deps";
+import { bulkRefusal, runBulk, runBulkIn } from "./bulk";
+import { trackItemEvent, trackItemEvents } from "./deps";
 import type { Tx } from "./events";
 import { ensureFriendDevice, friendNameKeysOf, hashDeviceKey, isFriendDevice, lockFriendName } from "./friend-device";
+import { createItem } from "./items";
 import { parisDay } from "./wishlists";
 
 type OrderRow = typeof schema.groupOrders.$inferSelect;
@@ -576,6 +579,119 @@ export function setLineRemoved(db: Database, userId: string, id: string, lineId:
   });
 }
 
+/** Her active lines (`buyer_name_key` null). */
+async function ownActiveLines(db: Database | Tx, orderId: string) {
+  return db
+    .select({ id: schema.groupOrderLines.id, itemId: schema.groupOrderLines.itemId })
+    .from(schema.groupOrderLines)
+    .where(
+      and(
+        eq(schema.groupOrderLines.groupOrderId, orderId),
+        isNull(schema.groupOrderLines.buyerNameKey),
+        isNull(schema.groupOrderLines.removedAt),
+      ),
+    );
+}
+
+/**
+ * « Ajouter un autre article »: a link of the order's shop (found by its domain, never created). Its product page is
+ * read as for any paste, her item for it is found or created (« Repéré »), put in the order's list, then her line for
+ * that item is written (or replaced: size and quantity). Refusals that write nothing come first; the line is written
+ * under the order row's lock.
+ */
+export async function addOwnLink(
+  db: Database,
+  queue: CaptureQueue,
+  userId: string,
+  id: string,
+  input: GroupOrderOwnLink,
+  now: () => Date,
+): Promise<Outcome<OwnerGroupOrder> | NotInShop> {
+  const order = await ownOrder(db, userId, id);
+  if (!order) return { error: "not_found" };
+  if (!RUNNING.includes(order.status as GroupOrderStatus)) return { error: "group_order_locked" };
+  const found = await linkOfShop(db, order, input.url);
+  if ("error" in found) return found;
+  // No room for a new line of hers: refused before anything is created (checked again under the lock below).
+  const before = await ownActiveLines(db, id);
+  if (before.length >= GROUP_ORDER_MAX_LINES) {
+    const [known] = await db
+      .select({ itemId: schema.items.id })
+      .from(schema.items)
+      .innerJoin(schema.products, eq(schema.products.id, schema.items.productId))
+      .where(
+        and(
+          eq(schema.products.canonicalUrl, found.url),
+          eq(schema.items.userId, userId),
+          isNull(schema.items.deletedAt),
+        ),
+      );
+    if (!known || !before.some((l) => l.itemId === known.itemId)) return { error: "too_many_lines" };
+  }
+  const { productId } = await requestProductCapture(db, queue, {
+    url: found.url,
+    shop: found.shop,
+    requestedBy: userId,
+    now,
+  });
+  // Her item for the product (one active per product, G2), put in the list as when she pastes a link there.
+  const kept = await createItem(db, userId, { productId, action: "list", wishlistId: order.wishlistId }, now());
+  if ("error" in kept) return kept;
+  if (kept.created) await trackItemEvent(db, userId, "item_saved", { action: "list", stage: "spotted" });
+  else {
+    const added = await runBulk(
+      db,
+      userId,
+      { op: "addToList", ids: [kept.itemId], wishlistId: order.wishlistId },
+      now(),
+    );
+    if ("error" in added) return added;
+  }
+  return writeThenView(db, async (tx) => {
+    const at = now();
+    const locked = await lockOwn(tx, userId, id, true);
+    const root = await orderShopRoot(tx, locked);
+    const item = (await listItems(tx, locked.wishlistId)).find((i) => i.itemId === kept.itemId && i.shopId === root);
+    if (!item) throw new Refused("invalid_request");
+    if (item.currency !== null && item.currency !== locked.currency) throw new Refused("currency_mismatch");
+    const [existing] = await tx
+      .select({ id: schema.groupOrderLines.id, removedAt: schema.groupOrderLines.removedAt })
+      .from(schema.groupOrderLines)
+      .where(
+        and(
+          eq(schema.groupOrderLines.groupOrderId, id),
+          isNull(schema.groupOrderLines.buyerNameKey),
+          eq(schema.groupOrderLines.itemId, item.itemId),
+        ),
+      )
+      .orderBy(asc(schema.groupOrderLines.createdAt), asc(schema.groupOrderLines.id))
+      .limit(1);
+    // A new active line (or one she took out, back): never more than GROUP_ORDER_MAX_LINES of hers.
+    if ((!existing || existing.removedAt !== null) && (await ownActiveLines(tx, id)).length >= GROUP_ORDER_MAX_LINES)
+      throw new Refused("too_many_lines");
+    if (existing) {
+      await tx
+        .update(schema.groupOrderLines)
+        .set({ sizeLabel: input.sizeLabel, quantity: input.quantity, removedAt: null, updatedAt: at })
+        .where(eq(schema.groupOrderLines.id, existing.id));
+    } else {
+      // The product and the name at write time (none yet while the page is read): the line survives the item.
+      await tx.insert(schema.groupOrderLines).values({
+        groupOrderId: id,
+        itemId: item.itemId,
+        productId: item.productId,
+        manualName: item.name,
+        sizeLabel: input.sizeLabel,
+        quantity: input.quantity,
+        createdAt: at,
+        updatedAt: at,
+      });
+    }
+    await tx.update(schema.groupOrders).set({ updatedAt: at }).where(eq(schema.groupOrders.id, id));
+    return id;
+  });
+}
+
 /**
  * « J'ai commandé »: freezes each active line's price (given, else its current one; none → `missing_price`) and the
  * shipping, writes what each friend owes, then moves her items to « Commandé » (no undo).
@@ -598,9 +714,11 @@ export async function orderGroupOrder(
       const price = given.get(line.row.id) ?? line.view.unitPriceCents;
       if (price === null) throw new Refused("missing_price");
       line.view.unitPriceCents = price;
+      // The name shown now is the one it keeps (a rename of her item just before counts, one after does not).
+      const name = line.view.name === "" ? line.row.manualName : line.view.name;
       await tx
         .update(schema.groupOrderLines)
-        .set({ finalPriceCents: price, updatedAt: now })
+        .set({ finalPriceCents: price, manualName: name, updatedAt: now })
         .where(eq(schema.groupOrderLines.id, line.row.id));
     }
     await tx
@@ -618,28 +736,46 @@ export async function orderGroupOrder(
     });
     if (owed.length > 0) await tx.insert(schema.groupOrderPayments).values(owed);
     // Her items (not in the trash) go to « Commandé » through the usual path, in this same transaction: the order
-    // and the move commit or fail together. Its undo is not given.
-    const itemIds = [
-      ...new Set(active.flatMap((l) => (l.row.buyerNameKey === null && l.row.itemId ? [l.row.itemId] : []))),
-    ];
+    // and the move commit or fail together. Its undo is not given. Each records its final unit price as paid (the
+    // quantity does not change the item; its first line gives the price), which the budget counts.
+    const paidOf = new Map<string, number>();
+    for (const line of active)
+      if (line.row.buyerNameKey === null && line.row.itemId && !paidOf.has(line.row.itemId))
+        paidOf.set(line.row.itemId, line.view.unitPriceCents ?? 0);
     const alive =
-      itemIds.length === 0
+      paidOf.size === 0
         ? []
         : await tx
             .select({ id: schema.items.id })
             .from(schema.items)
             .where(
-              and(inArray(schema.items.id, itemIds), eq(schema.items.userId, userId), isNull(schema.items.deletedAt)),
-            );
+              and(
+                inArray(schema.items.id, [...paidOf.keys()]),
+                eq(schema.items.userId, userId),
+                isNull(schema.items.deletedAt),
+              ),
+            )
+            // All of them locked at once, in id order, before the moves by price below.
+            .orderBy(asc(schema.items.id))
+            .for("update");
     if (alive.length === 0) return [];
+    const byPrice = new Map<number, string[]>();
+    for (const { id: itemId } of alive) {
+      const price = paidOf.get(itemId) ?? 0;
+      byPrice.set(price, [...(byPrice.get(price) ?? []), itemId]);
+    }
     try {
-      const moved = await runBulkIn(
-        tx,
-        userId,
-        { op: "stage", ids: alive.map((i) => i.id), stage: "ordered", at: now.toISOString() },
-        now,
-      );
-      return moved.trace.stageChanges;
+      const changes: { from: ItemStage; to: ItemStage }[] = [];
+      for (const [amountCents, ids] of byPrice) {
+        const moved = await runBulkIn(
+          tx,
+          userId,
+          { op: "stage", ids, stage: "ordered", at: now.toISOString(), amountCents },
+          now,
+        );
+        changes.push(...moved.trace.stageChanges);
+      }
+      return changes;
     } catch (error) {
       const code = bulkRefusal(error);
       if (code) throw new Refused(code);

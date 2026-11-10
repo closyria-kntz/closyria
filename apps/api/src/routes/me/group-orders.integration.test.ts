@@ -33,12 +33,14 @@ function call(method: string, path: string, cookie: string | undefined, body?: u
 
 async function newShop(label: string) {
   const k = ++counter;
+  const domain = `go-shop-${k}.test`;
   const [shop] = await t.db
     .insert(schema.shops)
     .values({ name: `${label} ${k}`, slug: `go-shop-${k}` })
     .returning();
   if (!shop) throw new Error("no shop");
-  return shop;
+  await t.db.insert(schema.shopDomains).values({ domain, shopId: shop.id });
+  return { ...shop, domain };
 }
 
 async function newProduct(shopId: string, priceCents: number | null, currency: string | null = "EUR") {
@@ -605,5 +607,184 @@ describe("a merge of the order's shop", () => {
       }),
     );
     expect(ticked.people[0]?.lines.map((l) => l.itemId)).toEqual([s.itemA.id]);
+  });
+});
+
+describe("her own link", () => {
+  const ownLink = (s: Setup, orderId: string, body: unknown) =>
+    call("POST", `/api/me/group-orders/${orderId}/own-link`, s.cookie, body);
+  const inList = async (listId: string, itemId: string) =>
+    (await t.db.select().from(schema.wishlistItems).where(eq(schema.wishlistItems.wishlistId, listId))).some(
+      (r) => r.itemId === itemId,
+    );
+  const itemsOf = (userId: string) => t.db.select().from(schema.items).where(eq(schema.items.userId, userId));
+
+  it("a link of the order's shop: an item in her wishes and in the list, ticked in the order", async () => {
+    const s = await setup();
+    const order = await open(s);
+    const url = `https://${s.shop.domain}/robe-neuve`;
+    const res = await ownLink(s, order.id, { url, sizeLabel: "M", quantity: 2 });
+    expect(res.status).toBe(201);
+    const view = (await res.json()) as OwnerGroupOrder;
+    const [product] = await t.db.select().from(schema.products).where(eq(schema.products.canonicalUrl, url));
+    expect(product?.shopId).toBe(s.shop.id);
+    const item = (await itemsOf(s.userId)).find((i) => i.productId === product?.id);
+    expect(item?.stage).toBe("spotted");
+    expect(await inList(s.list.id, item?.id as string)).toBe(true);
+    expect(view.ownItems.map((i) => i.itemId)).toContain(item?.id);
+    const line = view.people[0]?.lines[0];
+    expect(view.people[0]?.isOwner).toBe(true);
+    expect(line).toMatchObject({ itemId: item?.id, sizeLabel: "M", quantity: 2, status: "reading" });
+    const [row] = await t.db
+      .select()
+      .from(schema.groupOrderLines)
+      .where(eq(schema.groupOrderLines.id, line?.id as string));
+    expect(row?.productId).toBe(product?.id);
+    expect(row?.buyerNameKey).toBeNull();
+
+    // The same link again: her line for that item is replaced, never a second item or line.
+    const again = await ownLink(s, order.id, { url, sizeLabel: "S", quantity: 1 });
+    expect(again.status).toBe(201);
+    const second = (await again.json()) as OwnerGroupOrder;
+    expect(second.people[0]?.lines).toHaveLength(1);
+    expect(second.people[0]?.lines[0]).toMatchObject({ itemId: item?.id, sizeLabel: "S", quantity: 1 });
+    expect((await itemsOf(s.userId)).filter((i) => i.productId === product?.id)).toHaveLength(1);
+  });
+
+  it("a link of another shop, or of an unknown one: not_in_shop, nothing created", async () => {
+    const s = await setup();
+    const order = await open(s);
+    const elsewhere = await ownLink(s, order.id, {
+      url: `https://${s.other.domain}/robe`,
+      sizeLabel: null,
+      quantity: 1,
+    });
+    expect(elsewhere.status).toBe(400);
+    expect(await elsewhere.json()).toEqual({ error: "not_in_shop", shopName: s.shop.name });
+    const shopsBefore = await t.db.$count(schema.shops);
+    const unknownUrl = "https://inconnue-go-closyria.test/robe";
+    const unknown = await ownLink(s, order.id, { url: unknownUrl, sizeLabel: null, quantity: 1 });
+    expect(unknown.status).toBe(400);
+    expect(await unknown.json()).toEqual({ error: "not_in_shop", shopName: s.shop.name });
+    expect(await t.db.$count(schema.shops)).toBe(shopsBefore);
+    expect(await t.db.$count(schema.products, eq(schema.products.canonicalUrl, unknownUrl))).toBe(0);
+    expect(await itemsOf(s.userId)).toHaveLength(3);
+    expect(await t.db.$count(schema.groupOrderLines, eq(schema.groupOrderLines.groupOrderId, order.id))).toBe(0);
+    expect(
+      (await call("POST", `/api/me/group-orders/${order.id}/own-link`, s.cookie, { url: "pas un lien" })).status,
+    ).toBe(400);
+  });
+
+  it("a product already in her wishes: the same item, put in the list", async () => {
+    const s = await setup();
+    const order = await open(s);
+    const url = `https://${s.shop.domain}/deja`;
+    const [product] = await t.db
+      .insert(schema.products)
+      .values({ shopId: s.shop.id, canonicalUrl: url, name: "Déjà là", priceCents: 1800, currency: "EUR" })
+      .returning();
+    const created = await call("POST", "/api/me/items", s.cookie, { productId: product?.id, action: "wish" });
+    expect(created.status).toBe(201);
+    const { item } = (await created.json()) as { item: ItemView };
+    expect(await inList(s.list.id, item.id)).toBe(false);
+    const view = (await (await ownLink(s, order.id, { url, sizeLabel: null, quantity: 1 })).json()) as OwnerGroupOrder;
+    expect(await itemsOf(s.userId)).toHaveLength(4);
+    expect(await inList(s.list.id, item.id)).toBe(true);
+    expect(view.people[0]?.lines[0]).toMatchObject({ itemId: item.id, name: "Déjà là", unitPriceCents: 1800 });
+  });
+
+  it("refuses once ordered (group_order_locked) and past 20 lines of hers (too_many_lines)", async () => {
+    const s = await setup();
+    const order = await open(s);
+    await t.db
+      .insert(schema.groupOrderLines)
+      .values(Array.from({ length: 20 }, (_, i) => ({ groupOrderId: order.id, manualName: `Article ${i}` })));
+    const full = await ownLink(s, order.id, { url: `https://${s.shop.domain}/trop`, sizeLabel: null, quantity: 1 });
+    expect(full.status).toBe(409);
+    expect(await full.json()).toEqual({ error: "too_many_lines" });
+    await ok(
+      await call("POST", `/api/me/group-orders/${order.id}/order`, s.cookie, {
+        shippingCents: 0,
+        lines: [
+          ...(
+            await t.db.select().from(schema.groupOrderLines).where(eq(schema.groupOrderLines.groupOrderId, order.id))
+          ).map((l) => ({ id: l.id, priceCents: 100 })),
+        ],
+      }),
+    );
+    const locked = await ownLink(s, order.id, { url: `https://${s.shop.domain}/tard`, sizeLabel: null, quantity: 1 });
+    expect(locked.status).toBe(409);
+    expect(await locked.json()).toEqual({ error: "group_order_locked" });
+    const other = await t.signIn();
+    expect(
+      (
+        await call("POST", `/api/me/group-orders/${order.id}/own-link`, other.cookie, {
+          url: `https://${s.shop.domain}/x`,
+          sizeLabel: null,
+          quantity: 1,
+        })
+      ).status,
+    ).toBe(404);
+  });
+});
+
+describe("« J'ai commandé » for her items", () => {
+  it("records the final unit price as paid and counts it in the list budget", async () => {
+    const s = await setup();
+    const order = await open(s);
+    const mine = await ok(
+      await call("PUT", `/api/me/group-orders/${order.id}/own-lines`, s.cookie, {
+        lines: [
+          { itemId: s.itemA.id, sizeLabel: "38", quantity: 1 },
+          { itemId: s.itemB.id, sizeLabel: "M", quantity: 2 },
+        ],
+      }),
+    );
+    const lineA = mine.people[0]?.lines[0]?.id as string;
+    const budget = await call("PUT", `/api/me/wishlists/${s.list.id}/budget`, s.cookie, {
+      amountCents: 30000,
+      period: "week",
+    });
+    expect(budget.status).toBe(200);
+    await ok(
+      await call("POST", `/api/me/group-orders/${order.id}/order`, s.cookie, {
+        shippingCents: 600,
+        lines: [{ id: lineA, priceCents: 4200 }],
+      }),
+    );
+    const [a] = await t.db.select().from(schema.items).where(eq(schema.items.id, s.itemA.id));
+    const [b] = await t.db.select().from(schema.items).where(eq(schema.items.id, s.itemB.id));
+    expect(a).toMatchObject({ stage: "ordered", pricePaidCents: 4200 });
+    // B: its size M at 25 €, the unit price (the quantity does not change the item).
+    expect(b).toMatchObject({ stage: "ordered", pricePaidCents: 2500 });
+    const after = (await (await call("GET", `/api/me/wishlists/${s.list.id}/budget`, s.cookie)).json()) as {
+      current: { spentCents: number };
+    };
+    // One « Commandé » event per item, at the price paid (the existing rule).
+    expect(after.current.spentCents).toBe(4200 + 2500);
+  });
+
+  it("freezes the name shown at the order: a rename just before is kept, one after is not", async () => {
+    const s = await setup();
+    const order = await open(s);
+    await ok(
+      await call("PUT", `/api/me/group-orders/${order.id}/own-lines`, s.cookie, {
+        lines: [{ itemId: s.itemA.id, sizeLabel: null, quantity: 1 }],
+      }),
+    );
+    expect((await call("PATCH", `/api/me/items/${s.itemA.id}`, s.cookie, { nameOverride: "Nouveau nom" })).status).toBe(
+      200,
+    );
+    const ordered = await ok(
+      await call("POST", `/api/me/group-orders/${order.id}/order`, s.cookie, { shippingCents: 600, lines: [] }),
+    );
+    expect(ordered.people[0]?.lines[0]?.name).toBe("Nouveau nom");
+    await call("PATCH", `/api/me/items/${s.itemA.id}`, s.cookie, { nameOverride: "Après" });
+    expect((await ok(await current(s))).people[0]?.lines[0]?.name).toBe("Nouveau nom");
+    const [row] = await t.db
+      .select()
+      .from(schema.groupOrderLines)
+      .where(eq(schema.groupOrderLines.groupOrderId, order.id));
+    expect(row?.manualName).toBe("Nouveau nom");
   });
 });

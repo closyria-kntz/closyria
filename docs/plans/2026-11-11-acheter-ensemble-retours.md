@@ -32,8 +32,8 @@
 - Produces : `POST /api/me/group-orders/{id}/own-link` body `{ url, sizeLabel, quantity }` → 201 `ownerGroupOrderSchema`. Crée ou retrouve l'article de la fondatrice pour ce produit par le chemin existant (capture + `createItem` en « Repéré »), l'ajoute à la liste de la commande, puis ajoute sa ligne (avec `product_id` et `manual_name`). Erreurs : `400 not_in_shop {shopName}` (racine de boutique différente ou inconnue, jamais de boutique créée), `409 group_order_locked`, `409 too_many_lines`.
 - « J'ai commandé » : chaque article de la fondatrice reçoit `price_paid_cents` = prix final **unitaire** (le prix payé d'un article est unitaire ; la quantité ne change pas l'article), et « Déjà commandé » du budget le compte par le chemin existant (lire `apps/api/src/wardrobe/spent.ts` et `events.ts`) ; `manual_name` de chaque ligne = nom affiché au moment de commander.
 
-- [ ] Tests d'intégration d'abord : lien même boutique → article dans ses envies et dans la liste, ligne cochée ; lien autre boutique → 400 sans boutique créée ; même produit déjà dans ses envies → pas de doublon d'article ; après « J'ai commandé » avec prix corrigé 4200 → `price_paid_cents` 4200 et budget « Déjà commandé » augmenté de 4200 × quantité selon la règle existante ; article renommé juste avant de commander → nom figé = nouveau nom.
-- [ ] Implémenter, relancer, `pnpm lint`, `pnpm typecheck`, commit « feat(acheter-ensemble): lien de la fondatrice, prix payé, nom figé ».
+- [x] Tests d'intégration d'abord : lien même boutique → article dans ses envies et dans la liste, ligne cochée ; lien autre boutique → 400 sans boutique créée ; même produit déjà dans ses envies → pas de doublon d'article ; après « J'ai commandé » avec prix corrigé 4200 → `price_paid_cents` 4200 et budget « Déjà commandé » augmenté de 4200 × quantité selon la règle existante ; article renommé juste avant de commander → nom figé = nouveau nom.
+- [x] Implémenter, relancer, `pnpm lint`, `pnpm typecheck`, commit « feat(acheter-ensemble): lien de la fondatrice, prix payé, nom figé ».
 
 ### Task 2: Écrans de la fondatrice
 
