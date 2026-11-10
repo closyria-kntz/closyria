@@ -5,6 +5,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { PageViewTracker } from "@/components/page-view-tracker";
+import { FAVICON_DATA_URL } from "./favicon-data";
 import "./globals.css";
 
 // `cover` lets the page reach under the notch and home indicator; the phone tab bar pads itself with the safe area.
@@ -32,6 +33,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <script src="/theme-init.js" />
         {/* With credentials: behind dev's password, a manifest fetched without them makes Chrome ask again and again. */}
         <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
+        <link rel="icon" type="image/png" sizes="32x32" href={FAVICON_DATA_URL} />
       </head>
       <body className="min-h-dvh bg-surface text-ink antialiased">
         <NextIntlClientProvider messages={publicMessages}>{children}</NextIntlClientProvider>
