@@ -456,6 +456,10 @@ export const groupOrders = pgTable(
  * the owner's items, a product (a pasted link), or only carries a typed name and price. Removed lines are kept
  * (`removed_at`) so that the friend can be told.
  */
+/*
+ * Source rule: `item_id` is `ON DELETE SET NULL` (an ordered group order keeps its history), so a line always carries
+ * its own source too: a `product_id` or a snapshot `manual_name` (owner lines store the item's name when written).
+ */
 export const groupOrderLines = pgTable(
   "group_order_lines",
   {
@@ -499,10 +503,7 @@ export const groupOrderLines = pgTable(
       "group_order_lines_prices_check",
       sql`(${t.manualPriceCents} IS NULL OR ${t.manualPriceCents} >= 0) AND (${t.finalPriceCents} IS NULL OR ${t.finalPriceCents} >= 0)`,
     ),
-    check(
-      "group_order_lines_source_check",
-      sql`${t.itemId} IS NOT NULL OR ${t.productId} IS NOT NULL OR ${t.manualName} IS NOT NULL`,
-    ),
+    check("group_order_lines_source_check", sql`${t.productId} IS NOT NULL OR ${t.manualName} IS NOT NULL`),
   ],
 );
 

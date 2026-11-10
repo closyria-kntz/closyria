@@ -1,5 +1,5 @@
 {
-  "id": "1b4e603f-e828-42cc-9419-c495b606db5e",
+  "id": "23965a7b-6d3d-4002-9b78-89fca1c92c75",
   "prevId": "ee18d74a-7cf6-452b-9c3c-5e0a21c8b1f2",
   "version": "7",
   "dialect": "postgresql",
@@ -2864,7 +2864,7 @@
         },
         "group_order_lines_source_check": {
           "name": "group_order_lines_source_check",
-          "value": "\"group_order_lines\".\"item_id\" IS NOT NULL OR \"group_order_lines\".\"product_id\" IS NOT NULL OR \"group_order_lines\".\"manual_name\" IS NOT NULL"
+          "value": "\"group_order_lines\".\"product_id\" IS NOT NULL OR \"group_order_lines\".\"manual_name\" IS NOT NULL"
         }
       },
       "isRLSEnabled": false

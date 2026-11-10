@@ -33,7 +33,7 @@ CREATE TABLE "group_order_lines" (
 	CONSTRAINT "group_order_lines_size_label_check" CHECK ("group_order_lines"."size_label" IS NULL OR char_length("group_order_lines"."size_label") <= 320),
 	CONSTRAINT "group_order_lines_buyer_name_check" CHECK ("group_order_lines"."buyer_name" IS NULL OR char_length("group_order_lines"."buyer_name") BETWEEN 1 AND 320),
 	CONSTRAINT "group_order_lines_prices_check" CHECK (("group_order_lines"."manual_price_cents" IS NULL OR "group_order_lines"."manual_price_cents" >= 0) AND ("group_order_lines"."final_price_cents" IS NULL OR "group_order_lines"."final_price_cents" >= 0)),
-	CONSTRAINT "group_order_lines_source_check" CHECK ("group_order_lines"."item_id" IS NOT NULL OR "group_order_lines"."product_id" IS NOT NULL OR "group_order_lines"."manual_name" IS NOT NULL)
+	CONSTRAINT "group_order_lines_source_check" CHECK ("group_order_lines"."product_id" IS NOT NULL OR "group_order_lines"."manual_name" IS NOT NULL)
 );
 --> statement-breakpoint
 CREATE TABLE "group_order_payments" (

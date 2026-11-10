@@ -53,6 +53,38 @@ describe("migration 0018 (acheter ensemble)", () => {
         await expect(line(6, "Robe")).rejects.toThrow(/check/i);
         await expect(line(1, null)).rejects.toThrow(/check/i);
 
+        const profile = await client.query<{ id: string }>(
+          `insert into profiles (user_id, name, audience, color) values ('u1', 'P', 'women', 'rose') returning id`,
+        );
+        const mkItem = async () =>
+          (
+            await client.query<{ id: string }>(
+              `insert into items (user_id, profile_id) values ('u1', $1) returning id`,
+              [profile.rows[0]?.id],
+            )
+          ).rows[0]?.id;
+        const product = await client.query<{ id: string }>(
+          `insert into products (shop_id, canonical_url) values ($1, 'https://zara.example/p/1') returning id`,
+          [shopId],
+        );
+        const itemId = await mkItem();
+        // An item-only line is refused: deleting the item would break the source check.
+        await expect(
+          client.query(`insert into group_order_lines (group_order_id, item_id) values ($1, $2)`, [openId, itemId]),
+        ).rejects.toThrow(/check/i);
+        await client.query(`insert into group_order_lines (group_order_id, item_id, product_id) values ($1, $2, $3)`, [
+          openId,
+          itemId,
+          product.rows[0]?.id,
+        ]);
+        await client.query("delete from items where id = $1", [itemId]);
+        const kept = await client.query<{ item_id: string | null }>(
+          `select item_id from group_order_lines where product_id = $1`,
+          [product.rows[0]?.id],
+        );
+        expect(kept.rowCount).toBe(1);
+        expect(kept.rows[0]?.item_id).toBeNull();
+
         const option = await client.query<{ id: string }>(
           `insert into shop_shipping_options (shop_id, label, shipping_cents) values ($1, 'Standard', 690) returning id`,
           [shopId],
@@ -80,6 +112,7 @@ describe("migration 0018 (acheter ensemble)", () => {
         const orphans = await client.query(`select 1 from group_order_lines`);
         expect(orphans.rowCount).toBe(0);
 
+        await client.query("delete from products where shop_id = $1", [shopId]);
         await client.query("delete from shops where id = $1", [shopId]);
         const left = await client.query("select 1 from shop_shipping_options");
         expect(left.rowCount).toBe(0);
