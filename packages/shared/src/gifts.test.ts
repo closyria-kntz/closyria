@@ -92,6 +92,7 @@ describe("wishlistViewSchema", () => {
       giftOccasion: null,
       giftDate: null,
       giftReminderDue: false,
+      groupOrder: null,
     };
     expect(wishlistViewSchema.safeParse(w).success).toBe(true);
     const { giftReminderDue: _, ...without } = w;

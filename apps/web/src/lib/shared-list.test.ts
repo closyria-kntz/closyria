@@ -19,6 +19,7 @@ const view = {
   viewerIsOwner: false,
   gifts: { open: false, occasion: null, date: null },
   givenItems: [],
+  groupOrder: null,
   levels: DEFAULT_LOVE_LEVELS,
   budget: null,
   items: [

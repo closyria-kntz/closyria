@@ -273,6 +273,7 @@ describe("views", () => {
       giftOccasion: null,
       giftDate: null,
       giftReminderDue: false,
+      groupOrder: null,
     };
     expect(wishlistViewSchema.safeParse(w).success).toBe(true);
     expect(wishlistViewSchema.safeParse({ ...w, shared: true, sharedAt: "2026-11-05T10:00:00.000Z" }).success).toBe(

@@ -68,6 +68,29 @@ export const shopDomains = pgTable("shop_domains", {
     .references(() => shops.id, { onDelete: "cascade" }),
 });
 
+/** Delivery options of a shop (« Standard, 6,90 €, offert dès 80 € »), edited in the admin; a group order copies one. */
+export const shopShippingOptions = pgTable(
+  "shop_shipping_options",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    shippingCents: integer("shipping_cents").notNull(),
+    freeFromCents: integer("free_from_cents"),
+    position: integer("position").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("shop_shipping_options_shop_id_idx").on(t.shopId),
+    check("shop_shipping_options_label_check", sql`char_length(${t.label}) BETWEEN 1 AND 320`),
+    check("shop_shipping_options_shipping_check", sql`${t.shippingCents} >= 0`),
+    check("shop_shipping_options_free_from_check", sql`${t.freeFromCents} IS NULL OR ${t.freeFromCents} > 0`),
+  ],
+);
+
 /** Prices are in cents with an ISO 4217 currency. */
 export const products = pgTable(
   "products",

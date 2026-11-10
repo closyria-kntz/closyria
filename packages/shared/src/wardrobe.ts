@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { audienceSchema, childDetailSchema, currencySchema, productViewSchema, seasonSchema } from "./catalog";
 import { sharedGiftStateSchema, sharedGiftsSchema } from "./gifts";
+import { groupOrderStatusSchema, sharedGroupOrderSchema } from "./group-orders";
 import { type LoveLevel, loveLevelSchema } from "./love-level";
 import { opinionViewSchema, wishlistSettingsSchema } from "./opinions";
 
@@ -391,6 +392,8 @@ export const wishlistViewSchema = z.object({
   giftDate: z.string().nullable(),
   /** The day after her occasion (until « Plus tard » or « C'est fait »): « {occasion} est passé … ». Reveals nothing. */
   giftReminderDue: z.boolean(),
+  /** The running (or last) group order of the list, in short. */
+  groupOrder: z.object({ id: z.uuid(), status: groupOrderStatusSchema, shopName: z.string() }).nullable(),
 });
 export type WishlistView = z.infer<typeof wishlistViewSchema>;
 
@@ -402,6 +405,7 @@ export const sharedWishlistViewSchema = z.object({
   /** The session reading the link owns the list: every gift is `hidden` and the page says why. */
   viewerIsOwner: z.boolean(),
   gifts: sharedGiftsSchema,
+  groupOrder: sharedGroupOrderSchema.nullable(),
   /** Items given to her already (names only), shown under « Déjà offerts ». */
   givenItems: z.array(z.object({ name: z.string() })),
   /** Her level names, so friends see the same emojis she does. */

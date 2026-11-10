@@ -60,19 +60,19 @@
   - `computeGroupOrderTotals(input: { people: { key: string; isOwner: boolean; linesCents: number[] }[]; shippingCents: number; freeFromCents: number | null }): { totalCents: number; remainingForFreeCents: number | null; shippingTotalCents: number; perPerson: Record<string, { itemsCents: number; shippingCents: number; totalCents: number }> }` — personnes dans l'ordre d'affichage ; seules celles avec ≥ 1 ligne participent au port.
   - `sharedGroupOrderSchema` (vue des amies) et `ownerGroupOrderSchema` (vue de la fondatrice), voir Tasks 3 et 4 pour les champs ; `sharedWishlistViewSchema` + `groupOrder: sharedGroupOrderSchema.nullable()` ; `wishlistViewSchema` + `groupOrder: z.object({ id, status, shopName }).nullable()`.
 
-- [ ] **Step 1: tests du calcul** (`group-orders.test.ts`) :
+- [x] **Step 1: tests du calcul** (`group-orders.test.ts`) :
   - port 690, sans seuil, 3 personnes (fondatrice + 2) → 230 chacune ;
   - port 700, 3 personnes → fondatrice 234, amies 233 (reste à la fondatrice) ;
   - port 700, fondatrice sans ligne, 3 amies → première amie 234 ;
   - seuil 8000, total 5700 → `remainingForFreeCents: 2300`, port partagé ; total 8000 → `remainingForFreeCents: 0`, port 0 pour toutes ;
   - personne sans ligne → pas de part de port, absente de `perPerson` ;
   - aucune ligne → total 0, port 0.
-- [ ] **Step 2: tests de schéma** : `friendLineInputSchema` refuse `quantity: 6`, une taille de 41 caractères, `source: "manual"` sans prix ; `groupOrderCreateSchema` refuse à la fois `shippingOptionId` et `shipping`.
-- [ ] **Step 3: test de migration** (`migration-0018`) : deux commandes `open` sur la même liste → erreur d'unicité ; une `ordered` + une `open` → OK ; `quantity = 0` → erreur ; ligne sans item, produit ni nom → erreur ; supprimer la boutique d'une option → l'option disparaît.
-- [ ] **Step 4: lancer** `pnpm --filter @closyria/shared test` et `pnpm --filter @closyria/testing test -- migration-0018` → échecs attendus.
-- [ ] **Step 5: implémenter** schémas Drizzle, migration (`pnpm --filter @closyria/db generate`, renommer en `0018_acheter_ensemble.sql`), schémas et calcul partagés ; vues existantes remplies par défaut (`groupOrder: null`).
-- [ ] **Step 6: relancer** → PASS ; `pnpm typecheck` → PASS.
-- [ ] **Step 7: commit** « feat(acheter-ensemble): données, schémas et calcul ».
+- [x] **Step 2: tests de schéma** : `friendLineInputSchema` refuse `quantity: 6`, une taille de 41 caractères, `source: "manual"` sans prix ; `groupOrderCreateSchema` refuse à la fois `shippingOptionId` et `shipping`.
+- [x] **Step 3: test de migration** (`migration-0018`) : deux commandes `open` sur la même liste → erreur d'unicité ; une `ordered` + une `open` → OK ; `quantity = 0` → erreur ; ligne sans item, produit ni nom → erreur ; supprimer la boutique d'une option → l'option disparaît.
+- [x] **Step 4: lancer** `pnpm --filter @closyria/shared test` et `pnpm --filter @closyria/testing test -- migration-0018` → échecs attendus.
+- [x] **Step 5: implémenter** schémas Drizzle, migration (`pnpm --filter @closyria/db generate`, renommer en `0018_acheter_ensemble.sql`), schémas et calcul partagés ; vues existantes remplies par défaut (`groupOrder: null`).
+- [x] **Step 6: relancer** → PASS ; `pnpm typecheck` → PASS.
+- [x] **Step 7: commit** « feat(acheter-ensemble): données, schémas et calcul ».
 
 ### Task 2: Admin — livraison des boutiques
 

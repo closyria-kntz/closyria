@@ -108,6 +108,7 @@ function toWishlistView(row: WishlistRow, itemIds: string[], newOpinions: number
     giftOccasion: row.giftOccasion,
     giftDate: row.giftDate,
     giftReminderDue: giftReminderDue(row, now),
+    groupOrder: null,
   };
 }
 
@@ -244,6 +245,7 @@ export async function loadSharedView(
     gifts: list.allowGifts
       ? { open: true, occasion: list.giftOccasion, date: list.giftDate }
       : { open: false, occasion: null, date: null },
+    groupOrder: null,
     givenItems: given.map((m) => ({ name: m.name ?? "" })),
     levels,
     budget,

@@ -3,6 +3,11 @@ import {
   budgetPeriodSchema,
   childDetailSchema,
   GIFT_OCCASION_MAX_CODE_POINTS,
+  GROUP_ORDER_MANUAL_NAME_MAX,
+  GROUP_ORDER_MAX_QUANTITY,
+  GROUP_ORDER_SHIPPING_LABEL_MAX,
+  GROUP_ORDER_SIZE_LABEL_MAX,
+  groupOrderStatusSchema,
   itemEventTypeSchema,
   itemStageSchema,
   MAX_LOVE_LEVEL_LABEL,
@@ -38,7 +43,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
-import { products } from "./catalog";
+import { products, shops } from "./catalog";
 import { oneOf } from "./helpers";
 import { media } from "./media";
 import { categories, colors } from "./reference";
@@ -405,6 +410,117 @@ export const wishlistGifts = pgTable(
     index("wishlist_gifts_item_id_idx").on(t.itemId),
     check("wishlist_gifts_role_check", oneOf(t.role, ["reserver", "contributor"])),
     check("wishlist_gifts_giver_name_check", lengthBetween(t.giverName, OPINION_NAME_MAX_CODE_POINTS)),
+  ],
+);
+
+/**
+ * A group order on a shared list (« Acheter ensemble »): friends add items from one shop, the owner closes, orders and
+ * marks payments. The delivery values are copied from the shop's option, so the admin changing it later changes nothing
+ * here. At most one running (`open` or `closed`) order per list. Goes with the list.
+ */
+export const groupOrders = pgTable(
+  "group_orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    wishlistId: uuid("wishlist_id")
+      .notNull()
+      .references(() => wishlists.id, { onDelete: "cascade" }),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id),
+    status: text("status").notNull().default("open"),
+    /** Last day to add (end of the day, Europe/Paris). */
+    deadline: date("deadline", { mode: "string" }),
+    shippingLabel: text("shipping_label").notNull(),
+    shippingCents: integer("shipping_cents").notNull(),
+    freeFromCents: integer("free_from_cents"),
+    currency: text("currency").notNull(),
+    orderedAt: timestamp("ordered_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("group_orders_running_idx").on(t.wishlistId).where(sql`${t.status} IN ('open', 'closed')`),
+    index("group_orders_shop_id_idx").on(t.shopId),
+    check("group_orders_status_check", oneOf(t.status, groupOrderStatusSchema.options)),
+    check("group_orders_shipping_label_check", lengthBetween(t.shippingLabel, GROUP_ORDER_SHIPPING_LABEL_MAX * 8)),
+    check("group_orders_shipping_check", sql`${t.shippingCents} >= 0`),
+    check("group_orders_free_from_check", sql`${t.freeFromCents} IS NULL OR ${t.freeFromCents} > 0`),
+    check("group_orders_currency_check", sql`char_length(${t.currency}) = 3`),
+  ],
+);
+
+/**
+ * A line of a group order. `buyer_name` null = the owner. Friends' lines never create an item: a line points to one of
+ * the owner's items, a product (a pasted link), or only carries a typed name and price. Removed lines are kept
+ * (`removed_at`) so that the friend can be told.
+ */
+export const groupOrderLines = pgTable(
+  "group_order_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupOrderId: uuid("group_order_id")
+      .notNull()
+      .references(() => groupOrders.id, { onDelete: "cascade" }),
+    buyerName: text("buyer_name"),
+    buyerNameKey: text("buyer_name_key"),
+    itemId: uuid("item_id").references(() => items.id, { onDelete: "set null" }),
+    productId: uuid("product_id").references(() => products.id),
+    url: text("url"),
+    manualName: text("manual_name"),
+    manualPriceCents: integer("manual_price_cents"),
+    sizeLabel: text("size_label"),
+    quantity: integer("quantity").notNull().default(1),
+    /** Real price per unit, set by « J'ai commandé ». */
+    finalPriceCents: integer("final_price_cents"),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("group_order_lines_group_order_id_idx").on(t.groupOrderId),
+    index("group_order_lines_item_id_idx").on(t.itemId),
+    index("group_order_lines_product_id_idx").on(t.productId),
+    check(
+      "group_order_lines_quantity_check",
+      sql`${t.quantity} BETWEEN 1 AND ${sql.raw(String(GROUP_ORDER_MAX_QUANTITY))}`,
+    ),
+    check(
+      "group_order_lines_manual_name_check",
+      sql`${t.manualName} IS NULL OR char_length(${t.manualName}) BETWEEN 1 AND ${sql.raw(String(GROUP_ORDER_MANUAL_NAME_MAX * 8))}`,
+    ),
+    check("group_order_lines_size_label_check", atMost(t.sizeLabel, GROUP_ORDER_SIZE_LABEL_MAX * 8)),
+    check(
+      "group_order_lines_buyer_name_check",
+      sql`${t.buyerName} IS NULL OR char_length(${t.buyerName}) BETWEEN 1 AND ${sql.raw(String(OPINION_NAME_MAX_CODE_POINTS))}`,
+    ),
+    check(
+      "group_order_lines_prices_check",
+      sql`(${t.manualPriceCents} IS NULL OR ${t.manualPriceCents} >= 0) AND (${t.finalPriceCents} IS NULL OR ${t.finalPriceCents} >= 0)`,
+    ),
+    check(
+      "group_order_lines_source_check",
+      sql`${t.itemId} IS NOT NULL OR ${t.productId} IS NOT NULL OR ${t.manualName} IS NOT NULL`,
+    ),
+  ],
+);
+
+/** What a friend owes, frozen by « J'ai commandé »; `paid_at` set when the owner marks « Payé ». */
+export const groupOrderPayments = pgTable(
+  "group_order_payments",
+  {
+    groupOrderId: uuid("group_order_id")
+      .notNull()
+      .references(() => groupOrders.id, { onDelete: "cascade" }),
+    buyerNameKey: text("buyer_name_key").notNull(),
+    buyerName: text("buyer_name").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.groupOrderId, t.buyerNameKey] }),
+    check("group_order_payments_amount_check", sql`${t.amountCents} >= 0`),
   ],
 );
 

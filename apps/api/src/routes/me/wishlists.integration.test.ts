@@ -470,6 +470,7 @@ describe("sharing", () => {
       "budget",
       "gifts",
       "givenItems",
+      "groupOrder",
       "items",
       "levels",
       "name",

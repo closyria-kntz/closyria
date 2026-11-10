@@ -6,6 +6,7 @@ export * from "./client-address";
 export * from "./env";
 export * from "./events";
 export * from "./gifts";
+export * from "./group-orders";
 export * from "./health";
 export * from "./love-level";
 export * from "./media";
