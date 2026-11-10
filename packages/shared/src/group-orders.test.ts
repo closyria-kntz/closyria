@@ -153,6 +153,7 @@ describe("group order views", () => {
         totals: { totalCents: 0, remainingForFreeCents: null, shippingTotalCents: 0 },
         people: [],
         eligibleItemIds: [],
+        itemSizes: {},
         mine: null,
         orderedAt: null,
       }).success,

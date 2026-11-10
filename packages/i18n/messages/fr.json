@@ -1395,6 +1395,7 @@
         "editTitle": "Modifier : {name}",
         "link": "Lien de l'article chez {shop}",
         "size": "Taille (facultatif)",
+        "noSize": "Taille non précisée",
         "quantity": "Quantité",
         "manualName": "Nom de l'article",
         "manualPrice": "Prix ({currency})",

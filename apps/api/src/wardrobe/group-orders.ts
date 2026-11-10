@@ -906,6 +906,18 @@ export async function sharedGroupOrderView(
     list.showOwnerName ? ownerFirstName(db, order.wishlistId) : Promise.resolve(""),
     deviceKey ? friendNameKeysOf(db, list.id, deviceKey) : Promise.resolve([]),
   ]);
+  const eligible = items.filter((i) => i.shopId === order.shopId);
+  const itemSizes: Record<string, string[]> = {};
+  const sizesByProduct = new Map<string, string[]>();
+  for (const size of await sizesOf(
+    db,
+    eligible.map((i) => i.productId),
+  ))
+    sizesByProduct.set(size.productId, [...(sizesByProduct.get(size.productId) ?? []), size.label]);
+  for (const item of eligible) {
+    const sizes = sizesByProduct.get(item.productId);
+    if (sizes) itemSizes[item.itemId] = sizes;
+  }
   const people = peopleOf(lines);
   const totals = totalsOf(people, order.shippingCents, order.freeFromCents);
   const own = people.find((p) => !p.isOwner && deviceNames.includes(p.key));
@@ -962,7 +974,8 @@ export async function sharedGroupOrderView(
         },
       ];
     }),
-    eligibleItemIds: items.filter((i) => i.shopId === order.shopId).map((i) => i.itemId),
+    eligibleItemIds: eligible.map((i) => i.itemId),
+    itemSizes,
     mine,
     orderedAt: order.orderedAt?.toISOString() ?? null,
   };

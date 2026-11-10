@@ -17,6 +17,7 @@ import { type FriendDevice, friendDevice } from "@/lib/friend-device";
 import { levelOf } from "@/lib/love-levels";
 import { formatOptionalPrice } from "@/lib/price";
 import {
+  addGroupLine,
   deleteGroupLine,
   deleteOpinion,
   fetchSharedView,
@@ -338,6 +339,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
       buyerName,
       sizeLabel: line.sizeLabel,
       quantity: line.quantity,
+      sizes: (line.itemId && view.groupOrder?.itemSizes[line.itemId]) || [],
       // A link read without a price: she says what it is and what it costs.
       manual:
         line.itemId === null && line.unitPriceCents === null && line.status !== "reading"
@@ -384,8 +386,24 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
       void reload();
       return;
     }
-    show(tGroup("toast.removed"), null);
-    focusAfterRead.current = groupFocusOf(line.itemId);
+    // « Annuler » takes the same item back, in the same size and quantity (a link's address is not on the page).
+    const itemId = line.itemId;
+    const key = device.key;
+    const undo = itemId
+      ? async () =>
+          (
+            await addGroupLine(token, {
+              source: "item",
+              itemId,
+              sizeLabel: line.sizeLabel,
+              quantity: line.quantity,
+              name: buyerName,
+              deviceKey: key,
+            })
+          ).ok
+      : null;
+    show(tGroup("toast.removed"), undo, groupFocusOf(itemId));
+    focusAfterRead.current = groupFocusOf(itemId);
     await reload();
   }
 
@@ -474,7 +492,12 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
               groupCanAct={device !== null && !view.viewerIsOwner}
               groupBusy={groupBusy}
               onGroupTake={() =>
-                openGroupSheet({ kind: "item", itemId: item.itemId, name: item.name?.trim() || t("noName") })
+                openGroupSheet({
+                  kind: "item",
+                  itemId: item.itemId,
+                  name: item.name?.trim() || t("noName"),
+                  sizes: view.groupOrder?.itemSizes[item.itemId] ?? [],
+                })
               }
               onGroupEdit={editGroupLine}
               onGroupRemove={(line) => void removeGroupLine(line)}

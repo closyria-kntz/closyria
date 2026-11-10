@@ -18,7 +18,13 @@ import { cleanName, clip, FriendNameStep, NameTakenQuestion, nameFits } from "./
 
 /** What the sheet is for: an item of the list, a link of the shop, or one of her lines. */
 export type GroupLineTarget =
-  | { kind: "item"; itemId: string; name: string }
+  | {
+      kind: "item";
+      itemId: string;
+      name: string;
+      /** Known sizes of the item (a list to pick from); empty: a free field. */
+      sizes: string[];
+    }
   | { kind: "link" }
   | {
       kind: "edit";
@@ -28,6 +34,8 @@ export type GroupLineTarget =
       buyerName: string;
       sizeLabel: string | null;
       quantity: number;
+      /** Known sizes of its item of the list; empty for a link or her own entry (a free field). */
+      sizes: string[];
       /** A link read without a price: she types its name and price. */
       manual: { name: string; priceCents: number | null } | null;
     };
@@ -122,6 +130,17 @@ export function GroupLineSheet({
         ? t("sheet.addTitle")
         : t("sheet.editTitle", { name: target.name });
   const action = target.kind === "item" ? t("take") : target.kind === "link" ? t("sheet.add") : t("sheet.save");
+
+  // A list of the item's sizes when it has some (the line's own size kept if the shop dropped it).
+  const sizeChoices =
+    target.kind === "link"
+      ? []
+      : target.kind === "edit" &&
+          target.sizes.length > 0 &&
+          target.sizeLabel &&
+          !target.sizes.includes(target.sizeLabel)
+        ? [target.sizeLabel, ...target.sizes]
+        : target.sizes;
 
   const focus = (input: { current: HTMLInputElement | null }) => requestAnimationFrame(() => input.current?.focus());
 
@@ -306,14 +325,30 @@ export function GroupLineSheet({
             <label htmlFor={sizeId} className="text-sm text-ink-muted">
               {t("sheet.size")}
             </label>
-            <input
-              id={sizeId}
-              type="text"
-              autoComplete="off"
-              value={size}
-              onChange={(event) => setSize(clip(event.target.value, GROUP_ORDER_SIZE_LABEL_MAX))}
-              className={`${inputClass} min-h-touch-target`}
-            />
+            {sizeChoices.length > 0 ? (
+              <select
+                id={sizeId}
+                value={size}
+                onChange={(event) => setSize(event.target.value)}
+                className={`${inputClass} min-h-touch-target`}
+              >
+                <option value="">{t("sheet.noSize")}</option>
+                {sizeChoices.map((label) => (
+                  <option key={label} value={label}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id={sizeId}
+                type="text"
+                autoComplete="off"
+                value={size}
+                onChange={(event) => setSize(clip(event.target.value, GROUP_ORDER_SIZE_LABEL_MAX))}
+                className={`${inputClass} min-h-touch-target`}
+              />
+            )}
           </div>
           <div className="flex flex-col gap-space-1">
             <label htmlFor={quantityId} className="text-sm text-ink-muted">

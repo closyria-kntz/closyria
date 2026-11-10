@@ -175,6 +175,14 @@ describe("the group order on the shared link", () => {
       },
     ]);
     expect(seen?.eligibleItemIds.sort()).toEqual([s.itemA.id, s.itemB.id].sort());
+    // Known sizes of the eligible items only, in the shop's order; none for an item without sizes.
+    expect(seen?.itemSizes).toEqual({});
+    await t.db.insert(schema.productSizes).values([
+      { productId: s.pA.id, label: "40", position: 1, available: true },
+      { productId: s.pA.id, label: "38", position: 0, available: false },
+      { productId: s.pC.id, label: "S", position: 0, available: true },
+    ]);
+    expect((await groupOrderOf(s))?.itemSizes).toEqual({ [s.itemA.id]: ["38", "40"] });
 
     expect((await groupOrderOf(s, keyLea))?.mine).toEqual({
       name: "Léa",

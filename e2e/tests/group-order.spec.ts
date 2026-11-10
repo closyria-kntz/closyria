@@ -105,7 +105,7 @@ async function takeToo(page: Page, itemName: string, size: string, name?: string
     .click();
   const sheet = page.getByRole("dialog");
   await expect(sheet).toBeVisible();
-  if (size) await sheet.getByLabel("Taille").fill(size);
+  if (size) await sheet.getByLabel("Taille").selectOption(size);
   if (name) await sheet.getByLabel("Ton prénom").fill(name);
   await sheet.getByRole("button", { name: "Je le prends aussi" }).click();
   await expect(sheet).toBeHidden();
@@ -134,19 +134,21 @@ test("des amies achètent ensemble chez la même boutique", async ({
   await expect(banner(lea)).toContainText(euros("Total 0 € · Plus que 80 € pour la livraison offerte"));
   await axe(lea);
 
-  // Léa takes the first item too, in T38: her name is asked once.
+  // Léa takes the first item too, in M (a size the shop gives): her name is asked once.
   await itemOf(lea, FIRST)
     .getByRole("button", { name: /^Je le prends aussi/ })
     .click();
   const sheet = lea.getByRole("dialog");
   await expect(sheet.getByLabel("Quantité")).toHaveValue("1");
-  await sheet.getByLabel("Taille").fill("T38");
+  const sizes = sheet.getByLabel("Taille").getByRole("option");
+  await expect(sizes).toHaveText(["Taille non précisée", "S", "M"]);
+  await sheet.getByLabel("Taille").selectOption("M");
   await sheet.getByLabel("Ton prénom").fill("Léa");
   await axe(lea);
   await sheet.getByRole("button", { name: "Je le prends aussi" }).click();
   await expect(sheet).toBeHidden();
   const leaFirst = itemOf(lea, FIRST);
-  await expect(leaFirst.getByText("Tu le prends aussi (T38 × 1)")).toBeVisible();
+  await expect(leaFirst.getByText("Tu le prends aussi (M × 1)")).toBeVisible();
   await expect(leaFirst.getByRole("button", { name: /^Modifier/ })).toBeFocused();
   // Still offered: the same item in another size.
   await expect(leaFirst.getByRole("button", { name: /^Je le prends aussi/ })).toBeVisible();
@@ -197,6 +199,16 @@ test("des amies achètent ensemble chez la même boutique", async ({
   // Léa adds the second item, Camille takes it out: struck through for Léa only.
   await takeToo(lea, SECOND, "");
   await expect(itemOf(lea, SECOND).getByText("Tu le prends aussi (× 1)")).toBeVisible();
+  // « Retirer », then « Annuler » takes it back (same size and quantity).
+  await itemOf(lea, SECOND)
+    .getByRole("button", { name: /^Retirer/ })
+    .click();
+  const toast = lea.getByRole("status", { name: "Notifications" });
+  await expect(toast).toContainText("Retiré de la commande groupée");
+  await expect(itemOf(lea, SECOND).getByText("Tu le prends aussi", { exact: false })).toHaveCount(0);
+  await expect(itemOf(lea, SECOND).getByRole("button", { name: /^Je le prends aussi/ })).toBeFocused();
+  await toast.getByRole("button", { name: "Annuler" }).click();
+  await expect(itemOf(lea, SECOND).getByText("Tu le prends aussi (× 1)")).toBeVisible();
   const view = await ownerView(page, owner.listId);
   const leaPerson = view.people.find((p) => p.name === "Léa");
   const secondLine = leaPerson?.lines.find((l) => l.name === SECOND);
@@ -215,11 +227,11 @@ test("des amies achètent ensemble chez la même boutique", async ({
   // Léa takes three: free shipping.
   await leaFirst.getByRole("button", { name: /^Modifier/ }).click();
   const edit = lea.getByRole("dialog");
-  await expect(edit.getByLabel("Taille")).toHaveValue("T38");
+  await expect(edit.getByLabel("Taille")).toHaveValue("M");
   await edit.getByLabel("Quantité").selectOption("3");
   await edit.getByRole("button", { name: "Enregistrer" }).click();
   await expect(edit).toBeHidden();
-  await expect(leaFirst.getByText("Tu le prends aussi (T38 × 3)")).toBeVisible();
+  await expect(leaFirst.getByText("Tu le prends aussi (M × 3)")).toBeVisible();
   await expect(banner(lea)).toContainText(euros("Total 92 € · Livraison offerte ✓"));
   await expect(summary(lea)).toContainText(euros("Ta part : 69 € (articles 69 € + port 0 €)"));
   await lea.screenshot({ path: testInfo.outputPath("lea-light.png"), fullPage: true });

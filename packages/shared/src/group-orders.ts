@@ -216,6 +216,8 @@ export const sharedGroupOrderSchema = z.object({
     }),
   ),
   eligibleItemIds: z.array(z.uuid()),
+  /** Known size labels of each eligible item's product, in the shop's order; items without any are left out. */
+  itemSizes: z.record(z.uuid(), z.array(z.string())),
   /** Only for the device attached to the name. */
   mine: z
     .object({
