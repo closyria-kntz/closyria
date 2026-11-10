@@ -97,6 +97,13 @@ const itemOf = (page: Page, name: string) =>
     .filter({ has: page.getByRole("heading", { name }) });
 const banner = (page: Page) => page.getByTestId("group-banner");
 const summary = (page: Page) => page.getByRole("region", { name: "Commande groupée" });
+/** « Voir le détail ({n} articles) »: everyone's lines, folded until she opens them. */
+const detailToggle = (page: Page) => summary(page).getByRole("button", { name: /^Voir le détail/ });
+async function openDetail(page: Page): Promise<void> {
+  const toggle = detailToggle(page);
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+}
 
 /** « Je le prends aussi » on an item: size, quantity, her name if asked. */
 async function takeToo(page: Page, itemName: string, size: string, name?: string): Promise<void> {
@@ -153,13 +160,15 @@ test("des amies achètent ensemble chez la même boutique", async ({
   // Still offered: the same item in another size.
   await expect(leaFirst.getByRole("button", { name: /^Je le prends aussi/ })).toBeVisible();
   await expect(banner(lea)).toContainText(euros("Total 23 € · Plus que 57 € pour la livraison offerte"));
-  await expect(summary(lea)).toContainText("Léa");
+  await openDetail(lea);
+  await expect(summary(lea)).toContainText("Léa (toi)");
   await expect(summary(lea)).toContainText(euros("Ta part : 29,90 € (articles 23 € + port 6,90 €)"));
   await expect(summary(lea)).toContainText("provisoire");
 
   // Inès: a link of another shop is refused, one of the same shop is read.
   await ines.goto(owner.shareUrl);
   await expect(itemOf(ines, FIRST).getByText("Tu le prends aussi", { exact: false })).toHaveCount(0);
+  await openDetail(ines);
   await expect(summary(ines)).toContainText(FIRST);
   await expect(summary(ines).getByText("Ta part", { exact: false })).toHaveCount(0);
   await summary(ines).getByRole("button", { name: "Ajouter un autre article" }).click();
@@ -214,6 +223,7 @@ test("des amies achètent ensemble chez la même boutique", async ({
     await expect(sheet).toBeHidden();
   };
   await ines.reload();
+  await openDetail(ines);
   await typePrice("25", "");
   await expect(summary(ines)).toContainText(euros("Ta part : 28,45 € (articles 25 € + port 3,45 €)"));
   await typePrice("23", "25,00");
@@ -240,11 +250,14 @@ test("des amies achètent ensemble chez la même boutique", async ({
   });
   expect(removed.status()).toBe(200);
   await lea.reload();
+  await openDetail(lea);
   const struck = summary(lea).getByTestId("removed-line");
   await expect(struck).toContainText(SECOND);
   await expect(struck).toContainText("Retiré par Camille");
   await expect(struck.getByText(SECOND)).toHaveCSS("text-decoration-line", "line-through");
   await ines.reload();
+  await openDetail(ines);
+  await expect(summary(ines)).toContainText(FIRST);
   await expect(ines.getByText("Retiré par Camille")).toHaveCount(0);
 
   // Léa takes three: free shipping.
@@ -321,4 +334,105 @@ test("le prénom de la fondatrice caché", async ({ page, browser, baseURL, db, 
   await expect(summary(zoe)).toContainText(euros("Tu dois 29,90 €"));
   await expect(summary(zoe)).not.toContainText("Tu dois 29,90 € à");
   await zoe.context().close();
+});
+
+// Retours du 11 novembre (task 3): the order at the top of the link, its detail folded, « Seulement {boutique} »,
+// « Haut de page ».
+test("le lien des amies : la commande en haut, le détail replié, le filtre, haut de page", async ({
+  page,
+  browser,
+  baseURL,
+  db,
+  userAgentTag,
+}, testInfo) => {
+  test.slow();
+  const owner = await groupList(page, db, userAgentTag);
+  // A third item, from another shop: not in the order.
+  const OTHER = "Robe Alma";
+  await page.goto("/");
+  await page.getByLabel("Coller un lien").fill(manualProductUrl());
+  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByLabel("Nom de l’article").fill(OTHER);
+  await page.getByLabel("Prix (en euros)").fill("89");
+  await page.getByRole("button", { name: "Enregistrer la fiche" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: OTHER })).toBeVisible();
+  await keepWish(page);
+  await db.query(
+    `insert into wishlist_items (wishlist_id, item_id, position)
+     select $1, i.id, 2 from items i join products p on p.id = i.product_id where p.name = $2
+     and i.user_id = (select user_id from wishlists where id = $1)`,
+    [owner.listId, OTHER],
+  );
+
+  const lea = await friend(browser, baseURL, `10.224.${testInfo.workerIndex % 250}.1`);
+  await lea.goto(owner.shareUrl);
+  await expect(itemOf(lea, OTHER)).toBeVisible();
+  await takeToo(lea, FIRST, "M", "Léa");
+  await takeToo(lea, SECOND, "");
+  await expect(itemOf(lea, SECOND).getByText("Tu le prends aussi (× 1)")).toBeVisible();
+
+  // Right under the title, above the items: the banner, her share, the folded detail.
+  const block = summary(lea);
+  await expect(block.getByTestId("group-banner")).toContainText(`Commande groupée chez ${AUTO_SHOP.name}`);
+  await expect(block).toContainText(euros("Ta part : 52,90 € (articles 46 € + port 6,90 €)"));
+  const blockBox = await block.boundingBox();
+  const itemsBox = await lea.getByRole("list", { name: "Articles" }).boundingBox();
+  expect(blockBox && itemsBox && blockBox.y + blockBox.height <= itemsBox.y).toBe(true);
+  const toggle = detailToggle(lea);
+  await expect(toggle).toHaveText("Voir le détail (2 articles)");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(block.getByText("Léa (toi)")).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(block.getByText("Léa (toi)")).toBeVisible();
+  await expect(block.getByText(SECOND, { exact: true })).toBeVisible();
+  await toggle.click();
+  await expect(block.getByText("Léa (toi)")).toHaveCount(0);
+
+  // « Seulement Fausse boutique »: the other shop's item goes, « Tous les articles » brings it back.
+  const all = lea.getByRole("button", { name: "Tous les articles" });
+  const only = lea.getByRole("button", { name: `Seulement ${AUTO_SHOP.name}` });
+  await expect(all).toHaveAttribute("aria-pressed", "true");
+  await expect(only).toHaveAttribute("aria-pressed", "false");
+  await only.click();
+  await expect(only).toHaveAttribute("aria-pressed", "true");
+  await expect(itemOf(lea, OTHER)).toHaveCount(0);
+  await expect(itemOf(lea, FIRST)).toBeVisible();
+  await expect(itemOf(lea, SECOND)).toBeVisible();
+  await lea.screenshot({ path: testInfo.outputPath("top-light.png"), fullPage: true });
+  await axe(lea);
+  await setTheme(lea, "equilibre-dark");
+  await lea.screenshot({ path: testInfo.outputPath("top-dark.png"), fullPage: true });
+  await axe(lea);
+  await all.click();
+  await expect(all).toHaveAttribute("aria-pressed", "true");
+  await expect(itemOf(lea, OTHER)).toBeVisible();
+
+  // « Haut de page »: once she scrolled down a screen; back at the top, on the list's title.
+  const up = lea.getByRole("button", { name: "Haut de page" });
+  await expect(up).toHaveCount(0);
+  await lea.evaluate(() => {
+    const spacer = document.createElement("div");
+    spacer.style.height = "3000px";
+    document.querySelector("main")?.prepend(spacer);
+    window.scrollTo({ top: document.scrollingElement?.scrollHeight ?? 0 });
+  });
+  await expect(up).toBeVisible();
+  await expect(up).toBeInViewport();
+  await lea.screenshot({ path: testInfo.outputPath("back-to-top-dark.png") });
+  await up.click();
+  await expect.poll(() => lea.evaluate(() => window.scrollY)).toBe(0);
+  await expect(lea.getByRole("heading", { level: 1, name: "Anniversaire" })).toBeFocused();
+  await expect(up).toHaveCount(0);
+
+  // Closed: no filter any more, every item shows.
+  const closed = await page.request.post(`/api/me/group-orders/${owner.orderId}/action`, {
+    data: { action: "close" },
+  });
+  expect(closed.status()).toBe(200);
+  await lea.reload();
+  await expect(banner(lea)).toContainText("Commande close");
+  await expect(lea.getByRole("button", { name: "Tous les articles" })).toHaveCount(0);
+  await expect(itemOf(lea, OTHER)).toBeVisible();
+  await lea.context().close();
 });

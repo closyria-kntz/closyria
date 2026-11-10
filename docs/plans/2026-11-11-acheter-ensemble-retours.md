@@ -46,8 +46,8 @@
 
 **Files:** `apps/web/src/app/l/[token]/opinions.tsx`, `group-order.tsx`, `back-to-top.tsx` (Task 2), `fr.json`, `e2e/tests/group-order.spec.ts`
 
-- [ ] e2e d'abord : bloc commande au-dessus de la liste des articles ; détail replié puis ouvert par « Voir le détail ({n} articles) » ; filtre « Seulement {boutique} » masque les articles d'autres boutiques, « Tous les articles » les remet ; « Haut de page » ; le test « focus après Retirer » passe 10 fois de suite sur les 3 appareils (`--repeat-each=10`).
-- [ ] Implémenter ; relectures dans l'ordre (numéro de séquence, réponse plus ancienne ignorée) et relecture au retour sur l'onglet ; commit « feat(acheter-ensemble): commande en haut du lien, filtre, haut de page ».
+- [x] e2e d'abord : bloc commande au-dessus de la liste des articles ; détail replié puis ouvert par « Voir le détail ({n} articles) » ; filtre « Seulement {boutique} » masque les articles d'autres boutiques, « Tous les articles » les remet ; « Haut de page » ; le test « focus après Retirer » passe 10 fois de suite sur les 3 appareils (`--repeat-each=10`).
+- [x] Implémenter ; relectures dans l'ordre (numéro de séquence, réponse plus ancienne ignorée) et relecture au retour sur l'onglet ; commit « feat(acheter-ensemble): commande en haut du lien, filtre, haut de page ».
 
 ### Task 4: Test admin instable et documentation
 

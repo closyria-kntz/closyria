@@ -49,7 +49,8 @@ export function BackToTop() {
     const scroller = scrollerOf(anchor.current);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     scroller.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" });
-    const title = document.querySelector<HTMLElement>("h1");
+    // The title of the page it sits in (the app's content area, or a page of its own such as a shared link).
+    const title = (anchor.current?.closest("main") ?? document).querySelector<HTMLElement>("h1");
     if (title) {
       if (!title.hasAttribute("tabindex")) title.setAttribute("tabindex", "-1");
       title.focus({ preventScroll: true });

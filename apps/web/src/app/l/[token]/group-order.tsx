@@ -26,10 +26,10 @@ export const mineLines = (order: SharedGroupOrder): Line[] => {
 };
 
 /**
- * The 🛍️ banner (spec §3.1, §3.5): « Commande groupée chez {boutique} avec {prénom}, jusqu'au {date} », the way to
- * free shipping, and the state once closed, ordered or cancelled.
+ * The 🛍️ banner at the head of the order's block (spec §3.1, §3.5): « Commande groupée chez {boutique} avec {prénom},
+ * jusqu'au {date} » (the block's title), the way to free shipping, and the state once closed, ordered or cancelled.
  */
-export function GroupBanner({ order }: { order: SharedGroupOrder }) {
+function GroupBanner({ order, titleId }: { order: SharedGroupOrder; titleId: string }) {
   const t = useTranslations("SharedList.groupOrder");
   const locale = useLocale();
   const shop = order.shopName;
@@ -60,14 +60,11 @@ export function GroupBanner({ order }: { order: SharedGroupOrder }) {
   else if (order.status === "closed" || order.locked) state = name ? t("closed", { name }) : t("closedHidden");
 
   return (
-    <div
-      data-testid="group-banner"
-      className="flex flex-col gap-space-1 self-start rounded-card border-2 border-selected-line bg-selected-surface px-space-4 py-space-3 break-words"
-    >
-      <p className="font-strong">
+    <div data-testid="group-banner" className="flex flex-col gap-space-1 break-words">
+      <h2 id={titleId} className="font-display text-lead font-strong">
         <span aria-hidden="true">🛍️ </span>
         {title}
-      </p>
+      </h2>
       {progress && <p className="tabular-nums">{progress}</p>}
       {state && <p className="font-strong">{state}</p>}
     </div>
@@ -158,14 +155,17 @@ export function GroupItemActions({
 }
 
 /**
- * « Commande groupée » (spec §3.4, §3.5): everyone's lines, the owner first; her share for her only, marked
- * « provisoire » until ordered, then what she owes and « Payé ✓ »; « Ajouter un autre article » while it is open.
+ * The group order's block, right under the list's title (spec §3.4, §3.5; retours R3): the banner, her share
+ * (marked « provisoire » until ordered, then what she owes and « Payé ✓ »), « Voir le détail ({n} articles) » that
+ * unfolds everyone's lines (the owner first) and hers taken out, and « Ajouter un autre article » while it is open.
  */
-export function GroupSummary({
+export function GroupOrderBlock({
   order,
   noName,
   canAct,
   busy,
+  detailOpen,
+  onToggleDetail,
   onAdd,
   onEdit,
   onRemove,
@@ -174,6 +174,9 @@ export function GroupSummary({
   noName: string;
   canAct: boolean;
   busy: boolean;
+  /** Everyone's lines shown (folded at first). */
+  detailOpen: boolean;
+  onToggleDetail: () => void;
   onAdd: () => void;
   onEdit: (line: Line) => void;
   onRemove: (line: Line) => void;
@@ -181,90 +184,26 @@ export function GroupSummary({
   const t = useTranslations("SharedList.groupOrder");
   const locale = useLocale();
   const titleId = useId();
+  const detailId = useId();
   const money = (cents: number) => formatAmount(locale, cents, order.currency);
   const writable = groupOrderWritable(order) && canAct;
   const mine = order.mine;
   const own = new Set(mine?.lineIds ?? []);
-  if (order.status === "cancelled") return null;
   const ownerName = order.ownerName;
+  const lineCount = order.people.reduce((count, person) => count + person.lines.length, 0);
+  const removedLines = mine?.removedLines ?? [];
+  const live = order.status !== "cancelled";
 
   return (
     <section
       aria-labelledby={titleId}
       id="group-order"
       tabIndex={-1}
-      className={`flex flex-col gap-space-3 rounded-card border border-card-border bg-card-bg p-space-4 ${focusRing}`}
+      className={`flex flex-col gap-space-3 rounded-card border-2 border-selected-line bg-card-bg p-space-4 ${focusRing}`}
     >
-      <h2 id={titleId} className="font-display text-lead font-strong">
-        <span aria-hidden="true">🛍️ </span>
-        {t("title")}
-      </h2>
+      <GroupBanner order={order} titleId={titleId} />
 
-      {order.people.length > 0 && (
-        <ul className="flex flex-col gap-space-3">
-          {order.people.map((person) => {
-            const isMe = !person.isOwner && person.lines.some((l) => own.has(l.id));
-            const who = person.isOwner ? person.name || ownerName || t("ownerFallback") : person.name;
-            return (
-              <li key={person.lines[0]?.id ?? person.name} className="flex flex-col gap-space-1">
-                <p className="font-strong">{isMe ? t("you", { name: who }) : who}</p>
-                <ul className="flex flex-col gap-space-2">
-                  {person.lines.map((line) => (
-                    <SummaryLine
-                      key={line.id}
-                      line={line}
-                      noName={noName}
-                      money={money}
-                      actions={
-                        writable && own.has(line.id) ? (
-                          <span className="flex items-center gap-space-1">
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => onEdit(line)}
-                              className={linkButtonClass}
-                            >
-                              {t("edit")}
-                              <span className="sr-only"> {t("forItem", { name: line.name || noName })}</span>
-                            </button>
-                            <span aria-hidden="true">·</span>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => onRemove(line)}
-                              className={linkButtonClass}
-                            >
-                              {t("remove")}
-                              <span className="sr-only"> {t("forItem", { name: line.name || noName })}</span>
-                            </button>
-                          </span>
-                        ) : null
-                      }
-                    />
-                  ))}
-                </ul>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {mine && mine.removedLines.length > 0 && (
-        <ul className="flex flex-col gap-space-1 text-sm">
-          {mine.removedLines.map((line) => (
-            <li
-              key={line.id}
-              data-testid="removed-line"
-              className="flex flex-wrap items-center gap-x-space-2 text-ink-muted"
-            >
-              <span className="line-through break-words">{line.name || noName}</span>
-              <span>{ownerName ? t("removedBy", { name: ownerName }) : t("removedByHidden")}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {mine && mine.lineIds.length > 0 && (
+      {live && mine && mine.lineIds.length > 0 && (
         <div className="flex flex-col gap-space-1 rounded-md border border-selected-line bg-selected-surface px-space-3 py-space-2">
           <p className="tabular-nums">
             <span className="font-strong">
@@ -289,7 +228,101 @@ export function GroupSummary({
         </div>
       )}
 
-      {writable && (
+      {live && (lineCount > 0 || removedLines.length > 0) && (
+        <>
+          <button
+            type="button"
+            aria-expanded={detailOpen}
+            aria-controls={detailOpen ? detailId : undefined}
+            onClick={onToggleDetail}
+            className={`group inline-flex min-h-touch-target items-center gap-space-1 self-start rounded-button text-sm font-strong underline underline-offset-2 ${focusRing}`}
+          >
+            {t("detail", { count: lineCount })}
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              className="size-space-4 shrink-0 transition-transform duration-base group-aria-expanded:rotate-180 motion-reduce:transition-none"
+            >
+              <path d="M4 6l4 4 4-4" />
+            </svg>
+          </button>
+
+          {detailOpen && (
+            <div id={detailId} className="flex flex-col gap-space-3">
+              {order.people.length > 0 && (
+                <ul className="flex flex-col gap-space-3">
+                  {order.people.map((person) => {
+                    const isMe = !person.isOwner && person.lines.some((l) => own.has(l.id));
+                    const who = person.isOwner ? person.name || ownerName || t("ownerFallback") : person.name;
+                    return (
+                      <li key={person.lines[0]?.id ?? person.name} className="flex flex-col gap-space-1">
+                        <p className="font-strong">{isMe ? t("you", { name: who }) : who}</p>
+                        <ul className="flex flex-col gap-space-2">
+                          {person.lines.map((line) => (
+                            <SummaryLine
+                              key={line.id}
+                              line={line}
+                              noName={noName}
+                              money={money}
+                              actions={
+                                writable && own.has(line.id) ? (
+                                  <span className="flex items-center gap-space-1">
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => onEdit(line)}
+                                      className={linkButtonClass}
+                                    >
+                                      {t("edit")}
+                                      <span className="sr-only"> {t("forItem", { name: line.name || noName })}</span>
+                                    </button>
+                                    <span aria-hidden="true">·</span>
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => onRemove(line)}
+                                      className={linkButtonClass}
+                                    >
+                                      {t("remove")}
+                                      <span className="sr-only"> {t("forItem", { name: line.name || noName })}</span>
+                                    </button>
+                                  </span>
+                                ) : null
+                              }
+                            />
+                          ))}
+                        </ul>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {removedLines.length > 0 && (
+                <ul className="flex flex-col gap-space-1 text-sm">
+                  {removedLines.map((line) => (
+                    <li
+                      key={line.id}
+                      data-testid="removed-line"
+                      className="flex flex-wrap items-center gap-x-space-2 text-ink-muted"
+                    >
+                      <span className="line-through break-words">{line.name || noName}</span>
+                      <span>{ownerName ? t("removedBy", { name: ownerName }) : t("removedByHidden")}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {live && writable && (
         <button
           type="button"
           disabled={busy}

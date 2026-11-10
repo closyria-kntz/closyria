@@ -10,8 +10,9 @@ import {
 } from "@closyria/shared";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { BackToTop } from "@/components/back-to-top";
 import { FriendOpinions } from "@/components/friend-opinions";
-import { buttonClass, focusRing } from "@/components/ui";
+import { buttonClass, focusRing, toggleButtonClass } from "@/components/ui";
 import { formatAmount } from "@/lib/budget";
 import { type FriendDevice, friendDevice } from "@/lib/friend-device";
 import { levelOf } from "@/lib/love-levels";
@@ -31,7 +32,7 @@ import { CoverPhoto } from "./cover-photo";
 import { GiftActions, GiftBanner, GiftSheet } from "./gifts";
 import { GivenItems } from "./given";
 import { GroupLineSheet, type GroupLineTarget, groupErrorKey } from "./group-line-sheet";
-import { GroupBanner, GroupItemActions, GroupSummary, groupOrderWritable, mineLines } from "./group-order";
+import { GroupItemActions, GroupOrderBlock, groupOrderWritable, mineLines } from "./group-order";
 import { OpinionSheet, type SheetOutcome } from "./opinion-sheet";
 
 type Item = SharedWishlistView["items"][number];
@@ -96,9 +97,17 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
   const deviceKey = useRef<string | null>(null);
   // Read with her device key yet? Until then her own gifts look like anyone's: the gift buttons wait.
   const [checked, setChecked] = useState<"pending" | "ok" | "failed">("pending");
-  // The block (an item's gift or group order part, or the group order) that takes the focus once the list read
-  // after a change shows.
-  const focusAfterRead = useRef<string | null>(null);
+  // The block (an item's gift or group order part, or the group order) that takes the focus once a read started
+  // after the change shows (`from`: the first such read's number; an older one still on its way does not count).
+  const focusAfterRead = useRef<{ id: string; from: number } | null>(null);
+  // The reads of the list, numbered in the order they start: the latest started, and the one the page shows.
+  const readsStarted = useRef(0);
+  const readShown = useRef(0);
+  const latestView = useRef<SharedWishlistView | null>(initial);
+  // Everyone's lines of the group order, folded at first.
+  const [groupDetail, setGroupDetail] = useState(false);
+  // « Seulement {boutique} » while the group order is open.
+  const [shopOnly, setShopOnly] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastCounter = useRef(0);
@@ -107,11 +116,20 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
   const goneTitle = useRef<HTMLHeadingElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
 
-  /** Reads the list again: the view, null once the link stopped working, undefined when it could not be read. */
+  /**
+   * Reads the list again: the view, null once the link stopped working, undefined when it could not be read. Reads
+   * may answer out of order (a poll started before her change, answered after it): an answer older than the one
+   * shown is dropped, and the view shown is returned instead.
+   */
   const reload = useCallback(async (): Promise<SharedWishlistView | null | undefined> => {
+    readsStarted.current += 1;
+    const read = readsStarted.current;
     try {
       // With her device key: her own gifts show as hers (the server's first paint cannot know them).
       const next = await fetchSharedView(token, deviceKey.current);
+      if (read < readShown.current) return latestView.current;
+      readShown.current = read;
+      latestView.current = next;
       if (next) {
         setView(next);
         if (deviceKey.current) setChecked("ok");
@@ -159,13 +177,28 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
     return () => clearInterval(timer);
   }, [pollMs, gone, reload]);
 
-  // After a gift changed: her next step (« Me retirer », « Je lui offre ») once the new state shows.
+  // Back on the tab (another app, another tab): read again at once rather than at the next poll.
   useEffect(() => {
-    const blockId = focusAfterRead.current;
-    if (!blockId || !view) return;
+    if (gone) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void reload();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [gone, reload]);
+
+  /** Her next step after a change takes the focus once a read started from now on shows. */
+  const focusAfterNextRead = (id: string) => {
+    focusAfterRead.current = { id, from: readsStarted.current + 1 };
+  };
+
+  // After a change: her next step (« Me retirer », « Je lui offre »…) once the new state shows.
+  useEffect(() => {
+    const pending = focusAfterRead.current;
+    if (!pending || !view || readShown.current < pending.from) return;
     focusAfterRead.current = null;
     // Gone from the page (she left an item taken off the list): nothing to focus.
-    const block = document.getElementById(blockId);
+    const block = document.getElementById(pending.id);
     if (!block) return;
     (block.querySelector<HTMLElement>("button:not([disabled])") ?? block).focus();
   }, [view]);
@@ -206,9 +239,10 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
   async function runUndo() {
     const undo = toast?.undo;
     if (!undo) return;
-    if (toast.focusId) focusAfterRead.current = toast.focusId;
+    const focusId = toast.focusId;
     setToast(null);
     const ok = await undo();
+    if (focusId) focusAfterNextRead(focusId);
     await reload();
     if (!ok) show(tOpinions("toast.undoFailed"), null);
   }
@@ -284,7 +318,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
         : tGifts(view.ownerName ? "announce.reserver" : "announce.reserverHidden", { name: itemName }),
       null,
     );
-    focusAfterRead.current = giftBlockId(item.itemId);
+    focusAfterNextRead(giftBlockId(item.itemId));
     await reload();
   }
 
@@ -318,7 +352,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
         ? async () => (await giveGift(token, item.itemId, { name, deviceKey: key, intent: "join" })).ok
         : null;
     show(tGifts("toast.left"), undo, giftBlockId(item.itemId));
-    focusAfterRead.current = giftBlockId(item.itemId);
+    focusAfterNextRead(giftBlockId(item.itemId));
     await reload();
   }
 
@@ -356,8 +390,10 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
         : target.kind === "edit"
           ? ((view.groupOrder && mineLines(view.groupOrder).find((l) => l.id === target.lineId)?.itemId) ?? null)
           : null;
-    // After a link, the focus stays where the sheet gives it back (« Ajouter un autre article »).
-    if (target.kind !== "link") focusAfterRead.current = groupFocusOf(itemId);
+    // After a link, the focus stays where the sheet gives it back (« Ajouter un autre article »); her new line shows
+    // in the detail, unfolded (it is on no item of the list).
+    if (target.kind === "link") setGroupDetail(true);
+    else focusAfterNextRead(groupFocusOf(itemId));
     await reload();
   }
 
@@ -400,9 +436,19 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
           ).ok
       : null;
     show(tGroup("toast.removed"), undo, groupFocusOf(itemId));
-    focusAfterRead.current = groupFocusOf(itemId);
+    focusAfterNextRead(groupFocusOf(itemId));
     await reload();
   }
+
+  // « Seulement {boutique} »: while friends may still add to the order, and when some item is of its shop.
+  const filterOrder =
+    order && groupOrderWritable(order) && view.items.some((item) => order.eligibleItemIds.includes(item.itemId))
+      ? order
+      : null;
+  const shownItems =
+    filterOrder && shopOnly
+      ? view.items.filter((item) => filterOrder.eligibleItemIds.includes(item.itemId))
+      : view.items;
 
   const giftItem = giftSheet ? view.items.find((item) => item.itemId === giftSheet.itemId) : undefined;
   const sheetItem = sheet ? view.items.find((item) => item.itemId === sheet.itemId) : undefined;
@@ -442,9 +488,21 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
         )}
       </header>
 
-      <GiftBanner gifts={view.gifts} ownerName={view.ownerName} />
+      {view.groupOrder && (
+        <GroupOrderBlock
+          order={view.groupOrder}
+          noName={t("noName")}
+          canAct={device !== null && !view.viewerIsOwner}
+          busy={groupBusy}
+          detailOpen={groupDetail}
+          onToggleDetail={() => setGroupDetail((open) => !open)}
+          onAdd={() => openGroupSheet({ kind: "link" })}
+          onEdit={editGroupLine}
+          onRemove={(line) => void removeGroupLine(line)}
+        />
+      )}
 
-      {view.groupOrder && <GroupBanner order={view.groupOrder} />}
+      <GiftBanner gifts={view.gifts} ownerName={view.ownerName} />
 
       {view.gifts.open && view.viewerIsOwner && (
         <p data-testid="owner-gifts-note" className="self-start text-ink-muted">
@@ -458,6 +516,22 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
         </p>
       )}
 
+      {filterOrder && (
+        <div className="flex flex-wrap gap-space-2">
+          <button
+            type="button"
+            aria-pressed={!shopOnly}
+            onClick={() => setShopOnly(false)}
+            className={toggleButtonClass}
+          >
+            {tGroup("filterAll")}
+          </button>
+          <button type="button" aria-pressed={shopOnly} onClick={() => setShopOnly(true)} className={toggleButtonClass}>
+            {tGroup("filterShop", { shop: filterOrder.shopName })}
+          </button>
+        </div>
+      )}
+
       {view.items.length === 0 ? (
         <p className="text-ink-muted">{t("empty")}</p>
       ) : (
@@ -466,7 +540,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
           data-testid="shared-items"
           className="grid grid-cols-1 items-start gap-space-4 md:grid-cols-2 lg:grid-cols-3"
         >
-          {view.items.map((item) => (
+          {shownItems.map((item) => (
             <ItemCard
               key={item.itemId}
               item={item}
@@ -501,18 +575,6 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
             />
           ))}
         </ul>
-      )}
-
-      {view.groupOrder && (
-        <GroupSummary
-          order={view.groupOrder}
-          noName={t("noName")}
-          canAct={device !== null && !view.viewerIsOwner}
-          busy={groupBusy}
-          onAdd={() => openGroupSheet({ kind: "link" })}
-          onEdit={editGroupLine}
-          onRemove={(line) => void removeGroupLine(line)}
-        />
       )}
 
       {view.gifts.open && <GivenItems items={view.givenItems} />}
@@ -591,6 +653,8 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
           </p>
         )}
       </div>
+
+      <BackToTop />
     </>
   );
 }

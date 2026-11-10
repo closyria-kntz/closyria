@@ -1389,6 +1389,9 @@
       "paid": "Payé ✓",
       "removedBy": "Retiré par {name}",
       "removedByHidden": "Retiré par elle",
+      "detail": "Voir le détail ({count, plural, one {# article} other {# articles}})",
+      "filterAll": "Tous les articles",
+      "filterShop": "Seulement {shop}",
       "sheet": {
         "takeTitle": "Je le prends aussi : {name}",
         "addTitle": "Ajouter un autre article",
