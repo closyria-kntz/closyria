@@ -1,6 +1,7 @@
 import { and, asc, type Database, desc, eq, gte, inArray, isNull, or, schema, sql } from "@closyria/db";
 import {
   computeGroupOrderTotals,
+  GROUP_ORDER_MAX_LINES,
   type GroupOrderAction,
   type GroupOrderCreate,
   type GroupOrderLineStatus,
@@ -16,7 +17,7 @@ import {
 import { catalogImageUrl } from "../catalog/product-view";
 import { listShippingOptions } from "../catalog/shipping-options";
 import { pgCode } from "../pg-code";
-import { runBulk } from "./bulk";
+import { bulkRefusal, runBulkIn } from "./bulk";
 import { trackItemEvents } from "./deps";
 import type { Tx } from "./events";
 import { parisDay } from "./wishlists";
@@ -403,7 +404,8 @@ export async function pastGroupOrders(
       status: view.status,
       orderedAt: view.orderedAt,
       cancelledAt: view.cancelledAt,
-      totalCents: view.totals.totalCents,
+      // What was charged: items and shipping (frozen once ordered).
+      totalCents: view.totals.totalCents + view.totals.shippingTotalCents,
       unpaidCount: view.people.filter((p) => p.payment !== null && p.payment.paidAt === null).length,
     });
   }
@@ -494,6 +496,27 @@ export function replaceOwnLines(db: Database, userId: string, id: string, input:
 export function setLineRemoved(db: Database, userId: string, id: string, lineId: string, removed: boolean, now: Date) {
   return writeThenView(db, async (tx) => {
     await lockOwn(tx, userId, id, true);
+    if (!removed) {
+      // Back among her friend's active lines: never more than GROUP_ORDER_MAX_LINES (the order row is locked).
+      const [target] = await tx
+        .select({ key: schema.groupOrderLines.buyerNameKey, removedAt: schema.groupOrderLines.removedAt })
+        .from(schema.groupOrderLines)
+        .where(and(eq(schema.groupOrderLines.id, lineId), eq(schema.groupOrderLines.groupOrderId, id)));
+      if (!target) throw new Refused("not_found");
+      if (target.key !== null && target.removedAt !== null) {
+        const [active] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(schema.groupOrderLines)
+          .where(
+            and(
+              eq(schema.groupOrderLines.groupOrderId, id),
+              eq(schema.groupOrderLines.buyerNameKey, target.key),
+              isNull(schema.groupOrderLines.removedAt),
+            ),
+          );
+        if ((active?.count ?? 0) >= GROUP_ORDER_MAX_LINES) throw new Refused("too_many_lines");
+      }
+    }
     const [line] = await tx
       .update(schema.groupOrderLines)
       .set({ removedAt: removed ? now : null, updatedAt: now })
@@ -544,36 +567,43 @@ export async function orderGroupOrder(
         : [];
     });
     if (owed.length > 0) await tx.insert(schema.groupOrderPayments).values(owed);
-    return active.flatMap((l) => (l.row.buyerNameKey === null && l.row.itemId ? [l.row.itemId] : []));
-  });
-  if ("error" in outcome) return outcome;
-  const itemIds = [...new Set(outcome)];
-  if (itemIds.length > 0) {
-    // Her items still alive (not in the trash) go to « Commandé », through the usual path. Its undo is not given.
-    const alive = await db
-      .select({ id: schema.items.id })
-      .from(schema.items)
-      .where(and(inArray(schema.items.id, itemIds), eq(schema.items.userId, userId), isNull(schema.items.deletedAt)));
-    if (alive.length > 0) {
-      const moved = await runBulk(
-        db,
+    // Her items (not in the trash) go to « Commandé » through the usual path, in this same transaction: the order
+    // and the move commit or fail together. Its undo is not given.
+    const itemIds = [
+      ...new Set(active.flatMap((l) => (l.row.buyerNameKey === null && l.row.itemId ? [l.row.itemId] : []))),
+    ];
+    const alive =
+      itemIds.length === 0
+        ? []
+        : await tx
+            .select({ id: schema.items.id })
+            .from(schema.items)
+            .where(
+              and(inArray(schema.items.id, itemIds), eq(schema.items.userId, userId), isNull(schema.items.deletedAt)),
+            );
+    if (alive.length === 0) return [];
+    try {
+      const moved = await runBulkIn(
+        tx,
         userId,
         { op: "stage", ids: alive.map((i) => i.id), stage: "ordered", at: now.toISOString() },
         now,
       );
-      // Audience events, as the bulk route writes them.
-      if (!("error" in moved))
-        await trackItemEvents(
-          db,
-          userId,
-          moved.trace.stageChanges.map((change) => ({
-            name: "item_stage_changed" as const,
-            props: { from: change.from, to: change.to },
-          })),
-          now,
-        );
+      return moved.trace.stageChanges;
+    } catch (error) {
+      const code = bulkRefusal(error);
+      if (code) throw new Refused(code);
+      throw error;
     }
-  }
+  });
+  if ("error" in outcome) return outcome;
+  // Audience events, as the bulk route writes them.
+  await trackItemEvents(
+    db,
+    userId,
+    outcome.map((change) => ({ name: "item_stage_changed" as const, props: { from: change.from, to: change.to } })),
+    now,
+  );
   return viewById(db, id);
 }
 

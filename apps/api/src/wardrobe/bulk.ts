@@ -399,15 +399,30 @@ async function checkReferences(tx: Tx, ids: string[], values: ItemFieldValues) {
  * changed and the undo (inverse ops grouped by previous value, and the history rows written).
  */
 export async function runBulk(db: Database, userId: string, op: ItemBulk, now: Date): Promise<BulkOutcome> {
-  return inTransaction(db, async (tx) => {
-    await lockFor(tx, userId, [op]);
-    const done = await applyOp(tx, userId, op, { now, writeEvents: true });
-    return {
-      itemIds: done.changed,
-      undo: done.undoOps.length > 0 ? { ops: done.undoOps, removeEventIds: done.eventIds } : null,
-      trace: done.trace,
-    };
-  });
+  return inTransaction(db, (tx) => runBulkIn(tx, userId, op, now));
+}
+
+/** A refusal of `runBulkIn`: the caller's transaction must roll back. */
+export const bulkRefusal = (error: unknown): WardrobeErrorCode | undefined =>
+  error instanceof BulkError ? error.code : undefined;
+
+/**
+ * The body of `runBulk`, inside the caller's transaction (all or nothing with the caller's own writes). A refusal
+ * throws: read its code with `bulkRefusal`.
+ */
+export async function runBulkIn(
+  tx: Tx,
+  userId: string,
+  op: ItemBulk,
+  now: Date,
+): Promise<Exclude<BulkOutcome, { error: WardrobeErrorCode }>> {
+  await lockFor(tx, userId, [op]);
+  const done = await applyOp(tx, userId, op, { now, writeEvents: true });
+  return {
+    itemIds: done.changed,
+    undo: done.undoOps.length > 0 ? { ops: done.undoOps, removeEventIds: done.eventIds } : null,
+    trace: done.trace,
+  };
 }
 
 /**

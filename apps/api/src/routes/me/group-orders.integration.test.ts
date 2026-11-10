@@ -1,4 +1,4 @@
-import { eq, schema } from "@closyria/db";
+import { eq, schema, sql } from "@closyria/db";
 import {
   type GroupOrderPastList,
   type ItemView,
@@ -215,6 +215,7 @@ describe("her group order", () => {
 
     // Ordered: a new one can be opened, then cancelled; ordering it is refused.
     const next = await open(s);
+    await friendLine(next.id, "Léa", { manualName: "Pull", manualPriceCents: 1500 });
     expect((await ok(await action(s, next.id, "cancel"))).status).toBe("cancelled");
     const late = await call("POST", `/api/me/group-orders/${next.id}/order`, s.cookie, {
       shippingCents: 600,
@@ -229,6 +230,8 @@ describe("her group order", () => {
       await call("GET", `/api/me/wishlists/${s.list.id}/group-orders`, s.cookie)
     ).json()) as GroupOrderPastList;
     expect(past.past.map((p) => p.id)).toEqual([next.id, order.id]);
+    // Items + shipping: the cancelled one with its current shipping (1500 + 600), the ordered one with nobody (0).
+    expect(past.past[0]).toMatchObject({ status: "cancelled", totalCents: 2100, unpaidCount: 0 });
     expect(past.past[1]).toMatchObject({ status: "ordered", shopName: s.shop.name, totalCents: 0, unpaidCount: 0 });
   });
 
@@ -348,7 +351,7 @@ describe("her group order", () => {
     let past = (await (
       await call("GET", `/api/me/wishlists/${s.list.id}/group-orders`, s.cookie)
     ).json()) as GroupOrderPastList;
-    expect(past.past[0]).toMatchObject({ id: order.id, totalCents: 11700, unpaidCount: 1 });
+    expect(past.past[0]).toMatchObject({ id: order.id, totalCents: 12400, unpaidCount: 1 });
     const unpaid = await ok(
       await call("PUT", `/api/me/group-orders/${order.id}/payments/${leaKey}`, s.cookie, { paid: false }),
     );
@@ -378,6 +381,72 @@ describe("her group order", () => {
     expect((await call("DELETE", `/api/me/group-orders/${otherOrder.id}/lines/${line.id}`, other.cookie)).status).toBe(
       404,
     );
+  });
+});
+
+describe("limits and atomicity", () => {
+  it("does not put back a line of a friend who already has 20 active ones", async () => {
+    const s = await setup();
+    const order = await open(s);
+    const removed = await friendLine(order.id, "Léa", { manualName: "Pull", manualPriceCents: 100 });
+    expect((await call("DELETE", `/api/me/group-orders/${order.id}/lines/${removed.id}`, s.cookie)).status).toBe(200);
+    for (let i = 0; i < 20; i++)
+      await friendLine(order.id, "Léa", { manualName: `Article ${i}`, manualPriceCents: 100 });
+    const res = await call("POST", `/api/me/group-orders/${order.id}/lines/${removed.id}/restore`, s.cookie);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "too_many_lines" });
+    // Another friend's line comes back.
+    const ines = await friendLine(order.id, "Inès", { manualName: "Jupe", manualPriceCents: 100 });
+    await call("DELETE", `/api/me/group-orders/${order.id}/lines/${ines.id}`, s.cookie);
+    expect((await call("POST", `/api/me/group-orders/${order.id}/lines/${ines.id}/restore`, s.cookie)).status).toBe(
+      200,
+    );
+  });
+
+  it("« J'ai commandé » is all or nothing: a failed move of her items leaves the order as it was", async () => {
+    const s = await setup();
+    const order = await open(s);
+    await ok(
+      await call("PUT", `/api/me/group-orders/${order.id}/own-lines`, s.cookie, {
+        lines: [{ itemId: s.itemA.id, sizeLabel: "38", quantity: 1 }],
+      }),
+    );
+    await friendLine(order.id, "Léa", { manualName: "Pull", manualPriceCents: 1500 });
+    await ok(await action(s, order.id, "close"));
+    // The database refuses the move of this one item to « Commandé » (the last write of the transaction).
+    await t.db.execute(
+      sql.raw(`
+      create function go_refuse_order() returns trigger language plpgsql as $$
+      begin
+        if new.id = '${s.itemA.id}' and new.stage = 'ordered' then raise exception 'refused for the test'; end if;
+        return new;
+      end $$;
+      create trigger go_refuse_order before update on items for each row execute function go_refuse_order();`),
+    );
+    try {
+      const res = await call("POST", `/api/me/group-orders/${order.id}/order`, s.cookie, {
+        shippingCents: 600,
+        lines: [],
+      });
+      expect(res.status).toBe(500);
+    } finally {
+      await t.db.execute(sql.raw("drop trigger go_refuse_order on items; drop function go_refuse_order();"));
+    }
+    const after = await ok(await current(s));
+    expect(after.status).toBe("closed");
+    expect(after.orderedAt).toBeNull();
+    expect(after.people.flatMap((p) => p.lines.map((l) => l.finalPriceCents))).toEqual([null, null]);
+    expect(after.people.every((p) => p.payment === null)).toBe(true);
+    const [item] = await t.db.select().from(schema.items).where(eq(schema.items.id, s.itemA.id));
+    expect(item?.stage).not.toBe("ordered");
+
+    // Without the refusal, both changes land together.
+    const done = await ok(
+      await call("POST", `/api/me/group-orders/${order.id}/order`, s.cookie, { shippingCents: 600, lines: [] }),
+    );
+    expect(done.status).toBe("ordered");
+    const [moved] = await t.db.select().from(schema.items).where(eq(schema.items.id, s.itemA.id));
+    expect(moved?.stage).toBe("ordered");
   });
 });
 

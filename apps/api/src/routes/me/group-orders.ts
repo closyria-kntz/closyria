@@ -165,12 +165,13 @@ const restoreLineRoute = defineAccess(
     method: "post",
     path: "/me/group-orders/{id}/lines/{lineId}/restore",
     summary: "Undo « Retirer »",
+    description: "Refused when her friend already has 20 active lines (too_many_lines).",
     request: { params: lineParams },
     responses: {
       200: view("Back"),
       400: errorContent("Malformed id (invalid_request)"),
       404: notFoundContent,
-      409: lockedContent,
+      409: errorContent("Ordered or cancelled (group_order_locked), 20 active lines already (too_many_lines)"),
     },
   }),
   "user",
@@ -183,7 +184,8 @@ const orderRoute = defineAccess(
     summary: "« J'ai commandé »",
     description:
       "From open or closed: freezes each active line's price (the one given, else its current price) and the real " +
-      "shipping, writes what each friend owes, and moves her items of the order to « Commandé ». No undo.",
+      "shipping, writes what each friend owes, and moves her items of the order to « Commandé », all in one " +
+      "transaction. No undo.",
     request: { params: orderParams, ...body(groupOrderOrderSchema) },
     responses: {
       200: view("Ordered"),
@@ -191,7 +193,7 @@ const orderRoute = defineAccess(
         "Invalid body or a line of another order (invalid_request), a line with no price (missing_price)",
       ),
       404: notFoundContent,
-      409: errorContent("Ordered or cancelled already (invalid_transition)"),
+      409: errorContent("Ordered or cancelled already (invalid_transition), an item trashed meanwhile (item_deleted)"),
     },
   }),
   "user",
@@ -231,6 +233,8 @@ const STATUS_OF: Partial<Record<WardrobeErrorCode, 400 | 404 | 409>> = {
   group_order_locked: 409,
   invalid_transition: 409,
   currency_mismatch: 409,
+  too_many_lines: 409,
+  item_deleted: 409,
 };
 
 export function groupOrdersRoutes(deps: WardrobeDeps) {

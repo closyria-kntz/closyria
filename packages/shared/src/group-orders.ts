@@ -276,7 +276,7 @@ export const ownerGroupOrderSchema = z.object({
 });
 export type OwnerGroupOrder = z.infer<typeof ownerGroupOrderSchema>;
 
-/** « Commandes groupées passées » of a list, most recent first. `totalCents`: the items, frozen at « J'ai commandé ». */
+/** « Commandes groupées passées » of a list, most recent first. `totalCents`: items + shipping, frozen at « J'ai commandé ». */
 export const groupOrderPastListSchema = z.object({
   past: z.array(
     z.object({
