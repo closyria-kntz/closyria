@@ -769,6 +769,9 @@ export async function addFriendLine(
       source = { manualName: input.manualName, manualPriceCents: input.manualPriceCents, url: link?.url ?? null };
     }
 
+    // The name first: another device learns nothing of her lines (a refusal rolls back the attachment).
+    if ((await ensureFriendDevice(tx, input.wishlistId, nameKey, hashDeviceKey(input.deviceKey), input.claim)) !== "ok")
+      throw new Refused("name_taken");
     const [active] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.groupOrderLines)
@@ -780,8 +783,6 @@ export async function addFriendLine(
         ),
       );
     if ((active?.count ?? 0) >= GROUP_ORDER_MAX_LINES) throw new Refused("too_many_lines");
-    if ((await ensureFriendDevice(tx, input.wishlistId, nameKey, hashDeviceKey(input.deviceKey), input.claim)) !== "ok")
-      throw new Refused("name_taken");
     const [line] = await tx
       .insert(schema.groupOrderLines)
       .values({
@@ -829,8 +830,22 @@ async function lockFriendLine(
 }
 
 /**
- * « Modifier »: size and quantity; name and price only on a line not taken from her list (a link that could not be
- * read). A line the owner took out is not changed (`not_found`).
+ * Her own name and price are for a line she typed, or a link whose page gave no price (reading failed or found
+ * none): never over an item of the list or a price the shop gives.
+ */
+async function mayNameItself(tx: Tx, line: typeof schema.groupOrderLines.$inferSelect): Promise<boolean> {
+  if (line.itemId !== null) return false;
+  if (line.productId === null) return true;
+  const [product] = await tx
+    .select({ priceCents: schema.products.priceCents, captureStatus: schema.products.captureStatus })
+    .from(schema.products)
+    .where(eq(schema.products.id, line.productId));
+  return product !== undefined && (product.priceCents === null || product.captureStatus === "failed");
+}
+
+/**
+ * « Modifier »: size and quantity; name and price only on her own entry or a link read without a price (never over
+ * a price the shop gives). A line the owner took out is not changed (`not_found`).
  */
 export async function patchFriendLine(
   db: Database,
@@ -841,7 +856,7 @@ export async function patchFriendLine(
     const { order, line } = await lockFriendLine(tx, input, now);
     if (line.removedAt !== null) throw new Refused("not_found");
     const manual = input.manualName !== undefined || input.manualPriceCents !== undefined;
-    if (manual && line.itemId !== null) throw new Refused("invalid_request");
+    if (manual && !(await mayNameItself(tx, line))) throw new Refused("invalid_request");
     await tx
       .update(schema.groupOrderLines)
       .set({

@@ -341,6 +341,49 @@ describe("the group order on the shared link", () => {
     expect((await linesOf(s.order.id)).map((l) => l.id)).not.toContain(leaLine);
   });
 
+  it("her own name and price only on a manual line or a link read without a price", async () => {
+    const s = await setup();
+    const fromItem = await added(
+      await addLine(s, { source: "item", itemId: s.itemA.id, sizeLabel: null, quantity: 1, ...lea }),
+    );
+    const read = await added(
+      await addLine(s, { source: "url", url: s.pB.canonicalUrl, sizeLabel: null, quantity: 1, ...lea }),
+    );
+    const unread = await added(
+      await addLine(s, {
+        source: "url",
+        url: `https://${s.shop.domain}/illisible`,
+        sizeLabel: null,
+        quantity: 1,
+        ...lea,
+      }),
+    );
+    for (const lineId of [fromItem, read]) {
+      const res = await patchLine(s, lineId, { sizeLabel: null, quantity: 1, manualPriceCents: 1, ...lea });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "invalid_request" });
+    }
+    const named = await patchLine(s, unread, {
+      sizeLabel: null,
+      quantity: 1,
+      manualName: "Robe illisible",
+      manualPriceCents: 2500,
+      ...lea,
+    });
+    expect(named.status).toBe(200);
+    const lines = (await groupOrderOf(s))?.people[0]?.lines ?? [];
+    expect(lines.find((l) => l.id === read)?.unitPriceCents).toBe(2000);
+    expect(lines.find((l) => l.id === unread)).toMatchObject({ name: "Robe illisible", unitPriceCents: 2500 });
+  });
+
+  it("another device under a full name gets name_taken, not too_many_lines", async () => {
+    const s = await setup();
+    for (let n = 1; n <= 20; n++) await added(await addLine(s, manual(lea, n)));
+    const res = await addLine(s, manual({ name: "Léa", deviceKey: keyOther }, 21));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "name_taken" });
+  });
+
   it("a line she removed shows to her device only, struck, in removedLines", async () => {
     const s = await setup();
     const kept = await added(await addLine(s, manual(lea)));
