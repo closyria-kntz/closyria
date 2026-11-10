@@ -12,7 +12,6 @@ import { groupOrderHref } from "./group-order-banner";
 import { buttonClass, inputClass, primaryButtonClass } from "./ui";
 
 const touch = "min-h-touch-target";
-const OTHER = "other";
 
 export type ListShop = { id: string; name: string };
 
@@ -122,7 +121,108 @@ export function ShippingFields({
   );
 }
 
-type Options = { status: "loading" } | { status: "ready"; options: ShippingOption[] } | { status: "error" };
+export type ShippingOptions =
+  | { status: "loading" }
+  | { status: "ready"; options: ShippingOption[] }
+  | { status: "error" };
+/** The value of « Autre » among the delivery choices. */
+export const OTHER_DELIVERY = "other";
+
+/** The shop's delivery options (from the admin), read again each time `active` turns on or the shop changes. */
+export function useShopShippingOptions(shopId: string, active: boolean): ShippingOptions {
+  const [options, setOptions] = useState<ShippingOptions>({ status: "loading" });
+  useEffect(() => {
+    if (!active || !shopId) return;
+    let live = true;
+    setOptions({ status: "loading" });
+    void fetchShopShippingOptions(shopId).then((result) => {
+      if (live) setOptions(result.ok ? { status: "ready", options: result.options } : { status: "error" });
+    });
+    return () => {
+      live = false;
+    };
+  }, [active, shopId]);
+  return options;
+}
+
+/** The delivery she chose, as the API takes it: one of the shop's options (by id) or the typed one. */
+export function chosenDelivery(
+  choice: string,
+  options: ShippingOptions,
+  draft: ShippingDraft,
+  fallbackLabel: string,
+):
+  | { ok: true; kind: "option"; option: ShippingOption }
+  | { ok: true; kind: "typed"; shipping: GroupOrderShipping }
+  | { ok: false; error: "amount" | "threshold" } {
+  const option =
+    choice === OTHER_DELIVERY || options.status !== "ready"
+      ? undefined
+      : options.options.find((candidate) => candidate.id === choice);
+  if (option) return { ok: true, kind: "option", option };
+  const parsed = parseShipping(draft, fallbackLabel);
+  return parsed.ok ? { ok: true, kind: "typed", shipping: parsed.shipping } : parsed;
+}
+
+/**
+ * « Livraison »: the shop's options, then « Autre » with its three fields. Used to open a group order and to change
+ * its delivery.
+ */
+export function ShippingChoice({
+  options,
+  choice,
+  onChoice,
+  draft,
+  onDraft,
+}: {
+  options: ShippingOptions;
+  choice: string;
+  onChoice: (choice: string) => void;
+  draft: ShippingDraft;
+  onDraft: (draft: ShippingDraft) => void;
+}) {
+  const t = useTranslations("GroupOrder.open");
+  const locale = useLocale();
+  const name = useId();
+  const money = (cents: number) => formatAmount(locale, cents);
+  return (
+    <fieldset className="flex flex-col gap-space-2">
+      <legend className="mb-space-1 text-sm font-strong">{t("delivery")}</legend>
+      {options.status === "loading" && (
+        <p role="status" className="text-sm text-ink-muted">
+          {t("optionsLoading")}
+        </p>
+      )}
+      {options.status === "ready" &&
+        options.options.map((option) => (
+          <Choice
+            key={option.id}
+            name={name}
+            checked={choice === option.id}
+            onChange={() => onChoice(option.id)}
+            label={
+              option.freeFromCents === null
+                ? t("option", { label: option.label, shipping: money(option.shippingCents) })
+                : t("optionThreshold", {
+                    label: option.label,
+                    shipping: money(option.shippingCents),
+                    threshold: money(option.freeFromCents),
+                  })
+            }
+          />
+        ))}
+      {options.status !== "loading" && (
+        <Choice
+          name={name}
+          checked={choice === OTHER_DELIVERY}
+          onChange={() => onChoice(OTHER_DELIVERY)}
+          label={t("other")}
+        />
+      )}
+      {choice === OTHER_DELIVERY && <ShippingFields draft={draft} onChange={onDraft} />}
+    </fieldset>
+  );
+}
 
 /**
  * « Ouvrir une commande groupée » (spec § 4.1): one of the shops of the list's items, the shop's delivery options
@@ -141,11 +241,10 @@ export function GroupOrderOpenDialog({
 }) {
   const t = useTranslations("GroupOrder.open");
   const tErrors = useTranslations("GroupOrder.errors");
-  const locale = useLocale();
   const router = useRouter();
   const id = useId();
   const [shopId, setShopId] = useState(shops[0]?.id ?? "");
-  const [options, setOptions] = useState<Options>({ status: "loading" });
+  const options = useShopShippingOptions(shopId, open);
   const [choice, setChoice] = useState<string>("");
   const [draft, setDraft] = useState<ShippingDraft>({ label: "", shipping: "", freeFrom: "" });
   const [deadline, setDeadline] = useState("");
@@ -159,25 +258,9 @@ export function GroupOrderOpenDialog({
 
   // The shop's options each time she picks a shop: the first is chosen, « Autre » without any.
   useEffect(() => {
-    if (!open || !shopId) return;
-    let live = true;
-    setOptions({ status: "loading" });
-    void fetchShopShippingOptions(shopId).then((result) => {
-      if (!live) return;
-      if (!result.ok) {
-        setOptions({ status: "error" });
-        setChoice(OTHER);
-        return;
-      }
-      setOptions({ status: "ready", options: result.options });
-      setChoice(result.options[0]?.id ?? OTHER);
-    });
-    return () => {
-      live = false;
-    };
-  }, [open, shopId]);
-
-  const money = (cents: number) => formatAmount(locale, cents);
+    if (options.status === "ready") setChoice(options.options[0]?.id ?? OTHER_DELIVERY);
+    else if (options.status === "error") setChoice(OTHER_DELIVERY);
+  }, [options]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -185,14 +268,9 @@ export function GroupOrderOpenDialog({
     setError(null);
     if (!shopId) return setError(tErrors("noShop"));
     if (deadline && deadline < parisToday()) return setError(tErrors("deadline"));
-    let delivery: { shippingOptionId: string } | { shipping: GroupOrderShipping };
-    if (choice === OTHER || choice === "") {
-      const parsed = parseShipping(draft, t("otherLabelDefault"));
-      if (!parsed.ok) return setError(tErrors(parsed.error));
-      delivery = { shipping: parsed.shipping };
-    } else {
-      delivery = { shippingOptionId: choice };
-    }
+    const chosen = chosenDelivery(choice, options, draft, t("otherLabelDefault"));
+    if (!chosen.ok) return setError(tErrors(chosen.error));
+    const delivery = chosen.kind === "option" ? { shippingOptionId: chosen.option.id } : { shipping: chosen.shipping };
     setBusy(true);
     const result = await openGroupOrder(listId, { shopId, deadline: deadline || null, ...delivery });
     setBusy(false);
@@ -223,41 +301,7 @@ export function GroupOrderOpenDialog({
           </select>
         </div>
 
-        <fieldset className="flex flex-col gap-space-2">
-          <legend className="mb-space-1 text-sm font-strong">{t("delivery")}</legend>
-          {options.status === "loading" && (
-            <p role="status" className="text-sm text-ink-muted">
-              {t("optionsLoading")}
-            </p>
-          )}
-          {options.status === "ready" &&
-            options.options.map((option) => (
-              <Choice
-                key={option.id}
-                name={`${id}-delivery`}
-                checked={choice === option.id}
-                onChange={() => setChoice(option.id)}
-                label={
-                  option.freeFromCents === null
-                    ? t("option", { label: option.label, shipping: money(option.shippingCents) })
-                    : t("optionThreshold", {
-                        label: option.label,
-                        shipping: money(option.shippingCents),
-                        threshold: money(option.freeFromCents),
-                      })
-                }
-              />
-            ))}
-          {options.status !== "loading" && (
-            <Choice
-              name={`${id}-delivery`}
-              checked={choice === OTHER}
-              onChange={() => setChoice(OTHER)}
-              label={t("other")}
-            />
-          )}
-          {choice === OTHER && <ShippingFields draft={draft} onChange={setDraft} />}
-        </fieldset>
+        <ShippingChoice options={options} choice={choice} onChoice={setChoice} draft={draft} onDraft={setDraft} />
 
         <div className="flex flex-col gap-space-1">
           <label htmlFor={`${id}-deadline`} className="text-sm font-strong">

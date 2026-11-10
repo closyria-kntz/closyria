@@ -24,6 +24,7 @@ import {
   reorderWishlistItems,
   restoreOpinion,
 } from "@/lib/wardrobe-client";
+import { BackToTop } from "./back-to-top";
 import { BudgetDialog } from "./budget-dialog";
 import { Dialog } from "./dialog";
 import { FriendOpinions } from "./friend-opinions";
@@ -435,6 +436,7 @@ export function WishlistDetail({ id }: { id: string }) {
           </button>
         </div>
       </Dialog>
+      <BackToTop />
     </div>
   );
 }

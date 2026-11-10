@@ -17,6 +17,7 @@ import {
   type GroupOrderCreate,
   type GroupOrderOrder,
   type GroupOrderOwnLines,
+  type GroupOrderOwnLink,
   type GroupOrderPatch,
   giftCheckSchema,
   groupOrderPastListSchema,
@@ -608,6 +609,11 @@ export async function actOnGroupOrder(id: string, action: GroupOrderAction["acti
 /** Her own lines, all of them (« Je le prends dans cette commande »). */
 export async function putOwnGroupLines(id: string, body: GroupOrderOwnLines, deps: ClientDeps = defaultDeps) {
   return await groupOrderCall(deps, `/api/me/group-orders/${id}/own-lines`, jsonInit("PUT", body));
+}
+
+/** « Ajouter un autre article »: her link of the order's shop, to her wishes, the list and her lines. */
+export async function addOwnGroupLink(id: string, body: GroupOrderOwnLink, deps: ClientDeps = defaultDeps) {
+  return await groupOrderCall(deps, `/api/me/group-orders/${id}/own-link`, jsonInit("POST", body));
 }
 
 /** « Retirer » a friend's line. */

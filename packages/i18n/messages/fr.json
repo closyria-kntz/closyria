@@ -1674,7 +1674,8 @@
       "size": "Taille",
       "noSize": "Taille non précisée",
       "quantity": "Quantité",
-      "empty": "Aucun article de {shop} dans cette liste."
+      "empty": "Aucun article de {shop} dans cette liste.",
+      "addOther": "Ajouter un autre article"
     },
     "friends": {
       "empty": "Aucune amie n'a encore ajouté d'article. Elles le font depuis le lien de la liste."
@@ -1766,6 +1767,18 @@
       "allPaid": "Tout est payé ✓",
       "see": "Voir",
       "seeFor": "— {shop}, {date}"
+    },
+    "copy": {
+      "message": "Copier le message",
+      "messageText": "Commande groupée chez {shop} jusqu'au {date} : ajoute tes articles ici 👉 {link}",
+      "messageTextNoDate": "Commande groupée chez {shop} : ajoute tes articles ici 👉 {link}",
+      "reminder": "Copier un rappel",
+      "reminderText": "Coucou {name}, tu me dois {amount} pour la commande {shop} 🙂",
+      "done": "Copié ✓",
+      "failed": "Copie impossible ici : copie le texte à la main."
     }
+  },
+  "BackToTop": {
+    "label": "Haut de page"
   }
 }

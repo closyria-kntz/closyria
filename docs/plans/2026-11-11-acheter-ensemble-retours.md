@@ -39,8 +39,8 @@
 
 **Files:** `apps/web/src/components/group-order-view.tsx`, `group-order-open-dialog.tsx` (réutiliser le choix de livraison), `apps/web/src/components/wishlist-detail.tsx`, nouveau `apps/web/src/components/back-to-top.tsx`, `apps/web/src/lib/wardrobe-client.ts`, `fr.json`, `e2e/tests/group-order-owner.spec.ts`
 
-- [ ] e2e d'abord : coller un lien de la même boutique → l'article apparaît coché dans « Toi » et dans la liste ; autre boutique → message ; « Modifier » propose les options de la boutique et « Autre » ; « Copier le message » → presse-papiers contient le texte validé avec le lien de partage ; après commande, « Copier un rappel » pour l'amie non payée → texte validé ; « Haut de page » visible après défilement, ramène en haut (page liste et page commande).
-- [ ] Implémenter (copie via `navigator.clipboard.writeText` dans le clic, retour « Copié ✓ », repli : texte sélectionnable si refus) ; relancer ; commit « feat(acheter-ensemble): lien, livraison, messages à copier côté fondatrice ».
+- [x] e2e d'abord : coller un lien de la même boutique → l'article apparaît coché dans « Toi » et dans la liste ; autre boutique → message ; « Modifier » propose les options de la boutique et « Autre » ; « Copier le message » → presse-papiers contient le texte validé avec le lien de partage ; après commande, « Copier un rappel » pour l'amie non payée → texte validé ; « Haut de page » visible après défilement, ramène en haut (page liste et page commande).
+- [x] Implémenter (copie via `navigator.clipboard.writeText` dans le clic, retour « Copié ✓ », repli : texte sélectionnable si refus) ; relancer ; commit « feat(acheter-ensemble): lien, livraison, messages à copier côté fondatrice ».
 
 ### Task 3: Lien des amies
 

@@ -6,6 +6,11 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* « Haut de page »: stuck above the bottom of the area that scrolls, clear of the home indicator. */
+@utility bottom-safe-4 {
+  bottom: calc(var(--spacing-space-4) + env(safe-area-inset-bottom));
+}
+
 /* While a modal window is open (photo viewer, « Ajouter une photo »), the page behind does not scroll and shows no
    scroll bar of its own: neither the window nor the app content (the only area that scrolls in the app frame). */
 html:has(dialog:modal),

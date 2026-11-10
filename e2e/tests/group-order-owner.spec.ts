@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import type { Browser, Page } from "@playwright/test";
 import { sessionsOf } from "../fixtures/auth";
 import { CLIENT_IP_HEADER } from "../fixtures/proxy";
-import { AUTO_SHOP, autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
+import { AUTO_SHOP, autoProductUrl, keepWish, manualProductUrl, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Acheter ensemble, task 6: her side (spec § 4). She opens a group order from « Partage » with a delivery option of
@@ -370,4 +370,172 @@ test("annuler une commande groupée", async ({ page, db, userAgentTag }, testInf
   await expect(page.getByRole("region", { name: "Commande groupée en cours" })).toHaveCount(0);
   await page.goto(`/listes/${other}`);
   await expect(page.getByRole("region", { name: "Commandes groupées passées" })).toContainText("Annulée le");
+});
+
+// Retours du 11 novembre (task 2): her own link in the order, the shop's options when she edits the delivery, the
+// message to send and the payment reminders to copy, « Haut de page ».
+
+const clipboardOf = (page: Page) => page.evaluate(() => navigator.clipboard.readText());
+
+/** Makes the page much taller than the window, so « Haut de page » has somewhere to come back from. */
+async function scrollToBottom(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const scroller = document.getElementById("app-content") ?? document.scrollingElement;
+    const spacer = document.createElement("div");
+    spacer.style.height = "3000px";
+    spacer.dataset.testSpacer = "";
+    document.querySelector("#app-content > div")?.prepend(spacer);
+    scroller?.scrollTo({ top: scroller.scrollHeight });
+  });
+}
+
+async function backToTop(page: Page, shot: string): Promise<void> {
+  const button = page.getByRole("button", { name: "Haut de page" });
+  await page.evaluate(() =>
+    (document.getElementById("app-content") ?? document.scrollingElement)?.scrollTo({ top: 0 }),
+  );
+  await expect(button).toHaveCount(0);
+  await scrollToBottom(page);
+  await expect(button).toBeVisible();
+  await expect(button).toBeInViewport();
+  // The cards' entrance (a fade) ends before axe reads the colours.
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every(
+        (animation) =>
+          !(animation instanceof CSSAnimation) ||
+          animation.animationName !== "card-rise" ||
+          animation.playState === "finished",
+      ),
+  );
+  await capture(page, shot, (name) => test.info().outputPath(name));
+  await button.click();
+  await expect
+    .poll(() => page.evaluate(() => (document.getElementById("app-content") ?? document.scrollingElement)?.scrollTop))
+    .toBe(0);
+  await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
+  await expect(button).toHaveCount(0);
+}
+
+test("son lien, la livraison de la boutique, les messages à copier", async ({
+  page,
+  browser,
+  baseURL,
+  db,
+  userAgentTag,
+}, testInfo) => {
+  test.slow();
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const owner = await ownerList(page, db, userAgentTag);
+  const relay = `Relais ${randomUUID().slice(0, 6)}`;
+  await adminOption(page, db, owner, userAgentTag, relay);
+  const opened = await page.request.post(`/api/me/wishlists/${owner.listId}/group-order`, {
+    data: {
+      shopId: owner.shopId,
+      shipping: { label: "Colissimo", shippingCents: 690, freeFromCents: null },
+      deadline: "2027-03-12",
+    },
+  });
+  expect(opened.status(), await opened.text()).toBe(201);
+  const orderId = ((await opened.json()) as { id: string }).id;
+  await page.goto(`/listes/${owner.listId}/commande-groupee`);
+  const origin = new URL(page.url()).origin;
+
+  // « Ajouter un autre article »: a link of another shop is refused, one of the shop lands ticked in « Toi ».
+  const me = page.getByRole("region", { name: "Toi" });
+  await expect(me.getByRole("heading", { name: "Ajouter un autre article" })).toBeVisible();
+  const link = me.getByLabel(`Lien de l'article chez ${AUTO_SHOP.name}`);
+  await link.fill(manualProductUrl());
+  await me.getByRole("button", { name: "Ajouter", exact: true }).click();
+  await expect(me.getByRole("alert")).toHaveText(`Ce lien n'est pas chez ${AUTO_SHOP.name}.`);
+  await link.fill(autoProductUrl());
+  await me.getByLabel("Taille (facultatif)").fill("M");
+  await me.getByLabel("Quantité", { exact: true }).selectOption("2");
+  await me.getByRole("button", { name: "Ajouter", exact: true }).click();
+  await expect(link).toHaveValue("");
+  await expect(link).toBeFocused();
+  const added = me.getByRole("listitem").filter({ hasText: PRODUCT.name });
+  await expect(added).toBeVisible({ timeout: 15_000 });
+  await expect(added.getByRole("checkbox", { name: /Je le prends dans cette commande/ })).toBeChecked();
+  await expect(added.getByLabel(/^Taille/)).toHaveValue("M");
+  await expect(added.getByLabel(/^Quantité/)).toHaveValue("2");
+  await capture(page, "own-link", (name) => testInfo.outputPath(name));
+
+  // « Modifier la date et la livraison »: the shop's options and « Autre » (typed by hand, as it was opened).
+  await page.getByRole("button", { name: "Modifier la date et la livraison" }).click();
+  const editing = page.getByRole("dialog", { name: "Date limite et livraison" });
+  const option = editing.getByRole("radio", { name: new RegExp(relay) });
+  await expect(option).toBeVisible();
+  await expect(editing.getByRole("radio", { name: "Autre" })).toBeChecked();
+  await expect(editing.getByLabel("Nom de la livraison")).toHaveValue("Colissimo");
+  await option.check();
+  await expect(editing.getByLabel("Nom de la livraison")).toHaveCount(0);
+  await capture(page, "edit-options", (name) => testInfo.outputPath(name));
+  await editing.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(editing).toHaveCount(0);
+  await expect(page.getByText(euros(`${relay} · port 4,90 € · offerte dès 80 €`))).toBeVisible();
+  await page.getByRole("button", { name: "Modifier la date et la livraison" }).click();
+  await expect(editing.getByRole("radio", { name: new RegExp(relay) })).toBeChecked();
+  await editing.getByRole("button", { name: "Annuler" }).click();
+
+  // « Copier le message »: the validated text with the list's link; « Copié ✓ » for a moment.
+  const message = `Commande groupée chez ${AUTO_SHOP.name} jusqu'au 12 mars : ajoute tes articles ici 👉 ${origin}/l/${owner.token}`;
+  const copyMessage = page.getByRole("button", { name: /^Copier le message|^Copié ✓/ });
+  await copyMessage.click();
+  await expect(copyMessage).toHaveText("Copié ✓");
+  expect(await clipboardOf(page)).toBe(message);
+  await expect(copyMessage).toHaveText("Copier le message", { timeout: 5_000 });
+  // The clipboard refused: the text shows, to copy by hand.
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = () => Promise.reject(new Error("refused"));
+  });
+  await copyMessage.click();
+  await expect(page.getByRole("textbox", { name: /Copie impossible ici/ })).toHaveValue(message);
+  await page.reload();
+
+  // Léa takes the first item; ordered: « Copier un rappel » for her while she has not paid.
+  const lea = await friend(browser, baseURL, `10.233.${testInfo.workerIndex % 250}.1`);
+  const leaLine = await lea.request.post(`/api/shared/${owner.token}/group-order/lines`, {
+    data: {
+      source: "item",
+      itemId: owner.items[0],
+      sizeLabel: "M",
+      quantity: 1,
+      name: "Léa",
+      deviceKey: deviceOf("Léa"),
+    },
+  });
+  expect(leaLine.status(), await leaLine.text()).toBe(201);
+  const view = (await (await page.request.get(`/api/me/group-orders/${orderId}`)).json()) as {
+    people: { lines: { id: string; removedAt: string | null }[] }[];
+  };
+  const lines = view.people.flatMap((person) => person.lines.filter((line) => line.removedAt === null));
+  expect(lines).toHaveLength(2);
+  const ordered = await page.request.post(`/api/me/group-orders/${orderId}/order`, {
+    data: { shippingCents: 490, lines: lines.map((line) => ({ id: line.id, priceCents: 2300 })) },
+  });
+  expect(ordered.status(), await ordered.text()).toBe(200);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Copier le message" })).toHaveCount(0);
+  await expect(me.getByRole("heading", { name: "Ajouter un autre article" })).toHaveCount(0);
+  const leaBlock = page.getByRole("region", { name: "Léa" });
+  await expect(leaBlock).toContainText(euros("Doit 25,45 €"));
+  const remind = leaBlock.getByRole("button", { name: /^Copier un rappel|^Copié ✓/ });
+  await remind.click();
+  await expect(remind).toHaveText("Copié ✓");
+  expect(await clipboardOf(page)).toMatch(
+    euros(`Coucou Léa, tu me dois 25,45 € pour la commande ${AUTO_SHOP.name} 🙂`),
+  );
+  await capture(page, "reminder", (name) => testInfo.outputPath(name));
+  await leaBlock.getByRole("checkbox", { name: /^Payé/ }).check();
+  await expect(leaBlock.getByRole("button", { name: /^Copier un rappel/ })).toHaveCount(0);
+
+  // « Haut de page » on the order's page and on the list's page; the new item is in the list.
+  await backToTop(page, "back-to-top-order");
+  await page.goto(`/listes/${owner.listId}`);
+  await expect(page.getByTestId("item-card").filter({ hasText: PRODUCT.name })).toBeVisible();
+  await backToTop(page, "back-to-top-list");
+
+  await lea.context().close();
 });

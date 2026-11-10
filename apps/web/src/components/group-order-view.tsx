@@ -1,16 +1,20 @@
 "use client";
 
-import type { GroupOrderOrder, OwnerGroupOrder } from "@closyria/shared";
+import { GROUP_ORDER_SIZE_LABEL_MAX, type GroupOrderOrder, type OwnerGroupOrder } from "@closyria/shared";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { formatAmount } from "@/lib/budget";
 import { confirmUnlessReserved } from "@/lib/gift-check";
+import { absoluteShareUrl } from "@/lib/share-link";
 import { pushUndo } from "@/lib/undo";
 import {
   actOnGroupOrder,
+  addOwnGroupLink,
+  type ClientError,
   fetchGroupOrder,
   fetchGroupOrderById,
+  fetchShareLink,
   type GroupOrderResult,
   orderGroupOrder,
   patchGroupOrder,
@@ -19,14 +23,17 @@ import {
   restoreGroupLine,
   setGroupPayment,
 } from "@/lib/wardrobe-client";
+import { BackToTop } from "./back-to-top";
 import { Dialog } from "./dialog";
 import {
   centsToField,
+  chosenDelivery,
   groupOrderErrorKey,
+  OTHER_DELIVERY,
   parisToday,
-  parseShipping,
+  ShippingChoice,
   type ShippingDraft,
-  ShippingFields,
+  useShopShippingOptions,
 } from "./group-order-open-dialog";
 import { GroupOrderOrderedDialog } from "./group-order-ordered-dialog";
 import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
@@ -56,6 +63,8 @@ export const parisDayOf = (locale: string, at: string) =>
     .replace(/ /g, " ");
 
 const running = (order: Order) => order.status === "open" || order.status === "closed";
+
+const isHttpUrl = (value: string) => /^https?:\/\/\S+$/i.test(value);
 
 /** Her own lines as she ticked them: item → size and quantity. */
 function ownOf(order: Order): Own {
@@ -272,6 +281,26 @@ function Ready({
   // Once ordered (or cancelled, or a past one): what it came to, items and shipping (frozen at « J'ai commandé »).
   const grandTotal = money(order.totals.totalCents + order.totals.shippingTotalCents);
 
+  // « Copier le message » while it is open: the list's link to send to her friends (none for a link of before).
+  const inviting = order.status === "open" && !pinned;
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!inviting) return;
+    let live = true;
+    void fetchShareLink(listId).then((result) => {
+      if (live && result.ok && result.url) setShareUrl(absoluteShareUrl(window.location.origin, result.url));
+    });
+    return () => {
+      live = false;
+    };
+  }, [inviting, listId]);
+  const invitation =
+    shareUrl === null
+      ? null
+      : order.deadline
+        ? t("copy.messageText", { shop, date: dayOf(locale, order.deadline), link: shareUrl })
+        : t("copy.messageTextNoDate", { shop, link: shareUrl });
+
   async function act(action: "close" | "reopen" | "cancel") {
     setBusy(true);
     await change(() => actOnGroupOrder(order.id, action));
@@ -322,6 +351,7 @@ function Ready({
           {stateText}
         </p>
         {settled && <p className="font-strong text-accent">{t("state.settled")}</p>}
+        {inviting && invitation && <CopyButton label={t("copy.message")} text={invitation} />}
       </div>
 
       {error && (
@@ -432,6 +462,7 @@ function Ready({
         </div>
       </Dialog>
       <EditDialog open={editing} order={order} onClose={() => setEditing(false)} change={change} />
+      <BackToTop />
     </div>
   );
 }
@@ -471,6 +502,7 @@ function Totals({ order, personKey, money }: { order: Order; personKey: string; 
 /**
  * « Toi »: her items of the list from this shop, each to tick (« Je le prends dans cette commande ») with its size and
  * quantity. Every change sends all her lines, one save after the other; what she ticked shows until the API answers.
+ * While it runs, « Ajouter un autre article »: a link of the shop goes to her wishes, the list and her lines (ticked).
  */
 function MeBlock({
   order,
@@ -487,10 +519,17 @@ function MeBlock({
   onSaving: (saving: boolean) => void;
 }) {
   const t = useTranslations("GroupOrder");
+  const tShared = useTranslations("SharedList.groupOrder");
   const id = useId();
   const [pending, setPending] = useState<Own | null>(null);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const waiting = useRef(0);
+  const [link, setLink] = useState("");
+  const [size, setSize] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const linkInput = useRef<HTMLInputElement>(null);
   const own = pending ?? ownOf(order);
   const owner = order.people.find((person) => person.isOwner);
   const lineOf = new Map(
@@ -511,6 +550,54 @@ function MeBlock({
       }
     });
   }
+  /** The refusal of her link, in the words of the friends' « Ajouter un autre article ». */
+  function linkErrorOf(error: ClientError): string {
+    switch (error) {
+      case "not_in_shop":
+        return tShared("errors.notInShop", { shop: order.shop.name });
+      case "too_many_lines":
+        return tShared("errors.tooMany");
+      case "rate_limited":
+        return tShared("errors.rateLimited");
+      case "invalid_request":
+        return tShared("errors.link");
+      default:
+        return t(`errors.${groupOrderErrorKey(error)}`);
+    }
+  }
+
+  async function addLink(event: FormEvent) {
+    event.preventDefault();
+    if (adding) return;
+    const url = link.trim();
+    if (!isHttpUrl(url)) {
+      setLinkError(tShared("errors.link"));
+      linkInput.current?.focus();
+      return;
+    }
+    setLinkError(null);
+    setAdding(true);
+    waiting.current += 1;
+    onSaving(true);
+    const body = { url, sizeLabel: size.trim() === "" ? null : size.trim(), quantity };
+    // After her saves still on their way: each of them sends all her lines, this one among them once it is answered.
+    const sent = queue.current.then(() => change(() => addOwnGroupLink(order.id, body), true));
+    queue.current = sent;
+    const result = await sent;
+    waiting.current -= 1;
+    if (waiting.current === 0) {
+      setPending(null);
+      onSaving(false);
+    }
+    setAdding(false);
+    if (result.ok) {
+      setLink("");
+      setSize("");
+      setQuantity(1);
+    } else setLinkError(linkErrorOf(result.error));
+    linkInput.current?.focus();
+  }
+
   const update = (itemId: string, value: { sizeLabel: string | null; quantity: number } | null) => {
     const next = new Map(own);
     if (value) next.set(itemId, value);
@@ -528,6 +615,7 @@ function MeBlock({
             const chosen = own.get(item.itemId);
             const line = lineOf.get(item.itemId);
             const name = item.name || t("line.noName");
+            const reading = line?.status === "reading" && !item.name;
             return (
               <li
                 key={item.itemId}
@@ -536,7 +624,13 @@ function MeBlock({
                 <div className="flex items-center gap-space-3 text-sm">
                   <Thumb url={item.imageUrl} />
                   <span className="flex min-w-space-0 flex-1 flex-col">
-                    <span className="font-strong break-words">{name}</span>
+                    {reading ? (
+                      <span aria-busy="true" className="text-ink-muted">
+                        {tShared("reading")}
+                      </span>
+                    ) : (
+                      <span className="font-strong break-words">{name}</span>
+                    )}
                     {line && (
                       <span className="text-ink-muted tabular-nums">
                         {line.unitPriceCents === null ? t("line.unknownPrice") : money(line.unitPriceCents)}
@@ -548,7 +642,7 @@ function MeBlock({
                   <input
                     type="checkbox"
                     checked={chosen !== undefined}
-                    disabled={!editable}
+                    disabled={!editable || adding}
                     onChange={(event) =>
                       update(item.itemId, event.target.checked ? { sizeLabel: null, quantity: 1 } : null)
                     }
@@ -569,7 +663,7 @@ function MeBlock({
                       <select
                         id={`${id}-${item.itemId}-size`}
                         value={chosen.sizeLabel ?? ""}
-                        disabled={!editable}
+                        disabled={!editable || adding}
                         onChange={(event) => update(item.itemId, { ...chosen, sizeLabel: event.target.value || null })}
                         className={`${inputClass} ${touch}`}
                       >
@@ -589,7 +683,7 @@ function MeBlock({
                       <select
                         id={`${id}-${item.itemId}-quantity`}
                         value={chosen.quantity}
-                        disabled={!editable}
+                        disabled={!editable || adding}
                         onChange={(event) => update(item.itemId, { ...chosen, quantity: Number(event.target.value) })}
                         className={`${inputClass} ${touch}`}
                       >
@@ -608,6 +702,81 @@ function MeBlock({
         </ul>
       )}
       {owner && <Totals order={order} personKey={owner.key} money={money} />}
+      {editable && (
+        <form
+          noValidate
+          onSubmit={(event) => void addLink(event)}
+          aria-labelledby={`${id}-add`}
+          className="flex flex-col gap-space-3 border-t border-line pt-space-3"
+        >
+          <h3 id={`${id}-add`} className="font-strong">
+            {t("me.addOther")}
+          </h3>
+          <div className="flex flex-col gap-space-1">
+            <label htmlFor={`${id}-link`} className="text-sm font-strong">
+              {tShared("sheet.link", { shop: order.shop.name })}
+            </label>
+            <input
+              ref={linkInput}
+              id={`${id}-link`}
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              value={link}
+              onChange={(event) => setLink(event.target.value)}
+              aria-invalid={linkError ? true : undefined}
+              aria-describedby={linkError ? `${id}-link-error` : undefined}
+              className={`${inputClass} ${touch}`}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-space-3 sm:max-w-narrow">
+            <div className="flex min-w-space-0 flex-col gap-space-1">
+              <label htmlFor={`${id}-link-size`} className="text-sm font-strong">
+                {tShared("sheet.size")}
+              </label>
+              <input
+                id={`${id}-link-size`}
+                type="text"
+                autoComplete="off"
+                maxLength={GROUP_ORDER_SIZE_LABEL_MAX}
+                value={size}
+                onChange={(event) => setSize(event.target.value)}
+                className={`${inputClass} ${touch}`}
+              />
+            </div>
+            <div className="flex min-w-space-0 flex-col gap-space-1">
+              <label htmlFor={`${id}-link-quantity`} className="text-sm font-strong">
+                {tShared("sheet.quantity")}
+              </label>
+              <select
+                id={`${id}-link-quantity`}
+                value={quantity}
+                onChange={(event) => setQuantity(Number(event.target.value))}
+                className={`${inputClass} ${touch}`}
+              >
+                {QUANTITIES.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {linkError && (
+            <p id={`${id}-link-error`} role="alert" className="text-sm text-danger">
+              {linkError}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={adding}
+            aria-busy={adding || undefined}
+            className={`${primaryButtonClass} ${touch} self-start`}
+          >
+            {tShared("sheet.add")}
+          </button>
+        </form>
+      )}
     </Block>
   );
 }
@@ -728,7 +897,83 @@ function FriendBlock({
           </label>
         </div>
       )}
+      {order.status === "ordered" && person.payment && !paid && (
+        <CopyButton
+          label={t("copy.reminder")}
+          labelSuffix={t("paidFor", { name: person.name })}
+          text={t("copy.reminderText", {
+            name: person.name,
+            amount: money(person.payment.amountCents),
+            shop: order.shop.name,
+          })}
+        />
+      )}
     </Block>
+  );
+}
+
+/** How long « Copié ✓ » shows on the button after a copy. */
+const COPIED_MS = 2000;
+
+/**
+ * A text to paste elsewhere (the message to her friends, a reminder): copied in the click, « Copié ✓ » for 2 s. If the
+ * clipboard refuses, the text shows below, selected, to copy by hand.
+ */
+function CopyButton({ label, labelSuffix, text }: { label: string; labelSuffix?: string; text: string }) {
+  const t = useTranslations("GroupOrder.copy");
+  const id = useId();
+  const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const field = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), COPIED_MS);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  useEffect(() => {
+    if (failed) field.current?.select();
+  }, [failed]);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setFailed(false);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+      setFailed(true);
+      field.current?.select();
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-space-2">
+      <button type="button" onClick={() => void copy()} className={`${buttonClass} ${touch}`}>
+        {copied ? t("done") : label}
+        {!copied && labelSuffix && <span className="sr-only"> {labelSuffix}</span>}
+      </button>
+      <span role="status" className="sr-only">
+        {copied ? t("done") : ""}
+      </span>
+      {failed && (
+        <div className="flex w-full flex-col gap-space-1">
+          <label htmlFor={`${id}-text`} className="text-sm text-ink-muted">
+            {t("failed")}
+          </label>
+          <textarea
+            ref={field}
+            id={`${id}-text`}
+            readOnly
+            rows={3}
+            value={text}
+            onFocus={(event) => event.target.select()}
+            className={`${inputClass} w-full resize-none`}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -743,7 +988,10 @@ function Thumb({ url }: { url: string | null }) {
   );
 }
 
-/** « Modifier la date et la livraison » while it is not ordered (spec § 4.2). */
+/**
+ * « Modifier la date et la livraison » while it is not ordered (spec § 4.2): the shop's delivery options and « Autre »,
+ * as when she opened it. The delivery of the order is chosen when it is one of the options, else « Autre » shows it.
+ */
 function EditDialog({
   open,
   order,
@@ -757,6 +1005,8 @@ function EditDialog({
 }) {
   const t = useTranslations("GroupOrder");
   const id = useId();
+  const options = useShopShippingOptions(order.shop.id, open);
+  const [choice, setChoice] = useState("");
   const [deadline, setDeadline] = useState("");
   const [draft, setDraft] = useState<ShippingDraft>({ label: "", shipping: "", freeFrom: "" });
   const [invalid, setInvalid] = useState<string | null>(null);
@@ -772,20 +1022,43 @@ function EditDialog({
       shipping: centsToField(order.shipping.shippingCents),
       freeFrom: order.shipping.freeFromCents === null ? "" : centsToField(order.shipping.freeFromCents),
     });
+    setChoice("");
     setInvalid(null);
   }, [open]);
+
+  // Once the options are read: the one that is the order's delivery, else « Autre ».
+  // biome-ignore lint/correctness/useExhaustiveDependencies: chosen when the options arrive, never while she chooses.
+  useEffect(() => {
+    if (!open || options.status === "loading") return;
+    const { label, shippingCents, freeFromCents } = order.shipping;
+    const same =
+      options.status === "ready"
+        ? options.options.find(
+            (option) =>
+              option.label === label &&
+              option.shippingCents === shippingCents &&
+              option.freeFromCents === freeFromCents,
+          )
+        : undefined;
+    setChoice(same?.id ?? OTHER_DELIVERY);
+  }, [open, options]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setInvalid(null);
     if (deadline && deadline < parisToday() && deadline !== order.deadline) return setInvalid(t("errors.deadline"));
-    const parsed = parseShipping(draft, t("open.otherLabelDefault"));
-    if (!parsed.ok) return setInvalid(t(`errors.${parsed.error}`));
+    const chosen = chosenDelivery(choice, options, draft, t("open.otherLabelDefault"));
+    if (!chosen.ok) return setInvalid(t(`errors.${chosen.error}`));
+    const shipping =
+      chosen.kind === "option"
+        ? {
+            label: chosen.option.label,
+            shippingCents: chosen.option.shippingCents,
+            freeFromCents: chosen.option.freeFromCents,
+          }
+        : chosen.shipping;
     setBusy(true);
-    const result = await change(
-      () => patchGroupOrder(order.id, { deadline: deadline || null, shipping: parsed.shipping }),
-      true,
-    );
+    const result = await change(() => patchGroupOrder(order.id, { deadline: deadline || null, shipping }), true);
     setBusy(false);
     if (result.ok) onClose();
     else setInvalid(t(`errors.${groupOrderErrorKey(result.error)}`));
@@ -806,17 +1079,18 @@ function EditDialog({
             className={`${inputClass} ${touch}`}
           />
         </div>
-        <fieldset className="flex flex-col gap-space-2">
-          <legend className="mb-space-1 text-sm font-strong">{t("open.delivery")}</legend>
-          <ShippingFields draft={draft} onChange={setDraft} />
-        </fieldset>
+        <ShippingChoice options={options} choice={choice} onChoice={setChoice} draft={draft} onDraft={setDraft} />
         {invalid && (
           <p role="alert" className="text-sm text-danger">
             {invalid}
           </p>
         )}
         <div className="flex flex-wrap gap-space-2">
-          <button type="submit" disabled={busy} className={`${primaryButtonClass} ${touch}`}>
+          <button
+            type="submit"
+            disabled={busy || options.status === "loading"}
+            className={`${primaryButtonClass} ${touch}`}
+          >
             {t("edit.save")}
           </button>
           <button type="button" onClick={onClose} className={`${buttonClass} ${touch}`}>
