@@ -15,7 +15,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: t("title"),
     description: t("description"),
-    // The manifest itself is app/manifest.ts (linked by Next); iOS ignores it, so the icon is declared too.
+    // The manifest is app/manifest.webmanifest (linked below); iOS ignores it, so the icon is declared too.
     icons: { apple: "/icons/icon-192.png" },
   };
 }
@@ -30,6 +30,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <head>
         {/* Blocking on purpose: her light / dark choice before the first paint. A file, for `script-src 'self'`. */}
         <script src="/theme-init.js" />
+        {/* With credentials: behind dev's password, a manifest fetched without them makes Chrome ask again and again. */}
+        <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
       </head>
       <body className="min-h-dvh bg-surface text-ink antialiased">
         <NextIntlClientProvider messages={publicMessages}>{children}</NextIntlClientProvider>

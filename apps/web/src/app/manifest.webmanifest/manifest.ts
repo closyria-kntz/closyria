@@ -2,7 +2,7 @@ import { defaultSemanticTokens } from "@closyria/design-tokens";
 import type { MetadataRoute } from "next";
 
 /** PWA manifest. `share_target` makes the installed app appear in Android's share sheet (GET /partager). */
-export default function manifest(): MetadataRoute.Manifest {
+export function manifest(): MetadataRoute.Manifest {
   return {
     name: "Closyria",
     short_name: "Closyria",
