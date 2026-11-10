@@ -1,5 +1,5 @@
 import { and, asc, type Database, eq, gt, inArray, isNull, or, schema, sql } from "@closyria/db";
-import type { SharedGiftState, SharedWishlistView, WishlistView } from "@closyria/shared";
+import type { GroupOrderStatus, SharedGiftState, SharedWishlistView, WishlistView } from "@closyria/shared";
 
 import { catalogImageUrl } from "../catalog/product-view";
 import type { Tx } from "./events";
@@ -58,12 +58,27 @@ export async function listWishlistViews(
     )
     .groupBy(schema.wishlistOpinions.wishlistId);
   const newCount = new Map(counts.map((c) => [c.wishlistId, c.count]));
+  // The open or closed group order of each list (at most one, partial unique index).
+  const running = await db
+    .select({
+      wishlistId: schema.groupOrders.wishlistId,
+      id: schema.groupOrders.id,
+      status: schema.groupOrders.status,
+      shopName: schema.shops.name,
+    })
+    .from(schema.groupOrders)
+    .innerJoin(schema.shops, eq(schema.shops.id, schema.groupOrders.shopId))
+    .where(and(inArray(schema.groupOrders.wishlistId, ids), inArray(schema.groupOrders.status, ["open", "closed"])));
+  const groupOrderOf = new Map(
+    running.map((r) => [r.wishlistId, { id: r.id, status: r.status as GroupOrderStatus, shopName: r.shopName }]),
+  );
   return rows.map((row) =>
     toWishlistView(
       row,
       members.filter((m) => m.wishlistId === row.id).map((m) => m.itemId),
       newCount.get(row.id) ?? 0,
       now,
+      groupOrderOf.get(row.id) ?? null,
     ),
   );
 }
@@ -91,7 +106,13 @@ export function giftReminderDue(row: WishlistRow, now: Date): boolean {
   );
 }
 
-function toWishlistView(row: WishlistRow, itemIds: string[], newOpinions: number, now: Date): WishlistView {
+function toWishlistView(
+  row: WishlistRow,
+  itemIds: string[],
+  newOpinions: number,
+  now: Date,
+  groupOrder: WishlistView["groupOrder"],
+): WishlistView {
   return {
     id: row.id,
     name: row.name,
@@ -108,7 +129,7 @@ function toWishlistView(row: WishlistRow, itemIds: string[], newOpinions: number
     giftOccasion: row.giftOccasion,
     giftDate: row.giftDate,
     giftReminderDue: giftReminderDue(row, now),
-    groupOrder: null,
+    groupOrder,
   };
 }
 

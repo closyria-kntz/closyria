@@ -617,6 +617,13 @@ export const wardrobeErrorCodes = [
   "gifts_closed",
   "owner_took",
   "already_reserved",
+  "not_shared",
+  "shop_not_in_list",
+  "already_open",
+  "group_order_locked",
+  "invalid_transition",
+  "missing_price",
+  "currency_mismatch",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];

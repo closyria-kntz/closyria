@@ -86,7 +86,7 @@
 
 - [x] **Step 1: tests d'intégration** : créer deux options puis lire → ordre conservé ; `label` vide → 400 ; `freeFromCents: 0` → 400 ; un compte non admin → 403 ; chaque écriture ajoute une entrée d'audit ; supprimer → 204 puis absente.
 - [x] **Step 2: lancer** → échecs ; **Step 3: implémenter** routes et section « Livraison » (liste, ajouter, modifier, supprimer avec confirmation ; montants saisis en euros, envoyés en centimes) ; **Step 4: relancer** → PASS.
-- [ ] **Step 5 (fait en Task 3): test de la copie** (dans le test de Task 3, rappelé ici) : modifier l'option après ouverture d'une commande ne change pas `group_orders.shipping_cents`.
+- [x] **Step 5 (fait en Task 3): test de la copie** (dans le test de Task 3, rappelé ici) : modifier l'option après ouverture d'une commande ne change pas `group_orders.shipping_cents`.
 - [x] **Step 6: commit** « feat(acheter-ensemble): options de livraison en admin ».
 
 ### Task 3: API de la fondatrice
@@ -107,9 +107,9 @@
   - `PUT /api/me/group-orders/{id}/payments/{nameKey}` `{ paid: boolean }`.
 - Produces : `ownerGroupOrderSchema = { id, wishlistId, shop: { id, name }, status, deadline, shipping: { label, shippingCents, freeFromCents }, currency, totals (sortie de computeGroupOrderTotals), people: { key, name, isOwner, lines: { id, name, imageUrl, url, sizeLabel, quantity, unitPriceCents: number | null, finalPriceCents, status: "reading"|"ready"|"manual", removedAt }[], payment: { amountCents, paidAt } | null }[], ownItems: { itemId, name, imageUrl, sizes: string[] }[], orderedAt, cancelledAt }`.
 
-- [ ] **Step 1: tests d'intégration** : ouverture avec option (copie des valeurs) et avec saisie libre ; deuxième ouverture → 409 ; boutique hors liste → 400 ; liste non partagée → 409 ; close → reopen → close → order ; order depuis cancelled → 409 ; order avec prix modifié → montants figés, paiements créés pour chaque amie avec `amountCents` = part calculée ; ses articles passent à `ordered` ; ligne sans prix → 400 ; retrait puis restauration d'une ligne d'amie ; « Payé » puis annulation ; option admin modifiée après ouverture → commande inchangée ; aucune route `/api/me/*` d'une autre utilisatrice ne lit la commande (404).
-- [ ] **Step 2: lancer** → échecs ; **Step 3: implémenter** ; **Step 4: relancer** → PASS.
-- [ ] **Step 5: commit** « feat(acheter-ensemble): API de la fondatrice ».
+- [x] **Step 1: tests d'intégration** : ouverture avec option (copie des valeurs) et avec saisie libre ; deuxième ouverture → 409 ; boutique hors liste → 400 ; liste non partagée → 409 ; close → reopen → close → order ; order depuis cancelled → 409 ; order avec prix modifié → montants figés, paiements créés pour chaque amie avec `amountCents` = part calculée ; ses articles passent à `ordered` ; ligne sans prix → 400 ; retrait puis restauration d'une ligne d'amie ; « Payé » puis annulation ; option admin modifiée après ouverture → commande inchangée ; aucune route `/api/me/*` d'une autre utilisatrice ne lit la commande (404).
+- [x] **Step 2: lancer** → échecs ; **Step 3: implémenter** ; **Step 4: relancer** → PASS.
+- [x] **Step 5: commit** « feat(acheter-ensemble): API de la fondatrice ».
 
 ### Task 4: API des amies (lien partagé)
 

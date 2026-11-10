@@ -86,6 +86,17 @@ export const groupOrderOrderSchema = z.object({
 });
 export type GroupOrderOrder = z.infer<typeof groupOrderOrderSchema>;
 
+/** Her own lines: replaces all of them (items of the list and of the shop only). */
+export const groupOrderOwnLinesSchema = z.object({
+  lines: z
+    .array(z.object({ itemId: z.uuid(), sizeLabel: sizeLabelSchema, quantity: quantitySchema }))
+    .max(GROUP_ORDER_MAX_LINES),
+});
+export type GroupOrderOwnLines = z.infer<typeof groupOrderOwnLinesSchema>;
+
+/** « Payé » ticked (true) or unticked (false) for one friend. */
+export const groupOrderPaymentInputSchema = z.object({ paid: z.boolean() });
+
 const friendLineCommon = {
   sizeLabel: sizeLabelSchema,
   quantity: quantitySchema,
@@ -264,3 +275,19 @@ export const ownerGroupOrderSchema = z.object({
   cancelledAt: dateTimeSchema.nullable(),
 });
 export type OwnerGroupOrder = z.infer<typeof ownerGroupOrderSchema>;
+
+/** « Commandes groupées passées » of a list, most recent first. `totalCents`: the items, frozen at « J'ai commandé ». */
+export const groupOrderPastListSchema = z.object({
+  past: z.array(
+    z.object({
+      id: z.uuid(),
+      shopName: z.string(),
+      status: groupOrderStatusSchema,
+      orderedAt: dateTimeSchema.nullable(),
+      cancelledAt: dateTimeSchema.nullable(),
+      totalCents: centsSchema,
+      unpaidCount: z.int().min(0),
+    }),
+  ),
+});
+export type GroupOrderPastList = z.infer<typeof groupOrderPastListSchema>;
