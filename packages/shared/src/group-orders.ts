@@ -47,6 +47,14 @@ export const shippingOptionInputSchema = z.object({
 });
 export type ShippingOptionInput = z.infer<typeof shippingOptionInputSchema>;
 
+/** A shop's delivery option as the API returns it. */
+export const shippingOptionSchema = shippingOptionInputSchema.extend({
+  id: z.uuid(),
+  position: z.int().min(0),
+});
+export type ShippingOption = z.infer<typeof shippingOptionSchema>;
+export const shippingOptionListSchema = z.object({ options: z.array(shippingOptionSchema) });
+
 const deadlineSchema = z.iso.date();
 
 /** Open a group order: exactly one of a shop's option or free input for the delivery. */

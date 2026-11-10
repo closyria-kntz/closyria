@@ -84,10 +84,10 @@
 - Produces : `GET /api/admin/shops/{id}/shipping-options` → `{ options: ShippingOption[] }` (triées par `position`), `POST` (création, 201), `PATCH /api/admin/shops/{id}/shipping-options/{optionId}`, `DELETE …/{optionId}` (204) ; accès `admin` (même `defineAccess` que `routes/admin/shops.ts`), chaque écriture notée par `noteAudit`.
 - Produces : `listShippingOptions(db, shopId): Promise<ShippingOption[]>` (dans `apps/api/src/catalog/shipping-options.ts`), utilisé par Task 3.
 
-- [ ] **Step 1: tests d'intégration** : créer deux options puis lire → ordre conservé ; `label` vide → 400 ; `freeFromCents: 0` → 400 ; un compte non admin → 403 ; chaque écriture ajoute une entrée d'audit ; supprimer → 204 puis absente.
-- [ ] **Step 2: lancer** → échecs ; **Step 3: implémenter** routes et section « Livraison » (liste, ajouter, modifier, supprimer avec confirmation ; montants saisis en euros, envoyés en centimes) ; **Step 4: relancer** → PASS.
-- [ ] **Step 5: test de la copie** (dans le test de Task 3, rappelé ici) : modifier l'option après ouverture d'une commande ne change pas `group_orders.shipping_cents`.
-- [ ] **Step 6: commit** « feat(acheter-ensemble): options de livraison en admin ».
+- [x] **Step 1: tests d'intégration** : créer deux options puis lire → ordre conservé ; `label` vide → 400 ; `freeFromCents: 0` → 400 ; un compte non admin → 403 ; chaque écriture ajoute une entrée d'audit ; supprimer → 204 puis absente.
+- [x] **Step 2: lancer** → échecs ; **Step 3: implémenter** routes et section « Livraison » (liste, ajouter, modifier, supprimer avec confirmation ; montants saisis en euros, envoyés en centimes) ; **Step 4: relancer** → PASS.
+- [ ] **Step 5 (fait en Task 3): test de la copie** (dans le test de Task 3, rappelé ici) : modifier l'option après ouverture d'une commande ne change pas `group_orders.shipping_cents`.
+- [x] **Step 6: commit** « feat(acheter-ensemble): options de livraison en admin ».
 
 ### Task 3: API de la fondatrice
 

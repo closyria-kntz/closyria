@@ -1,4 +1,4 @@
-import { adminShopDetailSchema, adminShopListSchema } from "@closyria/shared";
+import { adminShopDetailSchema, adminShopListSchema, shippingOptionListSchema } from "@closyria/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
@@ -8,6 +8,7 @@ import { HealthBadge } from "../health-badge";
 import { LinkTester } from "../link-tester";
 import { MergeDialog } from "../merge-dialog";
 import { ShopSettingsForm } from "../shop-settings-form";
+import { ShippingOptions } from "./shipping-options";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -19,10 +20,12 @@ export default async function AdminShopPage({ params }: Props) {
   const { id } = await params;
   if (!UUID.test(id)) notFound();
   const t = await getTranslations("Admin.shops");
+  const shippingT = await getTranslations("Admin.shipping");
   const common = await getTranslations("Admin.common");
   const format = await getFormatter();
   const shop = await adminRead(`/api/admin/shops/${id}`, adminShopDetailSchema);
   if (!shop) notFound();
+  const shipping = await adminRead(`/api/admin/shops/${id}/shipping-options`, shippingOptionListSchema);
   const all = await adminRead("/api/admin/shops", adminShopListSchema);
   const options = (all?.shops ?? []).filter((s) => s.id !== shop.id).map((s) => ({ id: s.id, name: s.name }));
   const when = (iso: string) =>
@@ -45,6 +48,16 @@ export default async function AdminShopPage({ params }: Props) {
           {t("settings")}
         </h2>
         <ShopSettingsForm shop={shop} />
+      </section>
+
+      <section
+        aria-labelledby="shipping-title"
+        className="flex flex-col gap-space-3 rounded-card border border-card-border bg-card-bg p-space-4"
+      >
+        <h2 id="shipping-title" className="font-display text-lead font-strong">
+          {shippingT("title")}
+        </h2>
+        <ShippingOptions shopId={shop.id} options={shipping?.options ?? []} />
       </section>
 
       <section

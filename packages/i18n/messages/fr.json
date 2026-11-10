@@ -500,6 +500,28 @@
       "cycle": "boucle",
       "cycleHint": "Ce type est pris dans une boucle : déplace-le pour la défaire.",
       "colorSwatch": "Aperçu de la teinte {hex}"
+    },
+    "shipping": {
+      "title": "Livraison",
+      "intro": "Les options de livraison de cette boutique. La fondatrice d’une commande groupée en choisit une ; une commande déjà ouverte garde les valeurs d’origine.",
+      "none": "Aucune option de livraison pour cette boutique.",
+      "label": "Nom de l’option",
+      "shippingPrice": "Frais de port (€)",
+      "freeFrom": "Livraison offerte dès (€)",
+      "freeFromHint": "Laisse vide s’il n’y a pas de seuil.",
+      "summary": "Port {port} · offerte dès {threshold}",
+      "summaryNoThreshold": "Port {port} · pas de livraison offerte",
+      "add": "Ajouter l’option",
+      "save": "Enregistrer",
+      "edit": "Modifier",
+      "remove": "Supprimer",
+      "confirmRemove": "Supprimer l’option « {label} » ?",
+      "confirmButton": "Oui, supprimer",
+      "cancel": "Annuler",
+      "saved": "Option enregistrée.",
+      "removed": "Option supprimée.",
+      "invalidAmount": "Saisis un montant en euros, par exemple 6,90.",
+      "invalidThreshold": "Le seuil doit être supérieur à 0, ou vide."
     }
   },
   "Capture": {
