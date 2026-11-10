@@ -9,7 +9,7 @@ const MAX_SLUG_ATTEMPTS = 50;
 class LostRace extends Error {}
 
 /** The shop owning the most specific known domain of `host`, followed to the shop it was merged into. */
-async function findShop(db: Database, host: string): Promise<Shop | null> {
+export async function findShopByHost(db: Database, host: string): Promise<Shop | null> {
   const candidates = domainCandidates(host);
   const rows = await db
     .select({ domain: schema.shopDomains.domain, shop: schema.shops })
@@ -33,7 +33,7 @@ async function findShop(db: Database, host: string): Promise<Shop | null> {
  */
 export async function findOrCreateShop(db: Database, url: string): Promise<Shop> {
   const host = new URL(url).hostname;
-  const existing = await findShop(db, host);
+  const existing = await findShopByHost(db, host);
   if (existing) return existing;
 
   const domain = shopDomain(url);
@@ -62,7 +62,7 @@ export async function findOrCreateShop(db: Database, url: string): Promise<Shop>
     }
     // Either the slug is taken (by another shop, or by the shop of a concurrent creation of this very
     // domain) or the domain was lost: the domain's owner, if any, is the answer.
-    const winner = await findShop(db, host);
+    const winner = await findShopByHost(db, host);
     if (winner) return winner;
   }
   throw new Error(`no free slug for ${domain}`);
@@ -80,7 +80,7 @@ export async function createDraftShop(db: Database, url: string): Promise<Create
   const baseSlug = domain.replaceAll(".", "-");
   for (let attempt = 1; attempt <= MAX_SLUG_ATTEMPTS; attempt++) {
     // The domain or a parent domain already belongs to a shop (the surviving one when merged).
-    const owner = await findShop(db, host);
+    const owner = await findShopByHost(db, host);
     if (owner) return { taken: owner.id };
     const slug = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
     try {

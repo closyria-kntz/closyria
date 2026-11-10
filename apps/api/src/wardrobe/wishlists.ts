@@ -5,6 +5,7 @@ import { catalogImageUrl } from "../catalog/product-view";
 import type { Tx } from "./events";
 import { friendNameKeysOf } from "./friend-device";
 import { giftStatesForList, wasGiven } from "./gifts";
+import { sharedGroupOrderView } from "./group-orders";
 import { readLoveLevels } from "./love-levels";
 import { opinionsByItem } from "./opinions";
 
@@ -174,13 +175,15 @@ const sharedItemColumns = {
 
 /**
  * `deviceKey` (optional, already validated): the friend's device, so her own gifts show as hers (`mine`) and the
- * items taken off the list that she gives still show to her.
+ * items taken off the list that she gives still show to her; likewise her share of the group order. `now`: the
+ * clock (the group order's deadline).
  */
 export async function loadSharedView(
   db: Database,
   list: SharedList,
   deviceKey: string | null = null,
   viewerIsOwner = false,
+  now: Date = new Date(),
 ): Promise<SharedWishlistView> {
   const onList = await db
     .select(sharedItemColumns)
@@ -266,7 +269,8 @@ export async function loadSharedView(
     gifts: list.allowGifts
       ? { open: true, occasion: list.giftOccasion, date: list.giftDate }
       : { open: false, occasion: null, date: null },
-    groupOrder: null,
+    // Her own link has no device of hers: never `mine`.
+    groupOrder: await sharedGroupOrderView(db, list, viewerIsOwner ? null : deviceKey, now),
     givenItems: given.map((m) => ({ name: m.name ?? "" })),
     levels,
     budget,

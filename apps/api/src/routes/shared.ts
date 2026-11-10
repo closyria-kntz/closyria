@@ -3,21 +3,27 @@ import { eq, schema } from "@closyria/db";
 import {
   containsWebAddress,
   deviceKeySchema,
+  friendLineDeleteSchema,
+  friendLineInputSchema,
+  friendLinePatchSchema,
   giftDeleteSchema,
   giftInputSchema,
   opinionDeleteSchema,
   opinionInputSchema,
   opinionViewSchema,
   sharedWishlistViewSchema,
+  type WardrobeErrorCode,
   wardrobeErrorSchema,
 } from "@closyria/shared";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { type AccessEnv, defineAccess } from "../access";
+import type { CaptureQueue } from "../catalog/capture-queue";
 import { clientAddress, rateLimit } from "../rate-limit";
 import type { WardrobeDeps } from "../wardrobe/deps";
 import { giveGift, leaveGift } from "../wardrobe/gifts";
+import { addFriendLine, deleteFriendLine, patchFriendLine } from "../wardrobe/group-orders";
 import { deleteOpinion, upsertOpinion } from "../wardrobe/opinions";
 import { hashShareToken, SHARE_TOKEN_PATTERN } from "../wardrobe/share-token";
 import { loadSharedView } from "../wardrobe/wishlists";
@@ -227,14 +233,131 @@ const deleteGiftRoute = defineAccess(
   "public",
 );
 
+const MAX_LINE_BODY_BYTES = 8 * 1024;
+const GROUP_ORDER_ACTIONS_PER_HOUR_PER_DEVICE = 30;
+const GROUP_ORDER_ACTIONS_PER_HOUR_PER_ADDRESS = 120;
+// One count for adding, changing and removing lines; keys of their own, apart from the gifts'.
+const groupOrderLimits = [
+  rateLimit(
+    {
+      max: GROUP_ORDER_ACTIONS_PER_HOUR_PER_DEVICE,
+      windowMs: HOUR_MS,
+      key: async (c) => `group-order:d:${c.req.param("token")}:${await deviceKeyOf(c)}`,
+    },
+    rateLimited,
+  ),
+  rateLimit(
+    {
+      max: GROUP_ORDER_ACTIONS_PER_HOUR_PER_ADDRESS,
+      windowMs: HOUR_MS,
+      key: (c) => `group-order:a:${c.req.param("token")}:${clientAddress(c.req.raw.headers)}`,
+    },
+    rateLimited,
+  ),
+] as const;
+const lineBodyLimit = bodyLimit({
+  maxSize: MAX_LINE_BODY_BYTES,
+  onError: (c) => c.json({ error: "invalid_request" }, 413),
+});
+const lineParams = z.object({ token: z.string(), lineId: z.uuid() });
+const lineIdContent = { "application/json": { schema: z.object({ lineId: z.uuid() }) } };
+const lineErrors = {
+  403: errorContent(
+    "Closed, ordered, cancelled or past its deadline (group_order_locked), or the device is not attached to the " +
+      "line's name (forbidden)",
+  ),
+  404: errorContent("Unknown or stopped share, no group order, or unknown line (not_found)"),
+  409: errorContent(
+    "Name used by another device (name_taken), 20 active lines already (too_many_lines), or another currency " +
+      "(currency_mismatch)",
+  ),
+  429: errorContent("Too many group order actions (rate_limited)"),
+};
+
+const postLineRoute = defineAccess(
+  createRoute({
+    method: "post",
+    path: "/shared/{token}/group-order/lines",
+    summary: "A friend adds a line to the group order of a shared list",
+    description:
+      "Public. From an item of the list at the order's shop, a link of that shop (its product page is created and " +
+      "a capture asked; a shop is never created) or her own name and price. Same name rule as the gifts (`claim`). " +
+      "30 group order actions an hour per device and list, 120 per address and list.",
+    middleware: [lineBodyLimit, ...groupOrderLimits] as const,
+    request: {
+      params: z.object({ token: z.string() }),
+      body: { required: true, content: { "application/json": { schema: friendLineInputSchema } } },
+    },
+    responses: {
+      201: { description: "Added", content: lineIdContent },
+      400: {
+        description:
+          "A link of another shop or of a shop unknown to Closyria (not_in_shop, with the order's shop), an item " +
+          "not on the list or of another shop (not_eligible), or a malformed body (invalid_request)",
+        content: {
+          "application/json": {
+            schema: z.union([z.object({ error: z.literal("not_in_shop"), shopName: z.string() }), wardrobeErrorSchema]),
+          },
+        },
+      },
+      ...lineErrors,
+      422: errorContent("Web address in the name (web_address)"),
+    },
+  }),
+  "public",
+);
+
+const patchLineRoute = defineAccess(
+  createRoute({
+    method: "patch",
+    path: "/shared/{token}/group-order/lines/{lineId}",
+    summary: "A friend changes her line",
+    description:
+      "Public. Size and quantity; name and price only on a line not taken from the list. With the device attached " +
+      "to the line's name. Counts in the same limits as adding.",
+    middleware: [lineBodyLimit, ...groupOrderLimits] as const,
+    request: {
+      params: lineParams,
+      body: { required: true, content: { "application/json": { schema: friendLinePatchSchema } } },
+    },
+    responses: {
+      200: { description: "Changed", content: lineIdContent },
+      400: errorContent("Name or price on a line taken from the list, or a malformed body (invalid_request)"),
+      ...lineErrors,
+    },
+  }),
+  "public",
+);
+
+const deleteLineRoute = defineAccess(
+  createRoute({
+    method: "delete",
+    path: "/shared/{token}/group-order/lines/{lineId}",
+    summary: "A friend takes back her line",
+    description: "Public. With the device attached to the line's name. Counts in the same limits as adding.",
+    middleware: [lineBodyLimit, ...groupOrderLimits] as const,
+    request: {
+      params: lineParams,
+      body: { required: true, content: { "application/json": { schema: friendLineDeleteSchema } } },
+    },
+    responses: {
+      204: { description: "Taken back" },
+      400: errorContent("Malformed body (invalid_request)"),
+      ...lineErrors,
+    },
+  }),
+  "public",
+);
+
 /** A stopped share must not be served from a cache, and the page must stay out of search engines. */
 function privateHeaders(c: { header: (name: string, value: string) => unknown }) {
   c.header("X-Robots-Tag", "noindex");
   c.header("Cache-Control", "no-store");
 }
 
-export function sharedRoutes(deps: WardrobeDeps) {
-  const { db } = deps;
+export function sharedRoutes(deps: WardrobeDeps & { queue: CaptureQueue }) {
+  const { db, queue } = deps;
+  const now = () => deps.now?.() ?? new Date();
   const app = new OpenAPIHono<AccessEnv>({
     defaultHook: (result, c) => (result.success ? undefined : c.json({ error: "invalid_request" } as const, 400)),
   });
@@ -268,8 +391,8 @@ export function sharedRoutes(deps: WardrobeDeps) {
       const deviceKey = deviceKeySchema.safeParse(c.req.valid("header")["x-device-key"]);
       // Her own link opened in her session: every gift hidden, whatever device she reads it from.
       const session = await c.var.getSession();
-      if (session?.user.id === list.userId) return c.json(await loadSharedView(db, list, null, true), 200);
-      return c.json(await loadSharedView(db, list, deviceKey.success ? deviceKey.data : null), 200);
+      if (session?.user.id === list.userId) return c.json(await loadSharedView(db, list, null, true, now()), 200);
+      return c.json(await loadSharedView(db, list, deviceKey.success ? deviceKey.data : null, false, now()), 200);
     })
     .openapi(putOpinionRoute, async (c) => {
       privateHeaders(c);
@@ -338,5 +461,65 @@ export function sharedRoutes(deps: WardrobeDeps) {
       if (result.error === "not_found") return c.json({ error: "not_found" } as const, 404);
       if (result.error === "no_gift") return c.json({ error: "no_gift" } as const, 404);
       return c.json({ error: "forbidden" } as const, 403);
+    })
+    .openapi(postLineRoute, async (c) => {
+      privateHeaders(c);
+      const { token } = c.req.valid("param");
+      const input = c.req.valid("json");
+      const list = await findList(token);
+      if (!list) return c.json({ error: "not_found" } as const, 404);
+      if (containsWebAddress(input.name)) return c.json({ error: "web_address" } as const, 422);
+      const outcome = await addFriendLine(
+        db,
+        queue,
+        { ...input, wishlistId: list.id, shareTokenHash: hashShareToken(token) },
+        now,
+      );
+      if (!("error" in outcome)) return c.json(outcome, 201);
+      if (outcome.error === "not_in_shop")
+        return c.json({ error: "not_in_shop", shopName: "shopName" in outcome ? outcome.shopName : "" } as const, 400);
+      return c.json({ error: outcome.error }, lineStatus(outcome.error));
+    })
+    .openapi(patchLineRoute, async (c) => {
+      privateHeaders(c);
+      const { token, lineId } = c.req.valid("param");
+      const input = c.req.valid("json");
+      const list = await findList(token);
+      if (!list) return c.json({ error: "not_found" } as const, 404);
+      const outcome = await patchFriendLine(
+        db,
+        { ...input, wishlistId: list.id, shareTokenHash: hashShareToken(token), lineId },
+        now(),
+      );
+      return "error" in outcome ? c.json({ error: outcome.error }, lineStatus(outcome.error)) : c.json(outcome, 200);
+    })
+    .openapi(deleteLineRoute, async (c) => {
+      privateHeaders(c);
+      const { token, lineId } = c.req.valid("param");
+      const list = await findList(token);
+      if (!list) return c.json({ error: "not_found" } as const, 404);
+      const outcome = await deleteFriendLine(
+        db,
+        { ...c.req.valid("json"), wishlistId: list.id, shareTokenHash: hashShareToken(token), lineId },
+        now(),
+      );
+      return "error" in outcome ? c.json({ error: outcome.error }, lineStatus(outcome.error)) : c.body(null, 204);
     });
+}
+
+/** The status of a refused group order line. */
+const LINE_STATUS_OF: Partial<Record<WardrobeErrorCode, 400 | 403 | 404 | 409>> = {
+  invalid_request: 400,
+  not_eligible: 400,
+  not_found: 404,
+  group_order_locked: 403,
+  forbidden: 403,
+  name_taken: 409,
+  too_many_lines: 409,
+  currency_mismatch: 409,
+};
+function lineStatus(error: WardrobeErrorCode) {
+  const status = LINE_STATUS_OF[error];
+  if (!status) throw new Error(`unexpected group order line error ${error}`);
+  return status;
 }

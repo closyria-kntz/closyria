@@ -1,14 +1,13 @@
-import { and, desc, eq, inArray, schema, sql } from "@closyria/db";
+import { eq, schema } from "@closyria/db";
 import { canonicalizeUrl, captureAcceptedSchema, captureViewSchema, catalogErrorSchema } from "@closyria/shared";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { type AccessEnv, defineAccess } from "../access";
 import type { CatalogDeps } from "../catalog/deps";
+import { requestProductCapture } from "../catalog/product-capture";
 import { loadProductView } from "../catalog/product-view";
 import { findOrCreateShop } from "../catalog/shops";
-
-const FRESH_MS = 24 * 60 * 60 * 1000;
 
 const invalidUrl = { error: "invalid_url" } as const;
 const invalidRequest = { error: "invalid_request" } as const;
@@ -70,87 +69,30 @@ export function capturesRoutes(deps: CatalogDeps, limiter: MiddlewareHandler<Acc
       if (!url) return c.json(invalidUrl, 400);
 
       const shop = await findOrCreateShop(db, url);
-      // Two people pasting the same new link: one insert wins, the other re-reads.
-      await db
-        .insert(schema.products)
-        .values({ shopId: shop.id, canonicalUrl: url })
-        .onConflictDoNothing({ target: schema.products.canonicalUrl });
-      const [product] = await db.select().from(schema.products).where(eq(schema.products.canonicalUrl, url));
-      if (!product) throw new Error("product vanished after insert");
-
-      const at = now();
-      const fresh =
-        product.captureStatus === "ok" &&
-        product.lastCapturedAt !== null &&
-        at.getTime() - product.lastCapturedAt.getTime() < FRESH_MS;
-      const base = { productId: product.id, shopId: shop.id, url, trigger: "user", requestedBy: userId } as const;
-
-      const outcome = await db.transaction(async (tx) => {
-        // One capture at a time per product, whoever asks.
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${product.id}, 0))`);
-        if (shop.captureMode === "manual") {
-          const [capture] = await tx
-            .insert(schema.captures)
-            .values({ ...base, status: "skipped_manual", finishedAt: at })
-            .returning();
-          await tx
-            .update(schema.products)
-            .set({ captureStatus: "manual", updatedAt: at })
-            .where(
-              and(eq(schema.products.id, product.id), inArray(schema.products.captureStatus, ["pending", "failed"])),
-            );
-          return { capture, enqueue: false };
-        }
-        if (fresh) {
-          const [capture] = await tx
-            .insert(schema.captures)
-            .values({ ...base, status: "succeeded", dataReady: true, finishedAt: at })
-            .returning();
-          return { capture, enqueue: false };
-        }
-        const [active] = await tx
-          .select()
-          .from(schema.captures)
-          .where(and(eq(schema.captures.productId, product.id), inArray(schema.captures.status, ["queued", "running"])))
-          .orderBy(desc(schema.captures.createdAt))
-          .limit(1);
-        if (active) return { capture: active, enqueue: false };
-        const [capture] = await tx
-          .insert(schema.captures)
-          .values({ ...base, status: "queued" })
-          .returning();
-        return { capture, enqueue: true };
+      const capture = await requestProductCapture(db, queue, {
+        url,
+        shop,
+        requestedBy: userId,
+        now,
+        // « Derniers liens »: every outcome counts as a visit. A failure here never fails the capture.
+        beforeEnqueue: async (productId) => {
+          try {
+            await db
+              .insert(schema.recentProducts)
+              .values({ userId, productId, visitedAt: now() })
+              .onConflictDoUpdate({
+                target: [schema.recentProducts.userId, schema.recentProducts.productId],
+                set: { visitedAt: now() },
+              });
+          } catch (error) {
+            console.error("recent product not recorded:", error);
+          }
+        },
       });
-      const { capture } = outcome;
-      if (!capture) throw new Error("capture not created");
-
-      // « Derniers liens »: every outcome counts as a visit. A failure here never fails the capture.
-      try {
-        await db
-          .insert(schema.recentProducts)
-          .values({ userId, productId: product.id, visitedAt: now() })
-          .onConflictDoUpdate({
-            target: [schema.recentProducts.userId, schema.recentProducts.productId],
-            set: { visitedAt: now() },
-          });
-      } catch (error) {
-        console.error("recent product not recorded:", error);
-      }
-
-      if (outcome.enqueue) {
-        try {
-          await queue.enqueue("capture-user", capture.id);
-        } catch (error) {
-          // Keep the row: another request may already have been given this capture id. A failed capture
-          // does not block the next attempt on this page.
-          await db
-            .update(schema.captures)
-            .set({ status: "failed", errorCode: "queue_unavailable", finishedAt: now() })
-            .where(eq(schema.captures.id, capture.id));
-          throw error;
-        }
-      }
-      return c.json({ productId: product.id, captureId: capture.id, status: capture.status as "queued" }, 202);
+      return c.json(
+        { productId: capture.productId, captureId: capture.captureId, status: capture.status as "queued" },
+        202,
+      );
     })
     .openapi(getCaptureRoute, async (c) => {
       const { id } = c.req.valid("param");

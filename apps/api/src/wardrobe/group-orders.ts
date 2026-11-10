@@ -1,6 +1,10 @@
 import { and, asc, type Database, desc, eq, gte, inArray, isNull, or, schema, sql } from "@closyria/db";
 import {
+  canonicalizeUrl,
   computeGroupOrderTotals,
+  type FriendLineDelete,
+  type FriendLineInput,
+  type FriendLinePatch,
   GROUP_ORDER_MAX_LINES,
   type GroupOrderAction,
   type GroupOrderCreate,
@@ -12,14 +16,20 @@ import {
   type GroupOrderPerson,
   type GroupOrderStatus,
   type OwnerGroupOrder,
+  opinionNameKey,
+  type SharedGroupOrder,
   type WardrobeErrorCode,
 } from "@closyria/shared";
+import type { CaptureQueue } from "../catalog/capture-queue";
+import { requestProductCapture } from "../catalog/product-capture";
 import { catalogImageUrl } from "../catalog/product-view";
 import { listShippingOptions } from "../catalog/shipping-options";
+import { findShopByHost, type Shop } from "../catalog/shops";
 import { pgCode } from "../pg-code";
 import { bulkRefusal, runBulkIn } from "./bulk";
 import { trackItemEvents } from "./deps";
 import type { Tx } from "./events";
+import { ensureFriendDevice, friendNameKeysOf, hashDeviceKey, isFriendDevice, lockFriendName } from "./friend-device";
 import { parisDay } from "./wishlists";
 
 type OrderRow = typeof schema.groupOrders.$inferSelect;
@@ -626,4 +636,318 @@ export function setPaid(db: Database, userId: string, id: string, nameKey: strin
 export async function ownGroupOrderView(db: Database, userId: string, id: string) {
   const order = await ownOrder(db, userId, id);
   return order ? toOwnerView(db, order) : null;
+}
+
+// ——— Her friends, on the shared link ———
+
+/** The shared list a friend writes through (found by its token). */
+export type FriendTarget = { wishlistId: string; shareTokenHash: string };
+type NotInShop = { error: "not_in_shop"; shopName: string };
+
+/** Past its deadline (end of that day in Paris), or no longer open: friends can no longer change anything. */
+const isLockedForFriends = (order: OrderRow, now: Date) =>
+  order.status !== "open" || (order.deadline !== null && parisDay(now) > order.deadline);
+
+/**
+ * The group order friends see on the list: the running one, else the latest ordered or cancelled — a cancelled one
+ * for 30 days only. `lock`: `FOR UPDATE` on the order row.
+ */
+async function sharedOrder(db: Database | Tx, wishlistId: string, now: Date, lock = false) {
+  const since = new Date(now.getTime() - RECENT_MS);
+  const query = db
+    .select()
+    .from(schema.groupOrders)
+    .where(
+      and(
+        eq(schema.groupOrders.wishlistId, wishlistId),
+        or(inArray(schema.groupOrders.status, [...RUNNING, "ordered"]), gte(schema.groupOrders.cancelledAt, since)),
+      ),
+    )
+    .orderBy(
+      sql`case when ${schema.groupOrders.status} in ('open', 'closed') then 0 else 1 end`,
+      desc(sql`coalesce(${schema.groupOrders.orderedAt}, ${schema.groupOrders.cancelledAt})`),
+      desc(schema.groupOrders.createdAt),
+    )
+    .limit(1);
+  // An ordered one stays (friends may still owe her); a cancelled one goes after 30 days.
+  const [row] = lock ? await query.for("update") : await query;
+  return row;
+}
+
+/** The shared list, still shared: stopping the share waits for us (or we find it gone). */
+async function lockSharedList(tx: Tx, target: FriendTarget) {
+  const [list] = await tx
+    .select({ id: schema.wishlists.id })
+    .from(schema.wishlists)
+    .where(and(eq(schema.wishlists.id, target.wishlistId), eq(schema.wishlists.shareTokenHash, target.shareTokenHash)))
+    .for("share");
+  if (!list) throw new Refused("not_found");
+}
+
+async function shopNameOf(db: Database | Tx, shopId: string): Promise<string> {
+  const [shop] = await db.select({ name: schema.shops.name }).from(schema.shops).where(eq(schema.shops.id, shopId));
+  return shop?.name ?? "";
+}
+
+/**
+ * A link a friend pastes must be of the order's shop (found by its domain, never created): its canonical address
+ * and shop, or `not_in_shop`.
+ */
+async function linkOfShop(
+  db: Database,
+  order: OrderRow,
+  url: string,
+): Promise<{ url: string; shop: Shop } | NotInShop> {
+  const canonical = canonicalizeUrl(url);
+  const shop = canonical ? await findShopByHost(db, new URL(canonical).hostname) : null;
+  const root = (await rootShops(db, [order.shopId])).get(order.shopId) ?? order.shopId;
+  if (!canonical || !shop || shop.id !== root)
+    return { error: "not_in_shop", shopName: await shopNameOf(db, order.shopId) };
+  return { url: canonical, shop };
+}
+
+/**
+ * « Je le prends aussi » / « Ajouter un autre article »: a friend's line, from an item of the list (of the order's
+ * shop), a link of the same shop (its product page is created and a capture asked, by nobody), or her own name and
+ * price. Locks, in this order: the shared list, the order row, then the name (one person per name, as for opinions
+ * and gifts) — never an item before the order. Refusals that write nothing come before the name check, which may
+ * attach the device.
+ */
+export async function addFriendLine(
+  db: Database,
+  queue: CaptureQueue,
+  input: FriendLineInput & FriendTarget,
+  now: () => Date,
+): Promise<Outcome<{ lineId: string }> | NotInShop> {
+  const nameKey = opinionNameKey(input.name);
+  // A link is checked, and its page read, before the write: never for an order friends can no longer change.
+  let link: { url: string; productId: string | null; orderId: string } | null = null;
+  if (input.source !== "item" && input.url !== undefined) {
+    const order = await sharedOrder(db, input.wishlistId, now());
+    if (!order) return { error: "not_found" };
+    if (isLockedForFriends(order, now())) return { error: "group_order_locked" };
+    const found = await linkOfShop(db, order, input.url);
+    if ("error" in found) return found;
+    const productId =
+      input.source === "url"
+        ? (await requestProductCapture(db, queue, { url: found.url, shop: found.shop, requestedBy: null, now }))
+            .productId
+        : null;
+    link = { url: found.url, productId, orderId: order.id };
+  }
+  return attempt(db, async (tx) => {
+    const at = now();
+    await lockSharedList(tx, input);
+    const order = await sharedOrder(tx, input.wishlistId, at, true);
+    if (!order) throw new Refused("not_found");
+    // Another order since the link was checked (cancelled, then a new one): its shop may differ.
+    if (isLockedForFriends(order, at) || (link && link.orderId !== order.id)) throw new Refused("group_order_locked");
+    await lockFriendName(tx, input.wishlistId, nameKey);
+
+    let source: Pick<
+      typeof schema.groupOrderLines.$inferInsert,
+      "itemId" | "productId" | "url" | "manualName" | "manualPriceCents"
+    >;
+    if (input.source === "item") {
+      const item = (await listItems(tx, input.wishlistId)).find(
+        (i) => i.itemId === input.itemId && i.shopId === order.shopId,
+      );
+      if (!item) throw new Refused("not_eligible");
+      if (item.currency !== null && item.currency !== order.currency) throw new Refused("currency_mismatch");
+      // The product and the name at write time: the line survives the item's deletion.
+      source = { itemId: item.itemId, productId: item.productId, manualName: item.name };
+    } else if (input.source === "url") {
+      const productId = link?.productId ?? null;
+      if (!productId) throw new Error("link line without its product");
+      const [product] = await tx
+        .select({ currency: schema.products.currency })
+        .from(schema.products)
+        .where(eq(schema.products.id, productId));
+      if (product?.currency != null && product.currency !== order.currency) throw new Refused("currency_mismatch");
+      source = { productId, url: link?.url ?? null };
+    } else {
+      source = { manualName: input.manualName, manualPriceCents: input.manualPriceCents, url: link?.url ?? null };
+    }
+
+    const [active] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.groupOrderLines)
+      .where(
+        and(
+          eq(schema.groupOrderLines.groupOrderId, order.id),
+          eq(schema.groupOrderLines.buyerNameKey, nameKey),
+          isNull(schema.groupOrderLines.removedAt),
+        ),
+      );
+    if ((active?.count ?? 0) >= GROUP_ORDER_MAX_LINES) throw new Refused("too_many_lines");
+    if ((await ensureFriendDevice(tx, input.wishlistId, nameKey, hashDeviceKey(input.deviceKey), input.claim)) !== "ok")
+      throw new Refused("name_taken");
+    const [line] = await tx
+      .insert(schema.groupOrderLines)
+      .values({
+        groupOrderId: order.id,
+        buyerName: input.name,
+        buyerNameKey: nameKey,
+        ...source,
+        sizeLabel: input.sizeLabel,
+        quantity: input.quantity,
+        createdAt: at,
+        updatedAt: at,
+      })
+      .returning({ id: schema.groupOrderLines.id });
+    if (!line) throw new Error("group order line not inserted");
+    await tx.update(schema.groupOrders).set({ updatedAt: at }).where(eq(schema.groupOrders.id, order.id));
+    return { lineId: line.id };
+  });
+}
+
+/**
+ * One of her lines, for a change: the shared list, then its order row (locked), then the name; the device must be
+ * attached to the line's name (`forbidden` otherwise, the owner's lines included).
+ */
+async function lockFriendLine(
+  tx: Tx,
+  target: FriendTarget & { lineId: string; name: string; deviceKey: string },
+  now: Date,
+) {
+  await lockSharedList(tx, target);
+  const [found] = await tx
+    .select({ order: schema.groupOrders })
+    .from(schema.groupOrders)
+    .innerJoin(schema.groupOrderLines, eq(schema.groupOrderLines.groupOrderId, schema.groupOrders.id))
+    .where(and(eq(schema.groupOrderLines.id, target.lineId), eq(schema.groupOrders.wishlistId, target.wishlistId)))
+    .for("update", { of: schema.groupOrders });
+  if (!found) throw new Refused("not_found");
+  if (isLockedForFriends(found.order, now)) throw new Refused("group_order_locked");
+  const nameKey = opinionNameKey(target.name);
+  await lockFriendName(tx, target.wishlistId, nameKey);
+  const [line] = await tx.select().from(schema.groupOrderLines).where(eq(schema.groupOrderLines.id, target.lineId));
+  if (!line) throw new Refused("not_found");
+  if (line.buyerNameKey !== nameKey || !(await isFriendDevice(tx, target.wishlistId, nameKey, target.deviceKey)))
+    throw new Refused("forbidden");
+  return { order: found.order, line };
+}
+
+/**
+ * « Modifier »: size and quantity; name and price only on a line not taken from her list (a link that could not be
+ * read). A line the owner took out is not changed (`not_found`).
+ */
+export async function patchFriendLine(
+  db: Database,
+  input: FriendLinePatch & FriendTarget & { lineId: string },
+  now: Date,
+): Promise<Outcome<{ lineId: string }>> {
+  return attempt(db, async (tx) => {
+    const { order, line } = await lockFriendLine(tx, input, now);
+    if (line.removedAt !== null) throw new Refused("not_found");
+    const manual = input.manualName !== undefined || input.manualPriceCents !== undefined;
+    if (manual && line.itemId !== null) throw new Refused("invalid_request");
+    await tx
+      .update(schema.groupOrderLines)
+      .set({
+        sizeLabel: input.sizeLabel,
+        quantity: input.quantity,
+        ...(input.manualName === undefined ? {} : { manualName: input.manualName }),
+        ...(input.manualPriceCents === undefined ? {} : { manualPriceCents: input.manualPriceCents }),
+        updatedAt: now,
+      })
+      .where(eq(schema.groupOrderLines.id, line.id));
+    await tx.update(schema.groupOrders).set({ updatedAt: now }).where(eq(schema.groupOrders.id, order.id));
+    return { lineId: line.id };
+  });
+}
+
+/** « Retirer »: her line is gone for everyone (a line the owner took out included). */
+export async function deleteFriendLine(
+  db: Database,
+  input: FriendLineDelete & FriendTarget & { lineId: string },
+  now: Date,
+): Promise<Outcome<{ lineId: string }>> {
+  return attempt(db, async (tx) => {
+    const { order, line } = await lockFriendLine(tx, input, now);
+    await tx.delete(schema.groupOrderLines).where(eq(schema.groupOrderLines.id, line.id));
+    await tx.update(schema.groupOrders).set({ updatedAt: now }).where(eq(schema.groupOrders.id, order.id));
+    return { lineId: line.id };
+  });
+}
+
+/**
+ * The group order on the shared link: everyone's active lines and the totals; `mine` (her share, what she owes, the
+ * lines the owner took out) only for a device attached to a name with a line in it. Null: none, or cancelled more
+ * than 30 days ago.
+ */
+export async function sharedGroupOrderView(
+  db: Database,
+  list: { id: string; showOwnerName: boolean },
+  deviceKey: string | null,
+  now: Date,
+): Promise<SharedGroupOrder | null> {
+  const order = await sharedOrder(db, list.id, now);
+  if (!order) return null;
+  const [shopName, lines, items, ownerName, deviceNames] = await Promise.all([
+    shopNameOf(db, order.shopId),
+    readLines(db, order),
+    listItems(db, order.wishlistId),
+    list.showOwnerName ? ownerFirstName(db, order.wishlistId) : Promise.resolve(""),
+    deviceKey ? friendNameKeysOf(db, list.id, deviceKey) : Promise.resolve([]),
+  ]);
+  const people = peopleOf(lines);
+  const totals = totalsOf(people, order.shippingCents, order.freeFromCents);
+  const own = people.find((p) => !p.isOwner && deviceNames.includes(p.key));
+  let mine: SharedGroupOrder["mine"] = null;
+  if (own) {
+    const [payment] = await db
+      .select({ paidAt: schema.groupOrderPayments.paidAt })
+      .from(schema.groupOrderPayments)
+      .where(
+        and(eq(schema.groupOrderPayments.groupOrderId, order.id), eq(schema.groupOrderPayments.buyerNameKey, own.key)),
+      );
+    const share = totals.perPerson[own.key] ?? { itemsCents: 0, shippingCents: 0, totalCents: 0 };
+    mine = {
+      name: own.name,
+      lineIds: own.lines.filter((l) => l.row.removedAt === null).map((l) => l.row.id),
+      ...share,
+      provisional: order.status !== "ordered",
+      paidAt: payment?.paidAt?.toISOString() ?? null,
+      removedLines: own.lines.filter((l) => l.row.removedAt !== null).map((l) => ({ id: l.row.id, name: l.view.name })),
+    };
+  }
+  return {
+    id: order.id,
+    shopName,
+    ownerName: ownerName || null,
+    status: order.status as GroupOrderStatus,
+    deadline: order.deadline,
+    locked: isLockedForFriends(order, now),
+    shipping: { label: order.shippingLabel, shippingCents: order.shippingCents, freeFromCents: order.freeFromCents },
+    currency: order.currency,
+    totals: {
+      totalCents: totals.totalCents,
+      remainingForFreeCents: totals.remainingForFreeCents,
+      shippingTotalCents: totals.shippingTotalCents,
+    },
+    // Lines the owner took out show to their friend only (`mine.removedLines`).
+    people: people.flatMap((p) => {
+      const active = p.lines.filter((l) => l.row.removedAt === null);
+      if (active.length === 0) return [];
+      return [
+        {
+          name: p.isOwner ? ownerName : p.name,
+          isOwner: p.isOwner,
+          lines: active.map(({ view }) => ({
+            id: view.id,
+            name: view.name,
+            imageUrl: view.imageUrl,
+            sizeLabel: view.sizeLabel,
+            quantity: view.quantity,
+            unitPriceCents: view.unitPriceCents,
+            status: view.status,
+          })),
+        },
+      ];
+    }),
+    eligibleItemIds: items.filter((i) => i.shopId === order.shopId).map((i) => i.itemId),
+    mine,
+    orderedAt: order.orderedAt?.toISOString() ?? null,
+  };
 }

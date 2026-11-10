@@ -625,6 +625,8 @@ export const wardrobeErrorCodes = [
   "missing_price",
   "currency_mismatch",
   "too_many_lines",
+  "not_in_shop",
+  "not_eligible",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];

@@ -42,7 +42,7 @@ export async function createCatalogHarness(overrides: Partial<Omit<CatalogDeps, 
     events: { db: handle.db },
     // The same clock as the catalog routes, so the overview's 24 h / 7 day windows match fixed test dates.
     admin: { db: handle.db, ...(overrides.now ? { now: overrides.now } : {}) },
-    wardrobe: { db: handle.db, shareLinkKey: Buffer.alloc(32, 7) },
+    wardrobe: { db: handle.db, shareLinkKey: Buffer.alloc(32, 7), ...(overrides.now ? { now: overrides.now } : {}) },
     catalog: { db: handle.db, store, queue: recorder.queue, ...overrides },
   });
   let ipCounter = 0;
