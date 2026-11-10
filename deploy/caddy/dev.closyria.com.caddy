@@ -1,7 +1,11 @@
 # Dev environment: password-protected, never indexed.
 # Put the output of `caddy hash-password` in place of the placeholder below.
 dev.closyria.com {
-	basic_auth {
+	# The password is asked for pages only. Requests a page makes by itself (data, icon, prefetch) carry a
+	# Sec-Fetch-Mode other than "navigate": desktop Chrome sends them without the password, which made the
+	# password window come back again and again. Without the header (curl, bots), the password is asked.
+	@needsPassword not header_regexp Sec-Fetch-Mode ^(cors|no-cors|same-origin)$
+	basic_auth @needsPassword {
 		closyria HASH
 	}
 	header X-Robots-Tag "noindex, nofollow"
