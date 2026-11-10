@@ -245,8 +245,10 @@ test("sa commande groupée, de l'ouverture au paiement", async ({
       .rows[0]?.status;
   expect(await statusOf()).toBe("closed");
 
-  // Again, « Commander quand même »: ordered, prices frozen, her items in « Commandé ».
-  await fill();
+  // Again, « Commander quand même »: what she corrected is still there; ordered, prices frozen, her items in « Commandé ».
+  await page.getByRole("button", { name: "J'ai commandé" }).click();
+  await expect(orderedDialog.getByLabel(`Prix de ${FIRST} (Léa)`)).toHaveValue("20");
+  await expect(orderedDialog.getByLabel("Port payé")).toHaveValue("5,50");
   await orderedDialog.getByLabel(`Prix de ${SECOND} (Camille)`).fill("");
   await orderedDialog.getByRole("button", { name: "Valider" }).click();
   await expect(orderedDialog.getByRole("alert")).toHaveText("Indique le prix de chaque article.");

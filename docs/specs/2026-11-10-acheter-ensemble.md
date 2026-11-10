@@ -195,5 +195,7 @@ Prises pendant la construction :
 - La fondatrice choisit la boutique parmi celles des articles de la liste ; les options de livraison de la boutique
   sont lues par une route réservée aux comptes connectés.
 - « Payé » est une case à cocher par amie ; la décocher annule.
-- Dans « Commandes groupées passées », seule la plus récente (moins de 30 jours, sans commande en cours) s'ouvre en
-  détail ; les plus anciennes montrent leur résumé (date, total, amies qui n'ont pas encore payé).
+- Chaque commande de « Commandes groupées passées » s'ouvre en détail (« Voir »), quel que soit son âge : la page la
+  montre en lecture seule, sauf les cases « Payé » (route `GET /api/me/group-orders/{id}`). Chaque ligne donne la
+  date, le total dans la monnaie de la commande, et les amies qui n'ont pas encore payé.
+- Après « Attendre » dans l'avertissement 🎁, rouvrir « J'ai commandé » garde les prix et le port qu'elle avait corrigés.

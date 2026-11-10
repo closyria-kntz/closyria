@@ -224,10 +224,12 @@ function Ready({
   const money = (cents: number) => formatAmount(locale, cents, order.currency);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [ordered, setOrdered] = useState<{ open: boolean; key: number; error: string | null }>({
+  // `keep`: she chose « Attendre » in the 🎁 window; the next « J'ai commandé » shows what she had typed.
+  const [ordered, setOrdered] = useState<{ open: boolean; key: number; error: string | null; keep: boolean }>({
     open: false,
     key: 0,
     error: null,
+    keep: false,
   });
   const editable = running(order) && !pinned;
 
@@ -275,7 +277,10 @@ function Ready({
   async function sendOrder(body: GroupOrderOrder) {
     setOrdered((previous) => ({ ...previous, open: false, error: null }));
     const itemIds = [...ownOf(order).keys()];
-    if (!(await confirmUnlessReserved(itemIds, "order"))) return;
+    if (!(await confirmUnlessReserved(itemIds, "order"))) {
+      setOrdered((previous) => ({ ...previous, keep: true }));
+      return;
+    }
     setBusy(true);
     const result = await change(() => orderGroupOrder(order.id, body), true);
     setBusy(false);
@@ -337,7 +342,14 @@ function Ready({
           <button
             type="button"
             disabled={busy}
-            onClick={() => setOrdered((previous) => ({ open: true, key: previous.key + 1, error: null }))}
+            onClick={() =>
+              setOrdered((previous) => ({
+                open: true,
+                key: previous.keep ? previous.key : previous.key + 1,
+                error: null,
+                keep: false,
+              }))
+            }
             className={`${primaryButtonClass} ${touch}`}
           >
             {t("actions.ordered")}
