@@ -258,6 +258,8 @@ export const ownerGroupOrderSchema = z.object({
       lines: z.array(
         z.object({
           id: z.uuid(),
+          /** Her item the line is for (her own lines, a friend's « Je le prends aussi »); null for a link or an entry. */
+          itemId: z.uuid().nullable(),
           name: z.string(),
           imageUrl: z.string().nullable(),
           url: z.string().nullable(),

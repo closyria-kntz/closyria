@@ -106,7 +106,7 @@ export type ProductTraits = z.infer<typeof productTraitsSchema>;
 /** A product as the API shows it. */
 export const productViewSchema = z.object({
   id: z.uuid(),
-  shop: z.object({ name: z.string(), slug: z.string() }),
+  shop: z.object({ id: z.uuid(), name: z.string(), slug: z.string() }),
   canonicalUrl: z.string(),
   name: z.string().nullable(),
   brand: z.string().nullable(),

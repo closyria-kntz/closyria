@@ -198,7 +198,7 @@ describe("list query", () => {
 
 const product = {
   id,
-  shop: { name: "Shop", slug: "shop" },
+  shop: { id: "00000000-0000-4000-8000-0000000000aa", name: "Shop", slug: "shop" },
   canonicalUrl: "https://shop.example/p/1",
   name: "Robe",
   brand: null,

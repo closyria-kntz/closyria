@@ -1638,5 +1638,132 @@
       "done": "C'est fait",
       "failed": "Le rappel n'a pas pu être masqué. Réessaie."
     }
+  },
+  "GroupOrder": {
+    "metadata": "Commande groupée",
+    "loading": "Chargement de la commande groupée…",
+    "loadError": "La commande groupée ne s'affiche pas. Réessaie dans un instant.",
+    "retry": "Réessayer",
+    "back": "Retour à la liste",
+    "missing": {
+      "title": "Pas de commande groupée",
+      "body": "Cette liste n'a pas de commande groupée en cours."
+    },
+    "title": "Commande groupée chez {shop}",
+    "titleDate": "Commande groupée chez {shop}, jusqu'au {date}",
+    "delivery": "{label} · port {shipping}",
+    "deliveryThreshold": "{label} · port {shipping} · offerte dès {threshold}",
+    "state": {
+      "open": "Ouverte : tes amies peuvent ajouter leurs articles.",
+      "openPastDeadline": "Date limite passée : tes amies ne peuvent plus rien ajouter.",
+      "closed": "Close : tes amies ne peuvent plus rien ajouter.",
+      "ordered": "Commandé le {date}.",
+      "cancelled": "Commande annulée.",
+      "settled": "Soldée : toutes tes amies ont payé ✓"
+    },
+    "actions": {
+      "close": "Clôturer",
+      "reopen": "Rouvrir",
+      "ordered": "J'ai commandé",
+      "cancel": "Annuler la commande groupée",
+      "edit": "Modifier la date et la livraison"
+    },
+    "me": {
+      "title": "Toi",
+      "take": "Je le prends dans cette commande",
+      "size": "Taille",
+      "noSize": "Taille non précisée",
+      "quantity": "Quantité",
+      "empty": "Aucun article de {shop} dans cette liste."
+    },
+    "friends": {
+      "empty": "Aucune amie n'a encore ajouté d'article. Elles le font depuis le lien de la liste."
+    },
+    "line": {
+      "sizeQuantity": "{size} × {quantity}",
+      "quantityOnly": "× {quantity}",
+      "unknownPrice": "Prix inconnu",
+      "seeAtShop": "Voir chez {shop}",
+      "remove": "Retirer",
+      "forItem": "{name} de {person}",
+      "removed": "Retiré",
+      "noName": "Article sans nom"
+    },
+    "totals": "Articles {items} + port {shipping} = {total}",
+    "owes": "Doit {amount}",
+    "paid": "Payé",
+    "paidFor": "pour {name}",
+    "toast": {
+      "removed": "Ligne de {name} retirée"
+    },
+    "errors": {
+      "failed": "Ça n'a pas marché. Réessaie.",
+      "locked": "Cette commande groupée ne peut plus changer.",
+      "transition": "La commande groupée a changé entre-temps : la page est à jour.",
+      "alreadyOpen": "Une commande groupée est déjà en cours sur cette liste.",
+      "notShared": "Partage d'abord la liste.",
+      "tooMany": "Cette amie a déjà 20 articles dans la commande.",
+      "currency": "Cet article n'est pas dans la même monnaie que la commande.",
+      "itemDeleted": "Un de tes articles est dans la corbeille : retire-le de la commande.",
+      "missingPrice": "Indique le prix de chaque article.",
+      "amount": "Écris un montant, par exemple 4,90.",
+      "threshold": "Le montant « offerte dès » doit être plus grand que 0.",
+      "deadline": "La date limite ne peut pas être passée.",
+      "noShop": "Choisis une boutique."
+    },
+    "open": {
+      "action": "Ouvrir une commande groupée",
+      "title": "Ouvrir une commande groupée",
+      "see": "Voir la commande groupée",
+      "hint": "Tes amies ajoutent leurs articles de la même boutique depuis le lien de la liste.",
+      "shop": "Boutique",
+      "delivery": "Livraison",
+      "optionsLoading": "Chargement des livraisons…",
+      "option": "{label} · {shipping}",
+      "optionThreshold": "{label} · {shipping} · offerte dès {threshold}",
+      "other": "Autre",
+      "otherLabel": "Nom de la livraison",
+      "otherLabelDefault": "Livraison",
+      "shipping": "Port (€)",
+      "freeFrom": "Offerte dès (€, facultatif)",
+      "deadline": "Date limite (facultatif)",
+      "submit": "Ouvrir la commande",
+      "cancel": "Annuler",
+      "close": "Fermer"
+    },
+    "edit": {
+      "title": "Date limite et livraison",
+      "save": "Enregistrer"
+    },
+    "ordered": {
+      "title": "J'ai commandé",
+      "intro": "Corrige les prix si besoin (code promo, prix réel) : prix, port et montants dus seront figés.",
+      "price": "Prix de {name} ({person})",
+      "quantity": "× {quantity}",
+      "you": "toi",
+      "shipping": "Port payé",
+      "submit": "Valider",
+      "cancel": "Annuler"
+    },
+    "cancel": {
+      "title": "Annuler la commande groupée ?",
+      "body": "Tes amies verront « Commande annulée. ». Rien n'est supprimé.",
+      "confirm": "Oui, annuler",
+      "keep": "Garder"
+    },
+    "banner": {
+      "label": "Commande groupée en cours",
+      "text": "Commande groupée chez {shop} en cours",
+      "see": "Voir"
+    },
+    "past": {
+      "title": "Commandes groupées passées",
+      "ordered": "Commandé le {date}",
+      "cancelled": "Annulée le {date}",
+      "total": "Total {total}",
+      "unpaid": "{count, plural, one {# amie n'a pas encore payé} other {# amies n'ont pas encore payé}}",
+      "allPaid": "Tout est payé ✓",
+      "see": "Voir"
+    }
   }
 }

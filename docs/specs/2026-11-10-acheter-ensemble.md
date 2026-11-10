@@ -171,3 +171,29 @@ rattaché au prénom de la ligne.
 - Plusieurs boutiques dans une commande.
 - Codes promo calculés automatiquement.
 - Livraison chez chaque amie.
+
+## 9. Décisions prises pendant la construction (2026-11-10)
+
+Prises par le plan :
+- Quand la fondatrice ne prend rien, le centime de port qui reste va à la première amie arrivée.
+- La monnaie de la commande est celle du premier article de la boutique dans la liste (sinon l'euro) ; un article
+  dans une autre monnaie est refusé.
+- Les montants dus sont créés au moment de « J'ai commandé », un par amie qui a au moins un article, et ne bougent plus.
+- Un lien collé par une amie ne crée jamais de boutique : seules les boutiques connues de Closyria sont acceptées.
+
+Prises pendant la construction :
+- La page de la commande se relit toute seule toutes les 10 secondes tant qu'elle est affichée et que la commande est
+  ouverte ou close, et aussi quand on revient sur l'onglet.
+- « J'ai commandé » montre une ligne par article de tout le monde avec son prix (vide s'il est inconnu, à remplir), et le
+  port déjà rempli : 0 si la livraison offerte est atteinte, sinon le port de la commande.
+- Avant d'envoyer « J'ai commandé », l'avertissement 🎁 est posé sur ses propres articles cochés ; « Attendre » n'envoie
+  rien et la commande reste comme elle était.
+- « Retirer » la ligne d'une amie : annulable 8 secondes (« Annuler » dans le message).
+- « Annuler la commande groupée » demande confirmation : « Annuler la commande groupée ? », « Oui, annuler » / « Garder ».
+- Bandeau « Commande groupée chez {boutique} en cours » + « Voir », dans « Mes envies » et sur la page de la liste, un par
+  commande ouverte ou close.
+- La fondatrice choisit la boutique parmi celles des articles de la liste ; les options de livraison de la boutique
+  sont lues par une route réservée aux comptes connectés.
+- « Payé » est une case à cocher par amie ; la décocher annule.
+- Dans « Commandes groupées passées », seule la plus récente (moins de 30 jours, sans commande en cours) s'ouvre en
+  détail ; les plus anciennes montrent leur résumé (date, total, amies qui n'ont pas encore payé).

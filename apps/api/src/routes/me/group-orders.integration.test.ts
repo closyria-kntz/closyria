@@ -480,3 +480,23 @@ describe("another account", () => {
     expect((await call("GET", `/api/me/wishlists/${s.list.id}/group-order`, undefined)).status).toBe(401);
   });
 });
+
+describe("a shop's delivery options for her", () => {
+  it("lists them in the admin's order with a session, never without", async () => {
+    const s = await setup();
+    await t.db
+      .insert(schema.shopShippingOptions)
+      .values({ shopId: s.shop.id, label: "Domicile", shippingCents: 690, freeFromCents: null, position: 1 });
+    const res = await call("GET", `/api/me/shops/${s.shop.id}/shipping-options`, s.cookie);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { options: { label: string; shippingCents: number }[] };
+    expect(body.options.map((o) => [o.label, o.shippingCents])).toEqual([
+      ["Point relais", 490],
+      ["Domicile", 690],
+    ]);
+    const none = await call("GET", `/api/me/shops/${s.other.id}/shipping-options`, s.cookie);
+    expect(await none.json()).toEqual({ options: [] });
+    expect((await call("GET", `/api/me/shops/${s.shop.id}/shipping-options`, undefined)).status).toBe(401);
+    expect((await call("GET", "/api/me/shops/nope/shipping-options", s.cookie)).status).toBe(400);
+  });
+});

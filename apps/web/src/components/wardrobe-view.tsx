@@ -43,6 +43,7 @@ import { BudgetCard } from "./budget-card";
 import { CaptureForm } from "./capture-form";
 import { FilterChips, FiltersMenu, SearchField } from "./filters-bar";
 import { GiftReminder } from "./gift-reminder";
+import { GroupOrderBanner } from "./group-order-banner";
 import { ItemGrid } from "./item-grid";
 import { ItemPreview } from "./item-preview";
 import { ListTabs } from "./list-tabs";
@@ -490,6 +491,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
               }
             />
           ))}
+      {view === "envies" && lists.items.map((list) => <GroupOrderBanner key={`group-${list.id}`} list={list} />)}
       {/* Positioned: the filters menu opens against this row (full width on a phone, under the tools from sm up). */}
       <div className="relative flex flex-wrap items-end justify-between gap-x-space-5 gap-y-space-4">
         <div className="flex min-w-space-0 flex-col gap-space-3">

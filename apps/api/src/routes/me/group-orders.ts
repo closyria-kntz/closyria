@@ -8,12 +8,14 @@ import {
   groupOrderPaymentInputSchema,
   type OwnerGroupOrder,
   ownerGroupOrderSchema,
+  shippingOptionListSchema,
   type WardrobeErrorCode,
   wardrobeErrorSchema,
 } from "@closyria/shared";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { type AccessEnv, defineAccess } from "../../access";
+import { listShippingOptions } from "../../catalog/shipping-options";
 import type { WardrobeDeps } from "../../wardrobe/deps";
 import {
   actOnGroupOrder,
@@ -216,6 +218,21 @@ const paymentRoute = defineAccess(
   "user",
 );
 
+const shippingOptionsRoute = defineAccess(
+  createRoute({
+    method: "get",
+    path: "/me/shops/{id}/shipping-options",
+    summary: "A shop's delivery options, to open a group order",
+    description: "The options the admin wrote for the shop, in their order (none: an empty list).",
+    request: { params: z.object({ id: z.uuid() }) },
+    responses: {
+      200: json("The options", shippingOptionListSchema),
+      400: errorContent("Malformed id (invalid_request)"),
+    },
+  }),
+  "user",
+);
+
 /** `user` access ran first: the session is there. */
 function userIdOf(c: Context<AccessEnv>): string {
   const id = c.var.session?.user.id;
@@ -294,6 +311,10 @@ export function groupOrdersRoutes(deps: WardrobeDeps) {
     .openapi(orderRoute, async (c) =>
       respond(c, await orderGroupOrder(db, userIdOf(c), c.req.valid("param").id, c.req.valid("json"), now())),
     )
+    .openapi(shippingOptionsRoute, async (c) => {
+      c.header("Cache-Control", "no-store");
+      return c.json({ options: await listShippingOptions(db, c.req.valid("param").id) }, 200);
+    })
     .openapi(paymentRoute, async (c) => {
       const { id, nameKey } = c.req.valid("param");
       return respond(c, await setPaid(db, userIdOf(c), id, nameKey, c.req.valid("json").paid, now()));

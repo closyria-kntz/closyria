@@ -1,10 +1,11 @@
 "use client";
 
-import type { BudgetView, ItemView, OpinionView, WishlistView } from "@closyria/shared";
+import type { BudgetView, GroupOrderPastList, ItemView, OpinionView, WishlistView } from "@closyria/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { type FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { formatAmount } from "@/lib/budget";
 import { useLiveRefresh } from "@/lib/live-changes";
 import { useLoveLevels } from "@/lib/profile-context";
 import { moveId } from "@/lib/reorder";
@@ -14,6 +15,7 @@ import {
   deleteWishlist,
   fetchBudget,
   fetchItemsPage,
+  fetchPastGroupOrders,
   fetchWishlistOpinions,
   fetchWishlists,
   markOpinionsSeen,
@@ -26,6 +28,8 @@ import { BudgetDialog } from "./budget-dialog";
 import { Dialog } from "./dialog";
 import { FriendOpinions } from "./friend-opinions";
 import { GiftReminder } from "./gift-reminder";
+import { GroupOrderBanner, groupOrderHref } from "./group-order-banner";
+import { parisDayOf } from "./group-order-view";
 import { ItemCard } from "./item-card";
 import { GRID_CLASS } from "./item-grid";
 import { focusMoved, MoveButtons, type MoveDirection } from "./move-buttons";
@@ -33,6 +37,14 @@ import { SharePanel } from "./share-panel";
 import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
 
 const touch = "min-h-touch-target";
+
+/** The shops of the list's items, once each, in the list's order. */
+function shopsOf(items: readonly ItemView[]) {
+  const shops = new Map<string, string>();
+  for (const item of items)
+    if (!shops.has(item.product.shop.id)) shops.set(item.product.shop.id, item.product.shop.name);
+  return [...shops].map(([id, name]) => ({ id, name }));
+}
 
 type State =
   | { status: "loading" }
@@ -344,7 +356,8 @@ export function WishlistDetail({ id }: { id: string }) {
       )}
 
       {list.giftReminderDue && <GiftReminder list={list} linked={false} onAnswered={apply} />}
-      <SharePanel list={list} onChange={apply} />
+      <GroupOrderBanner list={list} />
+      <SharePanel list={list} shops={shopsOf(items)} onChange={apply} />
 
       {partial && (
         <p role="alert" className="text-sm text-danger">
@@ -392,6 +405,8 @@ export function WishlistDetail({ id }: { id: string }) {
         </ul>
       )}
 
+      <PastGroupOrders list={list} />
+
       <BudgetDialog
         open={budgetOpen}
         onClose={() => setBudgetOpen(false)}
@@ -421,5 +436,74 @@ export function WishlistDetail({ id }: { id: string }) {
         </div>
       </Dialog>
     </div>
+  );
+}
+
+/** The group order page shows the last one ordered or cancelled for 30 days (when none runs). */
+const RECENT_MS = 30 * 86_400_000;
+
+/**
+ * « Commandes groupées passées » (spec § 5.1): ordered or cancelled, the most recent first, with the friends who have
+ * not paid yet. Read again when the running one ends (its state comes with the list).
+ */
+function PastGroupOrders({ list }: { list: WishlistView }) {
+  const t = useTranslations("GroupOrder.past");
+  const locale = useLocale();
+  const id = useId();
+  const [past, setPast] = useState<GroupOrderPastList["past"]>([]);
+  const running = list.groupOrder?.id ?? null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `running` ending (ordered, cancelled) adds a past one.
+  useEffect(() => {
+    let live = true;
+    void fetchPastGroupOrders(list.id).then((result) => {
+      if (live && result.ok) setPast(result.past);
+    });
+    return () => {
+      live = false;
+    };
+  }, [list.id, running]);
+  if (past.length === 0) return null;
+  const [latest] = past;
+  const latestAt = latest ? (latest.orderedAt ?? latest.cancelledAt) : null;
+  const linkLatest = running === null && latestAt !== null && Date.now() - Date.parse(latestAt) < RECENT_MS;
+  return (
+    <section
+      aria-labelledby={id}
+      className="flex flex-col gap-space-3 rounded-card border border-line bg-surface-raised p-space-4"
+    >
+      <h2 id={id} className="font-display text-lead font-strong">
+        {t("title")}
+      </h2>
+      <ul className="flex flex-col gap-space-2">
+        {past.map((order, index) => {
+          const at = order.orderedAt ?? order.cancelledAt;
+          const date = at ? parisDayOf(locale, at) : "";
+          return (
+            <li
+              key={order.id}
+              className="flex flex-wrap items-center justify-between gap-space-2 border-b border-line pb-space-2 text-sm last:border-b-0"
+            >
+              <span className="flex min-w-space-0 flex-col">
+                <span className="font-strong break-words">{order.shopName}</span>
+                <span className="flex flex-wrap gap-x-space-2 text-ink-muted tabular-nums">
+                  <span>{order.status === "ordered" ? t("ordered", { date }) : t("cancelled", { date })}</span>
+                  {order.status === "ordered" && (
+                    <span>{t("total", { total: formatAmount(locale, order.totalCents) })}</span>
+                  )}
+                  {order.status === "ordered" && (
+                    <span>{order.unpaidCount > 0 ? t("unpaid", { count: order.unpaidCount }) : t("allPaid")}</span>
+                  )}
+                </span>
+              </span>
+              {index === 0 && linkLatest && (
+                <Link href={groupOrderHref(list.id)} className={`${buttonClass} ${touch}`}>
+                  {t("see")}
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

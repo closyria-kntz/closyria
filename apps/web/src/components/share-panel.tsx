@@ -1,6 +1,7 @@
 "use client";
 
 import type { WishlistView } from "@closyria/shared";
+import NextLink from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { requestAccountPrompt } from "@/lib/account-prompt-request";
@@ -8,6 +9,8 @@ import { absoluteShareUrl } from "@/lib/share-link";
 import { pushUndo } from "@/lib/undo";
 import { fetchShareLink, patchWishlistSettings, shareWishlist, unshareWishlist } from "@/lib/wardrobe-client";
 import { Dialog } from "./dialog";
+import { groupOrderHref } from "./group-order-banner";
+import { GroupOrderOpenDialog, type ListShop } from "./group-order-open-dialog";
 import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
 
 const touch = "min-h-touch-target";
@@ -25,8 +28,19 @@ type Link = { status: "loading" } | { status: "error" } | { status: "ready"; url
  * « Partage » for one list (spec §4.2): the link, always shown while the list is shared (Copier, Envoyer…, Changer le
  * lien), what friends see and the four settings that change it, saved at once, and « Arrêter le partage ».
  */
-export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (list: WishlistView) => void }) {
+export function SharePanel({
+  list,
+  shops,
+  onChange,
+}: {
+  list: WishlistView;
+  /** The shops of the list's items: where a group order can be opened (spec 2c § 4.1). */
+  shops: ListShop[];
+  onChange: (list: WishlistView) => void;
+}) {
   const t = useTranslations("Lists.share");
+  const tGroup = useTranslations("GroupOrder.open");
+  const [opening, setOpening] = useState(false);
   const locale = useLocale();
   const [link, setLink] = useState<Link>({ status: "loading" });
   const [message, setMessage] = useState<{ text: string; kind: "info" | "error" } | null>(null);
@@ -288,6 +302,24 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
       </div>
 
       {list.shared && (
+        <div className="flex flex-col items-start gap-space-2 border-t border-line pt-space-3">
+          {list.groupOrder ? (
+            <NextLink href={groupOrderHref(list.id)} className={`${primaryButtonClass} ${touch}`}>
+              <span aria-hidden="true">🛍️&nbsp;</span>
+              {tGroup("see")}
+            </NextLink>
+          ) : (
+            shops.length > 0 && (
+              <button type="button" onClick={() => setOpening(true)} className={`${buttonClass} ${touch}`}>
+                <span aria-hidden="true">🛍️&nbsp;</span>
+                {tGroup("action")}
+              </button>
+            )
+          )}
+        </div>
+      )}
+
+      {list.shared && (
         <button
           type="button"
           disabled={busy}
@@ -298,6 +330,9 @@ export function SharePanel({ list, onChange }: { list: WishlistView; onChange: (
         </button>
       )}
 
+      {list.shared && !list.groupOrder && shops.length > 0 && (
+        <GroupOrderOpenDialog open={opening} onClose={() => setOpening(false)} listId={list.id} shops={shops} />
+      )}
       <Dialog
         open={confirming}
         onClose={() => setConfirming(false)}

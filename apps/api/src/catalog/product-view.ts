@@ -37,7 +37,7 @@ export async function loadProductViews(db: Database, productIds: string[]): Prom
   for (const { product, shop } of rows) {
     views.set(product.id, {
       id: product.id,
-      shop: { name: shop.name, slug: shop.slug },
+      shop: { id: shop.id, name: shop.name, slug: shop.slug },
       canonicalUrl: product.canonicalUrl,
       name: product.name,
       brand: product.brand,

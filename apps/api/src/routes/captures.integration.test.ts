@@ -413,6 +413,6 @@ describe("GET /api/captures/:id", () => {
       `/api/catalog-images/${second?.id}`,
     ]);
     expect(view.product.sizes.map((s) => s.label)).toEqual(["S", "M"]);
-    expect(view.product.shop).toEqual({ name: expect.any(String), slug: expect.any(String) });
+    expect(view.product.shop).toEqual({ id: expect.any(String), name: expect.any(String), slug: expect.any(String) });
   });
 });

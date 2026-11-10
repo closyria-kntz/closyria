@@ -190,6 +190,7 @@ async function readLines(db: Database | Tx, order: OrderRow) {
           : "ready";
     const view: LineView = {
       id: line.id,
+      itemId: line.itemId,
       name: r.itemName ?? line.manualName ?? r.productName ?? "",
       imageUrl: line.productId ? (images.get(line.productId) ?? null) : null,
       url: line.url ?? r.productUrl ?? null,

@@ -43,7 +43,7 @@ const deps = (response: Response) => ({ fetch: vi.fn(async () => response), ensu
 
 const product = {
   id,
-  shop: { name: "Shop", slug: "shop" },
+  shop: { id: "00000000-0000-4000-8000-0000000000aa", name: "Shop", slug: "shop" },
   canonicalUrl: "https://a.fr/p",
   name: "Robe",
   brand: null,

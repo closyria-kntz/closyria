@@ -13,7 +13,13 @@ import {
   facetsViewSchema,
   type GiftReminderAction,
   type GiftSettingsPatch,
+  type GroupOrderAction,
+  type GroupOrderCreate,
+  type GroupOrderOrder,
+  type GroupOrderOwnLines,
+  type GroupOrderPatch,
   giftCheckSchema,
+  groupOrderPastListSchema,
   type ItemBulkAction,
   type ItemCreate,
   type ItemPage,
@@ -29,6 +35,8 @@ import {
   mediaErrorCodes,
   mutationResultSchema,
   type OrderDraftInput,
+  type OwnerGroupOrder,
+  ownerGroupOrderSchema,
   type ProfileInput,
   type ProfilePatch,
   photoImportAcceptedSchema,
@@ -42,6 +50,7 @@ import {
   referenceViewSchema,
   shareLinkSchema,
   shareResultSchema,
+  shippingOptionListSchema,
   type TagPatch,
   type TagView,
   tagListSchema,
@@ -540,4 +549,82 @@ export async function answerGiftReminder(
   deps: ClientDeps = defaultDeps,
 ) {
   return await callNoContent(deps, `/api/me/wishlists/${id}/gift-reminder`, jsonInit("POST", { action }));
+}
+
+/** Her group order as one value (its `status` is the order's, never the HTTP one), or an API error code. */
+export type GroupOrderResult = { ok: true; order: OwnerGroupOrder } | { ok: false; error: ClientError };
+
+// Wrapped: `call` adds the HTTP status beside the body, and the order has a `status` of its own.
+const orderResultSchema = ownerGroupOrderSchema.transform((order) => ({ order }));
+async function groupOrderCall(deps: ClientDeps, path: string, init: RequestInit): Promise<GroupOrderResult> {
+  const result = await call(deps, path, init, orderResultSchema);
+  return result.ok ? { ok: true, order: result.order } : result;
+}
+
+/** « Ouvrir une commande groupée » on a shared list. */
+export async function openGroupOrder(listId: string, input: GroupOrderCreate, deps: ClientDeps = defaultDeps) {
+  return await groupOrderCall(deps, `/api/me/wishlists/${listId}/group-order`, jsonInit("POST", input));
+}
+
+/** The running one of the list, else the last one ordered or cancelled in 30 days; `not_found`: none. */
+export async function fetchGroupOrder(listId: string, deps: ClientDeps = defaultDeps) {
+  return await groupOrderCall(deps, `/api/me/wishlists/${listId}/group-order`, { method: "GET", cache: "no-store" });
+}
+
+/** « Commandes groupées passées » of a list. */
+export async function fetchPastGroupOrders(listId: string, deps: ClientDeps = defaultDeps) {
+  return await call(
+    deps,
+    `/api/me/wishlists/${listId}/group-orders`,
+    { method: "GET", cache: "no-store" },
+    groupOrderPastListSchema,
+  );
+}
+
+/** A shop's delivery options (from the admin), to open a group order. */
+export async function fetchShopShippingOptions(shopId: string, deps: ClientDeps = defaultDeps) {
+  return await call(
+    deps,
+    `/api/me/shops/${shopId}/shipping-options`,
+    { method: "GET", cache: "no-store" },
+    shippingOptionListSchema,
+  );
+}
+
+export async function patchGroupOrder(id: string, patch: GroupOrderPatch, deps: ClientDeps = defaultDeps) {
+  return await groupOrderCall(deps, `/api/me/group-orders/${id}`, jsonInit("PATCH", patch));
+}
+
+/** « Clôturer », « Rouvrir », « Annuler la commande groupée ». */
+export async function actOnGroupOrder(id: string, action: GroupOrderAction["action"], deps: ClientDeps = defaultDeps) {
+  return await groupOrderCall(deps, `/api/me/group-orders/${id}/action`, jsonInit("POST", { action }));
+}
+
+/** Her own lines, all of them (« Je le prends dans cette commande »). */
+export async function putOwnGroupLines(id: string, body: GroupOrderOwnLines, deps: ClientDeps = defaultDeps) {
+  return await groupOrderCall(deps, `/api/me/group-orders/${id}/own-lines`, jsonInit("PUT", body));
+}
+
+/** « Retirer » a friend's line. */
+export async function removeGroupLine(id: string, lineId: string, deps: ClientDeps = defaultDeps) {
+  return await groupOrderCall(deps, `/api/me/group-orders/${id}/lines/${lineId}`, { method: "DELETE" });
+}
+
+/** « Annuler » after « Retirer ». */
+export async function restoreGroupLine(id: string, lineId: string, deps: ClientDeps = defaultDeps) {
+  return await groupOrderCall(deps, `/api/me/group-orders/${id}/lines/${lineId}/restore`, jsonInit("POST", {}));
+}
+
+/** « J'ai commandé »: the real prices and the real shipping. */
+export async function orderGroupOrder(id: string, body: GroupOrderOrder, deps: ClientDeps = defaultDeps) {
+  return await groupOrderCall(deps, `/api/me/group-orders/${id}/order`, jsonInit("POST", body));
+}
+
+/** « Payé » ticked or unticked for one friend (`nameKey`: her `people[].key`). */
+export async function setGroupPayment(id: string, nameKey: string, paid: boolean, deps: ClientDeps = defaultDeps) {
+  return await groupOrderCall(
+    deps,
+    `/api/me/group-orders/${id}/payments/${encodeURIComponent(nameKey)}`,
+    jsonInit("PUT", { paid }),
+  );
 }
