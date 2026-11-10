@@ -1763,7 +1763,8 @@
       "total": "Total {total}",
       "unpaid": "{count, plural, one {# amie n'a pas encore payé} other {# amies n'ont pas encore payé}}",
       "allPaid": "Tout est payé ✓",
-      "see": "Voir"
+      "see": "Voir",
+      "seeFor": "— {shop}, {date}"
     }
   }
 }

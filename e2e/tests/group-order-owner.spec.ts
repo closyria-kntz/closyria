@@ -290,6 +290,24 @@ test("sa commande groupée, de l'ouverture au paiement", async ({
   ).toBeVisible();
   await capture(page, "past", (name) => testInfo.outputPath(name));
 
+  // Long after (past the 30 days of the list's current one), it still opens from the list, « Payé » to tick.
+  await db.query("update group_orders set ordered_at = now() - interval '40 days' where wishlist_id = $1", [
+    owner.listId,
+  ]);
+  await page.reload();
+  await past.getByRole("link", { name: /^Voir/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/listes/${owner.listId}/commande-groupee\\?commande=[0-9a-f-]{36}$`));
+  await expect(page.getByTestId("group-state")).toHaveText(/^Commandé le \d{1,2}\s\S+\.$/);
+  await expect(
+    page.getByRole("button", { name: /Clôturer|Rouvrir|J'ai commandé|Annuler la commande|Retirer/ }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Toi" }).getByRole("checkbox").first()).toBeDisabled();
+  const oldPaid = page.getByRole("region", { name: "Léa" }).getByRole("checkbox", { name: /^Payé/ });
+  await oldPaid.check();
+  await expect.poll(paidAt).not.toBeNull();
+  await page.goto(`/listes/${owner.listId}`);
+  await expect(past).toContainText("Tout est payé ✓");
+
   await lea.context().close();
   await ines.context().close();
 });

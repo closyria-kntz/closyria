@@ -439,12 +439,10 @@ export function WishlistDetail({ id }: { id: string }) {
   );
 }
 
-/** The group order page shows the last one ordered or cancelled for 30 days (when none runs). */
-const RECENT_MS = 30 * 86_400_000;
-
 /**
  * « Commandes groupées passées » (spec § 5.1): ordered or cancelled, the most recent first, with the friends who have
- * not paid yet. Read again when the running one ends (its state comes with the list).
+ * not paid yet; each opens (« Voir ») to tick « Payé ». Read again when the running one ends (its state comes with the
+ * list).
  */
 function PastGroupOrders({ list }: { list: WishlistView }) {
   const t = useTranslations("GroupOrder.past");
@@ -463,9 +461,6 @@ function PastGroupOrders({ list }: { list: WishlistView }) {
     };
   }, [list.id, running]);
   if (past.length === 0) return null;
-  const [latest] = past;
-  const latestAt = latest ? (latest.orderedAt ?? latest.cancelledAt) : null;
-  const linkLatest = running === null && latestAt !== null && Date.now() - Date.parse(latestAt) < RECENT_MS;
   return (
     <section
       aria-labelledby={id}
@@ -475,7 +470,7 @@ function PastGroupOrders({ list }: { list: WishlistView }) {
         {t("title")}
       </h2>
       <ul className="flex flex-col gap-space-2">
-        {past.map((order, index) => {
+        {past.map((order) => {
           const at = order.orderedAt ?? order.cancelledAt;
           const date = at ? parisDayOf(locale, at) : "";
           return (
@@ -488,18 +483,17 @@ function PastGroupOrders({ list }: { list: WishlistView }) {
                 <span className="flex flex-wrap gap-x-space-2 text-ink-muted tabular-nums">
                   <span>{order.status === "ordered" ? t("ordered", { date }) : t("cancelled", { date })}</span>
                   {order.status === "ordered" && (
-                    <span>{t("total", { total: formatAmount(locale, order.totalCents) })}</span>
+                    <span>{t("total", { total: formatAmount(locale, order.totalCents, order.currency) })}</span>
                   )}
                   {order.status === "ordered" && (
                     <span>{order.unpaidCount > 0 ? t("unpaid", { count: order.unpaidCount }) : t("allPaid")}</span>
                   )}
                 </span>
               </span>
-              {index === 0 && linkLatest && (
-                <Link href={groupOrderHref(list.id)} className={`${buttonClass} ${touch}`}>
-                  {t("see")}
-                </Link>
-              )}
+              <Link href={`${groupOrderHref(list.id)}?commande=${order.id}`} className={`${buttonClass} ${touch}`}>
+                {t("see")}
+                <span className="sr-only"> {t("seeFor", { shop: order.shopName, date })}</span>
+              </Link>
             </li>
           );
         })}

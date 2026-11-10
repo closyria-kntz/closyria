@@ -389,6 +389,12 @@ export async function currentGroupOrder(
   return row ? toOwnerView(db, row) : null;
 }
 
+/** One of her group orders, in any state and of any age (« Commandes groupées passées »). Null: not hers. */
+export async function groupOrderById(db: Database, userId: string, id: string): Promise<OwnerGroupOrder | null> {
+  const order = await ownOrder(db, userId, id);
+  return order ? toOwnerView(db, order) : null;
+}
+
 /** « Commandes groupées passées »: ordered or cancelled, most recent first. Null: not her list. */
 export async function pastGroupOrders(
   db: Database,
@@ -413,6 +419,7 @@ export async function pastGroupOrders(
       id: row.id,
       shopName: view.shop.name,
       status: view.status,
+      currency: view.currency,
       orderedAt: view.orderedAt,
       cancelledAt: view.cancelledAt,
       // What was charged: items and shipping (frozen once ordered).

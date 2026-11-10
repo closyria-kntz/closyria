@@ -20,6 +20,7 @@ import type { WardrobeDeps } from "../../wardrobe/deps";
 import {
   actOnGroupOrder,
   currentGroupOrder,
+  groupOrderById,
   openGroupOrder,
   orderGroupOrder,
   pastGroupOrders,
@@ -91,6 +92,22 @@ const pastRoute = defineAccess(
     description: "Ordered or cancelled, most recent first, with the friends not marked « Payé ».",
     request: { params: listParams },
     responses: { 200: json("The past ones", groupOrderPastListSchema), 404: notFoundContent },
+  }),
+  "user",
+);
+
+const byIdRoute = defineAccess(
+  createRoute({
+    method: "get",
+    path: "/me/group-orders/{id}",
+    summary: "One of her group orders",
+    description: "Any state and any age: a past one is still read (and its « Payé » ticked) from the list.",
+    request: { params: orderParams },
+    responses: {
+      200: view("The group order"),
+      400: errorContent("Malformed id (invalid_request)"),
+      404: notFoundContent,
+    },
   }),
   "user",
 );
@@ -290,6 +307,11 @@ export function groupOrdersRoutes(deps: WardrobeDeps) {
       c.header("Cache-Control", "no-store");
       const past = await pastGroupOrders(db, userIdOf(c), c.req.valid("param").id);
       return past ? c.json(past, 200) : c.json(notFound, 404);
+    })
+    .openapi(byIdRoute, async (c) => {
+      c.header("Cache-Control", "no-store");
+      const order = await groupOrderById(db, userIdOf(c), c.req.valid("param").id);
+      return order ? c.json(order, 200) : c.json(notFound, 404);
     })
     .openapi(patchRoute, async (c) =>
       respond(c, await patchGroupOrder(db, userIdOf(c), c.req.valid("param").id, c.req.valid("json"), now())),

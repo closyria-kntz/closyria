@@ -7,7 +7,15 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("metadata"), robots: { index: false, follow: false } };
 }
 
-export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ commande?: string | string[] }>;
+}) {
   const { id } = await params;
-  return <GroupOrderView listId={id} />;
+  // `?commande=<id>`: a past one, opened from « Commandes groupées passées ».
+  const { commande } = await searchParams;
+  return <GroupOrderView listId={id} orderId={typeof commande === "string" ? commande : null} />;
 }

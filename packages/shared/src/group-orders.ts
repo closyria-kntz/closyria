@@ -289,6 +289,7 @@ export const groupOrderPastListSchema = z.object({
       id: z.uuid(),
       shopName: z.string(),
       status: groupOrderStatusSchema,
+      currency: currencySchema,
       orderedAt: dateTimeSchema.nullable(),
       cancelledAt: dateTimeSchema.nullable(),
       totalCents: centsSchema,

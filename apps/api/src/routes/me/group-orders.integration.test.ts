@@ -500,3 +500,34 @@ describe("a shop's delivery options for her", () => {
     expect((await call("GET", "/api/me/shops/nope/shipping-options", s.cookie)).status).toBe(400);
   });
 });
+
+describe("one of her group orders by id", () => {
+  it("reads her own at any age and in any state, never another account's", async () => {
+    const s = await setup();
+    const order = await open(s);
+    await friendLine(order.id, "Léa", { manualName: "Pull", manualPriceCents: 1500 });
+    await ok(await call("POST", `/api/me/group-orders/${order.id}/order`, s.cookie, { shippingCents: 600, lines: [] }));
+    // Ordered long ago: past the 30 days of the list's current one.
+    await t.db
+      .update(schema.groupOrders)
+      .set({ orderedAt: new Date("2025-01-10T12:00:00Z") })
+      .where(eq(schema.groupOrders.id, order.id));
+    expect((await current(s)).status).toBe(404);
+    const read = await ok(await call("GET", `/api/me/group-orders/${order.id}`, s.cookie));
+    expect(read).toMatchObject({ id: order.id, status: "ordered", wishlistId: s.list.id });
+    expect(read.people.find((p) => p.name === "Léa")?.payment).toMatchObject({ amountCents: 2100, paidAt: null });
+    const running = await open(s);
+    expect((await ok(await call("GET", `/api/me/group-orders/${running.id}`, s.cookie))).status).toBe("open");
+
+    const past = (await (
+      await call("GET", `/api/me/wishlists/${s.list.id}/group-orders`, s.cookie)
+    ).json()) as GroupOrderPastList;
+    expect(past.past[0]).toMatchObject({ id: order.id, currency: "EUR" });
+
+    const { cookie } = await t.signIn();
+    const other = await call("GET", `/api/me/group-orders/${order.id}`, cookie);
+    expect(other.status).toBe(404);
+    expect(await other.json()).toEqual({ error: "not_found" });
+    expect((await call("GET", `/api/me/group-orders/${order.id}`, undefined)).status).toBe(401);
+  });
+});

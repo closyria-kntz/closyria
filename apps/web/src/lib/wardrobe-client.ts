@@ -571,6 +571,11 @@ export async function fetchGroupOrder(listId: string, deps: ClientDeps = default
   return await groupOrderCall(deps, `/api/me/wishlists/${listId}/group-order`, { method: "GET", cache: "no-store" });
 }
 
+/** One of her group orders, of any state or age (a past one opened from the list). */
+export async function fetchGroupOrderById(id: string, deps: ClientDeps = defaultDeps) {
+  return await groupOrderCall(deps, `/api/me/group-orders/${id}`, { method: "GET", cache: "no-store" });
+}
+
 /** « Commandes groupées passées » of a list. */
 export async function fetchPastGroupOrders(listId: string, deps: ClientDeps = defaultDeps) {
   return await call(

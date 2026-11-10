@@ -10,6 +10,7 @@ import { pushUndo } from "@/lib/undo";
 import {
   actOnGroupOrder,
   fetchGroupOrder,
+  fetchGroupOrderById,
   type GroupOrderResult,
   orderGroupOrder,
   patchGroupOrder,
@@ -73,7 +74,14 @@ function ownOf(order: Order): Own {
  * state; « Toi » (her items of the shop to tick); one block per friend (« Retirer », then « Payé »); the actions of
  * the state. Read again every 10 s while the page shows and the order is open or closed; the amounts are the API's.
  */
-export function GroupOrderView({ listId }: { listId: string }) {
+export function GroupOrderView({
+  listId,
+  orderId = null,
+}: {
+  listId: string;
+  /** A given order of the list (a past one): shown as it is, only « Payé » can change. */
+  orderId?: string | null;
+}) {
   const t = useTranslations("GroupOrder");
   const [state, setState] = useState<State>({ status: "loading" });
   const [error, setError] = useState<string | null>(null);
@@ -82,18 +90,23 @@ export function GroupOrderView({ listId }: { listId: string }) {
   const sent = useRef(0);
   const applied = useRef(0);
 
-  const take = useCallback((seq: number, result: GroupOrderResult): boolean => {
-    if (seq < applied.current) return false;
-    applied.current = seq;
-    if (result.ok) setState({ status: "ready", order: result.order });
-    else if (result.error === "not_found") setState({ status: "missing" });
-    return true;
-  }, []);
+  const take = useCallback(
+    (seq: number, result: GroupOrderResult): boolean => {
+      if (seq < applied.current) return false;
+      applied.current = seq;
+      // An order of another list behind this address: as if there were none.
+      if (result.ok && result.order.wishlistId !== listId) setState({ status: "missing" });
+      else if (result.ok) setState({ status: "ready", order: result.order });
+      else if (result.error === "not_found") setState({ status: "missing" });
+      return true;
+    },
+    [listId],
+  );
 
   const load = useCallback(
     async (quiet: boolean) => {
       const seq = ++sent.current;
-      const result = await fetchGroupOrder(listId);
+      const result = orderId ? await fetchGroupOrderById(orderId) : await fetchGroupOrder(listId);
       if (!result.ok && result.error !== "not_found") {
         // A failed read in the background leaves the page as it was.
         if (!quiet && seq >= applied.current) setState({ status: "error" });
@@ -101,7 +114,7 @@ export function GroupOrderView({ listId }: { listId: string }) {
       }
       take(seq, result);
     },
-    [listId, take],
+    [listId, orderId, take],
   );
 
   /** A change she made: its answer is the whole order (or an error code for the message). */
@@ -174,12 +187,23 @@ export function GroupOrderView({ listId }: { listId: string }) {
     );
   }
 
-  return <Ready order={state.order} listId={listId} error={error} busy={busy} setBusy={setBusy} change={change} />;
+  return (
+    <Ready
+      order={state.order}
+      listId={listId}
+      pinned={orderId !== null}
+      error={error}
+      busy={busy}
+      setBusy={setBusy}
+      change={change}
+    />
+  );
 }
 
 function Ready({
   order,
   listId,
+  pinned,
   error,
   busy,
   setBusy,
@@ -187,6 +211,8 @@ function Ready({
 }: {
   order: Order;
   listId: string;
+  /** Opened by its id from the past ones: read-only, but for « Payé ». */
+  pinned: boolean;
   error: string | null;
   busy: boolean;
   setBusy: (busy: boolean) => void;
@@ -203,7 +229,7 @@ function Ready({
     key: 0,
     error: null,
   });
-  const editable = running(order);
+  const editable = running(order) && !pinned;
 
   const shop = order.shop.name;
   const title = order.deadline ? t("titleDate", { shop, date: dayOf(locale, order.deadline) }) : t("title", { shop });
