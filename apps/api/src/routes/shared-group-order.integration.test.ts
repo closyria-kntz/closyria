@@ -170,6 +170,7 @@ describe("the group order on the shared link", () => {
             quantity: 2,
             unitPriceCents: 3000,
             status: "ready",
+            nameable: false,
           },
         ],
       },
@@ -279,6 +280,7 @@ describe("the group order on the shared link", () => {
       quantity: 1,
       unitPriceCents: 1500,
       status: "manual",
+      nameable: true,
     });
   });
 
@@ -457,6 +459,136 @@ describe("the group order on the shared link", () => {
       .where(and(eq(schema.wishlists.id, s.list.id)));
     expect((await groupOrderOf(s))?.ownerName).toBeNull();
     await t.db.delete(schema.groupOrders).where(eq(schema.groupOrders.id, s.order.id));
+    expect(await groupOrderOf(s)).toBeNull();
+  });
+});
+
+describe("the group order on the shared link, after the fixes", () => {
+  it("ordered past the free threshold: the shipping she typed is split, « Tu dois » reads the payment", async () => {
+    const s = await setup();
+    const patched = await call("PATCH", `/api/me/group-orders/${s.order.id}`, s.cookie, {
+      shipping: { label: "Colissimo", shippingCents: 600, freeFromCents: 2000 },
+    });
+    expect(patched.status).toBe(200);
+    await added(await addLine(s, { source: "item", itemId: s.itemA.id, sizeLabel: null, quantity: 1, ...lea }));
+    expect((await groupOrderOf(s, keyLea))?.mine?.totalCents).toBe(3000);
+    const ordered = await call("POST", `/api/me/group-orders/${s.order.id}/order`, s.cookie, {
+      shippingCents: 490,
+      lines: [],
+    });
+    expect(ordered.status).toBe(200);
+    const view = await groupOrderOf(s, keyLea);
+    expect(view?.totals.shippingTotalCents).toBe(490);
+    expect(view?.mine).toMatchObject({ itemsCents: 3000, shippingCents: 490, totalCents: 3490 });
+    await t.db
+      .update(schema.groupOrderPayments)
+      .set({ amountCents: 3500 })
+      .where(eq(schema.groupOrderPayments.groupOrderId, s.order.id));
+    expect((await groupOrderOf(s, keyLea))?.mine?.totalCents).toBe(3500);
+  });
+
+  it("a merge of the order's shop: her items stay eligible and a friend still takes one", async () => {
+    const s = await setup();
+    const target = await newShop("Cible");
+    await t.db.update(schema.products).set({ shopId: target.id }).where(eq(schema.products.shopId, s.shop.id));
+    await t.db.update(schema.shopDomains).set({ shopId: target.id }).where(eq(schema.shopDomains.shopId, s.shop.id));
+    await t.db.update(schema.shops).set({ mergedIntoId: target.id }).where(eq(schema.shops.id, s.shop.id));
+    expect((await groupOrderOf(s))?.eligibleItemIds.sort()).toEqual([s.itemA.id, s.itemB.id].sort());
+    await added(await addLine(s, { source: "item", itemId: s.itemA.id, sizeLabel: null, quantity: 1, ...lea }));
+    await added(
+      await addLine(s, {
+        source: "url",
+        url: `https://${s.shop.domain}/robe-apres`,
+        sizeLabel: null,
+        quantity: 1,
+        ...lea,
+      }),
+    );
+  });
+
+  it("says which of her lines take her own name and price (a typed price stays changeable)", async () => {
+    const s = await setup();
+    const fromItem = await added(
+      await addLine(s, { source: "item", itemId: s.itemA.id, sizeLabel: null, quantity: 1, ...lea }),
+    );
+    const read = await added(
+      await addLine(s, { source: "url", url: s.pB.canonicalUrl, sizeLabel: null, quantity: 1, ...lea }),
+    );
+    const unread = await added(
+      await addLine(s, {
+        source: "url",
+        url: `https://${s.shop.domain}/sans-prix`,
+        sizeLabel: null,
+        quantity: 1,
+        ...lea,
+      }),
+    );
+    const typed = await added(await addLine(s, manual(lea)));
+    const priced = await patchLine(s, unread, {
+      sizeLabel: null,
+      quantity: 1,
+      manualName: "Robe",
+      manualPriceCents: 2500,
+      ...lea,
+    });
+    expect(priced.status).toBe(200);
+    const lines = (await groupOrderOf(s, keyLea))?.people[0]?.lines ?? [];
+    const nameable = (id: string) => lines.find((l) => l.id === id)?.nameable;
+    expect([nameable(fromItem), nameable(read), nameable(unread), nameable(typed)]).toEqual([false, false, true, true]);
+    // A typed price can be typed again.
+    const again = await patchLine(s, unread, {
+      sizeLabel: null,
+      quantity: 1,
+      manualName: "Robe",
+      manualPriceCents: 2400,
+      ...lea,
+    });
+    expect(again.status).toBe(200);
+  });
+
+  it("shows only the most recent group order of the list", async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const s = await setup();
+    await added(await addLine(s, manual(lea)));
+    const ordered = await call("POST", `/api/me/group-orders/${s.order.id}/order`, s.cookie, {
+      shippingCents: 600,
+      lines: [],
+    });
+    expect(ordered.status).toBe(200);
+    // Ordered long ago, Léa has not paid: still there.
+    await t.db
+      .update(schema.groupOrders)
+      .set({ orderedAt: new Date(Date.now() - 40 * day) })
+      .where(eq(schema.groupOrders.id, s.order.id));
+    expect((await groupOrderOf(s))?.id).toBe(s.order.id);
+    // Paid: gone after 30 days.
+    await t.db
+      .update(schema.groupOrderPayments)
+      .set({ paidAt: new Date() })
+      .where(eq(schema.groupOrderPayments.groupOrderId, s.order.id));
+    expect(await groupOrderOf(s)).toBeNull();
+    await t.db
+      .update(schema.groupOrderPayments)
+      .set({ paidAt: null })
+      .where(eq(schema.groupOrderPayments.groupOrderId, s.order.id));
+    expect((await groupOrderOf(s))?.id).toBe(s.order.id);
+
+    // A newer one, cancelled 31 days ago: the link shows nothing, not the older ordered one.
+    const opened = await call("POST", `/api/me/wishlists/${s.list.id}/group-order`, s.cookie, {
+      shopId: s.shop.id,
+      shipping: { label: "Colissimo", shippingCents: 600, freeFromCents: null },
+      deadline: null,
+    });
+    expect(opened.status).toBe(201);
+    const next = (await opened.json()) as OwnerGroupOrder;
+    expect((await call("POST", `/api/me/group-orders/${next.id}/action`, s.cookie, { action: "cancel" })).status).toBe(
+      200,
+    );
+    expect((await groupOrderOf(s))?.id).toBe(next.id);
+    await t.db
+      .update(schema.groupOrders)
+      .set({ cancelledAt: new Date(Date.now() - 31 * day) })
+      .where(eq(schema.groupOrders.id, next.id));
     expect(await groupOrderOf(s)).toBeNull();
   });
 });

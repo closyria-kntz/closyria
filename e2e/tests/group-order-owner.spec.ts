@@ -151,12 +151,26 @@ test("sa commande groupée, de l'ouverture au paiement", async ({
   await banner.getByRole("link", { name: "Voir" }).click();
   await expect(page).toHaveURL(pageUrl(owner.listId));
 
-  // Her own items: ticked, with a size.
+  // Her own items: ticked, with a size. While a tick is being saved, « J'ai commandé » waits for it.
   const me = page.getByRole("region", { name: "Toi" });
   const mine = (name: string) => me.getByRole("listitem").filter({ hasText: name });
+  const orderedButton = page.getByRole("button", { name: "J'ai commandé" });
+  await expect(page.getByTestId("group-total")).toHaveCount(0);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/\/own-lines$/, async (route) => {
+    await held;
+    await route.continue();
+  });
   await mine(FIRST)
     .getByRole("checkbox", { name: /Je le prends dans cette commande/ })
     .check();
+  await expect(orderedButton).toBeDisabled();
+  release();
+  await expect(orderedButton).toBeEnabled();
+  await page.unroute(/\/own-lines$/);
   await mine(FIRST)
     .getByLabel(/^Taille/)
     .selectOption("M");
@@ -258,6 +272,8 @@ test("sa commande groupée, de l'ouverture au paiement", async ({
   await expect(state).toHaveText(/^Commandé le \d{1,2}\s\S+\.$/);
   await expect(leaBlock).toContainText(euros("Doit 22,75 €"));
   await expect(me).toContainText(euros("Articles 46 € + port 2,75 € = 48,75 €"));
+  // At the top, what it came to: 46 € + 20 € + 5,50 € of shipping.
+  await expect(page.getByTestId("group-total")).toHaveText(euros("Total 71,50 €"));
   await expect(page.getByRole("button", { name: /Clôturer|Rouvrir|J'ai commandé|Annuler la commande/ })).toHaveCount(0);
   expect(await statusOf()).toBe("ordered");
   const stages = await db.query<{ stage: string }>("select stage from items where id = any($1)", [owner.items]);
@@ -300,6 +316,7 @@ test("sa commande groupée, de l'ouverture au paiement", async ({
   await past.getByRole("link", { name: /^Voir/ }).click();
   await expect(page).toHaveURL(new RegExp(`/listes/${owner.listId}/commande-groupee\\?commande=[0-9a-f-]{36}$`));
   await expect(page.getByTestId("group-state")).toHaveText(/^Commandé le \d{1,2}\s\S+\.$/);
+  await expect(page.getByTestId("group-total")).toHaveText(euros("Total 71,50 €"));
   await expect(
     page.getByRole("button", { name: /Clôturer|Rouvrir|J'ai commandé|Annuler la commande|Retirer/ }),
   ).toHaveCount(0);

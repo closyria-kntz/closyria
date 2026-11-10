@@ -340,11 +340,8 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
       sizeLabel: line.sizeLabel,
       quantity: line.quantity,
       sizes: (line.itemId && view.groupOrder?.itemSizes[line.itemId]) || [],
-      // A link read without a price: she says what it is and what it costs.
-      manual:
-        line.itemId === null && line.unitPriceCents === null && line.status !== "reading"
-          ? { name: line.name, priceCents: null }
-          : null,
+      // Her own entry, or a link read without a price: she says (or corrects) what it is and what it costs.
+      manual: line.nameable && line.status !== "reading" ? { name: line.name, priceCents: line.unitPriceCents } : null,
     });
   }
 

@@ -199,3 +199,9 @@ Prises pendant la construction :
   montre en lecture seule, sauf les cases « Payé » (route `GET /api/me/group-orders/{id}`). Chaque ligne donne la
   date, le total dans la monnaie de la commande, et les amies qui n'ont pas encore payé.
 - Après « Attendre » dans l'avertissement 🎁, rouvrir « J'ai commandé » garde les prix et le port qu'elle avait corrigés.
+- Une fois « J'ai commandé » fait, le port qu'elle a vraiment payé (« Port payé ») est partagé à parts égales entre
+  celles qui commandent, même si la livraison offerte était atteinte : le seuil ne compte plus. Tout montant dû
+  affiché ensuite (« Doit … » chez elle, « Tu dois … » chez l'amie) est celui figé à ce moment-là.
+- Le lien de la liste ne montre que la commande groupée la plus récente de la liste : toujours si elle est ouverte ou
+  close ; commandée, tant qu'une amie n'a pas payé ou pendant 30 jours ; annulée, pendant 30 jours ; sinon aucune
+  (jamais une commande plus ancienne à sa place).

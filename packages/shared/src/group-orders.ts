@@ -211,6 +211,8 @@ export const sharedGroupOrderSchema = z.object({
           quantity: z.int(),
           unitPriceCents: centsSchema.nullable(),
           status: lineStatusSchema,
+          /** Her own name and price may be typed (« Modifier »): her own entry, or a link read without a price. */
+          nameable: z.boolean(),
         }),
       ),
     }),

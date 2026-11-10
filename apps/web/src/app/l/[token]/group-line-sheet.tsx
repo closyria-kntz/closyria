@@ -36,7 +36,7 @@ export type GroupLineTarget =
       quantity: number;
       /** Known sizes of its item of the list; empty for a link or her own entry (a free field). */
       sizes: string[];
-      /** A link read without a price: she types its name and price. */
+      /** Her own entry, or a link read without a price: she types (or corrects) its name and price. */
       manual: { name: string; priceCents: number | null } | null;
     };
 

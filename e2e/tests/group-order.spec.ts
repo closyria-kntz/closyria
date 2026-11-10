@@ -196,6 +196,29 @@ test("des amies achètent ensemble chez la même boutique", async ({
   await ines.screenshot({ path: testInfo.outputPath("ines-dark.png"), fullPage: true });
   await axe(ines);
 
+  // The shop gives no price for her link: she types one, then corrects it with « Modifier ».
+  const { rows: inesLines } = await db.query<{ product_id: string }>(
+    "select product_id from group_order_lines where group_order_id = $1 and buyer_name = 'Inès'",
+    [owner.orderId],
+  );
+  await db.query("update products set price_cents = null where id = $1", [inesLines[0]?.product_id]);
+  const typePrice = async (price: string, before: string) => {
+    await summary(ines)
+      .getByRole("button", { name: /^Modifier/ })
+      .click();
+    const sheet = ines.getByRole("dialog");
+    await expect(sheet.getByLabel("Nom de l'article")).toHaveValue(PRODUCT.name);
+    await expect(sheet.getByLabel(/^Prix/)).toHaveValue(before);
+    await sheet.getByLabel(/^Prix/).fill(price);
+    await sheet.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(sheet).toBeHidden();
+  };
+  await ines.reload();
+  await typePrice("25", "");
+  await expect(summary(ines)).toContainText(euros("Ta part : 28,45 € (articles 25 € + port 3,45 €)"));
+  await typePrice("23", "25,00");
+  await expect(summary(ines)).toContainText(euros("Ta part : 26,45 € (articles 23 € + port 3,45 €)"));
+
   // Léa adds the second item, Camille takes it out: struck through for Léa only.
   await takeToo(lea, SECOND, "");
   await expect(itemOf(lea, SECOND).getByText("Tu le prends aussi (× 1)")).toBeVisible();
@@ -257,7 +280,8 @@ test("des amies achètent ensemble chez la même boutique", async ({
   expect(ordered.status()).toBe(200);
   await lea.reload();
   await expect(banner(lea)).toContainText(/Commandé le \d{1,2}\s\S+\./);
-  await expect(summary(lea)).toContainText(euros("Tu dois 69 € à Camille"));
+  // Free shipping was reached, but she paid 6,90 €: split between Léa and Inès.
+  await expect(summary(lea)).toContainText(euros("Tu dois 72,45 € à Camille"));
   await expect(summary(lea).getByText("provisoire")).toHaveCount(0);
   await axe(lea);
   const key = (await ownerView(page, owner.listId)).people.find((p) => p.name === "Léa")?.key ?? "";

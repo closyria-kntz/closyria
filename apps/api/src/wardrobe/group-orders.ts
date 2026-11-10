@@ -77,6 +77,11 @@ async function rootShops(db: Database | Tx, shopIds: string[]): Promise<Map<stri
   return roots;
 }
 
+/** The shop the order's shop ends up in (an admin merge moves its products, not the order). */
+async function orderShopRoot(db: Database | Tx, order: OrderRow): Promise<string> {
+  return (await rootShops(db, [order.shopId])).get(order.shopId) ?? order.shopId;
+}
+
 /** Her items on the list (not in the trash), in list order, with their product and the product's shop root. */
 async function listItems(db: Database | Tx, wishlistId: string) {
   const rows = await db
@@ -188,10 +193,12 @@ async function readLines(db: Database | Tx, order: OrderRow) {
         : r.captureStatus === "pending" && r.productName === null
           ? "reading"
           : "ready";
+    // Once ordered, a line keeps the name it had when written (a later rename of the item does not reach it).
+    const frozen = order.status === "ordered" || line.finalPriceCents !== null;
     const view: LineView = {
       id: line.id,
       itemId: line.itemId,
-      name: r.itemName ?? line.manualName ?? r.productName ?? "",
+      name: (frozen ? (line.manualName ?? r.itemName) : (r.itemName ?? line.manualName)) ?? r.productName ?? "",
       imageUrl: line.productId ? (images.get(line.productId) ?? null) : null,
       url: line.url ?? r.productUrl ?? null,
       sizeLabel: line.sizeLabel,
@@ -201,7 +208,10 @@ async function readLines(db: Database | Tx, order: OrderRow) {
       status,
       removedAt: line.removedAt?.toISOString() ?? null,
     };
-    return { row: line, view, key: line.buyerNameKey ?? OWNER_KEY };
+    // As `mayNameItself`: her own entry, or a link whose page gave no price.
+    const nameable =
+      line.itemId === null && (line.productId === null || r.productPrice === null || r.captureStatus === "failed");
+    return { row: line, view, key: line.buyerNameKey ?? OWNER_KEY, nameable };
   });
 }
 
@@ -225,7 +235,16 @@ function peopleOf(lines: ReadLine[]) {
   );
 }
 
-function totalsOf(people: ReturnType<typeof peopleOf>, shippingCents: number, freeFromCents: number | null) {
+/**
+ * The totals of the order. Once ordered, the real shipping she typed is split among everyone, whatever the free
+ * threshold, and what each friend owes is the frozen amount (`owed`: name key → cents), never a new computation.
+ */
+function totalsOf(
+  people: ReturnType<typeof peopleOf>,
+  order: Pick<OrderRow, "status" | "shippingCents" | "freeFromCents">,
+  owed: Map<string, number> = new Map(),
+) {
+  const ordered = order.status === "ordered";
   const input: GroupOrderPerson[] = people.map((p) => ({
     key: p.key,
     isOwner: p.isOwner,
@@ -233,7 +252,17 @@ function totalsOf(people: ReturnType<typeof peopleOf>, shippingCents: number, fr
       .filter((l) => l.row.removedAt === null)
       .map((l) => (l.view.unitPriceCents ?? 0) * l.row.quantity),
   }));
-  return computeGroupOrderTotals({ people: input, shippingCents, freeFromCents });
+  const totals = computeGroupOrderTotals({
+    people: input,
+    shippingCents: order.shippingCents,
+    freeFromCents: ordered ? null : order.freeFromCents,
+  });
+  if (ordered)
+    for (const [key, amountCents] of owed) {
+      const share = totals.perPerson[key];
+      if (share) totals.perPerson[key] = { ...share, totalCents: amountCents };
+    }
+  return totals;
 }
 
 async function ownerFirstName(db: Database | Tx, wishlistId: string): Promise<string> {
@@ -248,7 +277,7 @@ async function ownerFirstName(db: Database | Tx, wishlistId: string): Promise<st
 
 /** The whole group order as she sees it. */
 async function toOwnerView(db: Database | Tx, order: OrderRow): Promise<OwnerGroupOrder> {
-  const [[shop], lines, payments, items, ownerName] = await Promise.all([
+  const [[shop], lines, payments, items, ownerName, root] = await Promise.all([
     db
       .select({ id: schema.shops.id, name: schema.shops.name })
       .from(schema.shops)
@@ -257,12 +286,13 @@ async function toOwnerView(db: Database | Tx, order: OrderRow): Promise<OwnerGro
     db.select().from(schema.groupOrderPayments).where(eq(schema.groupOrderPayments.groupOrderId, order.id)),
     listItems(db, order.wishlistId),
     ownerFirstName(db, order.wishlistId),
+    orderShopRoot(db, order),
   ]);
   if (!shop) throw new Error("group order without its shop");
   const people = peopleOf(lines);
-  const totals = totalsOf(people, order.shippingCents, order.freeFromCents);
   const paymentOf = new Map(payments.map((p) => [p.buyerNameKey, p]));
-  const own = items.filter((i) => i.shopId === order.shopId);
+  const totals = totalsOf(people, order, new Map(payments.map((p) => [p.buyerNameKey, p.amountCents])));
+  const own = items.filter((i) => i.shopId === root);
   const [sizes, images] = await Promise.all([
     sizesOf(
       db,
@@ -481,8 +511,9 @@ export function actOnGroupOrder(
 export function replaceOwnLines(db: Database, userId: string, id: string, input: GroupOrderOwnLines, now: Date) {
   return writeThenView(db, async (tx) => {
     const order = await lockOwn(tx, userId, id, true);
+    const root = await orderShopRoot(tx, order);
     const eligible = new Map(
-      (await listItems(tx, order.wishlistId)).filter((i) => i.shopId === order.shopId).map((i) => [i.itemId, i]),
+      (await listItems(tx, order.wishlistId)).filter((i) => i.shopId === root).map((i) => [i.itemId, i]),
     );
     const values = input.lines.map((line, index) => {
       const item = eligible.get(line.itemId);
@@ -577,7 +608,8 @@ export async function orderGroupOrder(
       .set({ status: "ordered", orderedAt: now, shippingCents: input.shippingCents, updatedAt: now })
       .where(eq(schema.groupOrders.id, id));
     const people = peopleOf(lines);
-    const totals = totalsOf(people, input.shippingCents, order.freeFromCents);
+    // The real shipping she typed is split among everyone, free threshold or not.
+    const totals = totalsOf(people, { status: "ordered", shippingCents: input.shippingCents, freeFromCents: null });
     const owed = people.flatMap((p) => {
       const share = totals.perPerson[p.key];
       return !p.isOwner && share
@@ -657,29 +689,33 @@ const isLockedForFriends = (order: OrderRow, now: Date) =>
   order.status !== "open" || (order.deadline !== null && parisDay(now) > order.deadline);
 
 /**
- * The group order friends see on the list: the running one, else the latest ordered or cancelled — a cancelled one
- * for 30 days only. `lock`: `FOR UPDATE` on the order row.
+ * The group order friends see on the list: only the most recent one of the list (by creation), open or closed; ordered
+ * while a friend still owes her or for 30 days; cancelled for 30 days. Never an older one behind it.
+ * `lock`: `FOR UPDATE` on the order row.
  */
-async function sharedOrder(db: Database | Tx, wishlistId: string, now: Date, lock = false) {
-  const since = new Date(now.getTime() - RECENT_MS);
+async function sharedOrder(
+  db: Database | Tx,
+  wishlistId: string,
+  now: Date,
+  lock = false,
+): Promise<OrderRow | undefined> {
   const query = db
     .select()
     .from(schema.groupOrders)
-    .where(
-      and(
-        eq(schema.groupOrders.wishlistId, wishlistId),
-        or(inArray(schema.groupOrders.status, [...RUNNING, "ordered"]), gte(schema.groupOrders.cancelledAt, since)),
-      ),
-    )
-    .orderBy(
-      sql`case when ${schema.groupOrders.status} in ('open', 'closed') then 0 else 1 end`,
-      desc(sql`coalesce(${schema.groupOrders.orderedAt}, ${schema.groupOrders.cancelledAt})`),
-      desc(schema.groupOrders.createdAt),
-    )
+    .where(eq(schema.groupOrders.wishlistId, wishlistId))
+    .orderBy(desc(schema.groupOrders.createdAt), desc(schema.groupOrders.id))
     .limit(1);
-  // An ordered one stays (friends may still owe her); a cancelled one goes after 30 days.
   const [row] = lock ? await query.for("update") : await query;
-  return row;
+  if (!row || RUNNING.includes(row.status as GroupOrderStatus)) return row;
+  const since = now.getTime() - RECENT_MS;
+  if (row.status === "cancelled") return row.cancelledAt && row.cancelledAt.getTime() >= since ? row : undefined;
+  if (row.orderedAt && row.orderedAt.getTime() >= since) return row;
+  const [unpaid] = await db
+    .select({ key: schema.groupOrderPayments.buyerNameKey })
+    .from(schema.groupOrderPayments)
+    .where(and(eq(schema.groupOrderPayments.groupOrderId, row.id), isNull(schema.groupOrderPayments.paidAt)))
+    .limit(1);
+  return unpaid ? row : undefined;
 }
 
 /** The shared list, still shared: stopping the share waits for us (or we find it gone). */
@@ -708,7 +744,7 @@ async function linkOfShop(
 ): Promise<{ url: string; shop: Shop } | NotInShop> {
   const canonical = canonicalizeUrl(url);
   const shop = canonical ? await findShopByHost(db, new URL(canonical).hostname) : null;
-  const root = (await rootShops(db, [order.shopId])).get(order.shopId) ?? order.shopId;
+  const root = await orderShopRoot(db, order);
   if (!canonical || !shop || shop.id !== root)
     return { error: "not_in_shop", shopName: await shopNameOf(db, order.shopId) };
   return { url: canonical, shop };
@@ -757,9 +793,8 @@ export async function addFriendLine(
       "itemId" | "productId" | "url" | "manualName" | "manualPriceCents"
     >;
     if (input.source === "item") {
-      const item = (await listItems(tx, input.wishlistId)).find(
-        (i) => i.itemId === input.itemId && i.shopId === order.shopId,
-      );
+      const root = await orderShopRoot(tx, order);
+      const item = (await listItems(tx, input.wishlistId)).find((i) => i.itemId === input.itemId && i.shopId === root);
       if (!item) throw new Refused("not_eligible");
       if (item.currency !== null && item.currency !== order.currency) throw new Refused("currency_mismatch");
       // The product and the name at write time: the line survives the item's deletion.
@@ -907,14 +942,23 @@ export async function sharedGroupOrderView(
 ): Promise<SharedGroupOrder | null> {
   const order = await sharedOrder(db, list.id, now);
   if (!order) return null;
-  const [shopName, lines, items, ownerName, deviceNames] = await Promise.all([
+  const [shopName, lines, items, ownerName, deviceNames, root, payments] = await Promise.all([
     shopNameOf(db, order.shopId),
     readLines(db, order),
     listItems(db, order.wishlistId),
     list.showOwnerName ? ownerFirstName(db, order.wishlistId) : Promise.resolve(""),
     deviceKey ? friendNameKeysOf(db, list.id, deviceKey) : Promise.resolve([]),
+    orderShopRoot(db, order),
+    db
+      .select({
+        key: schema.groupOrderPayments.buyerNameKey,
+        amountCents: schema.groupOrderPayments.amountCents,
+        paidAt: schema.groupOrderPayments.paidAt,
+      })
+      .from(schema.groupOrderPayments)
+      .where(eq(schema.groupOrderPayments.groupOrderId, order.id)),
   ]);
-  const eligible = items.filter((i) => i.shopId === order.shopId);
+  const eligible = items.filter((i) => i.shopId === root);
   const itemSizes: Record<string, string[]> = {};
   const sizesByProduct = new Map<string, string[]>();
   for (const size of await sizesOf(
@@ -927,16 +971,11 @@ export async function sharedGroupOrderView(
     if (sizes) itemSizes[item.itemId] = sizes;
   }
   const people = peopleOf(lines);
-  const totals = totalsOf(people, order.shippingCents, order.freeFromCents);
+  const totals = totalsOf(people, order, new Map(payments.map((p) => [p.key, p.amountCents])));
   const own = people.find((p) => !p.isOwner && deviceNames.includes(p.key));
   let mine: SharedGroupOrder["mine"] = null;
   if (own) {
-    const [payment] = await db
-      .select({ paidAt: schema.groupOrderPayments.paidAt })
-      .from(schema.groupOrderPayments)
-      .where(
-        and(eq(schema.groupOrderPayments.groupOrderId, order.id), eq(schema.groupOrderPayments.buyerNameKey, own.key)),
-      );
+    const payment = payments.find((p) => p.key === own.key);
     const share = totals.perPerson[own.key] ?? { itemsCents: 0, shippingCents: 0, totalCents: 0 };
     mine = {
       name: own.name,
@@ -969,7 +1008,7 @@ export async function sharedGroupOrderView(
         {
           name: p.isOwner ? ownerName : p.name,
           isOwner: p.isOwner,
-          lines: active.map(({ view, row }) => ({
+          lines: active.map(({ view, row, nameable }) => ({
             id: view.id,
             itemId: row.itemId,
             name: view.name,
@@ -978,6 +1017,7 @@ export async function sharedGroupOrderView(
             quantity: view.quantity,
             unitPriceCents: view.unitPriceCents,
             status: view.status,
+            nameable,
           })),
         },
       ];

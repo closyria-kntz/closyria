@@ -1690,6 +1690,7 @@
       "noName": "Article sans nom"
     },
     "totals": "Articles {items} + port {shipping} = {total}",
+    "grandTotal": "Total {total}",
     "owes": "Doit {amount}",
     "paid": "Payé",
     "paidFor": "pour {name}",

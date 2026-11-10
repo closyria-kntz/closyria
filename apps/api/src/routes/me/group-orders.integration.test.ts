@@ -531,3 +531,79 @@ describe("one of her group orders by id", () => {
     expect((await call("GET", `/api/me/group-orders/${order.id}`, undefined)).status).toBe(401);
   });
 });
+
+describe("once ordered", () => {
+  it("splits the shipping she typed even past the free threshold; the views read the frozen payments", async () => {
+    const s = await setup();
+    // « Point relais »: 4,90 €, free from 80 €; her lines reach it (3000 + 2 × 2500).
+    const order = await open(s, { shopId: s.shop.id, shippingOptionId: s.option.id, deadline: null });
+    await ok(
+      await call("PUT", `/api/me/group-orders/${order.id}/own-lines`, s.cookie, {
+        lines: [
+          { itemId: s.itemA.id, sizeLabel: "38", quantity: 1 },
+          { itemId: s.itemB.id, sizeLabel: "M", quantity: 2 },
+        ],
+      }),
+    );
+    await friendLine(order.id, "Léa", { manualName: "Pull", manualPriceCents: 1500 });
+    const before = await ok(await current(s));
+    expect(before.totals).toMatchObject({ remainingForFreeCents: 0, shippingTotalCents: 0 });
+
+    const ordered = await ok(
+      await call("POST", `/api/me/group-orders/${order.id}/order`, s.cookie, { shippingCents: 490, lines: [] }),
+    );
+    const lea = opinionNameKey("Léa");
+    expect(ordered.totals.shippingTotalCents).toBe(490);
+    expect(ordered.totals.perPerson.owner).toEqual({ itemsCents: 8000, shippingCents: 245, totalCents: 8245 });
+    expect(ordered.totals.perPerson[lea]).toEqual({ itemsCents: 1500, shippingCents: 245, totalCents: 1745 });
+    expect(ordered.people[1]?.payment).toEqual({ amountCents: 1745, paidAt: null });
+    const [payment] = await t.db
+      .select()
+      .from(schema.groupOrderPayments)
+      .where(eq(schema.groupOrderPayments.groupOrderId, order.id));
+    expect(payment?.amountCents).toBe(1745);
+
+    // What she owes is the frozen amount, never a new computation.
+    await t.db
+      .update(schema.groupOrderPayments)
+      .set({ amountCents: 1800 })
+      .where(eq(schema.groupOrderPayments.groupOrderId, order.id));
+    const again = await ok(await current(s));
+    expect(again.people[1]?.payment?.amountCents).toBe(1800);
+    expect(again.totals.perPerson[lea]?.totalCents).toBe(1800);
+  });
+
+  it("her line keeps its name when the item is renamed after the order", async () => {
+    const s = await setup();
+    const order = await open(s);
+    const mine = await ok(
+      await call("PUT", `/api/me/group-orders/${order.id}/own-lines`, s.cookie, {
+        lines: [{ itemId: s.itemA.id, sizeLabel: null, quantity: 1 }],
+      }),
+    );
+    const name = mine.people[0]?.lines[0]?.name;
+    expect(name).toBe(s.pA.name);
+    await ok(await call("POST", `/api/me/group-orders/${order.id}/order`, s.cookie, { shippingCents: 600, lines: [] }));
+    await t.db.update(schema.items).set({ nameOverride: "Renommée" }).where(eq(schema.items.id, s.itemA.id));
+    expect((await ok(await current(s))).people[0]?.lines[0]?.name).toBe(name);
+  });
+});
+
+describe("a merge of the order's shop", () => {
+  it("keeps her items of the shop in the order", async () => {
+    const s = await setup();
+    const order = await open(s);
+    // What the admin merge does: products and domains move, the shop points at the target.
+    const target = await newShop("Cible");
+    await t.db.update(schema.products).set({ shopId: target.id }).where(eq(schema.products.shopId, s.shop.id));
+    await t.db.update(schema.shops).set({ mergedIntoId: target.id }).where(eq(schema.shops.id, s.shop.id));
+    const view = await ok(await current(s));
+    expect(view.ownItems.map((i) => i.itemId).sort()).toEqual([s.itemA.id, s.itemB.id].sort());
+    const ticked = await ok(
+      await call("PUT", `/api/me/group-orders/${order.id}/own-lines`, s.cookie, {
+        lines: [{ itemId: s.itemA.id, sizeLabel: null, quantity: 1 }],
+      }),
+    );
+    expect(ticked.people[0]?.lines.map((l) => l.itemId)).toEqual([s.itemA.id]);
+  });
+});

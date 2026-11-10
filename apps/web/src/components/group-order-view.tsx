@@ -232,6 +232,9 @@ function Ready({
     keep: false,
   });
   const editable = running(order) && !pinned;
+  // Her own lines still being saved: « J'ai commandé » waits for them (it would order what she had before).
+  const [saving, setSaving] = useState(false);
+  const blocked = busy || saving;
 
   const shop = order.shop.name;
   const title = order.deadline ? t("titleDate", { shop, date: dayOf(locale, order.deadline) }) : t("title", { shop });
@@ -266,6 +269,8 @@ function Ready({
           : pastDeadline
             ? t("state.openPastDeadline")
             : t("state.open");
+  // Once ordered (or cancelled, or a past one): what it came to, items and shipping (frozen at « J'ai commandé »).
+  const grandTotal = money(order.totals.totalCents + order.totals.shippingTotalCents);
 
   async function act(action: "close" | "reopen" | "cancel") {
     setBusy(true);
@@ -275,6 +280,7 @@ function Ready({
 
   /** « J'ai commandé » validated: her ticked items are asked about first (🎁), then the order is sent. */
   async function sendOrder(body: GroupOrderOrder) {
+    if (saving) return;
     setOrdered((previous) => ({ ...previous, open: false, error: null }));
     const itemIds = [...ownOf(order).keys()];
     if (!(await confirmUnlessReserved(itemIds, "order"))) {
@@ -305,7 +311,13 @@ function Ready({
       <div className="flex flex-col gap-space-2 rounded-card border-2 border-selected-line bg-selected-surface p-space-4">
         <h1 className="font-display text-title font-strong break-words">{title}</h1>
         <p className="text-sm text-ink-muted tabular-nums">{delivery}</p>
-        {editable && <p className="font-strong tabular-nums">{progress}</p>}
+        {editable ? (
+          <p className="font-strong tabular-nums">{progress}</p>
+        ) : (
+          <p data-testid="group-total" className="font-strong tabular-nums">
+            {t("grandTotal", { total: grandTotal })}
+          </p>
+        )}
         <p data-testid="group-state" className="font-strong">
           {stateText}
         </p>
@@ -341,7 +353,7 @@ function Ready({
           )}
           <button
             type="button"
-            disabled={busy}
+            disabled={blocked}
             onClick={() =>
               setOrdered((previous) => ({
                 open: true,
@@ -368,7 +380,7 @@ function Ready({
         </div>
       )}
 
-      <MeBlock order={order} editable={editable} money={money} change={change} />
+      <MeBlock order={order} editable={editable} money={money} change={change} onSaving={setSaving} />
 
       {friends.length === 0 ? (
         <p className="max-w-measure text-sm text-ink-muted">{t("friends.empty")}</p>
@@ -391,7 +403,7 @@ function Ready({
         resetKey={ordered.key}
         order={order}
         error={ordered.error}
-        busy={busy}
+        busy={blocked}
         onClose={() => setOrdered((previous) => ({ ...previous, open: false }))}
         onConfirm={(body) => void sendOrder(body)}
       />
@@ -465,11 +477,14 @@ function MeBlock({
   editable,
   money,
   change,
+  onSaving,
 }: {
   order: Order;
   editable: boolean;
   money: (cents: number) => string;
   change: Change;
+  /** True from her first change until the last of her saves is answered. */
+  onSaving: (saving: boolean) => void;
 }) {
   const t = useTranslations("GroupOrder");
   const id = useId();
@@ -485,11 +500,15 @@ function MeBlock({
   function save(next: Own) {
     setPending(next);
     waiting.current += 1;
+    onSaving(true);
     const lines = [...next].map(([itemId, value]) => ({ itemId, ...value }));
     queue.current = queue.current.then(async () => {
       await change(() => putOwnGroupLines(order.id, { lines }));
       waiting.current -= 1;
-      if (waiting.current === 0) setPending(null);
+      if (waiting.current === 0) {
+        setPending(null);
+        onSaving(false);
+      }
     });
   }
   const update = (itemId: string, value: { sizeLabel: string | null; quantity: number } | null) => {
