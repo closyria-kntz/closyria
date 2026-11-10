@@ -949,8 +949,9 @@ export async function sharedGroupOrderView(
         {
           name: p.isOwner ? ownerName : p.name,
           isOwner: p.isOwner,
-          lines: active.map(({ view }) => ({
+          lines: active.map(({ view, row }) => ({
             id: view.id,
+            itemId: row.itemId,
             name: view.name,
             imageUrl: view.imageUrl,
             sizeLabel: view.sizeLabel,

@@ -2,11 +2,14 @@ import { DEFAULT_LOVE_LEVELS, sharedWishlistViewSchema } from "@closyria/shared"
 import { describe, expect, it, vi } from "vitest";
 import type { InternalApi } from "./admin-api";
 import {
+  addGroupLine,
+  deleteGroupLine,
   deleteOpinion,
   fetchSharedList,
   fetchSharedView,
   giveGift,
   leaveGift,
+  patchGroupLine,
   putOpinion,
   withGiftsHidden,
 } from "./shared-list";
@@ -230,5 +233,69 @@ describe("the friend's gifts", () => {
       ok: false,
       error: "forbidden",
     });
+  });
+});
+
+describe("the friend's group order lines", () => {
+  const LINE = "3f0d2b8e-5a71-4c6b-8a3e-2f4b5c6d7e8f";
+  const input = {
+    source: "item" as const,
+    itemId: ITEM,
+    sizeLabel: "T38",
+    quantity: 1,
+    name: "Léa",
+    deviceKey: KEY,
+  };
+
+  it("adds a line and reads back its id", async () => {
+    const fetcher = browserFetch(Response.json({ lineId: LINE }, { status: 201 }));
+    expect(await addGroupLine(TOKEN, input, fetcher as unknown as typeof fetch)).toEqual({ ok: true, lineId: LINE });
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`/api/shared/${TOKEN}/group-order/lines`);
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("same-origin");
+    expect(JSON.parse(String(init.body))).toEqual(input);
+  });
+
+  it("names the refusals, with the shop of the order for a link from elsewhere", async () => {
+    const elsewhere = browserFetch(Response.json({ error: "not_in_shop", shopName: "Zara" }, { status: 400 }));
+    expect(await addGroupLine(TOKEN, input, elsewhere as unknown as typeof fetch)).toEqual({
+      ok: false,
+      error: "not_in_shop",
+      shopName: "Zara",
+    });
+    for (const [status, code, error] of [
+      [403, "group_order_locked", "locked"],
+      [409, "name_taken", "name_taken"],
+      [409, "too_many_lines", "too_many"],
+      [400, "not_eligible", "not_eligible"],
+      [409, "currency_mismatch", "currency"],
+      [403, "forbidden", "forbidden"],
+      [429, "rate_limited", "rate_limited"],
+      [400, "invalid_request", "failed"],
+    ] as const) {
+      const fetcher = browserFetch(Response.json({ error: code }, { status }));
+      expect(await addGroupLine(TOKEN, input, fetcher as unknown as typeof fetch)).toEqual({ ok: false, error });
+    }
+    const down = vi.fn(async () => {
+      throw new TypeError("offline");
+    });
+    expect(await addGroupLine(TOKEN, input, down as unknown as typeof fetch)).toEqual({ ok: false, error: "failed" });
+  });
+
+  it("changes and takes out one of her lines", async () => {
+    const changed = browserFetch(Response.json({ lineId: LINE }));
+    const patch = { sizeLabel: null, quantity: 2, name: "Léa", deviceKey: KEY };
+    expect(await patchGroupLine(TOKEN, LINE, patch, changed as unknown as typeof fetch)).toEqual({
+      ok: true,
+      lineId: LINE,
+    });
+    expect(changed.mock.calls[0]?.[0]).toBe(`/api/shared/${TOKEN}/group-order/lines/${LINE}`);
+    expect(changed.mock.calls[0]?.[1]?.method).toBe("PATCH");
+    const gone = browserFetch(new Response(null, { status: 204 }));
+    expect(
+      await deleteGroupLine(TOKEN, LINE, { name: "Léa", deviceKey: KEY }, gone as unknown as typeof fetch),
+    ).toEqual({ ok: true, lineId: LINE });
+    expect(gone.mock.calls[0]?.[1]?.method).toBe("DELETE");
   });
 });

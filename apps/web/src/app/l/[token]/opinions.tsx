@@ -5,6 +5,7 @@ import {
   type GiftRole,
   type OpinionView,
   opinionNameKey,
+  type SharedGroupOrder,
   type SharedWishlistView,
 } from "@closyria/shared";
 import { useLocale, useTranslations } from "next-intl";
@@ -15,23 +16,40 @@ import { formatAmount } from "@/lib/budget";
 import { type FriendDevice, friendDevice } from "@/lib/friend-device";
 import { levelOf } from "@/lib/love-levels";
 import { formatOptionalPrice } from "@/lib/price";
-import { deleteOpinion, fetchSharedView, type GiftError, giveGift, leaveGift, putOpinion } from "@/lib/shared-list";
+import {
+  deleteGroupLine,
+  deleteOpinion,
+  fetchSharedView,
+  type GiftError,
+  type GroupLineError,
+  giveGift,
+  leaveGift,
+  putOpinion,
+} from "@/lib/shared-list";
 import { CoverPhoto } from "./cover-photo";
 import { GiftActions, GiftBanner, GiftSheet } from "./gifts";
 import { GivenItems } from "./given";
+import { GroupLineSheet, type GroupLineTarget, groupErrorKey } from "./group-line-sheet";
+import { GroupBanner, GroupItemActions, GroupSummary, groupOrderWritable, mineLines } from "./group-order";
 import { OpinionSheet, type SheetOutcome } from "./opinion-sheet";
 
 type Item = SharedWishlistView["items"][number];
+type GroupLine = SharedGroupOrder["people"][number]["lines"][number];
 type Toast = {
   id: number;
   label: string;
   undo: (() => Promise<boolean>) | null;
-  /** The item whose gift block takes the focus after « Annuler » (the toast and its button go away). */
-  itemId?: string;
+  /** The block that takes the focus after « Annuler » (the toast and its button go away). */
+  focusId?: string;
 };
 
 /** How long « Avis envoyé · Annuler » stays (same as the app's undo toast). */
 const TOAST_MS = 8_000;
+
+/** How often a running group order is read again while the page shows (others add lines, the owner closes it). */
+const GROUP_POLL_MS = 10_000;
+/** …and while one of her links is being read. */
+const GROUP_READING_POLL_MS = 3_000;
 
 const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
 
@@ -54,6 +72,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
   const tGone = useTranslations("SharedList.notFound");
   const tGifts = useTranslations("SharedList.gifts");
   const tFriend = useTranslations("SharedList.friend");
+  const tGroup = useTranslations("SharedList.groupOrder");
   const locale = useLocale();
   const [view, setView] = useState(initial);
   // Made in the browser only (local storage): before that, no « Modifier mon avis ».
@@ -66,12 +85,18 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
     session: number;
     open: boolean;
   } | null>(null);
+  const [groupSheet, setGroupSheet] = useState<{ target: GroupLineTarget; session: number; open: boolean } | null>(
+    null,
+  );
+  // A group order line being taken out (one at a time).
+  const [groupBusy, setGroupBusy] = useState(false);
   // The item whose « Me retirer » is on its way (one tap only).
   const [leaving, setLeaving] = useState<string | null>(null);
   const deviceKey = useRef<string | null>(null);
   // Read with her device key yet? Until then her own gifts look like anyone's: the gift buttons wait.
   const [checked, setChecked] = useState<"pending" | "ok" | "failed">("pending");
-  // The item whose gift block takes the focus once the list read after a change shows.
+  // The block (an item's gift or group order part, or the group order) that takes the focus once the list read
+  // after a change shows.
   const focusAfterRead = useRef<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -93,6 +118,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
         setGone(true);
         setSheet(null);
         setGiftSheet(null);
+        setGroupSheet(null);
         setToast(null);
       }
       return next;
@@ -107,21 +133,38 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
     deviceKey.current = made.key;
     setDevice(made);
     setDeviceName(made.name);
-    if (!initial.gifts.open) return;
+    // Her gifts and her group order lines show as hers only after a read with her device key.
+    if (!initial.gifts.open && !initial.groupOrder) return;
     void (async () => {
       // Once more on a failure; then the buttons stay off, with a word, rather than show a state that may be wrong.
       if ((await reload()) !== undefined) return;
       if ((await reload()) === undefined) setChecked((current) => (current === "ok" ? current : "failed"));
     })();
-  }, [initial.gifts.open, reload]);
+  }, [initial.gifts.open, initial.groupOrder, reload]);
+
+  // A running group order is read again now and then while the page shows: others add lines, the owner closes it.
+  const order = view.groupOrder;
+  const pollMs =
+    !order || order.status === "cancelled"
+      ? null
+      : mineLines(order).some((line) => line.status === "reading")
+        ? GROUP_READING_POLL_MS
+        : GROUP_POLL_MS;
+  useEffect(() => {
+    if (pollMs === null || gone) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void reload();
+    }, pollMs);
+    return () => clearInterval(timer);
+  }, [pollMs, gone, reload]);
 
   // After a gift changed: her next step (« Me retirer », « Je lui offre ») once the new state shows.
   useEffect(() => {
-    const itemId = focusAfterRead.current;
-    if (!itemId || !view) return;
+    const blockId = focusAfterRead.current;
+    if (!blockId || !view) return;
     focusAfterRead.current = null;
     // Gone from the page (she left an item taken off the list): nothing to focus.
-    const block = document.getElementById(giftBlockId(itemId));
+    const block = document.getElementById(blockId);
     if (!block) return;
     (block.querySelector<HTMLElement>("button:not([disabled])") ?? block).focus();
   }, [view]);
@@ -152,17 +195,17 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
     }
   }
 
-  function show(label: string, undo: Toast["undo"], itemId?: string) {
+  function show(label: string, undo: Toast["undo"], focusId?: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastCounter.current += 1;
-    setToast({ id: toastCounter.current, label, undo, ...(itemId ? { itemId } : {}) });
+    setToast({ id: toastCounter.current, label, undo, ...(focusId ? { focusId } : {}) });
     toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
   }
 
   async function runUndo() {
     const undo = toast?.undo;
     if (!undo) return;
-    if (toast.itemId) focusAfterRead.current = toast.itemId;
+    if (toast.focusId) focusAfterRead.current = toast.focusId;
     setToast(null);
     const ok = await undo();
     await reload();
@@ -223,6 +266,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
     setDeviceName(null);
     setSheet(null);
     setGiftSheet(null);
+    setGroupSheet(null);
     title.current?.focus();
     if (previous) show(tFriend("switched", { name: previous }), null);
     await reload();
@@ -239,7 +283,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
         : tGifts(view.ownerName ? "announce.reserver" : "announce.reserverHidden", { name: itemName }),
       null,
     );
-    focusAfterRead.current = item.itemId;
+    focusAfterRead.current = giftBlockId(item.itemId);
     await reload();
   }
 
@@ -272,8 +316,76 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
       item.gift.state === "reserved"
         ? async () => (await giveGift(token, item.itemId, { name, deviceKey: key, intent: "join" })).ok
         : null;
-    show(tGifts("toast.left"), undo, item.itemId);
-    focusAfterRead.current = item.itemId;
+    show(tGifts("toast.left"), undo, giftBlockId(item.itemId));
+    focusAfterRead.current = giftBlockId(item.itemId);
+    await reload();
+  }
+
+  const openGroupSheet = (target: GroupLineTarget) =>
+    setGroupSheet((current) => ({ target, session: (current?.session ?? 0) + 1, open: true }));
+  const closeGroupSheet = () => setGroupSheet((current) => current && { ...current, open: false });
+  /** Where her next step is after a change to this line: its item's block, else the group order. */
+  const groupFocusOf = (itemId: string | null) =>
+    itemId && view.items.some((item) => item.itemId === itemId) ? groupBlockId(itemId) : GROUP_ORDER_ID;
+
+  function editGroupLine(line: GroupLine) {
+    const buyerName = view.groupOrder?.mine?.name;
+    if (!buyerName) return;
+    openGroupSheet({
+      kind: "edit",
+      lineId: line.id,
+      name: line.name || t("noName"),
+      buyerName,
+      sizeLabel: line.sizeLabel,
+      quantity: line.quantity,
+      // A link read without a price: she says what it is and what it costs.
+      manual:
+        line.itemId === null && line.unitPriceCents === null && line.status !== "reading"
+          ? { name: line.name, priceCents: null }
+          : null,
+    });
+  }
+
+  /** Added or changed: announced, and her next step takes the focus once the list read back shows it. */
+  async function groupDone(target: GroupLineTarget, name: string) {
+    if (target.kind !== "edit") setDeviceName(name);
+    closeGroupSheet();
+    show(tGroup(target.kind === "edit" ? "toast.saved" : "toast.added"), null);
+    const itemId =
+      target.kind === "item"
+        ? target.itemId
+        : target.kind === "edit"
+          ? ((view.groupOrder && mineLines(view.groupOrder).find((l) => l.id === target.lineId)?.itemId) ?? null)
+          : null;
+    // After a link, the focus stays where the sheet gives it back (« Ajouter un autre article »).
+    if (target.kind !== "link") focusAfterRead.current = groupFocusOf(itemId);
+    await reload();
+  }
+
+  /** Refused: read the list again; once the order no longer takes changes, say so. */
+  async function groupFailed(error: GroupLineError) {
+    const next = await reload();
+    if (!next) return;
+    if (error === "locked" || !next.groupOrder || !groupOrderWritable(next.groupOrder)) {
+      closeGroupSheet();
+      show(tGroup("errors.locked"), null);
+    }
+  }
+
+  /** « Retirer »: her line leaves the order. */
+  async function removeGroupLine(line: GroupLine) {
+    const buyerName = view.groupOrder?.mine?.name;
+    if (!device || !buyerName || groupBusy) return;
+    setGroupBusy(true);
+    const result = await deleteGroupLine(token, line.id, { name: buyerName, deviceKey: device.key });
+    setGroupBusy(false);
+    if (!result.ok) {
+      show(tGroup(`errors.${groupErrorKey(result.error)}`), null);
+      void reload();
+      return;
+    }
+    show(tGroup("toast.removed"), null);
+    focusAfterRead.current = groupFocusOf(line.itemId);
     await reload();
   }
 
@@ -317,6 +429,8 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
 
       <GiftBanner gifts={view.gifts} ownerName={view.ownerName} />
 
+      {view.groupOrder && <GroupBanner order={view.groupOrder} />}
+
       {view.gifts.open && view.viewerIsOwner && (
         <p data-testid="owner-gifts-note" className="self-start text-ink-muted">
           {tGifts("ownerNote")}
@@ -357,12 +471,47 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
                 }))
               }
               onLeave={() => void leave(item)}
+              groupCanAct={device !== null && !view.viewerIsOwner}
+              groupBusy={groupBusy}
+              onGroupTake={() =>
+                openGroupSheet({ kind: "item", itemId: item.itemId, name: item.name?.trim() || t("noName") })
+              }
+              onGroupEdit={editGroupLine}
+              onGroupRemove={(line) => void removeGroupLine(line)}
             />
           ))}
         </ul>
       )}
 
+      {view.groupOrder && (
+        <GroupSummary
+          order={view.groupOrder}
+          noName={t("noName")}
+          canAct={device !== null && !view.viewerIsOwner}
+          busy={groupBusy}
+          onAdd={() => openGroupSheet({ kind: "link" })}
+          onEdit={editGroupLine}
+          onRemove={(line) => void removeGroupLine(line)}
+        />
+      )}
+
       {view.gifts.open && <GivenItems items={view.givenItems} />}
+
+      {device && groupSheet && view.groupOrder && (
+        <GroupLineSheet
+          key={groupSheet.session}
+          open={groupSheet.open}
+          onClose={closeGroupSheet}
+          token={token}
+          target={groupSheet.target}
+          shopName={view.groupOrder.shopName}
+          currency={view.groupOrder.currency}
+          knownNames={knownNames(view)}
+          device={device}
+          onDone={({ name }) => void groupDone(groupSheet.target, name)}
+          onFailed={(error) => void groupFailed(error)}
+        />
+      )}
 
       {device && giftSheet && giftItem && (
         <GiftSheet
@@ -435,6 +584,11 @@ function ItemCard({
   leaving,
   onGift,
   onLeave,
+  groupCanAct,
+  groupBusy,
+  onGroupTake,
+  onGroupEdit,
+  onGroupRemove,
 }: {
   item: Item;
   view: SharedWishlistView;
@@ -444,6 +598,11 @@ function ItemCard({
   leaving: boolean;
   onGift: (intent: GiftIntent) => void;
   onLeave: () => void;
+  groupCanAct: boolean;
+  groupBusy: boolean;
+  onGroupTake: () => void;
+  onGroupEdit: (line: GroupLine) => void;
+  onGroupRemove: (line: GroupLine) => void;
 }) {
   const t = useTranslations("SharedList");
   const tOpinions = useTranslations("SharedList.opinions");
@@ -456,6 +615,10 @@ function ItemCard({
   const gift = view.gifts.open && !view.viewerIsOwner ? item.gift : null;
   // Taken off her list while this device gives it: shown to her only, struck through.
   const removed = gift?.state === "removed";
+  // « Je le prends aussi » on the items of the group order's shop (spec §3.2); never on a cancelled one.
+  const groupOrder = view.groupOrder;
+  const inGroupOrder =
+    groupOrder !== null && groupOrder.status !== "cancelled" && groupOrder.eligibleItemIds.includes(item.itemId);
 
   return (
     <li className="card flex flex-col gap-space-3 rounded-card border border-card-border bg-card-bg p-space-3">
@@ -531,6 +694,20 @@ function ItemCard({
         onLeave={onLeave}
       />
 
+      {inGroupOrder && !removed && (
+        <GroupItemActions
+          itemName={name}
+          order={groupOrder}
+          lines={mineLines(groupOrder).filter((line) => line.itemId === item.itemId)}
+          blockId={groupBlockId(item.itemId)}
+          canAct={groupCanAct}
+          busy={groupBusy}
+          onTake={onGroupTake}
+          onEdit={onGroupEdit}
+          onRemove={onGroupRemove}
+        />
+      )}
+
       {view.allowOpinions && !removed && (
         <button
           type="button"
@@ -546,17 +723,22 @@ function ItemCard({
 }
 
 const giftBlockId = (itemId: string) => `gift-${itemId}`;
+const groupBlockId = (itemId: string) => `group-${itemId}`;
+/** The group order block's id (its `<section>` in group-order.tsx). */
+const GROUP_ORDER_ID = "group-order";
 
 /** Every name on the list (opinions and gifts), as written there: how « Une Léa… » spells a name already used. */
 function knownNames(view: SharedWishlistView): string[] {
-  return view.items.flatMap((item) => {
-    const gift = item.gift;
-    const givers =
-      gift?.state === "reserved"
-        ? [gift.reserver, ...gift.contributors]
-        : gift?.state === "owner_took"
-          ? gift.givers
-          : [];
-    return [...item.opinions.map((o) => o.name), ...givers];
-  });
+  return view.items
+    .flatMap((item) => {
+      const gift = item.gift;
+      const givers =
+        gift?.state === "reserved"
+          ? [gift.reserver, ...gift.contributors]
+          : gift?.state === "owner_took"
+            ? gift.givers
+            : [];
+      return [...item.opinions.map((o) => o.name), ...givers];
+    })
+    .concat(view.groupOrder?.people.filter((p) => !p.isOwner).map((p) => p.name) ?? []);
 }

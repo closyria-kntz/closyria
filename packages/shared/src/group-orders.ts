@@ -203,6 +203,8 @@ export const sharedGroupOrderSchema = z.object({
       lines: z.array(
         z.object({
           id: z.uuid(),
+          /** The item of the list it was taken from (« Je le prends aussi »); null for a link or her own entry. */
+          itemId: z.uuid().nullable(),
           name: z.string(),
           imageUrl: z.string().nullable(),
           sizeLabel: z.string().nullable(),

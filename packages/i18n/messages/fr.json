@@ -1355,7 +1355,71 @@
         "contributor": "Tu participes : {name}"
       }
     },
-    "toastLabel": "Notifications"
+    "toastLabel": "Notifications",
+    "groupOrder": {
+      "title": "Commande groupée",
+      "bannerNameDate": "Commande groupée chez {shop} avec {name}, jusqu'au {date}",
+      "bannerName": "Commande groupée chez {shop} avec {name}",
+      "bannerDate": "Commande groupée chez {shop}, jusqu'au {date}",
+      "banner": "Commande groupée chez {shop}",
+      "progressRemaining": "Total {total} · Plus que {remaining} pour la livraison offerte",
+      "progressFree": "Total {total} · Livraison offerte ✓",
+      "progressShared": "Total {total} · Port {shipping}, partagé entre celles qui commandent",
+      "closed": "Commande close, {name} va commander.",
+      "closedHidden": "Commande close, elle va commander.",
+      "ordered": "Commandé le {date}.",
+      "cancelled": "Commande annulée.",
+      "take": "Je le prends aussi",
+      "forItem": "— {name}",
+      "mine": "Tu le prends aussi ({size} × {quantity})",
+      "mineNoSize": "Tu le prends aussi (× {quantity})",
+      "edit": "Modifier",
+      "remove": "Retirer",
+      "addOther": "Ajouter un autre article",
+      "reading": "Lecture de l'article…",
+      "unknownPrice": "Prix inconnu",
+      "sizeQuantity": "{size} × {quantity}",
+      "quantityOnly": "× {quantity}",
+      "ownerFallback": "Elle",
+      "you": "{name} (toi)",
+      "share": "Ta part : {amount} (articles {items} + port {shipping})",
+      "provisional": "provisoire",
+      "owe": "Tu dois {amount} à {name}",
+      "oweHidden": "Tu dois {amount}",
+      "paid": "Payé ✓",
+      "removedBy": "Retiré par {name}",
+      "removedByHidden": "Retiré par elle",
+      "sheet": {
+        "takeTitle": "Je le prends aussi : {name}",
+        "addTitle": "Ajouter un autre article",
+        "editTitle": "Modifier : {name}",
+        "link": "Lien de l'article chez {shop}",
+        "size": "Taille (facultatif)",
+        "quantity": "Quantité",
+        "manualName": "Nom de l'article",
+        "manualPrice": "Prix ({currency})",
+        "add": "Ajouter",
+        "save": "Enregistrer",
+        "note": "Visible par les autres amies qui ont le lien."
+      },
+      "errors": {
+        "notInShop": "Ce lien n'est pas chez {shop}.",
+        "locked": "La commande est close.",
+        "tooMany": "Tu as déjà 20 articles dans cette commande.",
+        "notEligible": "Cet article ne fait pas partie de la commande.",
+        "currency": "Cet article n'est pas dans la même monnaie.",
+        "failed": "Ça n'a pas marché. Réessaie.",
+        "rateLimited": "Tu as fait beaucoup de changements d'un coup. Réessaie dans un moment.",
+        "link": "Colle le lien de l'article (il commence par https://).",
+        "manualName": "Écris le nom de l'article.",
+        "manualPrice": "Écris le prix (par exemple 23,50)."
+      },
+      "toast": {
+        "added": "Ajouté à la commande groupée",
+        "saved": "Modifié",
+        "removed": "Retiré de la commande groupée"
+      }
+    }
   },
   "Settings": {
     "title": "Réglages",

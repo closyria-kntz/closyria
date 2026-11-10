@@ -1,4 +1,7 @@
 import {
+  type FriendLineDelete,
+  type FriendLineInput,
+  type FriendLinePatch,
   type GiftDelete,
   type GiftInput,
   type GiftRole,
@@ -202,4 +205,99 @@ export async function leaveGift(
   if (typeof res === "string") return { ok: false, error: res };
   if (res.ok) return { ok: true };
   return { ok: false, error: giftErrorOf(await res.json().catch(() => null)) };
+}
+
+export type GroupLineError =
+  | "locked"
+  | "name_taken"
+  | "too_many"
+  | "not_in_shop"
+  | "not_eligible"
+  | "currency"
+  | "forbidden"
+  | "rate_limited"
+  | "failed";
+export type GroupLineResult = { ok: true; lineId: string } | { ok: false; error: GroupLineError; shopName?: string };
+
+/** The API's refusals of a group order line, as the page names them (anything else: `failed`). */
+const GROUP_LINE_ERRORS: Record<string, GroupLineError> = {
+  group_order_locked: "locked",
+  name_taken: "name_taken",
+  too_many_lines: "too_many",
+  not_in_shop: "not_in_shop",
+  not_eligible: "not_eligible",
+  currency_mismatch: "currency",
+  forbidden: "forbidden",
+  rate_limited: "rate_limited",
+};
+const lineIdSchema = z.object({ lineId: z.uuid() });
+const notInShopSchema = z.object({ error: z.literal("not_in_shop"), shopName: z.string() });
+
+async function groupLineCall(
+  fetcher: typeof fetch,
+  token: string,
+  path: string,
+  method: "POST" | "PATCH" | "DELETE",
+  body: FriendLineInput | FriendLinePatch | FriendLineDelete,
+): Promise<{ status: number; ok: boolean; body: unknown } | null> {
+  if (!TOKEN.test(token)) return null;
+  try {
+    const res = await fetcher(`/api/shared/${token}/group-order/lines${path}`, {
+      method,
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { status: res.status, ok: res.ok, body: res.status === 204 ? null : await res.json().catch(() => null) };
+  } catch {
+    return null;
+  }
+}
+
+function groupLineOutcome(res: Awaited<ReturnType<typeof groupLineCall>>, lineId?: string): GroupLineResult {
+  if (!res) return { ok: false, error: "failed" };
+  if (res.ok) {
+    if (lineId) return { ok: true, lineId };
+    const parsed = lineIdSchema.safeParse(res.body);
+    return parsed.success ? { ok: true, lineId: parsed.data.lineId } : { ok: false, error: "failed" };
+  }
+  const notInShop = notInShopSchema.safeParse(res.body);
+  if (notInShop.success) return { ok: false, error: "not_in_shop", shopName: notInShop.data.shopName };
+  const parsed = errorSchema.safeParse(res.body);
+  return { ok: false, error: (parsed.success && GROUP_LINE_ERRORS[parsed.data.error]) || "failed" };
+}
+
+/** « Je le prends aussi » (an item of the list) or « Ajouter un autre article » (a link, or her own entry). */
+export async function addGroupLine(
+  token: string,
+  input: FriendLineInput,
+  fetcher: typeof fetch = fetch,
+): Promise<GroupLineResult> {
+  return groupLineOutcome(await groupLineCall(fetcher, token, "", "POST", input));
+}
+
+/** « Modifier »: size and quantity; name and price on a line read without a price. */
+export async function patchGroupLine(
+  token: string,
+  lineId: string,
+  input: FriendLinePatch,
+  fetcher: typeof fetch = fetch,
+): Promise<GroupLineResult> {
+  return groupLineOutcome(
+    await groupLineCall(fetcher, token, `/${encodeURIComponent(lineId)}`, "PATCH", input),
+    lineId,
+  );
+}
+
+/** « Retirer »: her line leaves the group order. */
+export async function deleteGroupLine(
+  token: string,
+  lineId: string,
+  input: FriendLineDelete,
+  fetcher: typeof fetch = fetch,
+): Promise<GroupLineResult> {
+  return groupLineOutcome(
+    await groupLineCall(fetcher, token, `/${encodeURIComponent(lineId)}`, "DELETE", input),
+    lineId,
+  );
 }

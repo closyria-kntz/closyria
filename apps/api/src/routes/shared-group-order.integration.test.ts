@@ -163,6 +163,7 @@ describe("the group order on the shared link", () => {
         lines: [
           {
             id: lineId,
+            itemId: s.itemA.id,
             name: expect.any(String),
             imageUrl: null,
             sizeLabel: "38",
@@ -263,6 +264,7 @@ describe("the group order on the shared link", () => {
     const line = (await groupOrderOf(s))?.people[0]?.lines[0];
     expect(line).toEqual({
       id: lineId,
+      itemId: null,
       name: "Sac 1",
       imageUrl: null,
       sizeLabel: null,
