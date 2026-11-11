@@ -35,13 +35,20 @@ export function PhotoManager({
   item,
   onChange,
   reload,
+  adding: addingProp,
+  onAddingChange,
 }: {
   item: ItemView;
   onChange: (item: ItemView) => void;
   reload: () => Promise<void>;
+  /** « Ajouter une photo » opened from elsewhere on the sheet (« Que veux-tu faire ? »): the dialog lives here. */
+  adding?: boolean;
+  onAddingChange?: (open: boolean) => void;
 }) {
   const t = useTranslations("Item");
-  const [adding, setAdding] = useState(false);
+  const [ownAdding, setOwnAdding] = useState(false);
+  const adding = addingProp ?? ownAdding;
+  const setAdding = onAddingChange ?? setOwnAdding;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<ItemPhotoView | null>(null);

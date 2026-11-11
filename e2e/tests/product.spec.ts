@@ -245,7 +245,7 @@ test("ton envie : niveaux en tuiles, « Prioritaire » en petite pastille coché
   await axe(page);
 });
 
-test("« Voir chez », « Je le prends » et « Partager » (l'adresse de la boutique, copiée)", async ({
+test("« Que veux-tu faire ? » : « Voir chez », « Je le prends » et « Partager » (l'adresse de la boutique, copiée)", async ({
   page,
   context,
   baseURL,
@@ -266,12 +266,16 @@ test("« Voir chez », « Je le prends » et « Partager » (l'adresse de la bou
   const shopLink = actions.getByRole("link", { name: "Voir chez Fausse boutique" });
   await expect(shopLink).toHaveAttribute("target", "_blank");
   await expect(page.getByRole("link", { name: /Voir chez/ })).toHaveCount(1);
-  // « Je le prends », « Voir chez … », « Partager », in this order, on one row once there is room for it.
-  await expect(actions.locator("a, button")).toHaveText(["Je le prends", "Voir chez Fausse boutique", "Partager"]);
-  if ((page.viewportSize()?.width ?? 0) >= 640) {
-    const tops = await Promise.all((await actions.locator("a, button").all()).map(async (el) => (await boxOf(el)).y));
-    expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(2);
-  }
+  // Refonte Boudoir: written buttons two by two, « Je l’ai commandé » first (task 4).
+  await expect(actions.locator("a, button")).toHaveText([
+    "Je l’ai commandé",
+    "Voir chez Fausse boutique",
+    "Ajouter à une liste",
+    "Je le prends",
+    "Partager",
+  ]);
+  const [first, second] = await Promise.all([boxOf(actions.locator("a, button").nth(0)), boxOf(shopLink)]);
+  expect(Math.abs(first.y - second.y)).toBeLessThan(2);
 
   const take = actions.getByRole("button", { name: "Je le prends" });
   await expect(take).toHaveAttribute("aria-pressed", "false");
@@ -385,9 +389,13 @@ test("téléphone ou ordinateur : la galerie puis les blocs, ou côte à côte",
   const width = page.viewportSize()?.width ?? 0;
   if (width < 768) expect(infoBox.y).toBeGreaterThan(galleryBox.y + galleryBox.height - 1);
   else if (width >= 1024) expect(infoBox.x).toBeGreaterThan(galleryBox.x + galleryBox.width - 1);
-  // Every block of the sheet is a glass card.
+  // Every block of the sheet is a soft Boudoir box (mockup .box), no glass any more.
   const blocks = page.getByTestId("product-info").locator("[data-block]");
-  for (const block of await blocks.all()) await expect(block).toHaveClass(/\bglass\b/);
+  const soft = await tokenColor(page, "--color-surface-sunken");
+  for (const block of await blocks.all()) {
+    await expect(block).not.toHaveClass(/\bglass\b/);
+    await expect(block).toHaveCSS("background-color", soft);
+  }
   expect(await blocks.count()).toBeGreaterThanOrEqual(4);
 });
 

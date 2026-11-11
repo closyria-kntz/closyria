@@ -1,10 +1,11 @@
 "use client";
 
 import type { CaptureView, ItemView, PriceHistory, ProductView as Product } from "@closyria/shared";
+import Link from "next/link";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PriceCurve } from "@/components/price-curve";
-import { blockClass, blockTitleClass, buttonClass } from "@/components/ui";
+import { blockClass, blockTitleClass, buttonClass, focusRing } from "@/components/ui";
 import { formatAmount } from "@/lib/budget";
 import { pollCapture, pollUntil } from "@/lib/capture-poll";
 import { fetchCaptureView, fetchProduct } from "@/lib/catalog-client";
@@ -13,6 +14,7 @@ import { dropMention } from "@/lib/price-history";
 import { useCurrentProfile, useProfiles } from "@/lib/profile-context";
 import { fetchItemForProduct, fetchPriceHistory } from "@/lib/wardrobe-client";
 import { ItemPanel } from "./item-panel";
+import { ItemProgress } from "./item-progress";
 import { KeepActions } from "./keep-actions";
 import { ManualForm } from "./manual-form";
 import { PhotoManager, PhotoPlaceholder } from "./photo-manager";
@@ -62,6 +64,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   const [item, setItem] = useState<ItemView | null>(null);
   const [itemLoad, setItemLoad] = useState<"loading" | "error" | "ready">("loading");
   const [history, setHistory] = useState<PriceHistory | null>(null);
+  const [addingPhoto, setAddingPhoto] = useState(false);
 
   /** Reads her item for this sheet. The keep actions only show once this succeeded (never on a failed read). */
   const reloadItem = useCallback(async () => {
@@ -204,6 +207,8 @@ export function ProductView({ productId, captureId }: { productId: string; captu
               date: format.dateTime(since.date, { day: "numeric", month: "long", timeZone: "UTC" }),
             });
   const kept = hasName && itemLoad !== "error" && item !== null;
+  // « Robe · 54,90 € » (mockup): the last word of the shop's category path.
+  const typeName = product.traits.category.at(-1) ?? null;
 
   // « Mis à jour le … »: at the end of the shop's sheet, or under the sizes when the sheet has no name yet (no shop
   // sheet then), as before the overhaul.
@@ -217,23 +222,30 @@ export function ProductView({ productId, captureId }: { productId: string; captu
     </p>
   ) : null;
 
+  // « Ta taille » (mockup .chips): out of stock struck through, hers (the size noted on her item) filled in ink.
+  const mySize = kept && item?.sizeLabel ? item.sizeLabel.trim().toLowerCase() : null;
   const sizesBlock =
     product.sizes.length > 0 ? (
-      <section aria-labelledby="sizes-title" data-block className={blockClass}>
-        <h2 id="sizes-title" className={blockTitleClass}>
+      <section aria-labelledby="sizes-title" className="flex flex-col gap-space-2">
+        <h2 id="sizes-title" className="text-meta font-bold tracking-wide text-ink uppercase">
           {t("product.sizes")}
         </h2>
         {manualShop && <p className="text-sm text-ink-muted">{t("product.manualSizes")}</p>}
         <ul className="flex flex-wrap gap-space-2">
-          {product.sizes.map((size) => (
-            <li
-              key={size.label}
-              className={`flex h-space-7 min-w-size-chip items-center justify-center rounded-size bg-surface-strong px-space-3 text-control font-strong ${size.available ? "" : "text-ink-muted line-through"}`}
-            >
-              {size.label}
-              {!size.available && <span className="sr-only"> ({t("product.unavailable")})</span>}
-            </li>
-          ))}
+          {product.sizes.map((size) => {
+            const mine = mySize !== null && size.label.trim().toLowerCase() === mySize;
+            return (
+              <li
+                key={size.label}
+                data-mine={mine || undefined}
+                className={`flex min-w-size-chip items-center justify-center rounded-pill px-space-3 py-space-2 text-chip font-strong ${mine ? "bg-ink text-surface" : size.available ? "bg-surface-strong text-ink" : "bg-surface-strong text-ink-muted"} ${size.available ? "" : "line-through"}`}
+              >
+                {size.label}
+                {!size.available && <span className="sr-only"> ({t("product.unavailable")})</span>}
+                {mine && <span className="sr-only"> ({t("product.yourSize")})</span>}
+              </li>
+            );
+          })}
         </ul>
         {!hasName && updatedLine}
       </section>
@@ -247,6 +259,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
       item={kept ? item : null}
       onChange={setItem}
       reload={reloadItem}
+      onAddPhoto={() => setAddingPhoto(true)}
     />
   );
 
@@ -263,156 +276,182 @@ export function ProductView({ productId, captureId }: { productId: string; captu
   ) : null;
 
   return (
-    <article className={`${TWO_COLUMNS} gap-space-5`} aria-busy={capturing || reloadedPending || undefined}>
-      <div data-testid="product-gallery" className="lg:sticky lg:top-space-0 lg:self-start">
-        {item && itemLoad !== "error" ? (
-          <PhotoManager item={item} onChange={setItem} reload={reloadItem} />
-        ) : product.images.length > 0 ? (
-          <ProductGallery
-            photos={product.images.map((image) => ({ ...image, group: "product" as const }))}
-            alt={product.name ?? ""}
-            thumbAlt={(n) => tItem("photos.alt", { n, name: product.name ?? shop })}
-            groupLabels={{ product: tItem("photos.title") }}
-          />
-        ) : noPhotoYet ? (
-          <Skeleton className="photo-shape aspect-3/4 w-full" />
-        ) : !waiting ? (
-          <PhotoPlaceholder label={t("product.noPhoto")} />
-        ) : null}
-      </div>
+    <div className="flex flex-col gap-space-2">
+      {/* Back to « Mes articles » on a phone and a tablet (mockup); on a computer the menu above says it. */}
+      <Link
+        href="/articles"
+        className={`inline-flex min-h-touch-target items-center self-start rounded-pill text-menu font-bold text-ink lg:hidden ${focusRing}`}
+      >
+        {tItem("back")}
+      </Link>
+      <article className={`${TWO_COLUMNS} gap-space-5`} aria-busy={capturing || reloadedPending || undefined}>
+        <div data-testid="product-gallery" className="lg:sticky lg:top-space-0 lg:self-start">
+          {item && itemLoad !== "error" ? (
+            <PhotoManager
+              item={item}
+              onChange={setItem}
+              reload={reloadItem}
+              adding={addingPhoto}
+              onAddingChange={setAddingPhoto}
+            />
+          ) : product.images.length > 0 ? (
+            <ProductGallery
+              photos={product.images.map((image) => ({ ...image, group: "product" as const }))}
+              alt={product.name ?? ""}
+              thumbAlt={(n) => tItem("photos.alt", { n, name: product.name ?? shop })}
+              groupLabels={{ product: tItem("photos.title") }}
+            />
+          ) : noPhotoYet ? (
+            <Skeleton className="photo-shape aspect-3/4 w-full" />
+          ) : !waiting ? (
+            <PhotoPlaceholder label={t("product.noPhoto")} />
+          ) : null}
+        </div>
 
-      <div data-testid="product-info" className="flex min-w-space-0 flex-col gap-space-3-5">
-        <header data-testid="product-header" data-block className={blockClass}>
-          <div className="flex flex-col gap-space-1">
-            <p className="text-sm text-ink-muted sm:text-control">
-              {waiting ? <span role="status">{t("product.loading", { shop })}</span> : shop}
-            </p>
-            {hasName && product.brand && (
-              <p className="text-sm font-strong uppercase text-ink-muted">{product.brand}</p>
-            )}
-          </div>
-          <h1
-            ref={heading}
-            tabIndex={-1}
-            className={
-              waiting ? "sr-only" : "font-display text-sheet-title leading-none text-balance focus:outline-none"
-            }
-          >
-            {product.name ?? shop}
-          </h1>
-          {waiting && <Skeleton className="h-space-6 w-3/4" />}
-          {hasName && product.priceCents === null && (
-            <p className="text-ink-muted">{formatOptionalPrice(locale, null, currency, t("product.priceMissing"))}</p>
-          )}
-          {hasName && product.priceCents !== null && (
-            <div className="flex flex-wrap items-center gap-x-space-4 gap-y-space-2">
-              <p className="flex items-baseline gap-space-3 tabular-nums">
-                <span className="font-display text-title">{formatPrice(locale, product.priceCents, currency)}</span>
-                {product.compareAtCents !== null && product.compareAtCents > product.priceCents && (
-                  <s className="text-quote text-ink-muted decoration-accent decoration-2">
-                    <span className="sr-only">{t("product.comparePrice")} </span>
-                    {formatPrice(locale, product.compareAtCents, currency)}
-                  </s>
-                )}
+        <div data-testid="product-info" className="flex min-w-space-0 flex-col gap-space-3-5">
+          <header data-testid="product-header" className="flex flex-col gap-space-3-5">
+            <div className="flex flex-col gap-space-1">
+              <p className="text-meta text-ink-muted">
+                {waiting ? <span role="status">{t("product.loading", { shop })}</span> : shop}
               </p>
-              {history && history.points.length >= 2 && (
-                <div className="ml-auto">
-                  <PriceCurve points={history.points} currency={currency} />
-                </div>
+              {hasName && product.brand && (
+                <p className="text-sm font-strong uppercase text-ink-muted">{product.brand}</p>
               )}
             </div>
-          )}
-          {mention && (
-            <p className="self-start rounded-full bg-success-soft px-space-3 py-space-1-5 text-caption font-strong text-success tabular-nums">
-              {mention.months === null
-                ? t("product.drop", {
-                    amount: formatAmount(locale, mention.cents, currency),
-                    since: sinceText(mention.since),
-                  })
-                : t("product.dropLowest", {
-                    amount: formatAmount(locale, mention.cents, currency),
-                    since: sinceText(mention.since),
-                    months: mention.months,
-                  })}
-            </p>
-          )}
-          {waiting && <Skeleton className="h-space-5 w-1/3" />}
-        </header>
-        {waiting && <Skeleton className="h-space-6 w-1/2" />}
-        {hasName && manualShop && (
-          <p data-testid="manual-shop-note" data-block className={`${blockClass} text-sm`}>
-            {t("product.manualNote", {
-              shop,
-              date: format.dateTime(new Date(product.updatedAt), { dateStyle: "long" }),
-            })}
-          </p>
-        )}
-
-        {hasName && item && current.id && item.profileId !== current.id && (
-          <p role="status" className="rounded-card border border-line bg-hint px-space-3 py-space-2 text-sm">
-            {tItem("keep.alreadyIn", { name: profiles.find((p) => p.id === item.profileId)?.name ?? "" })}
-          </p>
-        )}
-        {hasName && itemLoad === "error" && (
-          <div className="flex flex-col items-start gap-space-2">
-            <p role="alert" className="text-sm text-danger">
-              {tItem("errors.itemLoad")}
-            </p>
-            <button type="button" className={`${buttonClass} min-h-touch-target`} onClick={() => void reloadItem()}>
-              {t("product.retry")}
-            </button>
-          </div>
-        )}
-        {kept && item ? (
-          <ItemPanel
-            item={item}
-            onChange={setItem}
-            onGone={() => setItem(null)}
-            reload={reloadItem}
-            beside={sizesBlock}
-            middle={actions}
-            shop={shopSheet}
-          />
-        ) : (
-          <>
-            {hasName && itemLoad === "loading" && !item && (
-              <p role="status" className="text-sm text-ink-muted">
-                {tItem("keep.working")}
-              </p>
+            <h1
+              ref={heading}
+              tabIndex={-1}
+              className={
+                waiting ? "sr-only" : "font-display text-page-title leading-none text-balance focus:outline-none"
+              }
+            >
+              {product.name ?? shop}
+            </h1>
+            {waiting && <Skeleton className="h-space-6 w-3/4" />}
+            {hasName && product.priceCents === null && (
+              <p className="text-ink-muted">{formatOptionalPrice(locale, null, currency, t("product.priceMissing"))}</p>
             )}
-            {hasName && itemLoad === "ready" && !item && (
-              <div data-block className={blockClass}>
-                <KeepActions product={product} profileId={current.id} onKept={setItem} reload={reloadItem} />
+            {hasName && product.priceCents !== null && (
+              <div className="flex flex-wrap items-center gap-x-space-4 gap-y-space-2">
+                <p className="flex flex-wrap items-baseline gap-x-space-2 text-body tabular-nums">
+                  {typeName && (
+                    <span>
+                      {typeName}
+                      <span aria-hidden="true"> ·</span>
+                    </span>
+                  )}
+                  <span className="font-bold">{formatPrice(locale, product.priceCents, currency)}</span>
+                  {product.compareAtCents !== null && product.compareAtCents > product.priceCents && (
+                    <s className="text-ink-muted">
+                      <span className="sr-only">{t("product.comparePrice")} </span>
+                      {formatPrice(locale, product.compareAtCents, currency)}
+                    </s>
+                  )}
+                </p>
+                {history && history.points.length >= 2 && (
+                  <div className="ml-auto">
+                    <PriceCurve points={history.points} currency={currency} />
+                  </div>
+                )}
               </div>
             )}
-            {sizesBlock}
-            {actions}
-            {shopSheet}
-          </>
-        )}
+            {mention && (
+              <p className="self-start rounded-full bg-success-soft px-space-3 py-space-1-5 text-caption font-strong text-success tabular-nums">
+                {mention.months === null
+                  ? t("product.drop", {
+                      amount: formatAmount(locale, mention.cents, currency),
+                      since: sinceText(mention.since),
+                    })
+                  : t("product.dropLowest", {
+                      amount: formatAmount(locale, mention.cents, currency),
+                      since: sinceText(mention.since),
+                      months: mention.months,
+                    })}
+              </p>
+            )}
+            {waiting && <Skeleton className="h-space-5 w-1/3" />}
+            {kept && item && <ItemProgress item={item} />}
+          </header>
+          {waiting && <Skeleton className="h-space-6 w-1/2" />}
+          {hasName && manualShop && (
+            <p data-testid="manual-shop-note" data-block className={`${blockClass} text-sm`}>
+              {t("product.manualNote", {
+                shop,
+                date: format.dateTime(new Date(product.updatedAt), { dateStyle: "long" }),
+              })}
+            </p>
+          )}
 
-        {!hasName && (failed || manualShop) && (
-          <p role="status" className="text-ink-muted">
-            {manualShop ? t("product.manualShop", { shop }) : t(`product.failure.${failureKey}`)}
-          </p>
-        )}
-        {!hasName && slow && (capturing || reloadedPending) && (
-          <p role="status" className="text-ink-muted">
-            {t("product.slow")}
-          </p>
-        )}
-        {showForm && (
-          <ManualForm
-            productId={product.id}
-            canonicalUrl={product.canonicalUrl}
-            onSaved={(saved) => {
-              setProduct(saved);
-              setLoad("ready");
-              setFocusHeading(true);
-            }}
-          />
-        )}
-      </div>
-    </article>
+          {hasName && item && current.id && item.profileId !== current.id && (
+            <p role="status" className="rounded-card border border-line bg-hint px-space-3 py-space-2 text-sm">
+              {tItem("keep.alreadyIn", { name: profiles.find((p) => p.id === item.profileId)?.name ?? "" })}
+            </p>
+          )}
+          {hasName && itemLoad === "error" && (
+            <div className="flex flex-col items-start gap-space-2">
+              <p role="alert" className="text-sm text-danger">
+                {tItem("errors.itemLoad")}
+              </p>
+              <button type="button" className={`${buttonClass} min-h-touch-target`} onClick={() => void reloadItem()}>
+                {t("product.retry")}
+              </button>
+            </div>
+          )}
+          {kept && item ? (
+            <ItemPanel
+              item={item}
+              onChange={setItem}
+              onGone={() => setItem(null)}
+              reload={reloadItem}
+              top={
+                <>
+                  {sizesBlock}
+                  {actions}
+                </>
+              }
+              shop={shopSheet}
+            />
+          ) : (
+            <>
+              {hasName && itemLoad === "loading" && !item && (
+                <p role="status" className="text-sm text-ink-muted">
+                  {tItem("keep.working")}
+                </p>
+              )}
+              {hasName && itemLoad === "ready" && !item && (
+                <div data-block className={blockClass}>
+                  <KeepActions product={product} profileId={current.id} onKept={setItem} reload={reloadItem} />
+                </div>
+              )}
+              {sizesBlock}
+              {actions}
+              {shopSheet}
+            </>
+          )}
+
+          {!hasName && (failed || manualShop) && (
+            <p role="status" className="text-ink-muted">
+              {manualShop ? t("product.manualShop", { shop }) : t(`product.failure.${failureKey}`)}
+            </p>
+          )}
+          {!hasName && slow && (capturing || reloadedPending) && (
+            <p role="status" className="text-ink-muted">
+              {t("product.slow")}
+            </p>
+          )}
+          {showForm && (
+            <ManualForm
+              productId={product.id}
+              canonicalUrl={product.canonicalUrl}
+              onSaved={(saved) => {
+                setProduct(saved);
+                setLoad("ready");
+                setFocusHeading(true);
+              }}
+            />
+          )}
+        </div>
+      </article>
+    </div>
   );
 }

@@ -286,9 +286,12 @@ test("passer à Commandé avertit aussi (fiche et sélection)", async ({
   const lea = await friend(browser, baseURL, `10.223.${testInfo.workerIndex % 250}.1`);
   await gift(lea, owner.token, first.id, "Léa", "reserve");
 
-  // The sheet's stages: « Commandé » then its date, then the window.
+  // The sheet's « Je l’ai commandé » (« Que veux-tu faire ? »), then its date, then the window.
   await page.goto(`/produits/${first.productId}`);
-  await page.getByRole("button", { name: "Passer à « Commandé »" }).click();
+  await page
+    .getByRole("region", { name: "Que veux-tu faire ?" })
+    .getByRole("button", { name: "Je l’ai commandé" })
+    .click();
   await page.getByRole("dialog").getByRole("button", { name: "Valider" }).click();
   await expect(warning(page)).toBeVisible();
   await warning(page).getByRole("button", { name: "Attendre" }).click();

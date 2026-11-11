@@ -49,20 +49,18 @@ type Props = {
   onGone: () => void;
   /** Re-reads her item (after an undo). */
   reload: () => Promise<void>;
-  /** Beside « Ton envie » when there is room (two blocks side by side, mockup): the sizes. */
-  beside?: React.ReactNode;
-  /** Between « Ton envie » and « Mon article »: the sheet's buttons. */
-  middle: React.ReactNode;
+  /** First, under the article's name and line: « Ta taille » and « Que veux-tu faire ? ». */
+  top: React.ReactNode;
   /** The shop's sheet, shown between « Mon article » and « Autres actions ». */
   shop: React.ReactNode;
 };
 
 /**
- * HER item as blocks of the sheet: « Ton envie » (level, priority, why), then `middle` (sizes, buttons), « Mon article »
- * (stage, size and amounts, notes, opinions, lists, tags), the shop sheet, « Autres actions » (profile, delete).
- * Photos live in the gallery column.
+ * HER item as blocks of the sheet (refonte Boudoir): `top` (sizes, « Que veux-tu faire ? »), « Avis des amies »,
+ * « Ton envie » (level, priority, why), « Mon article » (stages, size and amounts, notes, lists, tags), the shop sheet,
+ * « Autres actions » (the rare ones: profile, delete). Photos live in the gallery column.
  */
-export function ItemPanel({ item, onChange, onGone, reload, beside, middle, shop }: Props) {
+export function ItemPanel({ item, onChange, onGone, reload, top, shop }: Props) {
   const t = useTranslations("Item");
   const tMenu = useTranslations("Views.menu");
   const tGifts = useTranslations("Gifts.received");
@@ -290,96 +288,90 @@ export function ItemPanel({ item, onChange, onGone, reload, beside, middle, shop
 
   return (
     <>
-      <div className="grid grid-cols-(--grid-blocks) gap-space-3-5">
-        <section aria-labelledby="wish-title" aria-busy={busy || undefined} data-block className={blockClass}>
-          <div className="flex flex-wrap items-center justify-between gap-space-2">
-            <h2 id="wish-title" className={blockTitleClass}>
-              {t("sections.wish")}
-            </h2>
-            {/* A small ticked pill, a finger wide all the same (the button is taller than the pill it shows). */}
-            <button
-              type="button"
-              disabled={busy}
-              aria-pressed={item.priority}
-              onClick={togglePriority}
-              className={`group flex min-h-touch-target items-center rounded-full disabled:opacity-60 ${focusRing}`}
-            >
-              <span className="inline-flex h-control-xs items-center gap-space-1-5 rounded-full border border-transparent bg-surface-strong px-space-3-5 text-caption font-strong text-ink group-hover:bg-hint group-aria-pressed:border-accent group-aria-pressed:bg-hint">
-                {item.priority && <Tick draw />}
-                {t("keep.priority")}
-              </span>
-            </button>
-          </div>
-          {errorIn(true)}
-          <LoveLevelPicker
-            value={item.loveLevel}
-            onChange={(level) => void chooseLevel(level)}
+      {top}
+
+      <ItemOpinionsSection itemId={item.id} boxed />
+
+      <section aria-labelledby="wish-title" aria-busy={busy || undefined} data-block className={blockClass}>
+        <div className="flex flex-wrap items-center justify-between gap-space-2">
+          <h2 id="wish-title" className={blockTitleClass}>
+            {t("sections.wish")}
+          </h2>
+          {/* A small ticked pill, a finger wide all the same (the button is taller than the pill it shows). */}
+          <button
+            type="button"
             disabled={busy}
-            hideLegend
-          />
-          {editingWhy ? (
-            <form onSubmit={saveWhy} className="flex min-w-space-0 flex-wrap items-center gap-space-2">
-              <label htmlFor="item-why" className="sr-only">
-                {t("keep.why")}
-              </label>
-              <input
-                id="item-why"
-                // biome-ignore lint/a11y/noAutofocus: she just asked to edit it; the field replaces the button she pressed.
-                autoFocus
-                value={why}
-                maxLength={MAX_WHY}
-                placeholder={t("keep.why")}
-                onChange={(e) => setWhy(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    e.preventDefault();
-                    cancelWhy();
-                  }
-                }}
-                className={`${inputClass} ${touch} w-auto min-w-space-0 flex-1 basis-sidebar font-display text-quote italic`}
-              />
-              <button
-                type="submit"
-                disabled={busy}
-                aria-label={t("panel.whySave")}
-                className={`${buttonClass} ${touch}`}
-              >
-                {t("panel.save")}
-              </button>
-              <button type="button" onClick={cancelWhy} className={`${buttonClass} ${touch}`}>
-                {t("panel.whyCancel")}
-              </button>
-            </form>
-          ) : item.why ? (
-            <div className="flex flex-wrap items-baseline justify-between gap-space-2">
-              <p data-testid="item-why" className="min-w-space-0 font-display text-quote leading-snug italic">
-                {t("panel.whyQuote", { why: item.why })}
-              </p>
-              <button
-                ref={whyButton}
-                type="button"
-                aria-label={t("panel.whyEditLabel")}
-                onClick={() => setEditingWhy(true)}
-                className={`${touch} rounded-button px-space-2 text-sm font-strong text-ink underline underline-offset-4 ${focusRing}`}
-              >
-                {t("panel.whyEdit")}
-              </button>
-            </div>
-          ) : (
+            aria-pressed={item.priority}
+            onClick={togglePriority}
+            className={`group flex min-h-touch-target items-center rounded-full disabled:opacity-60 ${focusRing}`}
+          >
+            <span className="inline-flex h-control-xs items-center gap-space-1-5 rounded-full border border-transparent bg-surface-strong px-space-3-5 text-caption font-strong text-ink group-hover:bg-hint group-aria-pressed:border-accent group-aria-pressed:bg-hint">
+              {item.priority && <Tick draw />}
+              {t("keep.priority")}
+            </span>
+          </button>
+        </div>
+        {errorIn(true)}
+        <LoveLevelPicker
+          value={item.loveLevel}
+          onChange={(level) => void chooseLevel(level)}
+          disabled={busy}
+          hideLegend
+        />
+        {editingWhy ? (
+          <form onSubmit={saveWhy} className="flex min-w-space-0 flex-wrap items-center gap-space-2">
+            <label htmlFor="item-why" className="sr-only">
+              {t("keep.why")}
+            </label>
+            <input
+              id="item-why"
+              // biome-ignore lint/a11y/noAutofocus: she just asked to edit it; the field replaces the button she pressed.
+              autoFocus
+              value={why}
+              maxLength={MAX_WHY}
+              placeholder={t("keep.why")}
+              onChange={(e) => setWhy(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancelWhy();
+                }
+              }}
+              className={`${inputClass} ${touch} w-auto min-w-space-0 flex-1 basis-sidebar font-display text-quote italic`}
+            />
+            <button type="submit" disabled={busy} aria-label={t("panel.whySave")} className={`${buttonClass} ${touch}`}>
+              {t("panel.save")}
+            </button>
+            <button type="button" onClick={cancelWhy} className={`${buttonClass} ${touch}`}>
+              {t("panel.whyCancel")}
+            </button>
+          </form>
+        ) : item.why ? (
+          <div className="flex flex-wrap items-baseline justify-between gap-space-2">
+            <p data-testid="item-why" className="min-w-space-0 font-display text-quote leading-snug italic">
+              {t("panel.whyQuote", { why: item.why })}
+            </p>
             <button
               ref={whyButton}
               type="button"
+              aria-label={t("panel.whyEditLabel")}
               onClick={() => setEditingWhy(true)}
-              className={`${touch} self-start rounded-button px-space-2 text-sm font-strong text-ink underline underline-offset-4 ${focusRing}`}
+              className={`${touch} rounded-button px-space-2 text-sm font-strong text-ink underline underline-offset-4 ${focusRing}`}
             >
-              {t("panel.whyAdd")}
+              {t("panel.whyEdit")}
             </button>
-          )}
-        </section>
-        {beside}
-      </div>
-
-      {middle}
+          </div>
+        ) : (
+          <button
+            ref={whyButton}
+            type="button"
+            onClick={() => setEditingWhy(true)}
+            className={`${touch} self-start rounded-button px-space-2 text-sm font-strong text-ink underline underline-offset-4 ${focusRing}`}
+          >
+            {t("panel.whyAdd")}
+          </button>
+        )}
+      </section>
 
       <section
         aria-labelledby="mine-title"
@@ -419,7 +411,8 @@ export function ItemPanel({ item, onChange, onGone, reload, beside, middle, shop
                 </li>
               );
             })}
-            {canReceiveAsGift(item) && (
+            {/* On an order, « Reçu en cadeau » is one of « Que veux-tu faire ? »'s buttons. */}
+            {canReceiveAsGift(item) && item.stage !== "ordered" && (
               <li>
                 <button
                   type="button"
@@ -479,8 +472,6 @@ export function ItemPanel({ item, onChange, onGone, reload, beside, middle, shop
             {t("panel.save")}
           </button>
         </form>
-
-        <ItemOpinionsSection itemId={item.id} />
 
         {extrasFailed && (
           <div className="flex flex-col items-start gap-space-2">

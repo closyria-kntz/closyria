@@ -14,9 +14,9 @@ export const toggleButtonClass = `${buttonClass} min-h-touch-target aria-pressed
 /** A big level button: her emoji over her name, pressed when chosen (the picker, the shared link). */
 export const levelButtonClass = `flex min-h-level-tile-sm flex-col items-center justify-center gap-space-1 rounded-card border border-line bg-surface-raised px-space-1 py-space-2-5 text-caption text-ink sm:min-h-level-tile transition-colors duration-base hover:bg-surface-strong disabled:opacity-60 aria-pressed:border-accent aria-pressed:bg-hint aria-pressed:font-strong ${focusRing}`;
 
-/** A block of the product sheet (« l’article », « Ton envie », « Tailles »…): a frosted glass card (mockup .block). */
+/** A block of the product sheet (« Ton envie », « Avis des amies », « Mon article »…): Boudoir's soft box (mockup .box). */
 export const blockClass =
-  "glass flex min-w-space-0 flex-col gap-space-3 rounded-block p-space-4-5 shadow-block sm:px-space-6-5 sm:py-space-5-5";
+  "flex min-w-space-0 flex-col gap-space-3 rounded-card bg-surface-sunken p-space-3-5 sm:p-space-5";
 
-/** The title of a block of the sheet (mockup .block h2: Fraunces 20 px, medium). */
-export const blockTitleClass = "font-display text-heading font-medium";
+/** The title of a block of the sheet (mockup .k): small capitals in the accent. */
+export const blockTitleClass = "text-meta font-bold tracking-wide text-accent uppercase";

@@ -194,7 +194,7 @@ test.describe("structure de la fiche", () => {
     expect(ys).toEqual([...ys].sort((a, b) => a - b));
   };
 
-  test("fiche gardée : l'article, Ton envie, Tailles, boutons, Mon article, La fiche de la boutique, Autres actions", async ({
+  test("fiche gardée : l'article, Ta taille, Que veux-tu faire ?, Ton envie, Mon article, La fiche de la boutique, Autres actions", async ({
     page,
   }) => {
     await openSheet(page);
@@ -211,8 +211,8 @@ test.describe("structure de la fiche", () => {
     await expect(header.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible();
     await expect(page.getByTestId("product-actions").getByRole("link", { name: /Voir chez/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /Voir chez/ })).toHaveCount(1);
-    await expect(page.getByRole("region", { name: "Tailles" }).getByRole("heading", { level: 2 })).toHaveText([
-      "Tailles",
+    await expect(page.getByRole("region", { name: "Ta taille" }).getByRole("heading", { level: 2 })).toHaveText([
+      "Ta taille",
     ]);
     const shop = page.getByRole("region", { name: "La fiche de la boutique" });
     await expect(shop.getByRole("heading", { level: 2 })).toHaveText(["La fiche de la boutique"]);
@@ -227,9 +227,9 @@ test.describe("structure de la fiche", () => {
 
     await verticalOrder(page, [
       "[data-testid=product-header]",
-      "section[aria-labelledby=wish-title]",
       "section[aria-labelledby=sizes-title]",
       "[data-testid=product-actions]",
+      "section[aria-labelledby=wish-title]",
       "section[aria-labelledby=mine-title]",
       "section[aria-labelledby=shop-title]",
       "section[aria-labelledby=more-title]",
@@ -237,7 +237,7 @@ test.describe("structure de la fiche", () => {
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   });
 
-  test("fiche non gardée : l'article, Garder cet article, Tailles, boutons, La fiche de la boutique", async ({
+  test("fiche non gardée : l'article, Garder cet article, Ta taille, boutons, La fiche de la boutique", async ({
     page,
   }) => {
     await openSheet(page);
@@ -245,7 +245,7 @@ test.describe("structure de la fiche", () => {
     await expect(page.getByRole("button", { name: "Ajouter à mes envies" })).toBeVisible();
     await expect(page.getByRole("region", { name: "Mon article" })).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Autres actions" })).toHaveCount(0);
-    await expect(page.getByRole("region", { name: "Tailles" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Ta taille" })).toBeVisible();
     await verticalOrder(page, [
       "[data-testid=product-header]",
       "section[aria-labelledby=keep-title]",

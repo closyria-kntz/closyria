@@ -78,8 +78,8 @@
 
 **Interfaces:** Produces : bandeau d'avancée « Envie → Commandé → Reçu → Dans mon dressing » (étape courante marquée, `aria-current="step"`) ; bloc « Que veux-tu faire ? » avec boutons écrits selon l'étape (Envie : « Je l'ai commandé », « Voir chez {boutique} », « Demander un avis », « Ajouter à une liste », « M'alerter si le prix baisse », « Partager » ; autres étapes : les actions existantes équivalentes) ; « … » ne garde que les actions rares (supprimer, déplacer de profil).
 
-- [ ] e2e d'abord : pour un article de chaque étape, l'avancée marque la bonne étape et chaque action principale est un bouton visible qui fonctionne (aucune n'exige « … ») ; avertissement 🎁 toujours présent sur « Je l'ai commandé » ; axe clair/sombre.
-- [ ] Implémenter, relancer, commit « feat(refonte): fiche article ».
+- [x] e2e d'abord : pour un article de chaque étape, l'avancée marque la bonne étape et chaque action principale est un bouton visible qui fonctionne (aucune n'exige « … ») ; avertissement 🎁 toujours présent sur « Je l'ai commandé » ; axe clair/sombre.
+- [x] Implémenter, relancer, commit « feat(refonte): fiche article ».
 
 **Fin d'étape 2 :** comparaison maquette, présentation, mise en dev avec accord.
 

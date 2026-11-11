@@ -19,7 +19,7 @@ async function expectCapturedSheet(page: Page, timeout: number): Promise<void> {
   const sheet = page.getByRole("article");
   await expect(sheet.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout });
   await expect(sheet.getByText(PRODUCT.price)).toBeVisible({ timeout });
-  const sizes = sheet.getByRole("region", { name: "Tailles" }).getByRole("listitem");
+  const sizes = sheet.getByRole("region", { name: "Ta taille" }).getByRole("listitem");
   await expect(sizes).toHaveText([...PRODUCT.sizes], { timeout });
   const photo = sheet.getByRole("img", { name: PRODUCT.name }).first();
   await expect(photo).toBeVisible({ timeout });

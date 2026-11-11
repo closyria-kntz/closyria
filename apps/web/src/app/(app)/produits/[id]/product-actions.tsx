@@ -1,27 +1,41 @@
 "use client";
 
-import type { ItemView } from "@closyria/shared";
+import { type ItemStage, type ItemView, MAX_ITEM_PHOTOS } from "@closyria/shared";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
+import { Dialog } from "@/components/dialog";
+import { Choices } from "@/components/item-menu";
 import { Tick } from "@/components/tick";
 import { focusRing } from "@/components/ui";
-import { confirmUnlessReserved } from "@/lib/gift-check";
+import { canReceiveAsGift, confirmUnlessReserved } from "@/lib/gift-check";
 import { COPIED_FEEDBACK_MS } from "@/lib/timing";
 import { pushUndo } from "@/lib/undo";
-import { patchItem, undoWith } from "@/lib/wardrobe-client";
+import { patchItem, receiveAsGift, undoWith } from "@/lib/wardrobe-client";
+import { StageDialog } from "./stage-dialog";
 
-/** The sheet's buttons (mockup .actions .clay): 54 px with 16 px text, a finger tall on a phone. */
-const actionClass = `inline-flex h-touch-target items-center justify-center gap-space-2 rounded-button px-space-5 text-sm font-strong sm:h-control-2xl sm:text-control ${focusRing}`;
-/** The light ones (mockup .clay.light): the raised surface with a fine line. */
-const lightClass = "border border-line bg-surface-raised text-ink hover:bg-surface-strong";
+/** A written button of « Que veux-tu faire ? » (mockup .acts .btn): a pill, a finger tall, 13.5 px bold. */
+const actionClass = `inline-flex min-h-touch-target items-center justify-center gap-space-1-5 rounded-pill border-2 px-space-4 py-space-1-5 text-center text-menu font-bold leading-tight disabled:opacity-60 ${focusRing}`;
+/** The main one (.btn.pri), the shop's link (.btn, outlined in ink), the others (.btn.soft). */
+const LOOK = {
+  primary: "border-button-bg bg-button-bg text-button-ink",
+  outline: "border-ink bg-transparent text-ink hover:bg-surface-sunken",
+  soft: "border-transparent bg-surface-sunken text-ink hover:bg-surface-strong",
+} as const;
 
 const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
 
+type Action =
+  | { key: string; label: string; href: string }
+  | { key: string; label: string; onClick: () => void; pressed?: boolean; tick?: boolean };
+
 /**
- * The sheet's buttons (spec §6), on one row: « Je le prends » (her wish only: ticks it in « Ma commande », with
- * « Annuler »), « Voir chez {boutique} » (always, even while the capture runs or failed: she needs the shop's page to
- * fill the form), « Partager » (once the sheet is read). The sheet itself needs an account, so « Partager » gives the
- * SHOP's address: the phone's share menu when there is one, else the clipboard (« Lien de la boutique copié »).
+ * « Que veux-tu faire ? » (refonte Boudoir, spec R8): what she can do with the article at its step, as written buttons,
+ * the main one first, two by two. Envie: « Je l’ai commandé », « Voir chez … », « Ajouter à une liste », « Je le prends »,
+ * « Partager ». Commandé: « Je l’ai reçu », « Voir chez … », « Je l’ai retourné », « Reçu en cadeau », « Partager ».
+ * Reçu / Dans mon dressing: « Je le mets en vente », « Je l’ai retourné » (Reçu only), « Ajouter une photo »,
+ * « Partager ». Each opens what the sheet already did (the stage window, which asks first when a friend plans to give
+ * it). Not kept: « Voir chez … » and « Partager ». « Partager » gives the SHOP's address (the sheet needs an account):
+ * the phone's share menu when there is one, else the clipboard (« Lien de la boutique copié »).
  */
 export function ProductActions({
   shop,
@@ -30,6 +44,7 @@ export function ProductActions({
   item,
   onChange,
   reload,
+  onAddPhoto,
 }: {
   shop: string;
   /** The shop's page. */
@@ -39,13 +54,21 @@ export function ProductActions({
   item: ItemView | null;
   onChange: (item: ItemView) => void;
   reload: () => Promise<void>;
+  /** Opens the gallery's « Ajouter une photo » window. */
+  onAddPhoto?: () => void;
 }) {
   const t = useTranslations("Capture.product");
   const tItem = useTranslations("Item");
+  const tTodo = useTranslations("Item.todo");
+  const tGifts = useTranslations("Gifts.received");
+  const tMenu = useTranslations("Views.menu");
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<ItemStage | null>(null);
+  const [listsOpen, setListsOpen] = useState(false);
   const [shared, setShared] = useState<{ ok: true } | { ok: false; url: string } | null>(null);
   const clear = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(clear.current), []);
+  const fail = (code: string) => pushUndo(tItem(`errors.${code}` as "errors.failed"), null);
 
   async function take(current: ItemView) {
     setBusy(true);
@@ -53,9 +76,19 @@ export function ProductActions({
     if (!current.inOrderDraft && !(await confirmUnlessReserved([current.id], "take"))) return setBusy(false);
     const result = await patchItem(current.id, { inOrderDraft: !current.inOrderDraft });
     setBusy(false);
-    if (!result.ok) return pushUndo(tItem(`errors.${result.error}` as "errors.failed"), null);
+    if (!result.ok) return fail(result.error);
     onChange(result.item);
     pushUndo(tItem(result.item.inOrderDraft ? "toast.taken" : "toast.untaken"), undoWith(result.undo, reload));
+  }
+
+  // « Reçu en cadeau »: to « Reçu », « Offert par … » under the stages, « Annuler » for a few seconds.
+  async function receive(current: ItemView) {
+    setBusy(true);
+    const result = await receiveAsGift(current.id);
+    setBusy(false);
+    if (!result.ok) return fail(result.error);
+    onChange(result.item);
+    pushUndo(tGifts("toast"), undoWith(result.undo, reload));
   }
 
   async function share(name: string) {
@@ -79,37 +112,97 @@ export function ProductActions({
     }
   }
 
+  const viewAt: Action | null = isHttpUrl(url) ? { key: "shop", label: t("viewAt", { shop }), href: url } : null;
+  const shareAction: Action | null =
+    title !== null && isHttpUrl(url) ? { key: "share", label: t("share"), onClick: () => void share(title) } : null;
+  const toStage = (key: string, label: string, target: ItemStage): Action => ({
+    key,
+    label,
+    onClick: () => setStage(target),
+  });
+  const photo: Action | null =
+    item && onAddPhoto && item.photos.filter((p) => p.source === "private").length < MAX_ITEM_PHOTOS
+      ? { key: "photo", label: tTodo("addPhoto"), onClick: onAddPhoto }
+      : null;
+
+  const actions: (Action | null)[] = !item
+    ? [viewAt, shareAction]
+    : item.stage === "spotted"
+      ? [
+          toStage("ordered", tTodo("ordered"), "ordered"),
+          viewAt,
+          { key: "list", label: tTodo("addToList"), onClick: () => setListsOpen(true) },
+          {
+            key: "take",
+            label: t("take"),
+            onClick: () => void take(item),
+            pressed: item.inOrderDraft,
+            tick: item.inOrderDraft,
+          },
+          shareAction,
+        ]
+      : item.stage === "ordered"
+        ? [
+            toStage("received", tTodo("received"), "owned"),
+            viewAt,
+            toStage("returned", tTodo("returned"), "returned"),
+            canReceiveAsGift(item) ? { key: "gift", label: tGifts("action"), onClick: () => void receive(item) } : null,
+            shareAction,
+          ]
+        : item.stage === "owned"
+          ? [
+              toStage("forSale", tTodo("forSale"), "for_sale"),
+              item.received ? toStage("returned", tTodo("returned"), "returned") : null,
+              photo,
+              shareAction,
+            ]
+          : item.stage === "for_sale"
+            ? [toStage("sold", tTodo("sold"), "sold"), photo, shareAction]
+            : item.stage === "sold"
+              ? [shareAction, photo]
+              : [viewAt, shareAction];
+  const shown = actions.filter((action): action is Action => action !== null);
+
   return (
-    <div data-testid="product-actions" className="flex flex-col gap-space-2">
-      {/* One row under the blocks: « Je le prends », « Voir chez {boutique} », « Partager » (it wraps on a narrow phone). */}
-      <div className="flex flex-wrap items-center gap-space-2">
-        {item && item.stage === "spotted" && (
-          <button
-            type="button"
-            disabled={busy}
-            aria-pressed={item.inOrderDraft}
-            onClick={() => void take(item)}
-            className={`${actionClass} ${lightClass} aria-pressed:border-accent aria-pressed:bg-hint`}
-          >
-            {item.inOrderDraft && <Tick draw />}
-            {t("take")}
-          </button>
-        )}
-        {isHttpUrl(url) && (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${actionClass} bg-button-bg text-button-ink disabled:opacity-60`}
-          >
-            {t("viewAt", { shop })}
-          </a>
-        )}
-        {title !== null && isHttpUrl(url) && (
-          <button type="button" onClick={() => void share(title)} className={`${actionClass} ${lightClass}`}>
-            {t("share")}
-          </button>
-        )}
+    <section
+      aria-labelledby="todo-title"
+      aria-busy={busy || undefined}
+      data-testid="product-actions"
+      className="flex flex-col gap-space-2"
+    >
+      <h2 id="todo-title" className="text-meta font-bold tracking-wide text-ink uppercase">
+        {tTodo("title")}
+      </h2>
+      <div className="grid grid-cols-2 gap-space-2">
+        {shown.map((action, index) => {
+          const look = index === 0 ? LOOK.primary : "href" in action ? LOOK.outline : LOOK.soft;
+          const primary = index === 0 ? "true" : undefined;
+          return "href" in action ? (
+            <a
+              key={action.key}
+              href={action.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-primary={primary}
+              className={`${actionClass} ${look}`}
+            >
+              {action.label}
+            </a>
+          ) : (
+            <button
+              key={action.key}
+              type="button"
+              disabled={busy}
+              aria-pressed={action.pressed}
+              data-primary={primary}
+              onClick={action.onClick}
+              className={`${actionClass} ${look} aria-pressed:border-selected-line aria-pressed:bg-hint`}
+            >
+              {action.tick && <Tick draw />}
+              {action.label}
+            </button>
+          );
+        })}
       </div>
       <p role="status" className="min-h-space-5 text-sm text-ink-muted">
         {shared?.ok ? (
@@ -118,6 +211,27 @@ export function ProductActions({
           <span className="break-all">{t("copyFailed", { url: shared.url })}</span>
         ) : null}
       </p>
-    </div>
+      {item && (
+        <>
+          <StageDialog item={item} stage={stage} onClose={() => setStage(null)} onDone={onChange} reload={reload} />
+          <Dialog
+            open={listsOpen}
+            onClose={() => setListsOpen(false)}
+            title={tTodo("listsTitle")}
+            closeLabel={tMenu("close")}
+          >
+            {listsOpen && (
+              <Choices
+                choice="list"
+                item={item}
+                onChanged={onChange}
+                onClose={() => setListsOpen(false)}
+                reload={reload}
+              />
+            )}
+          </Dialog>
+        </>
+      )}
+    </section>
   );
 }

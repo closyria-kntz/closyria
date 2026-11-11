@@ -7,6 +7,7 @@ import { useLiveRefresh } from "@/lib/live-changes";
 import { useLoveLevels } from "@/lib/profile-context";
 import { fetchItemOpinions } from "@/lib/wardrobe-client";
 import { FriendOpinions } from "./friend-opinions";
+import { blockClass, blockTitleClass } from "./ui";
 
 type Lists = ItemOpinions["lists"];
 
@@ -15,7 +16,13 @@ type Lists = ItemOpinions["lists"];
  * The list's name shows (small, muted) only when several lists have opinions. Nothing at all while loading, when there
  * is no opinion, or when the load fails (a secondary section: no alert). Follows the changes stamp.
  */
-export function ItemOpinionsSection({ itemId }: { itemId: string }) {
+export function ItemOpinionsSection({
+  itemId,
+  boxed = false,
+}: {
+  itemId: string /** A block of its own (the sheet). */;
+  boxed?: boolean;
+}) {
   const t = useTranslations("Lists.opinions");
   const levels = useLoveLevels();
   const titleId = useId();
@@ -42,11 +49,16 @@ export function ItemOpinionsSection({ itemId }: { itemId: string }) {
   useLiveRefresh(() => void load());
 
   if (lists.length === 0) return null;
+  const Title = boxed ? "h2" : "h3";
   return (
-    <section aria-labelledby={titleId} className="flex flex-col gap-space-2">
-      <h3 id={titleId} className="text-sm font-strong">
+    <section
+      aria-labelledby={titleId}
+      data-block={boxed || undefined}
+      className={boxed ? blockClass : "flex flex-col gap-space-2"}
+    >
+      <Title id={titleId} className={boxed ? blockTitleClass : "text-sm font-strong"}>
         {t("listLabel")}
-      </h3>
+      </Title>
       {lists.map((list) => (
         <div key={list.wishlistId} className="flex flex-col gap-space-1">
           {lists.length > 1 && <p className="text-xs text-ink-muted">{list.wishlistName}</p>}

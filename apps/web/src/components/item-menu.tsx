@@ -222,7 +222,7 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
                       setStage(target);
                     }}
                   >
-                    {t(`toStage.${target}`)}
+                    {t(`toStage.${menuVerb(item.stage, target)}`)}
                   </Entry>
                 ))}
                 {canReceiveAsGift(item) && <Entry onClick={() => void receive()}>{tGifts("action")}</Entry>}
@@ -252,6 +252,11 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
       </Dialog>
     </>
   );
+}
+
+/** The written verb of a move (« Je l’ai reçu »…); back from a sale, « Remettre dans mon dressing ». */
+export function menuVerb(from: ItemStage, to: ItemStage): ItemStage | "ownedBack" {
+  return to === "owned" && (from === "for_sale" || from === "sold") ? "ownedBack" : to;
 }
 
 function Entry({ onClick, danger = false, children }: { onClick: () => void; danger?: boolean; children: ReactNode }) {
@@ -324,8 +329,8 @@ function WhyForm({
   );
 }
 
-/** Lists and tags (each a toggle), or the profile to move to. */
-function Choices({
+/** Lists and tags (each a toggle), or the profile to move to (also the sheet's « Ajouter à une liste »). */
+export function Choices({
   choice,
   item,
   onChanged,

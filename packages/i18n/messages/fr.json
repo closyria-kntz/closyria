@@ -607,7 +607,7 @@
       "manualSizes": "notées à la main, stock non suivi",
       "viewAt": "Voir chez {shop}",
       "updatedAt": "Mis à jour le {date}",
-      "sizes": "Tailles",
+      "sizes": "Ta taille",
       "unavailable": "indisponible",
       "comparePrice": "Prix avant réduction",
       "priceMissing": "Prix non renseigné",
@@ -655,7 +655,8 @@
       "take": "Je le prends",
       "share": "Partager",
       "copied": "Lien de la boutique copié",
-      "copyFailed": "Copie impossible. Voici le lien : {url}"
+      "copyFailed": "Copie impossible. Voici le lien : {url}",
+      "yourSize": "ta taille"
     },
     "manual": {
       "nameLabel": "Nom de l’article",
@@ -713,7 +714,8 @@
       "mine": "Mon article",
       "shop": "La fiche de la boutique",
       "more": "Autres actions",
-      "wish": "Ton envie"
+      "wish": "Ton envie",
+      "opinions": "Avis des amies"
     },
     "panel": {
       "whySave": "Enregistrer l’avis",
@@ -757,7 +759,7 @@
       "owned": "Reçu",
       "for_sale": "À vendre",
       "sold": "Vendu",
-      "returned": "Renvoyé"
+      "returned": "Retourné"
     },
     "stageDialog": {
       "title": "Passer à « {stage} »",
@@ -826,7 +828,23 @@
       "import_unsupported": "Ce lien ne mène pas à une image.",
       "itemLoad": "Ton article ne s’affiche pas. Réessaie dans un instant.",
       "extrasLoad": "Tes listes et étiquettes ne s’affichent pas."
-    }
+    },
+    "progress": {
+      "label": "Où en est cet article",
+      "current": "étape actuelle"
+    },
+    "todo": {
+      "title": "Que veux-tu faire ?",
+      "ordered": "Je l’ai commandé",
+      "received": "Je l’ai reçu",
+      "returned": "Je l’ai retourné",
+      "forSale": "Je le mets en vente",
+      "sold": "Je l’ai vendu",
+      "addToList": "Ajouter à une liste",
+      "addPhoto": "Ajouter une photo",
+      "listsTitle": "Ajouter à une liste"
+    },
+    "back": "← Mes articles"
   },
   "Account": {
     "title": "Garde tes articles",
@@ -1008,7 +1026,7 @@
       "reference": "Les filtres Type et Couleur ne se chargent pas.",
       "stageOptions": {
         "sold": "Vendu",
-        "returned": "Renvoyé"
+        "returned": "Retourné"
       },
       "levels": "Niveau",
       "priority": "Prioritaires",
@@ -1078,10 +1096,11 @@
       "toStage": {
         "spotted": "Remettre dans mes envies",
         "ordered": "Je l’ai commandé",
-        "owned": "Reçu",
-        "for_sale": "Mettre en vente",
+        "owned": "Je l’ai reçu",
+        "for_sale": "Je le mets en vente",
         "sold": "Je l’ai vendu",
-        "returned": "Je l’ai renvoyé"
+        "returned": "Je l’ai retourné",
+        "ownedBack": "Remettre dans mon dressing"
       },
       "close": "Fermer",
       "whyTitle": "Mon avis",
