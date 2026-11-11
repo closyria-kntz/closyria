@@ -4,17 +4,35 @@ import { DEFAULT_LOVE_LEVELS, type LoveLevelView, type ProfileView, type Summary
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { type FormEvent, type ReactNode, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AddSheetContext } from "@/lib/add-sheet-context";
 import { ARTICLES_PATH } from "@/lib/articles-address";
 import { fetchSummary } from "@/lib/catalog-client";
 import { useChangesPoller, useLiveRefresh } from "@/lib/live-changes";
+import {
+  discoveryShown,
+  PreferencesContext,
+  type PreferencesContextValue,
+  type PreferencesState,
+  withSeenTip,
+} from "@/lib/preferences";
 import { ProfilesContext, profileHref, useAccount, useCurrentProfile } from "@/lib/profile-context";
-import { fetchLoveLevels } from "@/lib/wardrobe-client";
+import { fetchLoveLevels, fetchPreferences, savePreferences } from "@/lib/wardrobe-client";
 import { AccountPrompt } from "./account-prompt";
 import { AddSheet } from "./add-sheet";
 import { type AppNavItem, type AppNavKey, appNav, isCurrent, phoneNav } from "./app-nav";
 import { GiftWarning } from "./gift-warning";
+import { Onboarding } from "./onboarding";
 import { ProfileSwitcher } from "./profile-switcher";
 import { focusRing } from "./ui";
 import { UndoToast } from "./undo-toast";
@@ -206,6 +224,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [loveLevels, setLoveLevels] = useState<readonly LoveLevelView[]>(DEFAULT_LOVE_LEVELS);
   const alive = useRef(true);
 
+  const [preferences, setPreferences] = useState<PreferencesState>({ status: "loading" });
+
+  // Her closed tips and the discovery: read with the summary (a sign-in elsewhere changes both).
+  const refreshPreferences = useCallback(async () => {
+    const view = await fetchPreferences().catch(() => undefined);
+    if (view !== undefined && alive.current) setPreferences({ status: "ready", view });
+  }, []);
+
   const refreshProfiles = useCallback(async () => {
     const summary = await fetchSummary();
     if (summary && alive.current) {
@@ -214,6 +240,29 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (alive.current) setReady(true);
   }, []);
+
+  const preferencesValue = useMemo<PreferencesContextValue>(
+    () => ({
+      state: preferences,
+      closeTip: (id) => {
+        // Gone at once; her account keeps it closed (a failed save only brings it back on the next visit).
+        setPreferences((current) => ({
+          status: "ready",
+          view: withSeenTip(current.status === "ready" ? current.view : null, id),
+        }));
+        void savePreferences({ seenTips: [id] });
+      },
+      finishDiscovery: () => {
+        setPreferences((current) =>
+          current.status === "ready" && current.view
+            ? { status: "ready", view: { ...current.view, onboardedAt: new Date().toISOString() } }
+            : current,
+        );
+        void savePreferences({ onboarded: true });
+      },
+    }),
+    [preferences],
+  );
 
   // Her level names: the starting ones stay shown when they cannot be read.
   const refreshLoveLevels = useCallback(async () => {
@@ -227,77 +276,82 @@ export function AppShell({ children }: { children: ReactNode }) {
     alive.current = true;
     void refreshProfiles();
     void refreshLoveLevels();
+    void refreshPreferences();
     return () => {
       alive.current = false;
     };
-  }, [refreshProfiles, refreshLoveLevels]);
+  }, [refreshProfiles, refreshLoveLevels, refreshPreferences]);
   useLiveRefresh(() => {
     void refreshProfiles();
     void refreshLoveLevels();
+    void refreshPreferences();
   });
 
   return (
     <ProfilesContext.Provider value={{ profiles, ready, account, refreshProfiles, loveLevels, refreshLoveLevels }}>
-      <AddSheetContext.Provider value={openAdd}>
-        <a
-          href="#app-content"
-          className={`sr-only rounded-button bg-surface-raised px-space-3 py-space-2 focus:not-sr-only focus:absolute focus:top-space-2 focus:left-space-2 focus:z-30 ${focusRing}`}
-        >
-          {t("skipToContent")}
-        </a>
-        <div className="flex h-dvh overflow-hidden text-ink">
-          <div className="flex min-h-space-0 min-w-space-0 flex-1 flex-col">
-            <header className="relative z-10 shrink-0 bg-band text-band-ink">
-              <div className="flex items-center gap-space-3 px-space-4 py-space-2 md:px-space-5 lg:gap-space-5-5">
-                <Link href="/" className={`font-title text-logo leading-none ${focusRing}`}>
-                  {t("brand")}
-                </Link>
-                <Suspense>
-                  <TopNav />
-                </Suspense>
-                <span className="flex-1" />
-                <Suspense>
-                  <BandSearch />
-                </Suspense>
-                <button
-                  type="button"
-                  onClick={openAdd}
-                  className={`relative hit-area hidden h-control-xs shrink-0 items-center rounded-pill bg-label px-space-4 text-caption font-bold text-label-ink md:inline-flex ${focusRing}`}
-                >
-                  <span aria-hidden="true">+ {tNav("add")}</span>
-                  <span className="sr-only">{tNav("addLabel")}</span>
-                </button>
-                <Suspense>
-                  <ProfileSwitcher />
-                  <Avatar />
-                </Suspense>
-              </div>
-            </header>
+      <PreferencesContext.Provider value={preferencesValue}>
+        <AddSheetContext.Provider value={openAdd}>
+          <a
+            href="#app-content"
+            className={`sr-only rounded-button bg-surface-raised px-space-3 py-space-2 focus:not-sr-only focus:absolute focus:top-space-2 focus:left-space-2 focus:z-30 ${focusRing}`}
+          >
+            {t("skipToContent")}
+          </a>
+          <div className="flex h-dvh overflow-hidden text-ink">
+            <div className="flex min-h-space-0 min-w-space-0 flex-1 flex-col">
+              <header className="relative z-10 shrink-0 bg-band text-band-ink">
+                <div className="flex items-center gap-space-3 px-space-4 py-space-2 md:px-space-5 lg:gap-space-5-5">
+                  <Link href="/" className={`font-title text-logo leading-none ${focusRing}`}>
+                    {t("brand")}
+                  </Link>
+                  <Suspense>
+                    <TopNav />
+                  </Suspense>
+                  <span className="flex-1" />
+                  <Suspense>
+                    <BandSearch />
+                  </Suspense>
+                  <button
+                    type="button"
+                    onClick={openAdd}
+                    className={`relative hit-area hidden h-control-xs shrink-0 items-center rounded-pill bg-label px-space-4 text-caption font-bold text-label-ink md:inline-flex ${focusRing}`}
+                  >
+                    <span aria-hidden="true">+ {tNav("add")}</span>
+                    <span className="sr-only">{tNav("addLabel")}</span>
+                  </button>
+                  <Suspense>
+                    <ProfileSwitcher />
+                    <Avatar />
+                  </Suspense>
+                </div>
+              </header>
 
-            <main
-              ref={content}
-              id="app-content"
-              tabIndex={-1}
-              className="relative min-h-space-0 flex-1 overflow-y-auto px-space-4 pt-space-5 pb-space-6 focus:outline-none md:px-space-5 lg:px-space-6"
-            >
-              <div className="mx-auto flex w-full max-w-app flex-col gap-space-4">
-                <Suspense>
-                  <AccountPrompt />
-                </Suspense>
-                {children}
-              </div>
-            </main>
-            <Suspense>
-              <BottomNav onAdd={openAdd} />
-            </Suspense>
+              <main
+                ref={content}
+                id="app-content"
+                tabIndex={-1}
+                className="relative min-h-space-0 flex-1 overflow-y-auto px-space-4 pt-space-5 pb-space-6 focus:outline-none md:px-space-5 lg:px-space-6"
+              >
+                <div className="mx-auto flex w-full max-w-app flex-col gap-space-4">
+                  <Suspense>
+                    <AccountPrompt />
+                  </Suspense>
+                  {children}
+                </div>
+              </main>
+              <Suspense>
+                <BottomNav onAdd={openAdd} />
+              </Suspense>
+            </div>
           </div>
-        </div>
-        <Suspense>
-          <AddSheet open={adding} onClose={closeAdd} />
-        </Suspense>
-        <UndoToast />
-        <GiftWarning />
-      </AddSheetContext.Provider>
+          <Suspense>
+            <AddSheet open={adding} onClose={closeAdd} />
+          </Suspense>
+          <UndoToast />
+          <GiftWarning />
+          {discoveryShown(account, preferences) && <Onboarding onDone={preferencesValue.finishDiscovery} />}
+        </AddSheetContext.Provider>
+      </PreferencesContext.Provider>
     </ProfilesContext.Provider>
   );
 }

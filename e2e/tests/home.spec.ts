@@ -123,8 +123,13 @@ test("la zone « Colle son lien ici » capture comme avant ; ses envies, ses bou
 
   const tip = page.getByRole("complementary", { name: "Astuce" });
   await expect(tip).toContainText("Touche deux fois la photo d’un article");
+  // Kept on her account (task 7): saved before the page is read again.
+  const saved = page.waitForResponse(
+    (r) => r.url().endsWith("/api/me/preferences") && r.request().method() === "PATCH" && r.ok(),
+  );
   await tip.getByRole("button", { name: "Fermer l’astuce" }).click();
   await expect(tip).toHaveCount(0);
+  await saved;
   await page.reload();
   await expect(page.getByRole("heading", { level: 1, name: "Rien de neuf pour l’instant" })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Astuce" })).toHaveCount(0);

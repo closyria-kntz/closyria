@@ -257,7 +257,7 @@ describe("GET /api/me/summary", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       isAnonymous: true,
-      account: { email: null, createdAt: expect.any(String) },
+      account: { email: null, firstName: null, createdAt: expect.any(String) },
       itemCount: 1,
       profiles: [expect.objectContaining({ name: "Moi", itemCount: 1 })],
     });
@@ -272,13 +272,13 @@ describe("GET /api/me/summary", () => {
     const createdAt = new Date("2026-10-30T09:15:00.000Z");
     await t.db
       .update(schema.user)
-      .set({ isAnonymous: false, email: "lea@example.com", createdAt })
+      .set({ isAnonymous: false, email: "lea@example.com", name: "Léa Martin", createdAt })
       .where(eq(schema.user.id, userId));
     const body = (await (await call("GET", "/api/me/summary", cookie)).json()) as {
       isAnonymous: boolean;
-      account: { email: string | null; createdAt: string };
+      account: { email: string | null; firstName: string | null; createdAt: string };
     };
     expect(body.isAnonymous).toBe(false);
-    expect(body.account).toEqual({ email: "lea@example.com", createdAt: createdAt.toISOString() });
+    expect(body.account).toEqual({ email: "lea@example.com", firstName: "Léa", createdAt: createdAt.toISOString() });
   });
 });

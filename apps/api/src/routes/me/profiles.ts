@@ -14,6 +14,7 @@ import type { Context } from "hono";
 import { type AccessEnv, defineAccess } from "../../access";
 import { pgCode } from "../../pg-code";
 import type { WardrobeDeps } from "../../wardrobe/deps";
+import { firstNameOf } from "../../wardrobe/home";
 import {
   ensureDefaultProfile,
   findOwnProfile,
@@ -266,12 +267,21 @@ export function profilesRoutes(deps: WardrobeDeps) {
       const profiles = await listProfileViews(db, userId);
       // Read from the table, not the session: the session may carry the anonymous placeholder address.
       const [user] = await db
-        .select({ email: schema.user.email, isAnonymous: schema.user.isAnonymous, createdAt: schema.user.createdAt })
+        .select({
+          email: schema.user.email,
+          name: schema.user.name,
+          isAnonymous: schema.user.isAnonymous,
+          createdAt: schema.user.createdAt,
+        })
         .from(schema.user)
         .where(eq(schema.user.id, userId));
       if (!user) throw new Error("summary: signed-in user not found");
       const isAnonymous = user.isAnonymous === true;
-      const account = { email: isAnonymous ? null : user.email, createdAt: user.createdAt.toISOString() };
+      const account = {
+        email: isAnonymous ? null : user.email,
+        firstName: firstNameOf(user),
+        createdAt: user.createdAt.toISOString(),
+      };
       const [active] = await db
         .select({ n: count() })
         .from(schema.items)

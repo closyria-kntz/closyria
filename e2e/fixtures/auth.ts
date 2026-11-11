@@ -29,13 +29,32 @@ export async function readCode(request: APIRequestContext, email: string): Promi
   return code as string;
 }
 
-/** Asks for a code from the page, reads it from the test mailbox and signs in with it. */
-export async function signInWithEmailCode(page: Page, request: APIRequestContext, email: string): Promise<void> {
+/**
+ * Asks for a code from the page, reads it from the test mailbox and signs in with it. Unless `discovery` is asked
+ * for, the account is then marked as having seen the first-opening discovery (refonte Boudoir, task 7), so that its
+ * dialog never covers the pages a journey visits; onboarding.spec.ts asks for it.
+ */
+export async function signInWithEmailCode(
+  page: Page,
+  request: APIRequestContext,
+  email: string,
+  { discovery = false }: { discovery?: boolean } = {},
+): Promise<void> {
   expect(await page.evaluate((to) => window.closyriaE2E.sendCode(to), email)).toEqual({ ok: true });
   const code = await readCode(request, email);
   expect(
     await page.evaluate(([to, otp]) => window.closyriaE2E.signInWithCode(to, otp), [email, code] as const),
   ).toEqual({ ok: true });
+  if (discovery) return;
+  const status = await page.evaluate(async () => {
+    const res = await fetch("/api/me/preferences", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ onboarded: true }),
+    });
+    return res.status;
+  });
+  expect(status).toBe(200);
 }
 
 export type SessionRow = { userId: string; isAnonymous: boolean; email: string; authMethod: string };

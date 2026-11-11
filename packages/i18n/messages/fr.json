@@ -65,8 +65,6 @@
       "more": "Autres façons d’ajouter"
     },
     "tip": {
-      "label": "Astuce",
-      "close": "Fermer l’astuce",
       "levels": "Touche deux fois la photo d’un article pour lui donner ton niveau d’envie."
     },
     "shops": {
@@ -163,8 +161,6 @@
   },
   "Me": {
     "metadata": "Moi",
-    "title": "Moi",
-    "intro": "Ton dressing, tes listes, ton budget et tes réglages.",
     "placesLabel": "Mes pages",
     "places": {
       "envies": "Mes envies",
@@ -177,7 +173,53 @@
       "compte": "Mon compte",
       "aide": "Aide iPhone"
     },
-    "budgetWhere": "Dans « Mes envies »"
+    "budgetWhere": "Dans « Mes envies »",
+    "kicker": "Moi",
+    "noName": "Mon espace",
+    "settings": "Réglages",
+    "loading": "Chargement de ton aperçu…",
+    "loadError": "Ton aperçu ne s’affiche pas. Réessaie dans un instant.",
+    "placesTitle": "Toutes mes pages",
+    "glance": {
+      "title": "En un coup d’œil",
+      "dressing": {
+        "label": "Dressing",
+        "line": "{count, plural, =0 {aucune pièce pour l’instant} one {pièce} other {pièces}}"
+      },
+      "forSale": {
+        "label": "À vendre",
+        "line": "{count, plural, =0 {rien en vente} one {pièce en vente} other {pièces en vente}}"
+      },
+      "orders": {
+        "label": "Commandes",
+        "soon": "Bientôt",
+        "line": "Le suivi de tes colis arrivera ici."
+      },
+      "budget": {
+        "label": "Budget",
+        "none": "Aucun",
+        "add": "Ajouter un budget",
+        "ended": "Budget terminé",
+        "of": {
+          "week": "sur {amount} cette semaine",
+          "month": "sur {amount} ce mois",
+          "custom": "sur {amount} pour ces dates",
+          "none": "sur {amount}"
+        }
+      }
+    },
+    "returns": {
+      "kicker": "Bientôt",
+      "title": "Tes retours à faire",
+      "text": "Les dates limites de retour, remboursements et avoirs arriveront ici."
+    },
+    "dressing": {
+      "title": "Mon dressing",
+      "all": "Tout voir",
+      "empty": "Ton dressing est vide : passe un article reçu dans « Dans mon dressing » pour le retrouver ici.",
+      "noPhoto": "Sans photo",
+      "noName": "Article sans nom"
+    }
   },
   "Discover": {
     "metadata": "Découvrir",
@@ -2016,5 +2058,33 @@
   },
   "BackToTop": {
     "label": "Haut de page"
+  },
+  "Tip": {
+    "label": "Astuce",
+    "close": "Fermer l’astuce"
+  },
+  "Onboarding": {
+    "count": "{step} sur {total}",
+    "next": "Continuer",
+    "start": "C’est parti",
+    "skip": "Passer",
+    "watch": {
+      "title": "Garde tes envies, on veille pour toi",
+      "text": "Colle le lien d'un vêtement : on te prévient quand le prix baisse ou quand ta taille revient.",
+      "tag1": "Ta taille est revenue",
+      "tag2": "−15 €"
+    },
+    "friends": {
+      "title": "Demande l'avis de tes amies",
+      "text": "Partage une liste : elles donnent leur avis, t'offrent un article ou commandent avec toi.",
+      "tag1": "Ton amie adore",
+      "tag2": "Elle te l’offre"
+    },
+    "wardrobe": {
+      "title": "Range ton dressing",
+      "text": "Retrouve tout ce que tu as, ce que tu attends et ce que tu vends au même endroit.",
+      "tag1": "Dans mon dressing",
+      "tag2": "À vendre"
+    }
   }
 }

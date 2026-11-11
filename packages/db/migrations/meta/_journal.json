@@ -141,6 +141,13 @@
       "when": 1794435122764,
       "tag": "0019_boutique_de_la_semaine",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794438988573,
+      "tag": "0020_preferences",
+      "breakpoints": true
     }
   ]
 }

@@ -13,4 +13,5 @@ export * from "./home";
 export * from "./love-level";
 export * from "./media";
 export * from "./opinions";
+export * from "./preferences";
 export * from "./wardrobe";

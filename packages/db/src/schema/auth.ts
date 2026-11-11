@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { bigint, boolean, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
@@ -16,6 +16,10 @@ export const user = pgTable("user", {
   role: text("role", { enum: ["user", "admin"] })
     .default("user")
     .notNull(),
+  /** The tips she closed (refonte Boudoir, spec R8): closed on one device, closed on all. */
+  seenTips: text("seen_tips").array().default(sql`'{}'::text[]`).notNull(),
+  /** When she went through or skipped the first-opening discovery; null while she has not. */
+  onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
 });
 
 export const session = pgTable(

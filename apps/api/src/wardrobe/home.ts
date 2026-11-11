@@ -74,7 +74,7 @@ export function sizeBackOf(points: Point[], size: string, since: Date) {
 }
 
 /** A guest has no name of her own (Better Auth calls her « Anonymous »); an e-mail is not a first name either. */
-function firstNameOf(row: { name: string; isAnonymous: boolean | null } | undefined): string | null {
+export function firstNameOf(row: { name: string; isAnonymous: boolean | null } | undefined): string | null {
   if (!row || row.isAnonymous) return null;
   const first = row.name.trim().split(/\s+/)[0] ?? "";
   return first && !first.includes("@") ? first : null;

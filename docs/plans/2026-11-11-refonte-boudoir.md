@@ -113,8 +113,8 @@
 
 **Interfaces:** Produces `Tip({ id, title, children })` qui ne s'affiche plus une fois fermé (préférence de compte) ; `Onboarding` 3 écrans (« Garde tes envies, on veille pour toi », « Demande l'avis de tes amies », « Range ton dressing ») avec « Continuer » et « Passer ».
 
-- [ ] Tests d'abord : Moi montre dressing, à vendre, budget, réglages et « Commandes — bientôt » ; découverte affichée à la première connexion, plus jamais après « Passer » ou la fin, même sur un autre navigateur du même compte ; astuce fermée ne revient pas ; axe.
-- [ ] Implémenter, relancer, commit « feat(refonte): Moi, découverte et astuces ».
+- [x] Tests d'abord : Moi montre dressing, à vendre, budget, réglages et « Commandes — bientôt » ; découverte affichée à la première connexion, plus jamais après « Passer » ou la fin, même sur un autre navigateur du même compte ; astuce fermée ne revient pas ; axe.
+- [x] Implémenter, relancer, commit « feat(refonte): Moi, découverte et astuces ». (Préférences : colonnes `seen_tips` et `onboarded_at` sur `user`, migration 0020 ; `GET`/`PATCH /api/me/preferences` créées, il n'existait pas de route de préférences.)
 
 ### Task 8: Lien des amies, commande groupée, finitions
 

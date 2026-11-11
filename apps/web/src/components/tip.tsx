@@ -1,41 +1,22 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { type ReactNode, useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import { tipShown, usePreferences } from "@/lib/preferences";
 import { focusRing } from "./ui";
-
-const storageKey = (id: string) => `closyria.tip.${id}`;
-
-function readDismissed(id: string): boolean {
-  try {
-    return window.localStorage.getItem(storageKey(id)) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function writeDismissed(id: string) {
-  try {
-    window.localStorage.setItem(storageKey(id), "1");
-  } catch {
-    // Private window or blocked storage: it stays closed until the page is opened again.
-  }
-}
 
 /**
  * An amber tip (refonte Boudoir, spec R8, mockup .tip): « Astuce » over one sentence, closed once read with ✕.
- * This browser remembers it is closed; Task 7 keeps it on her account instead, so it stays closed everywhere.
+ * Her account remembers it is closed (`seenTips`), so it stays closed on all her devices. One tip at most per page.
  */
-export function Tip({ id, children }: { id: string; children: ReactNode }) {
-  const t = useTranslations("Home.tip");
-  // Unknown until the browser is read: nothing shows rather than a tip that vanishes at once.
-  const [dismissed, setDismissed] = useState<boolean | null>(null);
-  useEffect(() => setDismissed(readDismissed(id)), [id]);
-  if (dismissed !== false) return null;
+export function Tip({ id, title, children }: { id: string; title?: string; children: ReactNode }) {
+  const t = useTranslations("Tip");
+  const { state, closeTip } = usePreferences();
+  // Unknown until her preferences are read: nothing shows rather than a tip that vanishes at once.
+  if (!tipShown(state, id)) return null;
 
   const close = () => {
-    writeDismissed(id);
-    setDismissed(true);
+    closeTip(id);
     // The tip and its button are gone: the page itself takes the focus, where it was read.
     document.getElementById("app-content")?.focus({ preventScroll: true });
   };
@@ -49,7 +30,7 @@ export function Tip({ id, children }: { id: string; children: ReactNode }) {
         💡
       </span>
       <p className="flex-1 pt-space-0-5">
-        <b className="block">{t("label")}</b>
+        <b className="block">{title ?? t("label")}</b>
         {children}
       </p>
       <button

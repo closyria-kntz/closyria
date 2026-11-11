@@ -145,6 +145,8 @@ export const defaultSemanticTokens = {
   // A row of the « Par étape » columns and its thumbnail (12 / 8 px).
   "radius-board-row": "0.75rem",
   "radius-board-thumb": "0.5rem",
+  // The picture of a discovery screen (mockup bienvenue(): 28 px).
+  "radius-discovery": "1.75rem",
   // Shape C of the item photos: a rectangle whose top corners are much rounder than the bottom ones.
   "radius-photo-top": radius.photoTop,
   "radius-photo-bottom": radius.photoBottom,
@@ -186,6 +188,9 @@ export const defaultSemanticTokens = {
   "text-emoji-card": "clamp(1.5rem, 1.3295rem + 0.8523vw, 1.875rem)",
   "text-emoji-sheet": "2.25rem",
   "text-emoji-level": "1.375rem",
+  // « Moi » (mockup .big 28 px): the number of a tile; the first-opening discovery's title (30 px).
+  "text-stat": "1.75rem",
+  "text-discovery-title": "1.875rem",
   "tracking-display": "-0.02em",
   "font-weight-regular": fontWeight.regular,
   "font-weight-medium": fontWeight.medium,
@@ -234,6 +239,8 @@ export const defaultSemanticTokens = {
   // The search field of the band (mockup .srch, 260 px at least).
   "container-search": "16.25rem",
   "container-budget": "32.5rem",
+  // The first-opening discovery's column (mockup bienvenue(): 520 px on a computer).
+  "container-discovery": "32.5rem",
   // Level tiles (at least 92 px each) and the blocks side by side on the sheet (at least 250 px each).
   "grid-levels": "repeat(auto-fit, minmax(5.75rem, 1fr))",
   "grid-blocks": "repeat(auto-fit, minmax(15.625rem, 1fr))",

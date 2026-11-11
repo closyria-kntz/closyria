@@ -42,10 +42,13 @@ import {
   type OrderDraftInput,
   type OwnerGroupOrder,
   ownerGroupOrderSchema,
+  type PreferencesPatch,
+  type PreferencesView,
   type ProfileInput,
   type ProfilePatch,
   photoImportAcceptedSchema,
   photoImportViewSchema,
+  preferencesViewSchema,
   priceHistorySchema,
   profileListSchema,
   profileViewSchema,
@@ -292,6 +295,28 @@ export async function fetchItemCounts(
   if (response.status === 401) return { envie: 0, commande: 0, recu: 0, dressing: 0, aVendre: 0 };
   if (!response.ok) throw new Error(`counts ${response.status}`);
   return itemCountsSchema.parse(await response.json());
+}
+
+/**
+ * What her account remembers (closed tips, the discovery seen). Without a session nothing is remembered yet: null.
+ * Read without opening a session (a visit alone opens none).
+ */
+export async function fetchPreferences(deps: ClientDeps = defaultDeps): Promise<PreferencesView | null> {
+  const response = await deps.fetch("/api/me/preferences", { cache: "no-store" });
+  if (response.status === 401) return null;
+  if (!response.ok) throw new Error(`preferences ${response.status}`);
+  return preferencesViewSchema.parse(await response.json());
+}
+
+/** Closes tips and / or marks the discovery done, on her account (a session is opened if needed). */
+export async function savePreferences(patch: PreferencesPatch, deps: ClientDeps = defaultDeps) {
+  // `keepalive`: closing then leaving the page at once still saves it.
+  return await call(
+    deps,
+    "/api/me/preferences",
+    { ...jsonInit("PATCH", patch), keepalive: true },
+    preferencesViewSchema,
+  );
 }
 
 /** Categories and colours of the filters (public, cached by the browser for an hour). */

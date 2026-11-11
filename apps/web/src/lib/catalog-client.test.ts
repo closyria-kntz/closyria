@@ -54,7 +54,7 @@ describe("saveManual", () => {
 describe("fetchSummary", () => {
   const summary = {
     isAnonymous: true,
-    account: { email: null, createdAt: "2026-11-07T08:00:00.000Z" },
+    account: { email: null, firstName: null, createdAt: "2026-11-07T08:00:00.000Z" },
     itemCount: 0,
     profiles: [],
   };

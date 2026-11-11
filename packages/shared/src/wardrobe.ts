@@ -610,8 +610,8 @@ export type WishlistItemInput = z.infer<typeof wishlistItemInputSchema>;
 /** What the app shell needs: the account proposal (anonymous session, item count) and the profiles. */
 export const summaryViewSchema = z.object({
   isAnonymous: z.boolean(),
-  /** Who is signed in: her e-mail (null without an account) and when the account was created. */
-  account: z.object({ email: z.string().nullable(), createdAt: z.iso.datetime() }),
+  /** Who is signed in: her e-mail and first name (null without an account) and when the account was created. */
+  account: z.object({ email: z.string().nullable(), firstName: z.string().nullable(), createdAt: z.iso.datetime() }),
   /** Active items (not in the trash). */
   itemCount: z.number().int().nonnegative(),
   profiles: z.array(profileViewSchema),
