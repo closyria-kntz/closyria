@@ -58,22 +58,10 @@ function Select({
 }
 
 /**
- * The chips under the title: her levels (several at once) and « Prioritaires », then « Effacer le filtre » /
- * « Effacer les N filtres » at the end of the row as soon as one is on (it clears the search too, never the sort).
+ * Her levels (several at once) and « Prioritaires », as chips: in the « Filtres et tri » panel (refonte Boudoir: the
+ * page shows only the step chips, like the mockup), still one tap away once it is open.
  */
-export function FilterChips({
-  filters,
-  onChange,
-  activeCount,
-  onClearAll,
-}: {
-  filters: ViewFilters;
-  onChange: (filters: ViewFilters) => void;
-  /** Number of filters on (the sort does not count). */
-  activeCount: number;
-  /** Clears every filter (the sort stays: it is not a filter). */
-  onClearAll: () => void;
-}) {
+function LevelChips({ filters, onChange }: { filters: ViewFilters; onChange: (filters: ViewFilters) => void }) {
   const t = useTranslations("Views.filters");
   const levels = useLoveLevels();
   const toggleLevel = (level: LoveLevel) => {
@@ -111,15 +99,34 @@ export function FilterChips({
         {filters.priority && <ChipCheck />}
         {t("priority")}
       </button>
-      {activeCount > 0 && (
-        <button
-          type="button"
-          onClick={onClearAll}
-          className={`min-h-touch-target rounded-full px-space-3 text-sm font-strong text-ink underline underline-offset-4 ${focusRing}`}
-        >
-          {t("clearAll", { count: activeCount })}
-        </button>
-      )}
+    </div>
+  );
+}
+
+/**
+ * « Effacer le filtre » / « Effacer les N filtres » under the tools as soon as one is on (it clears the search too,
+ * never the sort).
+ */
+export function FilterChips({
+  activeCount,
+  onClearAll,
+}: {
+  /** Number of filters on (the sort does not count). */
+  activeCount: number;
+  /** Clears every filter (the sort stays: it is not a filter). */
+  onClearAll: () => void;
+}) {
+  const t = useTranslations("Views.filters");
+  if (activeCount === 0) return null;
+  return (
+    <div className="flex">
+      <button
+        type="button"
+        onClick={onClearAll}
+        className={`min-h-touch-target rounded-full px-space-3 text-sm font-strong text-ink underline underline-offset-4 ${focusRing}`}
+      >
+        {t("clearAll", { count: activeCount })}
+      </button>
     </div>
   );
 }
@@ -329,40 +336,43 @@ export function FiltersMenu({
     }
     onChange(next as ViewFilters);
   };
-  // The levels, the priority and the search are not in the panel: they do not count on its button.
-  const panelCount = activeCount - (filters.levels ? 1 : 0) - (filters.priority ? 1 : 0) - (filters.q ? 1 : 0);
+  // The search is not in the panel: it does not count on its button.
+  const panelCount = activeCount - (filters.q ? 1 : 0);
 
   return (
     <>
-      <button
-        ref={button}
-        type="button"
-        aria-label={t("menu", { count: panelCount })}
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => setOpen((value) => !value)}
-        className={`${toolClass} relative`}
-      >
-        <svg
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          aria-hidden="true"
-          className="size-space-4"
+      {/* The count sits beside the button, not in it: its name already says it (« Filtres et tri (2) »). */}
+      <span className="relative inline-flex">
+        <button
+          ref={button}
+          type="button"
+          aria-label={t("menu", { count: panelCount })}
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((value) => !value)}
+          className={`${toolClass} relative`}
         >
-          <path d="M2 4.5h12M4.5 8h7M7 11.5h2" />
-        </svg>
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+            className="size-space-4"
+          >
+            <path d="M2 4.5h12M4.5 8h7M7 11.5h2" />
+          </svg>
+        </button>
         {panelCount > 0 && (
           <span
             aria-hidden="true"
-            className="absolute -top-space-1 -right-space-1 flex size-space-5 items-center justify-center rounded-full bg-accent text-caption font-strong text-accent-ink tabular-nums"
+            className="pointer-events-none absolute -top-space-1 -right-space-1 flex size-space-5 items-center justify-center rounded-full bg-accent text-caption font-strong text-accent-ink tabular-nums"
           >
             {panelCount}
           </span>
         )}
-      </button>
+      </span>
       {open && (
         <section
           ref={panel}
@@ -373,6 +383,7 @@ export function FiltersMenu({
           <h2 id={titleId} className="font-display text-lead">
             {t("menuTitle")}
           </h2>
+          <LevelChips filters={filters} onChange={onChange} />
           <div className="grid grid-cols-1 gap-space-3 sm:grid-cols-2">
             {sortable && (
               <Select label={t("sort")} value={filters.sort ?? "recent"} onChange={(value) => set({ sort: value })}>

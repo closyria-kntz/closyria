@@ -194,10 +194,11 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     return () => controller.abort();
   }, [ready, current.id, reloadToken, scopeToken, countsToken]);
 
-  // First page, again whenever the view, the filters, the profile or the reload token change.
+  // First page, again whenever the view, the filters, the profile or the reload token change (not under « Par étape »).
   // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey stands for query.
   useEffect(() => {
-    if (!ready || listPending) return;
+    // « Par étape » reads its own columns: the grid's page waits until she leaves it.
+    if (!ready || listPending || board) return;
     const mine = ++generation.current;
     const controller = new AbortController();
     setData((previous) => ({ ...previous, status: "loading" }));
@@ -213,7 +214,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
       controller.abort();
       moreController.current?.abort();
     };
-  }, [queryKey, ready, reloadToken, listPending]);
+  }, [queryKey, ready, reloadToken, listPending, board]);
 
   const loadMore = useCallback(async () => {
     if (!data.nextCursor || loadingMore || data.status !== "ready") return;
@@ -669,12 +670,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
         </div>
       )}
       {selecting && selected.size === 0 && <p className="text-sm text-ink-muted">{t("selection.hint")}</p>}
-      <FilterChips
-        filters={filters}
-        onChange={setFilters}
-        activeCount={count}
-        onClearAll={() => setFilters(filters.sort ? { sort: filters.sort } : {})}
-      />
+      <FilterChips activeCount={count} onClearAll={() => setFilters(filters.sort ? { sort: filters.sort } : {})} />
 
       {data.status === "error" && (
         <div className="flex flex-col items-start gap-space-2">

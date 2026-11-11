@@ -47,9 +47,9 @@ type Props = {
 
 /**
  * One item in the grid (refonte Boudoir, mockup .card): a white card with 20 px corners, its 3:4 photo on top with
- * its step as an ochre clothing tag top left (the « taken » tick under it), « … » top right and her level emoji under
- * it; then the name (Gloock), « type · boutique », « Prioritaire », the price in a powder-pink price tag (with the
- * « −20 € » drop inside it) and the crossed price, her opinion.
+ * its step as an ochre clothing tag top left (the « taken » tick under it) and her level emoji top right (the
+ * mockup's heart); then the name (Gloock), « type · boutique », « Prioritaire », her opinion, and the price in a
+ * powder-pink price tag (crossed price and « −20 € » inside it) with « … » beside it, bottom right.
  */
 export function ItemCard({ item, actions, selection, typeName, linked = true, children }: Props) {
   const t = useTranslations("Views.card");
@@ -130,24 +130,27 @@ export function ItemCard({ item, actions, selection, typeName, linked = true, ch
               {t("priority")}
             </span>
           )}
-          {/* The price tag fills the width (mockup .pricetag); a drop shows inside it, crossed price and « −20 € ». */}
-          <span data-testid="price-tag" className="price-tag mt-space-1 tabular-nums">
-            <span className="whitespace-nowrap">{price}</span>
-            {drop !== null && item.product.compareAtCents !== null && (
-              <s className="font-regular whitespace-nowrap">
-                {formatAmount(locale, item.product.compareAtCents, currency)}
-              </s>
-            )}
-            {drop !== null && (
-              <span data-testid="card-drop" className="ml-auto whitespace-nowrap">
-                −{formatAmount(locale, drop, currency)}
-              </span>
-            )}
-          </span>
           {asked === null && item.product.captureStatus === "manual" && item.product.priceCents !== null && (
             <span className="truncate text-meta text-ink-muted">{t("manualPrice")}</span>
           )}
           {item.why && <span className="truncate text-meta text-ink-muted italic">{t("why", { why: item.why })}</span>}
+          {/* The price as a powder-pink clothing tag that fits its content (mockup .pricetag): a drop shows inside it,
+              crossed price and « −20 € ». Room on the right for « … ». */}
+          <span className="flex min-w-space-0 pt-space-1 pr-space-7">
+            <span data-testid="price-tag" className="price-tag max-w-full tabular-nums">
+              <span className="whitespace-nowrap">{price}</span>
+              {drop !== null && item.product.compareAtCents !== null && (
+                <s className="font-regular whitespace-nowrap">
+                  {formatAmount(locale, item.product.compareAtCents, currency)}
+                </s>
+              )}
+              {drop !== null && (
+                <span data-testid="card-drop" className="whitespace-nowrap">
+                  −{formatAmount(locale, drop, currency)}
+                </span>
+              )}
+            </span>
+          </span>
         </div>
       </Wrapper>
       <div className="pointer-events-none absolute inset-x-space-0 top-space-0 aspect-3/4">
@@ -227,7 +230,7 @@ export function ItemCard({ item, actions, selection, typeName, linked = true, ch
             reload={actions.reload}
             open={pickerOpen}
             onOpenChange={changePicker}
-            placement="top-space-2 right-space-2 mt-touch-target"
+            placement="top-space-1 right-space-1"
           />
           <ItemMenu item={item} onChanged={actions.onChanged} onTrashed={actions.onTrashed} reload={actions.reload} />
         </>

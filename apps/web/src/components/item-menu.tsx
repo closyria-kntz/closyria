@@ -46,7 +46,8 @@ type Props = {
 };
 
 /**
- * The « … » of a card (spec §3.3): a sheet from the bottom on a phone, a small menu from a tablet up. Levels,
+ * The « … » of a card (spec §3.3), bottom right of the card under its photo (refonte Boudoir: only her level sits on
+ * the photo): a sheet from the bottom on a phone, a small menu above it from a tablet up. Levels,
  * « Prioritaire », « Mon avis », stage, list, profile, tags, trash; each action with its « … · Annuler ».
  */
 export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
@@ -162,11 +163,11 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
         aria-controls={panelId}
         aria-busy={busy || undefined}
         onClick={() => (open ? close(true) : setOpen(true))}
-        className={`absolute top-space-2 right-space-2 z-10 flex min-h-touch-target min-w-touch-target items-center justify-center rounded-full p-space-1 ${focusRing}`}
+        className={`absolute right-space-1 bottom-space-1 z-10 flex min-h-touch-target min-w-touch-target items-center justify-center rounded-full p-space-1 ${focusRing}`}
       >
         <span
           aria-hidden="true"
-          className="flex size-space-6 items-center justify-center rounded-full bg-surface-raised/85 text-sm font-strong text-ink border border-line"
+          className="flex size-space-6 items-center justify-center rounded-full bg-surface-sunken text-sm font-strong text-ink"
         >
           …
         </span>
@@ -190,7 +191,7 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
               const next = event.relatedTarget as Node | null;
               if (next && !panel.current?.contains(next) && next !== button.current) close(false);
             }}
-            className="fixed inset-x-space-0 top-auto bottom-space-0 z-30 m-space-0 max-h-dvh w-full max-w-none overflow-y-auto rounded-t-card border border-line bg-surface-raised p-space-0 text-ink shadow-lifted backdrop:bg-ink/40 md:absolute md:top-touch-target md:bottom-auto md:max-h-none md:rounded-card"
+            className="fixed inset-x-space-0 top-auto bottom-space-0 z-30 m-space-0 max-h-dvh w-full max-w-none overflow-y-auto rounded-t-card border border-line bg-surface-raised p-space-0 text-ink shadow-lifted backdrop:bg-ink/40 md:absolute md:top-auto md:bottom-touch-target md:max-h-none md:rounded-card"
           >
             <div className="flex flex-col gap-space-3 p-space-4 pb-space-6 md:p-space-2">
               <fieldset className="flex flex-col gap-space-2">

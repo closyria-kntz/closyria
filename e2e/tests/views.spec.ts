@@ -147,7 +147,8 @@ test("Sélectionner : deux articles passent En feu, Annuler ; filtres par niveau
   await expect(cards.first().getByRole("button", { name: "Plus d’actions" })).toBeVisible();
   await expect(bar(page)).toHaveCount(0);
 
-  // Level chips (several at once) and « Prioritaires », in the address.
+  // Level chips (several at once) and « Prioritaires », in the « Filtres et tri » panel and in the address.
+  await page.getByRole("button", { name: /^Filtres et tri/ }).click();
   const levels = page.getByRole("group", { name: "Niveau" });
   await levels.getByRole("button", { name: "En feu" }).click();
   await expect(page).toHaveURL(/niveau=4(&|$)/);
@@ -159,7 +160,7 @@ test("Sélectionner : deux articles passent En feu, Annuler ; filtres par niveau
   await levels.getByRole("button", { name: "En feu" }).click();
   await expect(page).toHaveURL(/niveau=2(&|$)/);
   await expect(cards).toHaveCount(1);
-  await page.getByRole("button", { name: "Prioritaires" }).click();
+  await page.getByRole("button", { name: /Prioritaires/ }).click();
   await expect(page).toHaveURL(/prioritaire=1/);
   await expect(cards).toHaveCount(1);
   await levels.getByRole("button", { name: "J’aime" }).click();
@@ -483,6 +484,9 @@ test("filtres : la coche se dessine dans la pastille active, « Effacer » vide 
   const cards = page.getByTestId("item-card");
   await expect(cards).toHaveCount(2);
   await expect(page.getByRole("button", { name: /^Effacer/ })).toHaveCount(0);
+  // Only the step chips on the page (mockup): the levels and « Prioritaires » wait in the « Filtres et tri » panel.
+  await expect(page.getByRole("button", { name: "J’aime", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Filtres et tri", exact: true }).click();
 
   const liked = page.getByRole("button", { name: "J’aime", exact: true });
   const priority = page.getByRole("button", { name: "Prioritaires", exact: true });
@@ -497,8 +501,8 @@ test("filtres : la coche se dessine dans la pastille active, « Effacer » vide 
 
   await priority.click();
   await expect(cards).toHaveCount(0);
-  // The levels and « Prioritaires » are chips, not in the menu: its button counts none of them.
-  await page.getByRole("button", { name: "Filtres et tri", exact: true }).click();
+  // The panel's button counts them; the sort is not a filter.
+  await expect(page.getByRole("button", { name: "Filtres et tri (2)", exact: true })).toBeVisible();
   await page.getByLabel("Trier par").selectOption("price_asc");
   await expect(page).toHaveURL(/tri=price_asc/);
   await page.keyboard.press("Escape");
@@ -508,6 +512,7 @@ test("filtres : la coche se dessine dans la pastille active, « Effacer » vide 
 
   await clear.click();
   await expect(cards).toHaveCount(2);
+  await page.getByRole("button", { name: "Filtres et tri", exact: true }).click();
   await expect(liked).toHaveAttribute("aria-pressed", "false");
   await expect(priority).toHaveAttribute("aria-pressed", "false");
   await expect(page).not.toHaveURL(/niveau=|prioritaire=/);
@@ -520,7 +525,7 @@ test("filtres : la coche se dessine dans la pastille active, « Effacer » vide 
 
 const card = (page: Page) => page.getByTestId("item-card").first();
 
-test("la carte Boudoir : étape en haut à gauche, « … » et l'émoji à droite, « −20 € » dans l'étiquette de prix", async ({
+test("la carte Boudoir : étape en haut à gauche, l'émoji en haut à droite, « … » sous la photo, « −20 € » dans l'étiquette de prix", async ({
   page,
   db,
 }) => {
@@ -538,8 +543,8 @@ test("la carte Boudoir : étape en haut à gauche, « … » et l'émoji à droi
   await expect(photo).toHaveCSS("border-top-left-radius", "20px");
   await expect(photo).toHaveCSS("border-bottom-left-radius", "0px");
   await expect(photo.locator("img")).toHaveCSS("object-fit", "cover");
-  // The step top left as an ochre tag; « … » top right with the emoji right under it, both a finger wide (measured
-  // once the card has risen in).
+  // The step top left as an ochre tag, her level emoji top right (the mockup's heart); « … » off the photo, bottom
+  // right of the card beside the price tag; both a finger wide (measured once the card has risen in).
   const step = first.getByTestId("card-step");
   await expect(step).toHaveText("Envie");
   await expect(step).toHaveCSS("background-color", await tokenColor(page, "--color-label"));
@@ -551,10 +556,16 @@ test("la carte Boudoir : étape en haut à gauche, « … » et l'émoji à droi
   if (!frame || !tag || !emoji || !more) throw new Error("no box");
   expect(tag.x - frame.x).toBeGreaterThanOrEqual(6);
   expect(tag.y - frame.y).toBeGreaterThanOrEqual(6);
-  expect(more.x + more.width / 2).toBeGreaterThan(frame.x + frame.width / 2);
   expect(emoji.x + emoji.width / 2).toBeGreaterThan(frame.x + frame.width / 2);
-  expect(emoji.y).toBeGreaterThanOrEqual(more.y + more.height - 1);
+  expect(emoji.y + emoji.height).toBeLessThan(frame.y + frame.height / 2);
+  expect(more.x + more.width / 2).toBeGreaterThan(frame.x + frame.width / 2);
+  expect(more.y).toBeGreaterThanOrEqual(frame.y + frame.height);
   for (const box of [emoji, more]) expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(44);
+  // The price tag fits its content (a tag, not a bar) and never runs under « … ».
+  const priceBox = await first.getByTestId("price-tag").boundingBox();
+  if (!priceBox) throw new Error("no box");
+  expect(priceBox.width).toBeLessThan(frame.width / 2);
+  expect(priceBox.x + priceBox.width).toBeLessThanOrEqual(more.x + 1);
   // No drop yet: nothing crossed.
   await expect(first.getByTestId("card-drop")).toHaveCount(0);
   await expect(first.getByTestId("price-tag")).toHaveCSS("background-color", await tokenColor(page, "--color-une"));
@@ -719,17 +730,17 @@ test("Mes envies : grand titre, pastilles de résumé, loupe, menu des filtres e
   // The old « Filtres » button and the « Trier par » list with its label above are gone from the page itself.
   await expect(page.getByRole("button", { name: "Filtres", exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Trier par")).toHaveCount(0);
+  // The menu holds the level chips, the sort and the other filters; Escape closes it and gives the focus back.
+  const menu = page.getByRole("button", { name: "Filtres et tri" });
+  await menu.click();
+  await expect(menu).toHaveAttribute("aria-expanded", "true");
   // The chips: full and soft, no border; chosen = the hint fill.
   const liked = page.getByRole("button", { name: "J’aime", exact: true });
   await expect(liked).toHaveCSS("border-top-width", "0px");
   await liked.click();
   await expect(liked).toHaveCSS("background-color", await tokenColor(page, "--color-hint"));
   await liked.click();
-
-  // The menu holds the sort and the other filters; Escape closes it and gives the focus back.
-  const menu = page.getByRole("button", { name: "Filtres et tri" });
-  await menu.click();
-  await expect(menu).toHaveAttribute("aria-expanded", "true");
+  await expect(liked).toHaveAttribute("aria-pressed", "false");
   await page.getByLabel("Trier par").selectOption("name");
   await expect(page).toHaveURL(/tri=name/);
   await expect(cards.first()).toContainText(PRODUCT.name);

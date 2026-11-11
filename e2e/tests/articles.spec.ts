@@ -233,6 +233,13 @@ test("« Par étape » montre quatre colonnes sur ordinateur", async ({ page, db
     return;
   }
   await expect(board).toHaveAttribute("aria-pressed", "false");
+  // Only the step chips on the page, like the mockup (the levels wait in « Filtres et tri »).
+  await expect(page.getByRole("button", { name: "J’aime", exact: true })).toHaveCount(0);
+  // Under « Par étape » only the four columns are read, never the grid's « Tout » page.
+  const gridReads: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/me/items?") && request.url().includes("stages=")) gridReads.push(request.url());
+  });
   await board.click();
   await expect(board).toHaveAttribute("aria-pressed", "true");
   const columns = page.getByTestId("stage-column");
@@ -247,6 +254,10 @@ test("« Par étape » montre quatre colonnes sur ordinateur", async ({ page, db
   // Side by side.
   const boxes = await Promise.all((await columns.all()).map((column) => column.boundingBox()));
   expect(new Set(boxes.map((box) => Math.round(box?.y ?? 0))).size).toBe(1);
+  await page.reload();
+  await expect(columns).toHaveCount(4);
+  await expect(columns.nth(2)).toContainText("Jupe Yara");
+  expect(gridReads).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("par-etape.png"), fullPage: true });
   await axeLightAndDark(page);
   await columns.nth(1).getByRole("link", { name: "Pull Rowan" }).click();
