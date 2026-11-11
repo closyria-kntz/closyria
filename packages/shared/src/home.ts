@@ -54,7 +54,7 @@ export const homeViewSchema = z.object({
   /** The newest news with a photo; it is not repeated in `news`. */
   une: homeNewsSchema.nullable(),
   /** The other news, newest first; with the « une », at most HOME_NEWS_LIMIT. */
-  news: z.array(homeNewsSchema),
+  news: z.array(homeNewsSchema).max(HOME_NEWS_LIMIT),
   /** « Tes envies du moment »: her wishes, priority ones first, then the newest. */
   wishes: z.array(itemViewSchema).max(HOME_WISHES_LIMIT),
 });

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { focusRing, inputClass, primaryButtonClass } from "@/components/ui";
+import { useOpenAddSheet } from "@/lib/add-sheet-context";
 import { createCapture } from "@/lib/catalog-client";
 
 type ErrorKey = "invalidUrl" | "rateLimited" | "failed";
@@ -24,7 +25,8 @@ const boxButtonClass = `inline-flex min-h-touch-target shrink-0 items-center jus
 /**
  * « Coller un lien » → « Ajouter »: starts the capture, then opens the product page, which follows it.
  * With `autoSubmit` (the Android share target) the link it is given is added at once. The `box` look is the add box
- * of « Accueil » (its title is the box's; the field keeps the name « Coller un lien » for screen readers).
+ * of « Accueil » (its title is the box's; the field keeps the name « Coller un lien » for screen readers), with
+ * « Autres façons d'ajouter » that opens the + sheet (photo, share from a shop).
  */
 export function CaptureForm({
   initialUrl = "",
@@ -41,6 +43,7 @@ export function CaptureForm({
   const t = useTranslations("Capture");
   const tHome = useTranslations("Home.add");
   const box = look === "box";
+  const openAddSheet = useOpenAddSheet();
   const router = useRouter();
   const generatedFieldId = useId();
   const ids = { field: fieldId ?? generatedFieldId, hint: useId(), error: useId() };
@@ -107,7 +110,7 @@ export function CaptureForm({
       value={url}
       onChange={(e) => setUrl(e.target.value)}
       aria-invalid={error === "invalidUrl" || undefined}
-      aria-describedby={error ? `${ids.hint} ${ids.error}` : ids.hint}
+      aria-describedby={box ? (error ? ids.error : undefined) : error ? `${ids.hint} ${ids.error}` : ids.hint}
       className={box ? boxInputClass : inputClass}
     />
   );
@@ -130,9 +133,21 @@ export function CaptureForm({
       ) : (
         field
       )}
-      <p id={ids.hint} className={box ? "text-sm" : "text-sm text-ink-muted"}>
-        {box ? tHome("more") : t("hint")}
-      </p>
+      {box ? (
+        openAddSheet && (
+          <button
+            type="button"
+            onClick={openAddSheet}
+            className={`inline-flex min-h-touch-target items-center self-start rounded-pill text-sm font-bold underline underline-offset-3 ${focusRing}`}
+          >
+            {tHome("more")}
+          </button>
+        )
+      ) : (
+        <p id={ids.hint} className="text-sm text-ink-muted">
+          {t("hint")}
+        </p>
+      )}
       {error && (
         <p id={ids.error} role="alert" className={box ? "font-bold" : "text-danger"}>
           {t(`errors.${error}`)}

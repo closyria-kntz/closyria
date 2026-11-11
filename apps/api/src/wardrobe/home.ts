@@ -48,15 +48,29 @@ export function priceDropOf(points: Point[], since: Date) {
   return { at: from.seenAt, priceCents: latest.priceCents, previousPriceCents: previous.priceCents };
 }
 
-/** Her size is in stock at the latest capture, was out at the capture before, and came back since `since`. */
-export function sizeBackOf(points: Point[], label: string, since: Date) {
+/** A size label as the product page compares it: trimmed, lower case (« m » is « M »). */
+const sizeKey = (label: string) => label.trim().toLowerCase();
+
+/** Whether the size `key` was in stock at `point` (undefined when the shop did not list it). */
+function stockOf(point: Point, key: string): { label: string; available: boolean } | undefined {
+  const entry = Object.entries(point.sizes).find(([label]) => sizeKey(label) === key);
+  return entry ? { label: entry[0], available: entry[1] } : undefined;
+}
+
+/**
+ * Her size (matched like the product page: trimmed, any case) is in stock at the latest capture, was out at the
+ * capture before, and came back since `since`. `label` is the shop's spelling of it.
+ */
+export function sizeBackOf(points: Point[], size: string, since: Date) {
+  const key = sizeKey(size);
   const latest = points.at(-1);
-  if (latest?.sizes[label] !== true) return null;
-  const start = runStart(points, (p) => p.sizes[label] === true);
+  const now = latest ? stockOf(latest, key) : undefined;
+  if (!now?.available) return null;
+  const start = runStart(points, (p) => stockOf(p, key)?.available === true);
   const previous = points[start - 1];
   const from = points[start] as Point;
-  if (previous?.sizes[label] !== false || from.seenAt < since) return null;
-  return { at: from.seenAt };
+  if (!previous || stockOf(previous, key)?.available !== false || from.seenAt < since) return null;
+  return { at: from.seenAt, label: now.label };
 }
 
 /** A guest has no name of her own (Better Auth calls her « Anonymous »); an e-mail is not a first name either. */
@@ -122,14 +136,14 @@ async function catalogNews(db: Database, userId: string, since: Date): Promise<D
       });
     }
     const back = wish.sizeLabel ? sizeBackOf(history, wish.sizeLabel, since) : null;
-    if (back && wish.sizeLabel) {
+    if (back) {
       drafts.push({
         ...EMPTY_FACTS,
         kind: "size_back",
         itemId: wish.id,
         href,
         at: back.at.toISOString(),
-        sizeLabel: wish.sizeLabel,
+        sizeLabel: back.label,
       });
     }
   }

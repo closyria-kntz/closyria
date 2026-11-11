@@ -257,6 +257,19 @@ describe("GET /api/me/home", () => {
     expect(view.news).toEqual([]);
   });
 
+  it("finds her size back whatever its case or spaces, as the product page matches it", async () => {
+    const { cookie, userId } = await t.signIn();
+    const back = await newItem(cookie, userId, {
+      sizeLabel: " m ",
+      history: [
+        { seenAt: "2026-10-20T08:00:00.000Z", priceCents: 5000, sizes: { M: false, L: true } },
+        { seenAt: "2026-11-09T08:00:00.000Z", priceCents: 5000, sizes: { M: true, L: true } },
+      ],
+    });
+    const view = await home(cookie);
+    expect(view.news.map((n) => [n.kind, n.itemId, n.sizeLabel])).toEqual([["size_back", back.item.id, "M"]]);
+  });
+
   it("keeps at most five news", async () => {
     const { cookie, userId } = await t.signIn();
     for (let day = 4; day <= 10; day++) {

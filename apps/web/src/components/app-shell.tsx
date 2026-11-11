@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type FormEvent, type ReactNode, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
+import { AddSheetContext } from "@/lib/add-sheet-context";
 import { ARTICLES_PATH } from "@/lib/articles-address";
 import { fetchSummary } from "@/lib/catalog-client";
 import { useChangesPoller, useLiveRefresh } from "@/lib/live-changes";
@@ -237,64 +238,66 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <ProfilesContext.Provider value={{ profiles, ready, account, refreshProfiles, loveLevels, refreshLoveLevels }}>
-      <a
-        href="#app-content"
-        className={`sr-only rounded-button bg-surface-raised px-space-3 py-space-2 focus:not-sr-only focus:absolute focus:top-space-2 focus:left-space-2 focus:z-30 ${focusRing}`}
-      >
-        {t("skipToContent")}
-      </a>
-      <div className="flex h-dvh overflow-hidden text-ink">
-        <div className="flex min-h-space-0 min-w-space-0 flex-1 flex-col">
-          <header className="relative z-10 shrink-0 bg-band text-band-ink">
-            <div className="flex items-center gap-space-3 px-space-4 py-space-2 md:px-space-5 lg:gap-space-5-5">
-              <Link href="/" className={`font-title text-logo leading-none ${focusRing}`}>
-                {t("brand")}
-              </Link>
-              <Suspense>
-                <TopNav />
-              </Suspense>
-              <span className="flex-1" />
-              <Suspense>
-                <BandSearch />
-              </Suspense>
-              <button
-                type="button"
-                onClick={openAdd}
-                className={`relative hit-area hidden h-control-xs shrink-0 items-center rounded-pill bg-label px-space-4 text-caption font-bold text-label-ink md:inline-flex ${focusRing}`}
-              >
-                <span aria-hidden="true">+ {tNav("add")}</span>
-                <span className="sr-only">{tNav("addLabel")}</span>
-              </button>
-              <Suspense>
-                <ProfileSwitcher />
-                <Avatar />
-              </Suspense>
-            </div>
-          </header>
+      <AddSheetContext.Provider value={openAdd}>
+        <a
+          href="#app-content"
+          className={`sr-only rounded-button bg-surface-raised px-space-3 py-space-2 focus:not-sr-only focus:absolute focus:top-space-2 focus:left-space-2 focus:z-30 ${focusRing}`}
+        >
+          {t("skipToContent")}
+        </a>
+        <div className="flex h-dvh overflow-hidden text-ink">
+          <div className="flex min-h-space-0 min-w-space-0 flex-1 flex-col">
+            <header className="relative z-10 shrink-0 bg-band text-band-ink">
+              <div className="flex items-center gap-space-3 px-space-4 py-space-2 md:px-space-5 lg:gap-space-5-5">
+                <Link href="/" className={`font-title text-logo leading-none ${focusRing}`}>
+                  {t("brand")}
+                </Link>
+                <Suspense>
+                  <TopNav />
+                </Suspense>
+                <span className="flex-1" />
+                <Suspense>
+                  <BandSearch />
+                </Suspense>
+                <button
+                  type="button"
+                  onClick={openAdd}
+                  className={`relative hit-area hidden h-control-xs shrink-0 items-center rounded-pill bg-label px-space-4 text-caption font-bold text-label-ink md:inline-flex ${focusRing}`}
+                >
+                  <span aria-hidden="true">+ {tNav("add")}</span>
+                  <span className="sr-only">{tNav("addLabel")}</span>
+                </button>
+                <Suspense>
+                  <ProfileSwitcher />
+                  <Avatar />
+                </Suspense>
+              </div>
+            </header>
 
-          <main
-            ref={content}
-            id="app-content"
-            tabIndex={-1}
-            className="relative min-h-space-0 flex-1 overflow-y-auto px-space-4 pt-space-5 pb-space-6 focus:outline-none md:px-space-5 lg:px-space-6"
-          >
-            <div className="mx-auto flex w-full max-w-app flex-col gap-space-4">
-              <Suspense>
-                <AccountPrompt />
-              </Suspense>
-              {children}
-            </div>
-          </main>
-          <Suspense>
-            <BottomNav onAdd={openAdd} />
-          </Suspense>
+            <main
+              ref={content}
+              id="app-content"
+              tabIndex={-1}
+              className="relative min-h-space-0 flex-1 overflow-y-auto px-space-4 pt-space-5 pb-space-6 focus:outline-none md:px-space-5 lg:px-space-6"
+            >
+              <div className="mx-auto flex w-full max-w-app flex-col gap-space-4">
+                <Suspense>
+                  <AccountPrompt />
+                </Suspense>
+                {children}
+              </div>
+            </main>
+            <Suspense>
+              <BottomNav onAdd={openAdd} />
+            </Suspense>
+          </div>
         </div>
-      </div>
-      <Suspense>
-        <AddSheet open={adding} onClose={closeAdd} />
-      </Suspense>
-      <UndoToast />
-      <GiftWarning />
+        <Suspense>
+          <AddSheet open={adding} onClose={closeAdd} />
+        </Suspense>
+        <UndoToast />
+        <GiftWarning />
+      </AddSheetContext.Provider>
     </ProfilesContext.Provider>
   );
 }

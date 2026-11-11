@@ -33,7 +33,11 @@ export function HomeUne({ news }: { news: HomeNews }) {
         })
       : kind === "size_back"
         ? t("une.size_back", { name: news.title, size: news.sizeLabel ?? "" })
-        : t("une.opinion", { author: news.authorName ?? "", name: news.title });
+        : t("une.opinion", {
+            author: news.authorName ?? "",
+            others: Math.max(0, (news.count ?? 1) - 1),
+            name: news.title,
+          });
   return (
     <article
       aria-labelledby={titleId}

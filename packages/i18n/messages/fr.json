@@ -10,6 +10,7 @@
     "newsCount": "{count, plural, one {# nouvelle pour toi} other {# nouvelles pour toi}}",
     "quiet": "Rien de neuf pour l’instant",
     "welcome": "Bienvenue sur Closyria",
+    "loading": "Chargement de l’accueil…",
     "loadError": "L’accueil ne s’affiche pas en entier. Réessaie dans un instant.",
     "start": {
       "title": "Comment ça marche",
@@ -27,7 +28,7 @@
     "une": {
       "price_drop": "{name} passe à {price}",
       "size_back": "{name} : ta taille {size} est revenue",
-      "opinion": "{author} a donné son avis sur {name}",
+      "opinion": "{others, plural, =0 {{author} a donné son avis sur {name}} one {{author} et une autre amie ont donné leur avis sur {name}} other {{author} et # autres amies ont donné leur avis sur {name}}}",
       "open": {
         "price_drop": "Voir l’article",
         "size_back": "Voir l’article",
@@ -61,7 +62,7 @@
     "add": {
       "title": "Tu as vu un vêtement qui te plaît ?",
       "placeholder": "Colle son lien ici…",
-      "more": "ou ajoute une photo · ou partage depuis le site de la boutique"
+      "more": "Autres façons d’ajouter"
     },
     "tip": {
       "label": "Astuce",

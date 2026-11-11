@@ -91,6 +91,12 @@ test("une nouvelle utilisatrice voit l’accueil vide qui explique quoi faire, s
   await expect(page.getByRole("heading", { name: "Tes envies du moment" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Boutiques à découvrir" })).toHaveCount(0);
   await axeLightAndDark(page);
+
+  // « Autres façons d'ajouter » opens the + sheet: photo, share from a shop.
+  await page.getByRole("button", { name: "Autres façons d’ajouter" }).click();
+  const sheet = page.getByRole("dialog", { name: "Ajouter un article" });
+  await expect(sheet.getByRole("button", { name: /Prendre une photo/ })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: /Partager depuis une boutique/ })).toBeVisible();
 });
 
 test("la zone « Colle son lien ici » capture comme avant ; ses envies, ses boutiques et l’astuce qu’elle ferme", async ({

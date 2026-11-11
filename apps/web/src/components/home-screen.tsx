@@ -49,6 +49,28 @@ function AddBox({ fieldId }: { fieldId: string }) {
   );
 }
 
+/**
+ * While her home loads: the shapes of the title, the une and the add box (no field yet: what she typed would be lost
+ * when the real page replaces it), never an empty screen.
+ */
+function Loading() {
+  const t = useTranslations("Home");
+  const bar = "rounded-pill bg-surface-sunken motion-safe:animate-pulse";
+  return (
+    <div role="status" aria-label={t("loading")} className="flex flex-col gap-space-4-5">
+      <div className="flex flex-col gap-space-2">
+        <span className={`${bar} h-space-3 w-1/4`} />
+        <span className={`${bar} h-space-7 w-2/3`} />
+      </div>
+      <div className="aspect-video rounded-card bg-une motion-safe:animate-pulse" />
+      <div className="flex flex-col gap-space-3 rounded-card bg-band p-space-4">
+        <span className="h-space-5 w-3/4 rounded-pill bg-band-field" />
+        <span className="h-space-7 rounded-pill bg-band-field" />
+      </div>
+    </div>
+  );
+}
+
 /** A section title with its link on the right (mockup .row). */
 function Row({ titleId, title, link }: { titleId: string; title: string; link: ReactNode }) {
   return (
@@ -178,7 +200,7 @@ export function HomeScreen({ fieldId }: { fieldId: string }) {
   useLiveRefresh(() => void load());
 
   const recents = <RecentProducts emptyFocusId={fieldId} />;
-  if (loaded.status === "loading") return null;
+  if (loaded.status === "loading") return <Loading />;
   if (loaded.status === "error") {
     return (
       <div className="flex flex-col gap-space-4-5">
