@@ -6,7 +6,6 @@ import type { ViewKey } from "./wardrobe-view";
  */
 export const ARTICLES_PATH = "/articles";
 export const STEP_PARAM = "etape";
-export const PREPARE_PARAM = "preparer";
 
 /** The step values of the address and the view each shows. */
 const STEP_VIEWS = {
@@ -21,10 +20,9 @@ const isStep = (value: string | null): value is Step => value !== null && Object
 
 type Params = Pick<URLSearchParams, "get">;
 
-/** The view of `/articles` for its address: the step, `preparer=1` with « envie » for the old `/commande`. */
+/** The view of `/articles` for its address: the step, « Envies » without one. */
 export function articlesView(params: Params): ViewKey {
   const step = params.get(STEP_PARAM);
-  if (step === "envie" && params.get(PREPARE_PARAM) === "1") return "commande";
   if (isStep(step)) return STEP_VIEWS[step];
   return "envies";
 }
@@ -34,10 +32,7 @@ const OLD_VIEWS = {
   envies: [[STEP_PARAM, "envie"]],
   dressing: [[STEP_PARAM, "dressing"]],
   "a-vendre": [[STEP_PARAM, "a-vendre"]],
-  commande: [
-    [STEP_PARAM, "envie"],
-    [PREPARE_PARAM, "1"],
-  ],
+  commande: [[STEP_PARAM, "commande"]],
 } as const satisfies Record<ViewKey, readonly (readonly [string, string])[]>;
 
 type SearchRecord = Record<string, string | string[] | undefined>;

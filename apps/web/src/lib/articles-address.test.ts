@@ -11,7 +11,7 @@ describe("articles address", () => {
     expect(articlesView(params("etape=dressing"))).toBe("dressing");
     expect(articlesView(params("etape=a-vendre"))).toBe("a-vendre");
     expect(articlesView(params("etape=commande"))).toBe("commande");
-    expect(articlesView(params("etape=envie&preparer=1"))).toBe("commande");
+    expect(articlesView(params("etape=envie&preparer=1"))).toBe("envies");
     expect(articlesView(params("etape=nimporte"))).toBe("envies");
   });
 
@@ -25,7 +25,7 @@ describe("articles address", () => {
     );
     expect(oldViewRedirect("a-vendre", { profil: LIST })).toBe(`/articles?etape=a-vendre&profil=${LIST}`);
     expect(oldViewRedirect("commande", { recherche: "robe d'été" })).toBe(
-      "/articles?etape=envie&preparer=1&recherche=robe+d%27%C3%A9t%C3%A9",
+      "/articles?etape=commande&recherche=robe+d%27%C3%A9t%C3%A9",
     );
     expect(oldViewRedirect("dressing", { etape: "sold" })).toBe("/articles?etape=dressing&statut=sold");
     expect(oldViewRedirect("envies", { etiquette: ["a", "b"] })).toBe("/articles?etape=envie&etiquette=a&etiquette=b");

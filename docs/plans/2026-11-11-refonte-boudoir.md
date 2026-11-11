@@ -17,7 +17,7 @@
 - Menu : Accueil · Découvrir · + · Mes articles · Moi ; un seul menu (bas sur téléphone, haut sur ordinateur).
 - Étapes affichées : « Envie · Commandé · Reçu · Dans mon dressing · À vendre » (« Repéré » n'apparaît plus ; identifiants du code inchangés).
 - Actions principales en boutons écrits, jamais seulement dans « … ».
-- Aucune fonction existante ne disparaît ; anciennes adresses redirigées (`/envies` → `/articles?etape=envie`, `/dressing` → `/articles?etape=dressing`, `/a-vendre` → `/articles?etape=a-vendre`, `/commande` → `/articles?etape=envie&preparer=1`).
+- Aucune fonction existante ne disparaît ; anciennes adresses redirigées (`/envies` → `/articles?etape=envie`, `/dressing` → `/articles?etape=dressing`, `/a-vendre` → `/articles?etape=a-vendre`, `/commande` → `/articles?etape=commande` (la vue « Commandé », corrigé le 2026-11-11) ; « Préparer une commande » `/envies/commande` garde son adresse).
 - Jetons uniquement (`scripts/check-design-tokens.ts`), clair et sombre, axe AA, zones tactiles ≥ 44 px, réduction des animations respectée.
 - Mesurer chaque écran contre la maquette (captures) avant de le montrer.
 - Ports interdits 3000/3001/3100/3101, jamais `pkill -f`/`killall`/`git stash` nu, aucun secret ; commits `closyria-kntz` + `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` ; `pnpm format` avant.

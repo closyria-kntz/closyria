@@ -128,8 +128,12 @@ test("les anciennes adresses mènent à « Mes articles », avec l'étape, la li
   await expect(page.getByRole("heading", { level: 1, name: "À vendre" })).toBeVisible();
 
   await page.goto("/commande?prioritaire=1");
-  await expect(page).toHaveURL(/\/articles\?etape=envie&preparer=1&prioritaire=1$/);
+  await expect(page).toHaveURL(/\/articles\?etape=commande&prioritaire=1$/);
   await expect(page.getByRole("heading", { level: 1, name: "Commandé" })).toBeVisible();
+  // « Préparer une commande » keeps its own address.
+  await page.goto(`/envies/commande?liste=${listId}`);
+  await expect(page).toHaveURL(new RegExp(`/envies/commande\\?liste=${listId}$`));
+  await expect(page.getByRole("heading", { level: 1, name: "Préparer une commande" })).toBeVisible();
 
   // The old « Étape » filter (`etape=sold`) becomes `statut`, and a filter chosen on « Mes articles » keeps the step.
   await page.goto("/dressing?etape=sold");
