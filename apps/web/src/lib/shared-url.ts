@@ -35,13 +35,14 @@ const ENCODED_HTTP = /^https?%3A/i;
 /**
  * The link of `/partager?url=…` read from the raw query (`location.search`): an iOS Shortcut may put the link there
  * without encoding it, so everything after the first `url=` is the link, its own `?` and `&` included. An encoded
- * link (the share target, a shortcut that encodes) is decoded, up to the next parameter. Null without an http(s) link.
+ * link (the share target, a shortcut that encodes) is decoded, up to the next parameter. An unencoded link's fragment
+ * is in `hash` (`location.hash`), put back after it. Null without an http(s) link.
  */
-export function sharedUrlFromQuery(search: string): string | null {
+export function sharedUrlFromQuery(search: string, hash = ""): string | null {
   const found = URL_PARAM.exec(search);
   if (!found) return null;
   const raw = search.slice(found.index + found[0].length);
-  let link = raw;
+  let link = `${raw}${hash}`;
   if (ENCODED_HTTP.test(raw)) {
     try {
       link = decodeURIComponent(raw.split("&")[0] ?? "");

@@ -7,14 +7,14 @@ import { CaptureForm } from "./capture-form";
 
 /**
  * The capture of `/partager`: the link read from the raw address first (an iOS shortcut may send it unencoded, with
- * its own `?` and `&`), else the one the server found in the parameters (`parsed`: url, then text, then title).
+ * its own `?`, `&` and `#`), else the one the server found in the parameters (`parsed`: url, then text, then title).
  */
 export function ShareTarget({ parsed }: { parsed: string | null }) {
   const t = useTranslations("Capture");
   // undefined until the browser's address is read: nothing is sent before.
   const [url, setUrl] = useState<string | null | undefined>(undefined);
   useEffect(() => {
-    setUrl(sharedUrlFromQuery(window.location.search) ?? parsed);
+    setUrl(sharedUrlFromQuery(window.location.search, window.location.hash) ?? parsed);
   }, [parsed]);
 
   if (url === undefined) {

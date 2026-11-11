@@ -15,6 +15,29 @@ describe("shareLinks", () => {
     expect(links.sms).toBe(`sms:?&body=${encodeURIComponent(message)}`);
   });
 
+  it("E-mail: the given subject (the sheet's title), never the message with its link", () => {
+    const url = "https://closyria.com/l/abc";
+    const { email } = shareLinks({ text: `Commande groupée 👉 ${url}`, url, subject: "Commande chez Zara" });
+    expect(email).toBe(
+      `mailto:?subject=${encodeURIComponent("Commande chez Zara")}&body=${encodeURIComponent(`Commande groupée 👉 ${url}`)}`,
+    );
+  });
+
+  it("E-mail without a subject: the text, the link taken out of it", () => {
+    const url = "https://closyria.com/l/abc";
+    const { email } = shareLinks({ text: `Commande groupée : ajoute tes articles ici 👉 ${url}`, url });
+    const subject = decodeURIComponent(new URL(email).searchParams.get("subject") ?? "");
+    expect(subject).toBe("Commande groupée : ajoute tes articles ici 👉");
+    expect(email.split("&body=")[0]).not.toContain(encodeURIComponent(url));
+  });
+
+  it("a lone surrogate (an emoji cut in half) does not throw: it becomes �", () => {
+    const cut = "Robe 👗".slice(0, -1);
+    const links = shareLinks({ text: cut, url: "https://a.fr/p" });
+    expect(links.sms).toBe(`sms:?&body=${encodeURIComponent("Robe \uFFFD https://a.fr/p")}`);
+    expect(() => shareLinks({ text: "\uDC00x", url: "https://a.fr/\uD800" })).not.toThrow();
+  });
+
   it("E-mail: the text as the subject, the message as the body", () => {
     expect(links.email).toBe(
       `mailto:?subject=${encodeURIComponent("Robe d’été chez Zara & Co")}&body=${encodeURIComponent(message)}`,

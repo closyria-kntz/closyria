@@ -40,6 +40,12 @@ describe("sharedUrlFromQuery", () => {
     expect(sharedUrlFromQuery("?title=Robe&url=http://a.fr/p?x=1&y=%202")).toBe("http://a.fr/p?x=1&y=%202");
   });
 
+  it("keeps the unencoded link's fragment, which the browser puts apart in location.hash", () => {
+    expect(sharedUrlFromQuery("?url=https://a.fr/p?x=1", "#v=2")).toBe("https://a.fr/p?x=1#v=2");
+    // An encoded link carries its own fragment (%23): the page's hash is not added to it.
+    expect(sharedUrlFromQuery(`?url=${encodeURIComponent("https://a.fr/p#v=2")}`, "#other")).toBe("https://a.fr/p#v=2");
+  });
+
   it("decodes an encoded link (the share target, a shortcut that encodes)", () => {
     expect(sharedUrlFromQuery(`?url=${encodeURIComponent("https://zara.com/x?a=1&b=2")}`)).toBe(
       "https://zara.com/x?a=1&b=2",

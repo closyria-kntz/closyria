@@ -98,7 +98,7 @@ export function ShareSheet({
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
-  const links = shareLinks({ text, url });
+  const links = shareLinks({ text, url, subject: title });
   const copyValue = copy === "message" ? (text.includes(url) ? text : `${text} ${url}`) : url;
 
   useEffect(() => {

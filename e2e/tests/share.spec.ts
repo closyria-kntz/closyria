@@ -120,7 +120,8 @@ test("fiche : « Partager » ouvre la fenêtre, ses choix dans l'ordre, la copie
   await expect(choicesOf(sheet)).toHaveText(expectedChoices("Copier le lien", touchOf(testInfo), false));
   await expect(sheet.getByRole("link", { name: "Messenger" })).toHaveCount(touchOf(testInfo) ? 1 : 0);
   const text = `${PRODUCT.name} chez ${AUTO_SHOP.name}`;
-  await expectAppLinks(sheet, `${text} ${shopUrl}`, shopUrl, text);
+  // The e-mail's subject is the window's title (the product's name), never the message with its link.
+  await expectAppLinks(sheet, `${text} ${shopUrl}`, shopUrl, PRODUCT.name);
   for (const choice of await choicesOf(sheet).locator("a, button").all()) {
     expect((await choice.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   }
@@ -216,11 +217,13 @@ test("commande groupée : « Partager le message » ouvre la fenêtre, le messag
   expect(opened.status()).toBe(201);
 
   await page.goto(`/listes/${listId}/commande-groupee`);
+  const orderTitle = (await page.getByRole("heading", { level: 1 }).textContent()) ?? "";
+  expect(orderTitle).toContain(AUTO_SHOP.name);
   await page.getByRole("button", { name: "Partager le message" }).click();
   const sheet = sheetOf(page);
   await expect(choicesOf(sheet)).toHaveText(expectedChoices("Copier le message", touchOf(testInfo), false));
   const message = `Commande groupée chez ${AUTO_SHOP.name} jusqu'au 12\u00a0mars : ajoute tes articles ici 👉 ${shareUrl}`;
-  await expectAppLinks(sheet, message, shareUrl, message);
+  await expectAppLinks(sheet, message, shareUrl, orderTitle);
   await axeLightAndDark(page);
   await setTheme(page, "light");
   await expectCopy(page, sheet, "Copier le message", message);
@@ -353,8 +356,8 @@ test("l'aide iPhone : installer le raccourci, sinon la phrase pour l'IA, sinon c
   await axeLightAndDark(page);
 });
 
-test("/partager prend un lien non encodé : tout ce qui suit url=, avec ses ? et &", async ({ page }) => {
-  const url = `${autoProductUrl()}&couleur=rouge&taille=M`;
+test("/partager prend un lien non encodé : tout ce qui suit url=, avec ses ?, & et #", async ({ page }) => {
+  const url = `${autoProductUrl()}&couleur=rouge&taille=M#v=2`;
   const capture = page.waitForRequest((request) => request.url().endsWith("/api/captures"));
   await page.goto(`/partager?url=${url}`);
   expect((await capture).postDataJSON()).toEqual({ url });
