@@ -94,7 +94,7 @@ l'interface ; le code garde ses identifiants). Chaque bouton dit ce qu'il fait (
 - Accueil : agrège ce qui existe déjà (baisses de prix, tailles revenues, avis nouveaux, commandes groupées en cours) ;
   pas de nouvelle donnée.
 - Découverte et astuces : état « vu » retenu par compte (préférences existantes) pour ne pas les remontrer.
-- Découvrir : écran d'attente « Bientôt » tant que le chantier catalogue n'est pas fait (ou masqué : décision au plan).
+- Découvrir (validé le 2026-11-11) : en attendant le catalogue, l'onglet montre les boutiques déjà connues (actives en admin) et une « boutique de la semaine » choisie en admin ; le catalogue d'articles s'y ajoutera ensuite.
 
 ## 7. Hors de ce chantier
 
