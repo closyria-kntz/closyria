@@ -205,3 +205,31 @@ Prises pendant la construction :
 - Le lien de la liste ne montre que la commande groupée la plus récente de la liste : toujours si elle est ouverte ou
   close ; commandée, tant qu'une amie n'a pas payé ou pendant 30 jours ; annulée, pendant 30 jours ; sinon aucune
   (jamais une commande plus ancienne à sa place).
+
+## 11. Retours de la fondatrice (2026-11-11)
+
+Décisions validées après son essai, et ce qui a été fait.
+
+- **R1, lien de la fondatrice.** Sur la page « Commande groupée », elle colle un lien d'article de la boutique : l'article
+  va dans ses envies et dans la liste, puis est coché dans « Toi ». Un lien d'une autre boutique est refusé (« Ce lien
+  n'est pas chez {boutique}. »), sans créer de boutique.
+- **R2, modifier la date et la livraison.** Le bouton propose les options de livraison de la boutique et « Autre »,
+  comme à l'ouverture de la commande.
+- **R3, lien des amies.** Le bloc commande est juste sous le titre (bandeau, total, avancée, « Ta part ») ; le détail par
+  personne est replié (« Voir le détail ({n} articles) ») ; un bouton flottant « Haut de page » apparaît dès qu'on a
+  descendu d'un écran, sur le lien des amies, la page d'une liste et la page « Commande groupée ».
+- **A1, filtre sur le lien.** Pendant une commande ouverte : « Tous les articles » (par défaut) ou « Seulement {boutique} ».
+- **A2, « Copier le message ».** Sur la page « Commande groupée » ouverte, avec le lien de partage de la liste.
+- **A3, prix payé.** « J'ai commandé » enregistre le prix final de chacun de ses articles comme prix payé et le compte
+  dans « Déjà commandé » du budget, par le chemin existant des événements « Commandé ».
+- **A4, « Copier un rappel ».** Pour chaque amie qui n'a pas payé, une fois la commande passée.
+- **Corrections de fond.** Le nom est figé à « J'ai commandé » ; les relectures du lien des amies se font dans l'ordre
+  (une réponse plus ancienne est ignorée) et au retour sur l'onglet ; les tests « focus après Retirer » et
+  « Tester un lien » sont rendus stables.
+
+Règles précisées :
+
+- Le budget compte un article commandé par fiche, au prix unitaire : en prendre 2 exemplaires du même article compte une fois.
+- « jusqu'au {date} » reste dans le message à copier même une fois la date passée.
+- Si la liste n'a pas de lien de partage gardé (lien d'avant), le message n'est pas proposé : un texte dit « Pour copier
+  le message, recrée le lien dans « Partage ». ».

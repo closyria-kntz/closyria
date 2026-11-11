@@ -53,4 +53,4 @@
 
 **Files:** `e2e/tests/admin-shops.spec.ts` (ou le fichier du test « Tester un lien »), `docs/specs/2026-11-10-acheter-ensemble.md` (§ 11 « Retours du 2026-11-11 »), ce plan (cases cochées)
 
-- [ ] Trouver la cause de l'instabilité sous charge du test « Tester un lien » (attente d'un état réel plutôt qu'un délai) ; le faire passer 10 fois de suite sur les 3 appareils ; suite e2e complète une fois ; spec § 11 ; commit « test: stabilise « Tester un lien » ; docs ».
+- [x] Trouver la cause de l'instabilité sous charge du test « Tester un lien » (attente d'un état réel plutôt qu'un délai) ; le faire passer 10 fois de suite sur les 3 appareils ; suite e2e complète une fois ; spec § 11 ; commit « test: stabilise « Tester un lien » ; docs ».

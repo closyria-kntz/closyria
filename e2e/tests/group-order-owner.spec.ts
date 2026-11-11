@@ -492,7 +492,13 @@ test("son lien, la livraison de la boutique, les messages à copier", async ({
   });
   await copyMessage.click();
   await expect(page.getByRole("textbox", { name: /Copie impossible ici/ })).toHaveValue(message);
+  // A list whose link was not kept (a link of before): no message to copy, a hint to recreate the link.
+  await db.query("update wishlists set share_token_encrypted = null where id = $1", [owner.listId]);
   await page.reload();
+  await expect(page.getByTestId("group-no-link")).toHaveText(
+    "Pour copier le message, recrée le lien dans « Partage ».",
+  );
+  await expect(copyMessage).toHaveCount(0);
 
   // Léa takes the first item; ordered: « Copier un rappel » for her while she has not paid.
   const lea = await friend(browser, baseURL, `10.233.${testInfo.workerIndex % 250}.1`);

@@ -1775,6 +1775,7 @@
       "message": "Copier le message",
       "messageText": "Commande groupée chez {shop} jusqu'au {date} : ajoute tes articles ici 👉 {link}",
       "messageTextNoDate": "Commande groupée chez {shop} : ajoute tes articles ici 👉 {link}",
+      "noLink": "Pour copier le message, recrée le lien dans « Partage ».",
       "reminder": "Copier un rappel",
       "reminderText": "Coucou {name}, tu me dois {amount} pour la commande {shop} 🙂",
       "done": "Copié ✓",

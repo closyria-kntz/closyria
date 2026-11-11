@@ -284,11 +284,14 @@ function Ready({
   // « Copier le message » while it is open: the list's link to send to her friends (none for a link of before).
   const inviting = order.status === "open" && !pinned;
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [noLink, setNoLink] = useState(false);
   useEffect(() => {
     if (!inviting) return;
     let live = true;
     void fetchShareLink(listId).then((result) => {
-      if (live && result.ok && result.url) setShareUrl(absoluteShareUrl(window.location.origin, result.url));
+      if (!live || !result.ok) return;
+      if (result.url) setShareUrl(absoluteShareUrl(window.location.origin, result.url));
+      else setNoLink(true);
     });
     return () => {
       live = false;
@@ -352,6 +355,11 @@ function Ready({
         </p>
         {settled && <p className="font-strong text-accent">{t("state.settled")}</p>}
         {inviting && invitation && <CopyButton label={t("copy.message")} text={invitation} />}
+        {inviting && !invitation && noLink && (
+          <p data-testid="group-no-link" className="text-sm text-ink-muted">
+            {t("copy.noLink")}
+          </p>
+        )}
       </div>
 
       {error && (

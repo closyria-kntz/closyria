@@ -1,4 +1,5 @@
 import type { Locator } from "@playwright/test";
+import type pg from "pg";
 import { signInAsAdmin } from "../fixtures/auth";
 import { newShopUrl, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
@@ -13,12 +14,36 @@ const detail = (scope: Locator, label: string) =>
     .filter({ hasText: new RegExp(`^${label}$`) })
     .locator("xpath=following-sibling::dd[1]");
 
+/**
+ * Waits until every capture of the shop at this address is finished. The admin capture queue is shared by the
+ * whole suite and handles one job at a time (localConcurrency 1): under load a job waits its turn, so the wait
+ * is on the capture's own state, not on a fixed delay.
+ */
+async function capturesFinished(db: pg.Pool, host: string, trigger: "admin_test" | "any", expected: number) {
+  await expect
+    .poll(
+      async () => {
+        const { rows } = await db.query<{ status: string }>(
+          `select c.status from captures c join shop_domains d on d.shop_id = c.shop_id
+           where d.domain = $1 and ($2 = 'any' or c.trigger = $2)`,
+          [host, trigger],
+        );
+        const done = rows.filter((row) => !["queued", "running"].includes(row.status));
+        return done.length >= expected && done.length === rows.length;
+      },
+      { timeout: 90_000, intervals: [500, 1_000, 2_000] },
+    )
+    .toBe(true);
+}
+
 test("une admin ajoute une boutique depuis un lien (brouillon), puis teste un lien", async ({
   page,
   request,
   db,
   userAgentTag,
 }) => {
+  // Two captures wait their turn in the admin queue, which the whole suite shares: the default 30 s is not enough under load.
+  test.slow();
   await signInAsAdmin(page, request, db, userAgentTag);
   const { host, url } = newShopUrl();
 
@@ -36,13 +61,15 @@ test("une admin ajoute une boutique depuis un lien (brouillon), puis teste un li
   expect(rows).toEqual([{ status: "draft" }]);
   // The test capture of the new shop pre-fills its settings.
   const main = page.getByRole("main");
-  await expect(detail(main, "Nom")).toHaveText(PRODUCT.name, { timeout: 15_000 });
+  await capturesFinished(db, host, "any", 1);
+  await expect(detail(main, "Nom")).toHaveText(PRODUCT.name);
 
   await page.getByRole("link", { name: "Ouvrir la boutique" }).click();
   await expect(page).toHaveURL(/\/admin\/boutiques\/[0-9a-f-]{36}$/);
   const tester = page.getByRole("region", { name: "Tester un lien" });
   await tester.getByLabel("Adresse du produit").fill(url);
   await tester.getByRole("button", { name: "Lancer le test" }).click();
-  await expect(detail(tester, "Méthode")).toHaveText("Shopify", { timeout: 15_000 });
+  await capturesFinished(db, host, "admin_test", 2);
+  await expect(detail(tester, "Méthode")).toHaveText("Shopify");
   await expect(detail(tester, "Nom")).toHaveText(PRODUCT.name);
 });
