@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Couleurs (clair) : fond `#FBF7F4`, encre `#2B1418`, secondaire `#86686D`, filets `#ECDCD9`, cartes `#FFFFFF`, doux `#F6E6E3`, rose poudré `#F3D6DA`, bordeaux `#5B1A2A`, bordeaux accent `#8C2A3C`, ocre `#D9A441`, astuce `#FFF1D6` / `#5A3D00`. Sombre : valeurs validées par la fondatrice (étape 0), contrastes AA.
+- Couleurs (clair) : fond `#FBF7F4`, encre `#2B1418`, secondaire `#86686D`, filets `#ECDCD9`, cartes `#FFFFFF`, doux `#F6E6E3`, rose poudré `#F3D6DA`, bordeaux `#5B1A2A`, bordeaux accent `#8C2A3C`, ocre `#D9A441`, astuce `#FFF1D6` / `#5A3D00`. Sombre (validé le 2026-11-11) : fond `#1C0F12`, encre `#F6E9EA`, secondaire `#C2A6AB`, filets `#43282E`, cartes `#2A171B`, doux `#351D22`, rose foncé `#4A2730` (« unes »), bandeau `#3A1119`, bouton principal `#F3D6DA` avec texte `#2B1418`, accent de texte `#F0A9B6`, ocre `#D9A441`, astuce `#3A2E12` / `#F5DFA8` ; contrastes AA.
 - Polices : Gloock (titres, noms d'articles), Figtree (texte), auto-hébergées. Cartes 20 px, pilules, photos 3:4. Étiquette de prix en forme d'étiquette de vêtement (petit trou).
 - Menu : Accueil · Découvrir · + · Mes articles · Moi ; un seul menu (bas sur téléphone, haut sur ordinateur).
 - Étapes affichées : « Envie · Commandé · Reçu · Dans mon dressing · À vendre » (« Repéré » n'apparaît plus ; identifiants du code inchangés).
@@ -35,7 +35,7 @@
 
 ## Étape 0 (contrôleur, avant Task 1)
 
-- [ ] Ajouter le mode sombre et l'écran « Mes articles » (Tout, pastilles d'étape, « Par étape » sur ordinateur) à la maquette de référence ; les faire valider par la fondatrice ; reporter les valeurs sombres dans ce plan (Global Constraints).
+- [x] Ajouter le mode sombre et l'écran « Mes articles » (Tout, pastilles d'étape, « Par étape » sur ordinateur) à la maquette de référence ; les faire valider par la fondatrice ; reporter les valeurs sombres dans ce plan (Global Constraints).
 
 ## Étape 1 — Fondations (montrée puis mise en dev)
 
