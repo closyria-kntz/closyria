@@ -119,7 +119,7 @@ export function TrashSettings() {
       {items.length > 0 && (
         <ul aria-label={t("trash.listLabel")} data-testid="trash-grid" className={GRID_CLASS}>
           {items.map((item) => (
-            <ItemCard key={item.id} item={item} showStage={false} linked={false}>
+            <ItemCard key={item.id} item={item} linked={false}>
               <p className="px-space-1 pt-space-1 text-sm text-ink-muted">
                 {t("trash.deletedOn", { date: dateOf(item) })}
               </p>

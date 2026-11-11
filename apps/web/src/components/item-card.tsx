@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { formatAmount } from "@/lib/budget";
 import { formatOptionalPrice, priceDropCents } from "@/lib/price";
+import { itemStep } from "@/lib/wardrobe-view";
 import { ItemMenu } from "./item-menu";
 import { PHOTO_CLICK_DELAY_MS, photoClickPlan } from "./level-picker-logic";
 import { LoveLevelBadge, LoveLevelPill } from "./love-level-pill";
@@ -40,17 +41,19 @@ type Props = {
   linked?: boolean;
   /** Extra controls under the card (move up / down, remove, restore…). */
   children?: ReactNode;
-  /** Show the stage (« Vendu », « Renvoyé »): for the items that the view's own stage does not describe. */
-  showStage: boolean;
+  /** The name of its type (« Robe »), shown before the shop when known. */
+  typeName?: string | null | undefined;
 };
 
 /**
- * One item in the grid (refonte, shape C): a 3:4 photo that fills its frame, her level emoji top left (tucked in from
- * the curve), « … » top right with the « taken » tick just under it, « Prioritaire » under the emoji; under the photo
- * the shop, the name (Fraunces), the price with the crossed one and the « −20 € » drop beside it, her opinion.
+ * One item in the grid (refonte Boudoir, mockup .card): a white card with 20 px corners, its 3:4 photo on top with
+ * its step as an ochre clothing tag top left (the « taken » tick under it), « … » top right and her level emoji under
+ * it; then the name (Gloock), « type · boutique », « Prioritaire », the price in a powder-pink price tag (with the
+ * « −20 € » drop inside it) and the crossed price, her opinion.
  */
-export function ItemCard({ item, actions, selection, showStage, linked = true, children }: Props) {
+export function ItemCard({ item, actions, selection, typeName, linked = true, children }: Props) {
   const t = useTranslations("Views.card");
+  const tStep = useTranslations("Views.step");
   const tStage = useTranslations("Item.stage");
   const locale = useLocale();
   const router = useRouter();
@@ -84,8 +87,11 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
   // The shop's crossed price, only while the card shows the shop's price (not the price she asks).
   const drop = asked === null ? priceDropCents(item.product.priceCents, item.product.compareAtCents) : null;
   const quick = actions && !selection && actions.onTake && actions.onPreview ? actions : null;
+  const step = itemStep(item);
+  const stepLabel = step ? tStep(step) : tStage(item.stage);
+  const shop = item.product.shop.name;
   return (
-    <li className="card card-rise group relative flex flex-col" data-testid="item-card">
+    <li className="card card-rise group relative flex flex-col rounded-card bg-surface-raised" data-testid="item-card">
       <Wrapper
         linked={linked}
         href={href}
@@ -93,7 +99,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
         selection={selection}
         onToggle={() => selection?.onToggle(item.id)}
       >
-        <div data-photo className="photo-shape relative aspect-3/4 overflow-hidden bg-media-backdrop">
+        <div data-photo className="relative aspect-3/4 overflow-hidden rounded-t-card bg-media-backdrop">
           {item.coverUrl ? (
             // biome-ignore lint/performance/noImgElement: photos come from our own API, already resized.
             <img
@@ -111,47 +117,47 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               {t("noPhoto")}
             </span>
           )}
-          {showStage && (item.stage === "sold" || item.stage === "returned") && (
-            <span className="absolute right-space-2 bottom-space-2 rounded-full bg-ink px-space-2 py-space-1 text-sm text-surface-raised">
-              {tStage(item.stage)}
+        </div>
+        <div className="flex min-w-space-0 flex-col gap-space-0-5 px-space-2-5 pt-space-2 pb-space-3">
+          <span data-testid="card-name" className="truncate font-title text-ui leading-tight">
+            {name}
+          </span>
+          <span className="truncate text-meta text-ink-muted">
+            {typeName ? t("meta", { type: typeName, shop }) : shop}
+          </span>
+          {item.priority && (
+            <span className="self-start rounded-pill bg-accent px-space-2 py-space-0-5 text-tag font-bold text-accent-ink">
+              {t("priority")}
             </span>
           )}
-        </div>
-        <div className="flex min-w-space-0 flex-col gap-space-1 px-space-1">
-          <span className="truncate text-sm text-ink-muted">{item.product.shop.name}</span>
-          <span className="truncate font-display text-card-title leading-tight">{name}</span>
-          <span className="flex flex-wrap items-center gap-x-space-2 gap-y-space-1 font-bold tabular-nums">
-            {price}
+          {/* The price tag fills the width (mockup .pricetag); a drop shows inside it, crossed price and « −20 € ». */}
+          <span data-testid="price-tag" className="price-tag mt-space-1 tabular-nums">
+            <span className="whitespace-nowrap">{price}</span>
             {drop !== null && item.product.compareAtCents !== null && (
-              <s className="text-sm font-regular text-ink-muted">
+              <s className="font-regular whitespace-nowrap">
                 {formatAmount(locale, item.product.compareAtCents, currency)}
               </s>
             )}
             {drop !== null && (
-              <span
-                data-testid="card-drop"
-                className="rounded-full bg-success-soft px-space-3 py-space-1-5 text-caption font-strong text-success"
-              >
+              <span data-testid="card-drop" className="ml-auto whitespace-nowrap">
                 −{formatAmount(locale, drop, currency)}
               </span>
             )}
           </span>
           {asked === null && item.product.captureStatus === "manual" && item.product.priceCents !== null && (
-            <span className="truncate text-sm text-ink-muted">{t("manualPrice")}</span>
+            <span className="truncate text-meta text-ink-muted">{t("manualPrice")}</span>
           )}
-          {item.why && <span className="truncate text-sm text-ink-muted italic">{t("why", { why: item.why })}</span>}
+          {item.why && <span className="truncate text-meta text-ink-muted italic">{t("why", { why: item.why })}</span>}
         </div>
       </Wrapper>
       <div className="pointer-events-none absolute inset-x-space-0 top-space-0 aspect-3/4">
-        {item.priority && (
-          <span className="absolute top-space-7 left-space-3 mt-space-2 rounded-full bg-accent px-space-2 py-space-1 text-caption font-strong text-accent-ink">
-            {t("priority")}
-          </span>
-        )}
+        <span data-testid="card-step" className="clothing-tag absolute top-space-2 left-space-2">
+          {stepLabel}
+        </span>
         {selection ? (
           <span
             aria-hidden="true"
-            className={`absolute top-space-7 right-space-3 mt-space-2 flex size-space-6 items-center justify-center rounded-full border-2 ${
+            className={`absolute top-space-3 right-space-3 flex size-space-6 items-center justify-center rounded-full border-2 ${
               selection.selected ? "border-accent bg-accent text-accent-ink" : "border-surface-raised bg-ink/20"
             }`}
           >
@@ -164,7 +170,7 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
               data-testid="card-taken"
               role="img"
               aria-label={t("taken")}
-              className="absolute top-space-7 right-space-3 mt-space-2 flex size-control-2xs items-center justify-center rounded-mark bg-button-bg text-button-ink"
+              className="absolute top-space-7 left-space-2 flex size-control-2xs items-center justify-center rounded-mark bg-button-bg text-button-ink"
             >
               <Tick draw />
             </span>
@@ -221,11 +227,12 @@ export function ItemCard({ item, actions, selection, showStage, linked = true, c
             reload={actions.reload}
             open={pickerOpen}
             onOpenChange={changePicker}
+            placement="top-space-2 right-space-2 mt-touch-target"
           />
           <ItemMenu item={item} onChanged={actions.onChanged} onTrashed={actions.onTrashed} reload={actions.reload} />
         </>
       ) : (
-        <LoveLevelBadge item={item} />
+        <LoveLevelBadge item={item} placement="top-space-7 left-space-2" />
       )}
       {children}
     </li>
@@ -253,19 +260,15 @@ function Wrapper({
         type="button"
         aria-pressed={selection.selected}
         onClick={onToggle}
-        className={`flex flex-col gap-space-3 rounded-card text-left ${focusRing} ${selection.selected ? "ring-2 ring-accent" : ""}`}
+        className={`flex flex-col rounded-card text-left ${focusRing} ${selection.selected ? "ring-2 ring-accent" : ""}`}
       >
         {children}
       </button>
     );
   }
-  if (!linked) return <div className="flex flex-col gap-space-3">{children}</div>;
+  if (!linked) return <div className="flex flex-col">{children}</div>;
   return (
-    <Link
-      href={href}
-      {...(onClick ? { onClick } : {})}
-      className={`flex flex-col gap-space-3 rounded-card ${focusRing}`}
-    >
+    <Link href={href} {...(onClick ? { onClick } : {})} className={`flex flex-col rounded-card ${focusRing}`}>
       {children}
     </Link>
   );

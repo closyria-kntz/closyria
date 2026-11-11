@@ -12,12 +12,21 @@ import {
 import { z } from "zod";
 import { loadProductViews } from "../catalog/product-view";
 import type { Tx } from "./events";
+import { isInDressing, isReceived, receivedSince } from "./received";
 
 /** URL of one of her private photos (route of task 9, owner only). */
 export const privateMediaUrl = (mediaId: string) => `/api/me/media/${mediaId}`;
 
-/** Her items, in the order of `itemIds`, with their products, photos, tags and lists in a fixed number of queries. */
-export async function loadItemViews(db: Database | Tx, userId: string, itemIds: string[]): Promise<ItemView[]> {
+/**
+ * Her items, in the order of `itemIds`, with their products, photos, tags and lists in a fixed number of queries.
+ * `now` decides « Reçu » (see `received.ts`).
+ */
+export async function loadItemViews(
+  db: Database | Tx,
+  userId: string,
+  itemIds: string[],
+  now: Date = new Date(),
+): Promise<ItemView[]> {
   if (itemIds.length === 0) return [];
   const rows = await db
     .select()
@@ -25,7 +34,7 @@ export async function loadItemViews(db: Database | Tx, userId: string, itemIds: 
     .where(and(inArray(schema.items.id, itemIds), eq(schema.items.userId, userId)));
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const [products, photos, tags, lists] = await Promise.all([
+  const [products, photos, tags, lists, ownedMoves] = await Promise.all([
     loadProductViews(
       db as Database,
       rows.flatMap((r) => (r.productId ? [r.productId] : [])),
@@ -52,7 +61,23 @@ export async function loadItemViews(db: Database | Tx, userId: string, itemIds: 
       .from(schema.wishlistItems)
       .where(inArray(schema.wishlistItems.itemId, ids))
       .orderBy(asc(schema.wishlistItems.addedAt)),
+    db
+      .select({
+        itemId: schema.itemEvents.itemId,
+        at: sql<Date>`max(${schema.itemEvents.at})`.mapWith(schema.itemEvents.at),
+      })
+      .from(schema.itemEvents)
+      .where(
+        and(
+          inArray(schema.itemEvents.itemId, ids),
+          eq(schema.itemEvents.type, "stage"),
+          eq(schema.itemEvents.stage, "owned"),
+        ),
+      )
+      .groupBy(schema.itemEvents.itemId),
   ]);
+  const since = receivedSince(now).getTime();
+  const lastOwned = new Map(ownedMoves.map((m) => [m.itemId, m.at]));
   const byId = new Map<string, ItemView>();
   for (const item of rows) {
     const product = item.productId ? products.get(item.productId) : undefined;
@@ -78,6 +103,7 @@ export async function loadItemViews(db: Database | Tx, userId: string, itemIds: 
       // Only while it is a gift (« Reçu » after « Reçu en cadeau »): moved out of « Reçu », the names wait hidden.
       giftFrom: item.stage === "owned" && item.giftReceivedAt !== null ? item.giftFrom : null,
       receivedAsGift: item.stage === "owned" && item.giftReceivedAt !== null,
+      received: item.stage === "owned" && (lastOwned.get(item.id)?.getTime() ?? -Infinity) >= since,
       pricePaidCents: item.pricePaidCents,
       salePriceCents: item.salePriceCents,
       saleChannel: item.saleChannel,
@@ -104,8 +130,13 @@ export async function loadItemViews(db: Database | Tx, userId: string, itemIds: 
 }
 
 /** One of her items (trashed ones included), or null when unknown or another user's. */
-export async function loadItemView(db: Database | Tx, userId: string, itemId: string): Promise<ItemView | null> {
-  return (await loadItemViews(db, userId, [itemId]))[0] ?? null;
+export async function loadItemView(
+  db: Database | Tx,
+  userId: string,
+  itemId: string,
+  now: Date = new Date(),
+): Promise<ItemView | null> {
+  return (await loadItemViews(db, userId, [itemId], now))[0] ?? null;
 }
 
 /** Thrown for a cursor that was not produced by `listItems` for the same sort. */
@@ -238,7 +269,12 @@ function decodeCursor(sort: ListSort, cursor: string): string[] {
  * default, `(deleted_at, id)` descending in the trash (`deleted=true`). Price sorts use the product's price.
  * Throws `InvalidCursorError` for a foreign or malformed cursor.
  */
-export async function listItems(db: Database, userId: string, query: ItemListQuery): Promise<ItemPage> {
+export async function listItems(
+  db: Database,
+  userId: string,
+  query: ItemListQuery,
+  now: Date = new Date(),
+): Promise<ItemPage> {
   const sort: ListSort = query.wishlist ? "list" : (query.sort ?? (query.deleted ? "trash" : "recent"));
   const { keys, desc } = SORTS[sort];
   const conditions: SQL[] = [
@@ -247,6 +283,8 @@ export async function listItems(db: Database, userId: string, query: ItemListQue
   ];
   if (query.wishlist) conditions.push(isNotNull(schema.wishlistItems.itemId));
   if (query.stage) conditions.push(eq(schema.items.stage, query.stage));
+  if (query.stages) conditions.push(inArray(schema.items.stage, query.stages));
+  if (query.received !== undefined) conditions.push(query.received ? isReceived(now) : isInDressing(now));
   if (query.profile) conditions.push(eq(schema.items.profileId, query.profile));
   if (query.product) conditions.push(eq(schema.items.productId, query.product));
   if (query.loveLevel) conditions.push(inArray(schema.items.loveLevel, query.loveLevel));
@@ -322,6 +360,7 @@ export async function listItems(db: Database, userId: string, query: ItemListQue
     db,
     userId,
     page.map((r) => String(r.id)),
+    now,
   );
   return { items, nextCursor };
 }

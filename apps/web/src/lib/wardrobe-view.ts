@@ -13,14 +13,56 @@ import {
 import { z } from "zod";
 import { priceDropCents } from "./price";
 
-/** Envies, Commandé, Dressing, À vendre: one stage each; `sold` and `returned` are reached by the « Étape » filter. */
+/** The steps of « Tout » (refonte Boudoir): every item but the sold and returned ones (the « Étape » filter). */
+export const ARTICLE_STAGES = ["spotted", "ordered", "owned", "for_sale"] as const satisfies readonly ItemStage[];
+
+/**
+ * The views of « Mes articles »: « Tout », then one per step. « Reçu » and « Dans mon dressing » are both `owned`;
+ * the server tells them apart (`received`, 30 Paris days after her last move to `owned`).
+ */
 export const VIEWS = {
-  envies: { stage: "spotted", path: "/envies" },
-  commande: { stage: "ordered", path: "/commande" },
-  dressing: { stage: "owned", path: "/dressing" },
-  "a-vendre": { stage: "for_sale", path: "/a-vendre" },
-} as const satisfies Record<string, { stage: ItemStage; path: string }>;
+  tout: { stages: ARTICLE_STAGES },
+  envies: { stage: "spotted" },
+  commande: { stage: "ordered" },
+  recu: { stage: "owned", received: true },
+  dressing: { stage: "owned", received: false },
+  "a-vendre": { stage: "for_sale" },
+} as const satisfies Record<string, { stage: ItemStage; received?: boolean } | { stages: readonly ItemStage[] }>;
 export type ViewKey = keyof typeof VIEWS;
+
+/** A step of « Mes articles », as written in the address (`etape=`). */
+export type Step = "envie" | "commande" | "recu" | "dressing" | "a-vendre";
+
+/** The step a card shows (null: sold or returned, which the « Étape » filter names). */
+export function itemStep(item: Pick<ItemView, "stage" | "received">): Step | null {
+  switch (item.stage) {
+    case "spotted":
+      return "envie";
+    case "ordered":
+      return "commande";
+    case "owned":
+      return item.received ? "recu" : "dressing";
+    case "for_sale":
+      return "a-vendre";
+    default:
+      return null;
+  }
+}
+
+/** The one stage of a view (null: « Tout », which mixes them). */
+export function viewStage(view: ViewKey): ItemStage | null {
+  const rule: { stage?: ItemStage; stages?: readonly ItemStage[] } = VIEWS[view];
+  return rule.stage ?? null;
+}
+
+/** Whether `item` belongs to `view` (or to the « Étape » filter's stage, which replaces the view's own). */
+function inView(item: Pick<ItemView, "stage" | "received">, view: ViewKey, stage?: ItemStage): boolean {
+  if (stage) return item.stage === stage;
+  const rule: { stage?: ItemStage; received?: boolean; stages?: readonly ItemStage[] } = VIEWS[view];
+  if (rule.stages) return rule.stages.includes(item.stage);
+  if (item.stage !== rule.stage) return false;
+  return rule.received === undefined || item.received === rule.received;
+}
 
 /** Toggles `id` in a selection capped at `max`: `refused` when adding would go beyond it. */
 export function toggleSelection(
@@ -37,13 +79,6 @@ export function toggleSelection(
 
 export const STAGE_FILTER_OPTIONS = ["sold", "returned"] as const satisfies readonly ItemStage[];
 export const DEFAULT_SORT: ItemSort = "recent";
-
-export function viewForPath(pathname: string): ViewKey | null {
-  const found = (Object.entries(VIEWS) as [ViewKey, (typeof VIEWS)[ViewKey]][]).find(
-    ([, view]) => view.path === pathname,
-  );
-  return found ? found[0] : null;
-}
 
 export type ViewFilters = {
   shop?: string;
@@ -142,7 +177,14 @@ export const activeFilterCount = (filters: ViewFilters): number =>
 
 /** The query of `GET /api/me/items` for a view with its filters (the cursor is added per page). */
 export function toItemQuery(view: ViewKey, filters: ViewFilters, profileId: string | null): Record<string, string> {
-  const query: Record<string, string> = { stage: filters.stage ?? VIEWS[view].stage };
+  const rule: { stage?: ItemStage; received?: boolean; stages?: readonly ItemStage[] } = VIEWS[view];
+  const query: Record<string, string> = {};
+  if (filters.stage) query.stage = filters.stage;
+  else if (rule.stages) query.stages = rule.stages.join(",");
+  else if (rule.stage) {
+    query.stage = rule.stage;
+    if (rule.received !== undefined) query.received = String(rule.received);
+  }
   if (profileId) query.profile = profileId;
   if (filters.shop) query.shop = filters.shop;
   if (filters.category) query.category = filters.category;
@@ -182,16 +224,21 @@ export function wishSummary(items: readonly ItemView[]): { count: number; totalC
 }
 
 /**
- * Whether a card changed in place (pill, « … » menu) still belongs to the view: its stage, its profile, and the
+ * Whether a card changed in place (pill, « … » menu) still belongs to the view: its step, its profile, and the
  * filters she can change from the card (tag, level, priority). The others (shop, type…) do not change there.
  */
 export function stillShown(
   item: ItemView,
-  stage: ItemStage,
+  view: ViewKey,
   profileId: string | null,
-  filters: { tag?: string | undefined; levels?: readonly LoveLevel[] | undefined; priority?: boolean | undefined },
+  filters: {
+    stage?: ItemStage | undefined;
+    tag?: string | undefined;
+    levels?: readonly LoveLevel[] | undefined;
+    priority?: boolean | undefined;
+  },
 ): boolean {
-  if (item.stage !== stage) return false;
+  if (!inView(item, view, filters.stage)) return false;
   if (profileId !== null && item.profileId !== profileId) return false;
   if (filters.tag && !item.tags.some((tag) => tag.id === filters.tag)) return false;
   if (filters.levels?.length && (item.loveLevel === null || !filters.levels.includes(item.loveLevel))) return false;

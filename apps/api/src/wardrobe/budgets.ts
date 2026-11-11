@@ -61,6 +61,12 @@ function parisMidnight(year: number, month: number, day: number): Date {
   return new Date(wall - parisOffsetMs(guess));
 }
 
+/** 00:00 in Paris of the calendar day holding `instant`, shifted by `days`. */
+export function parisDayStart(instant: Date, days = 0): Date {
+  const p = inParis(instant);
+  return parisMidnight(p.year, p.month, p.day + days);
+}
+
 function parseDate(value: string): { year: number; month: number; day: number } {
   const [year = 0, month = 0, day = 0] = value.split("-").map(Number);
   return { year, month, day };

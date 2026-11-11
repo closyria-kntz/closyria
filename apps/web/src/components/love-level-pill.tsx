@@ -15,13 +15,20 @@ import { focusRing } from "./ui";
 export const pillClass =
   "inline-flex min-w-space-0 max-w-full items-center gap-space-1 overflow-hidden whitespace-nowrap rounded-full bg-surface-raised/85 px-space-2 py-space-1 text-caption font-strong text-ink border border-line";
 
-/** Her level, shown without a way to change it (the trash). */
-export function LoveLevelBadge({ item }: { item: ItemView }) {
+/** Her level, shown without a way to change it (the trash, « Sélectionner »): bottom left of the card's photo. */
+export function LoveLevelBadge({
+  item,
+  placement = "top-space-3 left-space-3",
+}: {
+  item: ItemView;
+  /** Where it sits on the photo (positioning classes). */
+  placement?: string;
+}) {
   const levels = useLoveLevels();
   if (item.loveLevel === null) return null;
   const { emoji, label } = levelOf(levels, item.loveLevel);
   return (
-    <span className={`${pillClass} pointer-events-none absolute top-space-3 left-space-3 max-w-3/4`}>
+    <span className={`${pillClass} pointer-events-none absolute ${placement} max-w-3/4`}>
       <span aria-hidden="true">{emoji}</span>
       <span className="min-w-space-0 truncate">{label}</span>
     </span>
@@ -40,6 +47,7 @@ export function LoveLevelPill({
   open,
   onOpenChange,
   big = false,
+  placement = "top-space-2 left-space-2",
 }: {
   item: ItemView;
   onChange: (item: ItemView) => void;
@@ -49,6 +57,8 @@ export function LoveLevelPill({
   onOpenChange: (open: boolean) => void;
   /** The big photo of the sheet: a bigger glyph (mockup 36 px, 30 px on a card). */
   big?: boolean;
+  /** Where it sits on the photo (positioning classes); top left by default. */
+  placement?: string;
 }) {
   const t = useTranslations("Views");
   const tCard = useTranslations("Views.card");
@@ -76,7 +86,7 @@ export function LoveLevelPill({
   return (
     <>
       {/* Tucked in from the curve: the glyph sits about space-4 from the top and from the edge of the photo. */}
-      <div className="absolute top-space-2 left-space-2 z-10">
+      <div className={`absolute ${placement} z-10`}>
         <button
           ref={setAnchor}
           type="button"

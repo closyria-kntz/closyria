@@ -27,8 +27,8 @@ const touch = "min-h-touch-target";
 const action = `${buttonClass} ${touch} shrink-0 whitespace-nowrap`;
 
 type Props = {
-  /** The stage this view shows: moving to it would change nothing. */
-  currentStage: ItemStage;
+  /** The stage this view shows: moving to it would change nothing (null: « Tout », its items stay and are read again). */
+  currentStage: ItemStage | null;
   ids: readonly string[];
   onClear: () => void;
   onSelectAll: () => void;
@@ -84,8 +84,9 @@ export function SelectionBar({ currentStage, ids, onClear, onSelectAll, onGone, 
   const count = ids.length;
   const list = [...ids];
   const stage = async (target: ItemStage) => {
-    // Bought (to « Commandé » or « Reçu » from the wishes or the orders): asked first, one window for all.
-    if (isPurchaseMove(currentStage, target)) {
+    // Bought (to « Commandé » or « Reçu » from the wishes or the orders): asked first, one window for all. On
+    // « Tout » the selection may hold wishes: asked whenever the move could be a purchase.
+    if (currentStage === null ? target === "ordered" || target === "owned" : isPurchaseMove(currentStage, target)) {
       setBusy(true);
       const go = await confirmUnlessReserved(list, "stage");
       setBusy(false);
@@ -94,7 +95,7 @@ export function SelectionBar({ currentStage, ids, onClear, onSelectAll, onGone, 
     return run(
       { op: "stage", ids: list, stage: target, at: new Date().toISOString() },
       (n) => t("toast.stage", { count: n, stage: tStage(target) }),
-      "leave",
+      currentStage === null && target !== "sold" && target !== "returned" ? "reload" : "leave",
     );
   };
   const setLevel = (level: LoveLevel | null) =>

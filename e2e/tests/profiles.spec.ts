@@ -59,6 +59,15 @@ test("créer « Léa », y déplacer deux articles, filtrer par profil, suppress
   await switcher.selectOption({ label: "Léa" });
   await expect(page).toHaveURL(/profil=/);
   await expect(page.getByTestId("item-card")).toHaveCount(2);
+  // Once the cards have risen in (half faded, their text would read paler than it is).
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Number.POSITIVE_INFINITY)
+        .map((a) => a.finished),
+    ),
+  );
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
   await switcher.selectOption({ label: "Moi" });

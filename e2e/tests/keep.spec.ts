@@ -182,7 +182,7 @@ test("un article gardé dans un autre profil : bandeau « Déjà dans le profil 
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
 });
 
-test("passer à « Reçu » avec le prix payé : l'article est dans Dressing, puis Annuler", async ({ page }) => {
+test("passer à « Reçu » avec le prix payé : l'article est dans Reçus, puis Annuler", async ({ page }) => {
   await openSheet(page);
   await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
@@ -194,15 +194,17 @@ test("passer à « Reçu » avec le prix payé : l'article est dans Dressing, pu
   await expect(page.getByText("Payé : 19,90")).toBeVisible();
   const toast = page.getByRole("status", { name: "Notifications" });
   await expect(toast).toContainText("Étape : Reçu");
-  // The Dressing view (another page in the same context) lists it while the undo is still on offer.
-  const dressing = await page.context().newPage();
-  await dressing.goto("/dressing");
-  await expect(dressing.getByTestId("item-card")).toHaveCount(1);
-  await dressing.close();
+  // « Reçus » (another page in the same context: just received, not yet in her dressing) lists it while the undo is
+  // still on offer.
+  const received = await page.context().newPage();
+  await received.goto("/articles?etape=recu");
+  await expect(received.getByTestId("item-card")).toHaveCount(1);
+  await expect(received.getByTestId("card-step")).toHaveText("Reçu");
+  await received.close();
   await toast.getByRole("button", { name: "Annuler" }).last().click();
   await expect(page.getByText("Payé : 19,90")).toHaveCount(0);
-  await page.goto("/dressing");
-  await expect(page.getByRole("heading", { name: "Ton dressing est vide" })).toBeVisible();
+  await page.goto("/articles?etape=recu");
+  await expect(page.getByRole("heading", { name: "Rien de reçu ces 30 derniers jours" })).toBeVisible();
 });
 
 test("deux messages empilés : survoler la pile déploie les bulles, l'Annuler du plus ancien est cliquable", async ({

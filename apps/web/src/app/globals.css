@@ -144,6 +144,57 @@ body {
   border-radius: var(--radius-photo-top) var(--radius-photo-top) var(--radius-photo-bottom) var(--radius-photo-bottom);
 }
 
+/* Boudoir signature (mockup .tag): the step of an item as an ochre clothing tag, square on the side of its small
+   punched hole (the card's colour shows through), round on the other. Positioned by its user. */
+@utility clothing-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-tag-in) var(--radius-tag-out) var(--radius-tag-out) var(--radius-tag-in);
+  padding: var(--spacing-space-0-75) var(--spacing-space-2-5) var(--spacing-space-0-75) var(--spacing-space-3-5);
+  background: var(--color-label);
+  color: var(--color-label-ink);
+  font-size: var(--text-tag);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--text-chip);
+  white-space: nowrap;
+
+  &::before {
+    content: "";
+    position: absolute;
+    left: var(--spacing-tag-hole);
+    inset-block: 0;
+    margin-block: auto;
+    width: var(--spacing-tag-hole);
+    height: var(--spacing-tag-hole);
+    border-radius: var(--radius-full);
+    background: var(--color-surface-raised);
+  }
+}
+
+/* Boudoir signature (mockup .pricetag): the price on a powder-pink tag with its punched hole first. */
+@utility price-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-space-1-5);
+  border-radius: var(--radius-tag-in) var(--radius-price-out) var(--radius-price-out) var(--radius-tag-in);
+  padding: var(--spacing-space-0-75) var(--spacing-space-2-5) var(--spacing-space-0-75) var(--spacing-space-2);
+  flex-wrap: wrap;
+  row-gap: var(--spacing-space-0-5);
+  background: var(--color-une);
+  color: var(--color-une-ink);
+  font-size: var(--text-chip);
+  font-weight: var(--font-weight-bold);
+
+  &::before {
+    content: "";
+    flex: none;
+    width: var(--spacing-price-hole);
+    height: var(--spacing-price-hole);
+    border-radius: var(--radius-full);
+    background: var(--color-surface-raised);
+  }
+}
+
 /* The same shape, smaller, for thumbnails (sheet gallery, preview strip). */
 @utility thumb-shape {
   border-radius: var(--radius-thumb-top) var(--radius-thumb-top) var(--radius-thumb-bottom) var(--radius-thumb-bottom);

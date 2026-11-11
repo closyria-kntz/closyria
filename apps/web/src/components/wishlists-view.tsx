@@ -8,6 +8,7 @@ import { useLiveRefresh } from "@/lib/live-changes";
 import { moveId } from "@/lib/reorder";
 import { pushUndo } from "@/lib/undo";
 import { createWishlist, fetchWishlists, reorderWishlists } from "@/lib/wardrobe-client";
+import { ArticlesTabs } from "./articles-tabs";
 import { focusMoved, MoveButtons, type MoveDirection } from "./move-buttons";
 import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
 
@@ -69,7 +70,8 @@ export function WishlistsView() {
   }
 
   return (
-    <div className="flex max-w-measure flex-col gap-space-5 pb-space-6">
+    <div className="flex max-w-measure flex-col gap-space-5 pt-space-5 pb-space-6">
+      <ArticlesTabs current="lists" lists={status === "ready" ? lists : null} />
       <h1 className="font-display text-title font-strong">{t("title")}</h1>
 
       <form onSubmit={create} className="flex flex-col gap-space-2 sm:flex-row sm:items-end">

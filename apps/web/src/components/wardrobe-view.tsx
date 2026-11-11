@@ -1,12 +1,13 @@
 "use client";
 
-import type { BudgetView, ItemView, ReferenceView, TagView, WishlistView } from "@closyria/shared";
+import type { BudgetView, ItemCounts, ItemView, ReferenceView, TagView, WishlistView } from "@closyria/shared";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { z } from "zod";
+import { ARTICLES_PATH, BOARD_PARAM, BOARD_VALUE, viewStep } from "@/lib/articles-address";
 import { draftTotals, formatAmount } from "@/lib/budget";
 import { flyTo } from "@/lib/fly-to";
 import { createTakeGuard } from "@/lib/gift-check";
@@ -18,6 +19,7 @@ import {
   type BudgetScope,
   fetchAllWishes,
   fetchFacets,
+  fetchItemCounts,
   fetchItemsPage,
   fetchReference,
   fetchTags,
@@ -34,11 +36,12 @@ import {
   stillShown,
   toggleSelection,
   toViewQuery,
-  VIEWS,
   type ViewFilters,
   type ViewKey,
+  viewStage,
   wishSummary,
 } from "@/lib/wardrobe-view";
+import { ArticlesTabs } from "./articles-tabs";
 import { BudgetCard } from "./budget-card";
 import { CaptureForm } from "./capture-form";
 import { FilterChips, FiltersMenu, SearchField } from "./filters-bar";
@@ -50,6 +53,8 @@ import { ListTabs } from "./list-tabs";
 import { OrderBand } from "./order-band";
 import { LIST_PARAM, PREVIEW_PARAM } from "./order-draft";
 import { SelectionBar } from "./selection-bar";
+import { StageBoard } from "./stage-board";
+import { StepChips } from "./step-chips";
 import { buttonClass, focusRing, primaryButtonClass } from "./ui";
 
 type Loaded = { items: ItemView[]; nextCursor: string | null; status: "loading" | "ready" | "error" };
@@ -59,10 +64,26 @@ const touch = "min-h-touch-target";
 const toolButtonClass = `hit-area relative inline-flex h-control-sm items-center rounded-button border border-line bg-surface-raised px-space-3-5 text-sm font-strong text-ink hover:bg-surface-strong sm:h-touch-target ${focusRing}`;
 const toolPrimaryClass = `hit-area relative inline-flex h-control-sm items-center rounded-button bg-button-bg px-space-3-5 text-sm font-strong text-button-ink sm:h-touch-target ${focusRing}`;
 
+/** « Par étape » needs a computer's width (64 rem and up). */
+const DESKTOP_UP = "(min-width: 64rem)";
+const subscribeDesktop = (onChange: () => void) => {
+  const media = window.matchMedia(DESKTOP_UP);
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+};
+const useDesktop = () =>
+  useSyncExternalStore(
+    subscribeDesktop,
+    () => window.matchMedia(DESKTOP_UP).matches,
+    () => false,
+  );
+
 /**
- * One of the four views (Envies, Commandé, Dressing, À vendre): filters in the address, infinite scroll, a pill and
- * a « … » menu on each card. « Sélectionner » turns each card into a toggle and brings the selection bar; « Terminé »
- * (or Escape) leaves the mode and forgets the selection (spec §3.4).
+ * « Mes articles » (refonte Boudoir): « Tout » or one step (Envies, Commandés, Reçus, Dans mon dressing, À vendre),
+ * with the tabs « Articles · Listes · Commandes groupées », the step chips and their numbers; filters in the address,
+ * infinite scroll, a pill and a « … » menu on each card. « Sélectionner » turns each card into a toggle and brings the
+ * selection bar; « Terminé » (or Escape) leaves the mode and forgets the selection (spec §3.4). On a computer,
+ * « Par étape » shows « Tout » in four columns.
  */
 export function WardrobeView({ view }: { view: ViewKey }) {
   const t = useTranslations("Views");
@@ -71,6 +92,11 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   const search = useSearchParams();
   const ready = useProfilesReady();
   const current = useCurrentProfile();
+  const desktop = useDesktop();
+  const step = viewStep(view);
+  // « Par étape »: on « Tout », on a computer, while the address says so.
+  const boardAsked = view === "tout" && search.get(BOARD_PARAM) === BOARD_VALUE;
+  const board = boardAsked && desktop;
 
   const filters = useMemo(() => filtersFromParams(search), [search]);
   // « Mes envies » only: the list tab in the address (`?liste=<id>`), null for « Toutes mes envies ».
@@ -109,6 +135,9 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   const [wishesReady, setWishesReady] = useState(false);
   const [adding, setAdding] = useState(false);
   const [scopeToken, setScopeToken] = useState(0);
+  // The numbers of the chips (and of the columns), read again whenever something may have moved.
+  const [counts, setCounts] = useState<ItemCounts | null>(null);
+  const [countsToken, setCountsToken] = useState(0);
   const generation = useRef(0);
   const moreController = useRef<AbortController | null>(null);
   const sentinel = useRef<HTMLDivElement>(null);
@@ -151,6 +180,19 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     () => (current.id ? accountWishes.filter((item) => item.profileId === current.id) : accountWishes),
     [accountWishes, current.id],
   );
+
+  useEffect(() => {
+    if (!ready) return;
+    const controller = new AbortController();
+    void reloadToken;
+    void scopeToken;
+    void countsToken;
+    fetchItemCounts(current.id, undefined, controller.signal).then(
+      (found) => !controller.signal.aborted && setCounts(found),
+      () => {},
+    );
+    return () => controller.abort();
+  }, [ready, current.id, reloadToken, scopeToken, countsToken]);
 
   // First page, again whenever the view, the filters, the profile or the reload token change.
   // biome-ignore lint/correctness/useExhaustiveDependencies: queryKey stands for query.
@@ -260,11 +302,11 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     const away = new Set(ids);
     setData((previous) => ({ ...previous, items: previous.items.filter((item) => !away.has(item.id)) }));
     setWishes((previous) => previous.filter((item) => !away.has(item.id)));
+    setCountsToken((value) => value + 1);
   }, []);
 
   // A card changed from its pill or its « … » menu: kept while it still belongs to the view and its filters.
-  const viewStage = filters.stage ?? VIEWS[view].stage;
-  const { tag, levels, priority } = filters;
+  const { tag, levels, priority, stage: stageFilter } = filters;
   const levelsKey = levels?.join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: levelsKey stands for levels.
   const changed = useCallback(
@@ -275,15 +317,16 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           : previous.filter((known) => known.id !== item.id),
       );
       // A list tab holds the wishes of every profile: a card there never leaves for its profile.
-      const stays = stillShown(item, viewStage, listId ? null : current.id, { tag, levels, priority });
+      const stays = stillShown(item, view, listId ? null : current.id, { stage: stageFilter, tag, levels, priority });
       setData((previous) => ({
         ...previous,
         items: stays
           ? previous.items.map((known) => (known.id === item.id ? item : known))
           : previous.items.filter((known) => known.id !== item.id),
       }));
+      setCountsToken((value) => value + 1);
     },
-    [viewStage, current.id, listId, tag, levelsKey, priority],
+    [view, stageFilter, current.id, listId, tag, levelsKey, priority],
   );
   const trashed = useCallback((id: string) => gone([id]), [gone]);
 
@@ -467,6 +510,21 @@ export function WardrobeView({ view }: { view: ViewKey }) {
   const count = activeFilterCount(filters);
   const label = t(`title.${view}`);
   const isEmpty = data.status === "ready" && data.items.length === 0;
+  // The view's one stage, if it has one: moving there changes nothing (« Tout » mixes them).
+  const singleStage = filters.stage ?? viewStage(view);
+  const typeName = useMemo(() => {
+    const names = new Map(reference?.categories.map((category) => [category.id, category.name]) ?? []);
+    // Her correction first, else the product's own type (the last of its path).
+    return (item: ItemView) =>
+      (item.categoryId ? names.get(item.categoryId) : undefined) ?? item.product.traits.category.at(-1) ?? null;
+  }, [reference]);
+  const boardHref = (() => {
+    const params = new URLSearchParams(search.toString());
+    if (boardAsked) params.delete(BOARD_PARAM);
+    else params.set(BOARD_PARAM, BOARD_VALUE);
+    const text = paramsText(params);
+    return text ? `${ARTICLES_PATH}?${text}` : ARTICLES_PATH;
+  })();
 
   const summary = view === "envies" && wishesReady ? wishSummary(scopeWishes) : null;
   const withoutSearch = ({ q: _, ...rest }: ViewFilters): ViewFilters => rest;
@@ -474,6 +532,23 @@ export function WardrobeView({ view }: { view: ViewKey }) {
 
   return (
     <div className="flex flex-col gap-space-4 pt-space-5 pb-space-6">
+      <div className="flex items-center justify-between gap-space-3">
+        <h1 className="font-title text-page-title leading-none font-regular">{t("pageTitle")}</h1>
+        {view === "tout" && desktop && (
+          <button
+            type="button"
+            aria-pressed={board}
+            onClick={() => router.push(boardHref, { scroll: false })}
+            className={`inline-flex min-h-touch-target items-center justify-center rounded-pill px-space-4 text-sm font-bold ${
+              board ? "bg-ink text-surface" : "bg-surface-sunken text-ink"
+            } ${focusRing}`}
+          >
+            {t("board.toggle")}
+          </button>
+        )}
+      </div>
+      <ArticlesTabs current="articles" lists={view === "envies" && lists.status === "ready" ? lists.items : null} />
+      <StepChips current={step} counts={counts} />
       {view === "envies" && <ListTabs lists={tabs} current={listId} allCount={wishes.length} onChange={chooseList} />}
       {view === "envies" &&
         lists.items
@@ -494,36 +569,37 @@ export function WardrobeView({ view }: { view: ViewKey }) {
       {view === "envies" && lists.items.map((list) => <GroupOrderBanner key={`group-${list.id}`} list={list} />)}
       {/* Positioned: the filters menu opens against this row (full width on a phone, under the tools from sm up). */}
       <div className="relative flex flex-wrap items-end justify-between gap-x-space-5 gap-y-space-4">
-        <div className="flex min-w-space-0 flex-col gap-space-3">
-          <h1 className="font-display text-hero leading-none font-regular tracking-display">{t(`heading.${view}`)}</h1>
-          {summary && (
-            <ul aria-label={t("summary.label")} data-testid="wish-summary" className="flex flex-wrap gap-space-2">
-              <li className="glass rounded-full px-space-3 py-space-1-5 text-sm tabular-nums">
-                {t.rich("summary.count", { count: summary.count, b: (chunks) => <b>{chunks}</b> })}
-              </li>
-              <li className="glass rounded-full px-space-3 py-space-1-5 text-sm tabular-nums">
-                {t.rich("summary.total", {
-                  amount: formatAmount(locale, summary.totalCents),
-                  b: (chunks) => <b>{chunks}</b>,
-                })}
-              </li>
-              {summary.drops > 0 && (
-                <li className="rounded-full bg-success-soft px-space-3 py-space-1-5 text-sm font-strong text-success tabular-nums">
-                  {t("summary.drops", { count: summary.drops })}
+        {(summary || showBudget) && (
+          <div className="flex min-w-space-0 flex-col gap-space-3">
+            {summary && (
+              <ul aria-label={t("summary.label")} data-testid="wish-summary" className="flex flex-wrap gap-space-2">
+                <li className="glass rounded-pill px-space-3 py-space-1-5 text-sm tabular-nums">
+                  {t.rich("summary.count", { count: summary.count, b: (chunks) => <b>{chunks}</b> })}
                 </li>
-              )}
-            </ul>
-          )}
-          {showBudget && budgetScope && (
-            <BudgetCard
-              scope={budgetScope}
-              draftCents={draftCents}
-              listName={activeList?.name}
-              reloadKey={reloadToken + scopeToken}
-              onBudget={(next) => setBandBudget({ key: scopeKey, view: next })}
-            />
-          )}
-        </div>
+                <li className="glass rounded-pill px-space-3 py-space-1-5 text-sm tabular-nums">
+                  {t.rich("summary.total", {
+                    amount: formatAmount(locale, summary.totalCents),
+                    b: (chunks) => <b>{chunks}</b>,
+                  })}
+                </li>
+                {summary.drops > 0 && (
+                  <li className="rounded-pill bg-success-soft px-space-3 py-space-1-5 text-sm font-strong text-success tabular-nums">
+                    {t("summary.drops", { count: summary.drops })}
+                  </li>
+                )}
+              </ul>
+            )}
+            {showBudget && budgetScope && (
+              <BudgetCard
+                scope={budgetScope}
+                draftCents={draftCents}
+                listName={activeList?.name}
+                reloadKey={reloadToken + scopeToken}
+                onBudget={(next) => setBandBudget({ key: scopeKey, view: next })}
+              />
+            )}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-space-2">
           <SearchField
             value={filters.q}
@@ -539,7 +615,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
             activeCount={count}
             sortable={!listId}
           />
-          {(selecting || data.items.length > 0) && (
+          {!board && (selecting || data.items.length > 0) && (
             <button
               type="button"
               className={`${selecting ? toolPrimaryClass : toolButtonClass}`}
@@ -610,17 +686,20 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           </button>
         </div>
       )}
-      {(data.status === "loading" || !ready) && data.items.length === 0 && (
+      {board && (
+        <StageBoard filters={filters} profileId={current.id} counts={counts} reloadKey={reloadToken + countsToken} />
+      )}
+      {!board && (data.status === "loading" || !ready) && data.items.length === 0 && (
         <p role="status" className="text-ink-muted">
           {t("loading")}
         </p>
       )}
 
-      {isEmpty && (
-        <section className="flex flex-col items-start gap-space-3 rounded-card border border-line bg-surface-raised p-space-5">
+      {!board && isEmpty && (
+        <section className="flex flex-col items-start gap-space-3 rounded-card bg-surface-sunken p-space-5">
           {count > 0 ? (
             <>
-              <h2 className="font-display text-lead font-strong">{t("empty.filtered.title")}</h2>
+              <h2 className="font-title text-lead font-regular">{t("empty.filtered.title")}</h2>
               <p className="max-w-measure text-ink-muted">{t("empty.filtered.body")}</p>
               <button
                 type="button"
@@ -632,7 +711,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
             </>
           ) : (
             <>
-              <h2 className="font-display text-lead font-strong">{t(`empty.${view}.title`)}</h2>
+              <h2 className="font-title text-lead font-regular">{t(`empty.${view}.title`)}</h2>
               <p className="max-w-measure text-ink-muted">{t(`empty.${view}.body`)}</p>
               <Link href="/" className={`${primaryButtonClass} ${touch}`}>
                 {t("empty.action")}
@@ -642,14 +721,8 @@ export function WardrobeView({ view }: { view: ViewKey }) {
         </section>
       )}
 
-      {data.items.length > 0 && (
-        <ItemGrid
-          label={label}
-          items={data.items}
-          actions={actions}
-          selection={selection}
-          showStage={filters.stage !== undefined}
-        >
+      {!board && data.items.length > 0 && (
+        <ItemGrid label={label} items={data.items} actions={actions} selection={selection} typeName={typeName}>
           <div ref={sentinel} aria-hidden="true" />
           {loadingMore && (
             <p role="status" className="text-center text-sm text-ink-muted">
@@ -678,7 +751,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
       )}
       {selecting && selected.size > 0 && (
         <SelectionBar
-          currentStage={filters.stage ?? VIEWS[view].stage}
+          currentStage={singleStage}
           ids={[...selected]}
           onClear={() => {
             setSelected(new Set());

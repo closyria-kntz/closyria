@@ -231,6 +231,7 @@ const itemView = {
   notes: null,
   giftFrom: null,
   receivedAsGift: false,
+  received: false,
   pricePaidCents: null,
   salePriceCents: null,
   saleChannel: null,

@@ -21,7 +21,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   return { title: t(articlesView(await paramsOf(searchParams))), robots: { index: false, follow: false } };
 }
 
-/** « Mes articles » (refonte Boudoir): the view of the step in the address, until « Tout » arrives (task 3). */
+/** « Mes articles » (refonte Boudoir): « Tout », or the view of the step in the address (`?etape=`). */
 export default async function Page({ searchParams }: Props) {
   const view = articlesView(await paramsOf(searchParams));
   return (

@@ -59,6 +59,7 @@ retrouve tous ses articles (envies, commandés, dressing) dans une seule vue.
 Les étapes visibles deviennent : **Envie · Commandé · Reçu · Dans mon dressing · À vendre** (« Repéré » disparaît de
 l'interface ; le code garde ses identifiants). Chaque bouton dit ce qu'il fait (« Je l'ai commandé », « Voir chez
 {boutique} », « Demander un avis », « Ajouter à une liste », « M'alerter si le prix baisse », « Partager »).
+« Reçu » ou « Dans mon dressing » (décision du 2026-11-11) : un article `owned` est « Reçu » tant que son dernier passage à `owned` date de moins de 30 jours (jours de Paris, constante `RECEIVED_DAYS`, calculé par l'API ; le chantier 3 la remplacera par la date limite de retour de chaque commande), sinon — ou sans passage enregistré — « Dans mon dressing ».
 
 ## 4. Identité Boudoir
 

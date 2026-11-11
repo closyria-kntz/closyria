@@ -752,7 +752,7 @@
       "whyQuote": "« {why} »"
     },
     "stage": {
-      "spotted": "Repéré",
+      "spotted": "Envie",
       "ordered": "Commandé",
       "owned": "Reçu",
       "for_sale": "À vendre",
@@ -837,16 +837,64 @@
   },
   "Views": {
     "title": {
+      "tout": "Mes articles",
       "envies": "Envies",
-      "commande": "Commandé",
-      "dressing": "Dressing",
+      "commande": "Commandés",
+      "recu": "Reçus",
+      "dressing": "Dans mon dressing",
       "a-vendre": "À vendre"
     },
-    "heading": {
-      "envies": "Mes envies",
+    "pageTitle": "Mes articles",
+    "step": {
+      "envie": "Envie",
       "commande": "Commandé",
-      "dressing": "Dressing",
+      "recu": "Reçu",
+      "dressing": "Dans mon dressing",
       "a-vendre": "À vendre"
+    },
+    "chips": {
+      "label": "Étapes",
+      "count": "{label} · {count, number}",
+      "tout": "Tout",
+      "envie": "Envies",
+      "commande": "Commandés",
+      "recu": "Reçus",
+      "dressing": "Dans mon dressing",
+      "a-vendre": "À vendre"
+    },
+    "tabs": {
+      "label": "Rubriques de Mes articles",
+      "count": "{label} · {count, number}",
+      "articles": "Articles",
+      "lists": "Listes",
+      "groupOrders": "Commandes groupées"
+    },
+    "board": {
+      "toggle": "Par étape",
+      "label": "Mes articles par étape",
+      "column": "{label} · {count, number}",
+      "empty": "Rien à cette étape.",
+      "seeAll": "Tout voir"
+    },
+    "groupOrders": {
+      "title": "Commandes groupées",
+      "metadata": "Mes commandes groupées",
+      "listLabel": "Mes commandes groupées",
+      "loading": "Chargement de tes commandes groupées…",
+      "loadError": "Tes commandes groupées ne s’affichent pas. Réessaie dans un instant.",
+      "retry": "Réessayer",
+      "shop": "Chez {shop}",
+      "list": "Liste « {name} »",
+      "see": "Voir la commande",
+      "status": {
+        "open": "En cours",
+        "closed": "Close, à passer"
+      },
+      "empty": {
+        "title": "Aucune commande groupée en cours",
+        "body": "Une commande groupée se lance depuis une liste partagée : tes amies ajoutent ce qu’elles veulent, tu passes une seule commande.",
+        "action": "Voir mes listes"
+      }
     },
     "summary": {
       "label": "En bref",
@@ -860,8 +908,10 @@
       "close": "Fermer"
     },
     "metadata": {
+      "tout": "Mes articles",
       "envies": "Mes envies",
       "commande": "Mes commandes",
+      "recu": "Mes articles reçus",
       "dressing": "Mon dressing",
       "a-vendre": "Mes articles à vendre",
       "order": "Préparer une commande"
@@ -873,6 +923,10 @@
     "loadMore": "Voir la suite",
     "end": "C’est tout pour l’instant.",
     "empty": {
+      "tout": {
+        "title": "Rien ici pour l’instant",
+        "body": "Colle le lien d’un vêtement que tu aimes : il arrive ici, dans tes envies. Tu le suis ensuite jusqu’à ton dressing."
+      },
       "envies": {
         "title": "Aucune envie pour l’instant",
         "body": "Colle le lien d’un article pour le retrouver ici."
@@ -881,9 +935,13 @@
         "title": "Aucune commande en cours",
         "body": "Colle le lien d’un article, puis marque-le comme commandé."
       },
+      "recu": {
+        "title": "Rien de reçu ces 30 derniers jours",
+        "body": "Quand un article commandé arrive, passe-le à « Reçu » depuis sa fiche : il reste ici 30 jours, puis rejoint ton dressing."
+      },
       "dressing": {
         "title": "Ton dressing est vide",
-        "body": "Colle le lien d’un article reçu pour le ranger ici."
+        "body": "Tes articles reçus le rejoignent au bout de 30 jours. Colle le lien d’un article que tu as déjà pour le ranger ici."
       },
       "a-vendre": {
         "title": "Rien à vendre pour l’instant",
@@ -913,7 +971,8 @@
       "takeOf": "Je le prends : {name}",
       "remove": "Retirer",
       "removeOf": "Retirer de ma commande : {name}",
-      "taken": "Dans ma commande"
+      "taken": "Dans ma commande",
+      "meta": "{type} · {shop}"
     },
     "filters": {
       "title": "Filtres",
@@ -1204,7 +1263,7 @@
     "listLabel": "Envies à commander",
     "empty": {
       "title": "Rien à commander pour l’instant",
-      "body": "Tes envies à l’étape « Repéré » s’afficheront ici."
+      "body": "Tes envies s’afficheront ici."
     },
     "row": {
       "priority": "Prioritaire",

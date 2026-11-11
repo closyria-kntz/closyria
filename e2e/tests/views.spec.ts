@@ -41,7 +41,7 @@ test("un article gardé apparaît dans Envies, l'onglet courant est marqué, et 
 }) => {
   await pasteAndWish(page);
   await page.goto("/envies");
-  await expect(page.getByRole("heading", { level: 1, name: "Mes envies" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Mes articles" })).toBeVisible();
   const card = page.getByTestId("item-card").first();
   await expect(card).toContainText(PRODUCT.name);
   await expect(card.getByRole("button", { name: "Niveau : J’aime. Toucher pour changer" })).toBeVisible();
@@ -67,7 +67,7 @@ test("les filtres vivent dans l'adresse et le bouton Précédent les restaure", 
   await page.getByRole("button", { name: "Filtres et tri" }).click();
   await page.getByLabel("Trier par").selectOption("price_asc");
   await expect(page).toHaveURL(/tri=price_asc/);
-  await page.getByLabel("Étape").selectOption("sold");
+  await page.getByLabel("Étape", { exact: true }).selectOption("sold");
   await expect(page).toHaveURL(/statut=sold/);
   await expect(page.getByRole("heading", { name: "Aucun article ne correspond" })).toBeVisible();
   await page.goBack();
@@ -420,7 +420,7 @@ test("double-clic sur la photo : la bulle des 4 niveaux, rien ne change avant de
   // A click on the emoji opens it too; click outside closes without a change.
   await emoji.click();
   await expect(bubble).toBeVisible();
-  await page.getByRole("heading", { level: 1, name: "Mes envies" }).click();
+  await page.getByRole("heading", { level: 1, name: "Mes articles" }).click();
   await expect(bubble).toHaveCount(0);
 
   // Choosing « Mims » changes the card and saves; « Annuler » puts it back.
@@ -515,11 +515,12 @@ test("filtres : la coche se dessine dans la pastille active, « Effacer » vide 
   await expect(page.getByRole("button", { name: /^Effacer/ })).toHaveCount(0);
 });
 
-// Refonte « Cocon lumineux », task 9 and palier 3 bis: cards in shape C, « Aperçu », « Je le prends ».
+// Refonte « Cocon lumineux », task 9 and palier 3 bis: « Aperçu », « Je le prends ». Refonte Boudoir, task 3: the
+// card is a white 20 px card, its step as a clothing tag, the price (and its drop) in a powder-pink price tag.
 
 const card = (page: Page) => page.getByTestId("item-card").first();
 
-test("la carte en forme C : émoji en haut à gauche, « … » en haut à droite, « −20 € » à côté du prix sous la photo", async ({
+test("la carte Boudoir : étape en haut à gauche, « … » et l'émoji à droite, « −20 € » dans l'étiquette de prix", async ({
   page,
   db,
 }) => {
@@ -530,44 +531,53 @@ test("la carte en forme C : émoji en haut à gauche, « … » en haut à droit
   await db.query("UPDATE products SET compare_at_cents = NULL WHERE id = $1", [productId]);
   await page.reload();
   const first = card(page);
-  // Shape C: the top corners much rounder than the bottom ones (44 / 14 px), the photo filling the frame.
+  // A white card with 20 px corners; the photo fills the top of it (its top corners follow the card's).
+  await expect(first).toHaveCSS("border-top-left-radius", "20px");
+  await expect(first).toHaveCSS("background-color", await tokenColor(page, "--color-surface-raised"));
   const photo = first.locator("[data-photo]");
-  await expect(photo).toHaveCSS("border-top-left-radius", "44px");
-  await expect(photo).toHaveCSS("border-top-right-radius", "44px");
-  await expect(photo).toHaveCSS("border-bottom-left-radius", "14px");
+  await expect(photo).toHaveCSS("border-top-left-radius", "20px");
+  await expect(photo).toHaveCSS("border-bottom-left-radius", "0px");
   await expect(photo.locator("img")).toHaveCSS("object-fit", "cover");
-  // The emoji alone top left, tucked in from the curve; « … » top right; both a finger wide (measured once the
-  // card has risen in).
+  // The step top left as an ochre tag; « … » top right with the emoji right under it, both a finger wide (measured
+  // once the card has risen in).
+  const step = first.getByTestId("card-step");
+  await expect(step).toHaveText("Envie");
+  await expect(step).toHaveCSS("background-color", await tokenColor(page, "--color-label"));
   await first.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
   const frame = await photo.boundingBox();
+  const tag = await step.boundingBox();
   const emoji = await first.getByRole("button", { name: /niveau : J’aime/ }).boundingBox();
   const more = await first.getByRole("button", { name: /Plus d’actions/ }).boundingBox();
-  if (!frame || !emoji || !more) throw new Error("no box");
-  expect(emoji.x - frame.x).toBeGreaterThanOrEqual(4);
-  expect(emoji.y - frame.y).toBeGreaterThanOrEqual(4);
-  expect(emoji.x + emoji.width / 2).toBeLessThan(frame.x + frame.width / 2);
+  if (!frame || !tag || !emoji || !more) throw new Error("no box");
+  expect(tag.x - frame.x).toBeGreaterThanOrEqual(6);
+  expect(tag.y - frame.y).toBeGreaterThanOrEqual(6);
   expect(more.x + more.width / 2).toBeGreaterThan(frame.x + frame.width / 2);
-  expect(Math.abs(more.y - emoji.y)).toBeLessThan(2);
+  expect(emoji.x + emoji.width / 2).toBeGreaterThan(frame.x + frame.width / 2);
+  expect(emoji.y).toBeGreaterThanOrEqual(more.y + more.height - 1);
   for (const box of [emoji, more]) expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(44);
   // No drop yet: nothing crossed.
   await expect(first.getByTestId("card-drop")).toHaveCount(0);
+  await expect(first.getByTestId("price-tag")).toHaveCSS("background-color", await tokenColor(page, "--color-une"));
 
   await db.query("UPDATE products SET compare_at_cents = 4300 WHERE id = $1", [productId]);
   await page.reload();
-  await expect(card(page).getByTestId("card-drop")).toHaveText(/^−20\s€$/);
-  await expect(card(page).locator("s")).toHaveText(/43\s€/);
-  // Under the photo, beside the price: never over « Aperçu » and « Je le prends ».
-  const dropBox = await card(page).getByTestId("card-drop").boundingBox();
+  const priceTag = card(page).getByTestId("price-tag");
+  const drop = priceTag.getByTestId("card-drop");
+  await expect(drop).toHaveText(/^−20\s€$/);
+  await expect(priceTag.locator("s")).toHaveText(/43\s€/);
+  // Inside the price tag, under the photo, whole (never cut, never over « Aperçu » and « Je le prends »), measured
+  // once the card has risen in.
+  await card(page).evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  const dropBox = await drop.boundingBox();
+  const tagBox = await priceTag.boundingBox();
   const photoBox = await card(page).locator("[data-photo]").boundingBox();
-  const priceBox = await card(page).locator("s").boundingBox();
-  if (!dropBox || !photoBox || !priceBox) throw new Error("no box");
+  if (!dropBox || !tagBox || !photoBox) throw new Error("no box");
   expect(dropBox.y).toBeGreaterThan(photoBox.y + photoBox.height);
-  await expect(card(page).getByTestId("card-drop")).toBeVisible();
-  // Beside the price, or wrapped right under it on a narrow phone (Figtree is wider than Jost). Temporary: Task 3 of
-  // the Boudoir redesign replaces this row with the price tag and will tighten this check again.
-  const sameRow = Math.abs(dropBox.y + dropBox.height / 2 - (priceBox.y + priceBox.height / 2)) < 6;
-  const rightUnder = dropBox.y >= priceBox.y + priceBox.height - 1 && dropBox.y - (priceBox.y + priceBox.height) < 12;
-  expect(sameRow || rightUnder).toBe(true);
+  expect(dropBox.x).toBeGreaterThanOrEqual(tagBox.x);
+  expect(dropBox.y).toBeGreaterThanOrEqual(tagBox.y);
+  expect(dropBox.x + dropBox.width).toBeLessThanOrEqual(tagBox.x + tagBox.width + 0.5);
+  expect(dropBox.y + dropBox.height).toBeLessThanOrEqual(tagBox.y + tagBox.height + 0.5);
+  expect(await drop.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   // Equal or lower crossed price: no badge.
   await db.query("UPDATE products SET compare_at_cents = 2300 WHERE id = $1", [productId]);
   await page.reload();
@@ -701,7 +711,7 @@ test("Mes envies : grand titre, pastilles de résumé, loupe, menu des filtres e
   await db.query("UPDATE products SET compare_at_cents = NULL WHERE id = $1", [ids[1]]);
   await page.reload();
 
-  const title = page.getByRole("heading", { level: 1, name: "Mes envies" });
+  const title = page.getByRole("heading", { level: 1, name: "Mes articles" });
   await expect(title).toHaveCSS("font-family", /Gloock/);
   const summary = page.getByRole("list", { name: "En bref" });
   await expect(summary.getByRole("listitem")).toHaveText(["2 envies", /^46\s€ en tout$/, "1 prix en baisse"]);

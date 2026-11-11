@@ -1,5 +1,7 @@
 import { and, eq, schema } from "@closyria/db";
 import {
+  itemCountsQuerySchema,
+  itemCountsSchema,
   itemCreateSchema,
   itemListQuerySchema,
   itemMoveSchema,
@@ -8,6 +10,7 @@ import {
   itemPatchSchema,
   itemStageInputSchema,
   itemViewSchema,
+  RECEIVED_DAYS,
   wardrobeErrorSchema,
 } from "@closyria/shared";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
@@ -15,6 +18,7 @@ import type { Context, MiddlewareHandler } from "hono";
 import { type AccessEnv, defineAccess } from "../../access";
 import { rateLimit } from "../../rate-limit";
 import { trackItemEvent, WARDROBE_LIMITS, type WardrobeDeps } from "../../wardrobe/deps";
+import { countItems } from "../../wardrobe/item-counts";
 import { InvalidCursorError, listItems, loadItemView } from "../../wardrobe/item-view";
 import {
   changeStage,
@@ -80,13 +84,31 @@ const listRoute = defineAccess(
       "`category`/`color` match her correction, else the product's; `audience` and the price sorts use the product. " +
       "`wishlist` keeps the items of one of her lists; `product` her item for one product. `loveLevel` takes a " +
       "comma-separated list (`4,3`); `orderDraft` her order selection; `sort=love` puts the highest level first, " +
-      "priority first at equal level, then the newest. Photos imported by link " +
+      "priority first at equal level, then the newest. `stages` keeps several stages (`spotted,ordered`); " +
+      "`received` splits `owned` into « Reçu » (`true`) and « Dans mon dressing » (`false`). Photos imported by link " +
       "that the worker has finished are attached first.",
     request: { query: itemListQuerySchema },
     responses: {
       200: json("A page", itemPageSchema),
       400: errorContent("Invalid query (invalid_request) or cursor (invalid_cursor)"),
       404: errorContent("`wishlist` is unknown or another account's list (not_found)"),
+    },
+  }),
+  "user",
+);
+
+const countsRoute = defineAccess(
+  createRoute({
+    method: "get",
+    path: "/me/items/counts",
+    summary: "How many of her items are at each step",
+    description:
+      "Not in the trash, of one profile with `profile`. `recu`: `owned` and moved there less than " +
+      `${RECEIVED_DAYS} Paris days ago; \`dressing\`: the other \`owned\` items. Sold and returned items are not counted.`,
+    request: { query: itemCountsQuerySchema },
+    responses: {
+      200: json("The counts", itemCountsSchema),
+      400: errorContent("Invalid query (invalid_request)"),
     },
   }),
   "user",
@@ -218,7 +240,7 @@ export function itemsRoutes(deps: WardrobeDeps, { attachReadyImports }: Pick<Imp
 
   /** The mutation answer: ids, undo and the item as it now is; null when it is gone meanwhile (404). */
   async function answer(userId: string, outcome: Exclude<ItemOutcome, { error: unknown }>) {
-    const item = await loadItemView(db, userId, outcome.itemId);
+    const item = await loadItemView(db, userId, outcome.itemId, now());
     return item ? { itemIds: outcome.itemIds, undo: outcome.undo, item } : null;
   }
 
@@ -250,17 +272,21 @@ export function itemsRoutes(deps: WardrobeDeps, { attachReadyImports }: Pick<Imp
         }
         // Her photos imported by link land before she sees the list (the sheet reads its item this way).
         await attachReadyImports(userIdOf(c));
-        return c.json(await listItems(db, userIdOf(c), query), 200);
+        return c.json(await listItems(db, userIdOf(c), query, now()), 200);
       } catch (error) {
         if (error instanceof InvalidCursorError) return c.json({ error: "invalid_cursor" } as const, 400);
         throw error;
       }
     })
+    .openapi(countsRoute, async (c) => {
+      const { profile } = c.req.valid("query");
+      return c.json(await countItems(db, userIdOf(c), profile ?? null, now()), 200);
+    })
     .openapi(getRoute, async (c) => {
       const userId = userIdOf(c);
       const { id } = c.req.valid("param");
       await attachReadyImports(userId, [id]);
-      const item = await loadItemView(db, userId, id);
+      const item = await loadItemView(db, userId, id, now());
       return item ? c.json(item, 200) : c.json(notFound, 404);
     })
     .openapi(patchRoute, async (c) => {

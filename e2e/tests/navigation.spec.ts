@@ -9,6 +9,14 @@ import { expect, test } from "../fixtures/test";
 const PHONE_MAX = 767;
 const isPhone = (page: Page) => (page.viewportSize()?.width ?? 0) <= PHONE_MAX;
 const menu = (page: Page) => page.getByRole("navigation", { name: "Menu principal" });
+/** « Mes articles » at a step: its title, and the step's chip marked current (task 3). */
+async function atStep(page: Page, chip: RegExp) {
+  await expect(page.getByRole("heading", { level: 1, name: "Mes articles" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Étapes" }).getByRole("link", { name: chip })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+}
 
 const axe = async (page: Page) => {
   const { violations } = await new AxeBuilder({ page }).analyze();
@@ -148,21 +156,21 @@ test("les anciennes adresses mènent à « Mes articles », avec l'étape, la li
 
   await page.goto(`/envies?liste=${listId}&prioritaire=1`);
   await expect(page).toHaveURL(new RegExp(`/articles\\?etape=envie&liste=${listId}&prioritaire=1$`));
-  await expect(page.getByRole("heading", { level: 1, name: "Mes envies" })).toBeVisible();
+  await atStep(page, /^Envies/);
   await expect(page.getByRole("button", { name: /^Anniversaire/ })).toHaveAttribute("aria-current", "true");
   await expect(menu(page).getByRole("link", { name: "Mes articles" })).toHaveAttribute("aria-current", "page");
 
   await page.goto("/dressing?prioritaire=1&tri=price_asc");
   await expect(page).toHaveURL(/\/articles\?etape=dressing&prioritaire=1&tri=price_asc$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Dressing" })).toBeVisible();
+  await atStep(page, /^Dans mon dressing/);
 
   await page.goto("/a-vendre?prioritaire=1");
   await expect(page).toHaveURL(/\/articles\?etape=a-vendre&prioritaire=1$/);
-  await expect(page.getByRole("heading", { level: 1, name: "À vendre" })).toBeVisible();
+  await atStep(page, /^À vendre/);
 
   await page.goto("/commande?prioritaire=1");
   await expect(page).toHaveURL(/\/articles\?etape=commande&prioritaire=1$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Commandé" })).toBeVisible();
+  await atStep(page, /^Commandés/);
   // « Préparer une commande » keeps its own address.
   await page.goto(`/envies/commande?liste=${listId}`);
   await expect(page).toHaveURL(new RegExp(`/envies/commande\\?liste=${listId}$`));
@@ -171,14 +179,14 @@ test("les anciennes adresses mènent à « Mes articles », avec l'étape, la li
   // The old « Étape » filter (`etape=sold`) becomes `statut`, and a filter chosen on « Mes articles » keeps the step.
   await page.goto("/dressing?etape=sold");
   await expect(page).toHaveURL(/\/articles\?etape=dressing&statut=sold$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Dressing" })).toBeVisible();
+  await atStep(page, /^Dans mon dressing/);
   await page.goto("/articles?etape=dressing");
   await page.getByRole("button", { name: "Filtres et tri" }).click();
   await page.getByLabel("Trier par").selectOption("price_asc");
   await expect(page).toHaveURL(/\/articles\?etape=dressing&tri=price_asc$/);
-  await page.getByLabel("Étape").selectOption("sold");
+  await page.getByLabel("Étape", { exact: true }).selectOption("sold");
   await expect(page).toHaveURL(/\/articles\?etape=dressing&tri=price_asc&statut=sold$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Dressing" })).toBeVisible();
+  await atStep(page, /^Dans mon dressing/);
 });
 
 test("la bonne place est marquée sur les sous-pages, et Moi mène à tout ce que l'ancien menu donnait", async ({
@@ -210,7 +218,7 @@ test("la bonne place est marquée sur les sous-pages, et Moi mène à tout ce qu
   await expect(places.getByRole("link", { name: /^Mon compte/ })).toContainText("Sans compte");
   await places.getByRole("link", { name: "Mon dressing" }).click();
   await expect(page).toHaveURL(/\/articles\?etape=dressing$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Dressing" })).toBeVisible();
+  await atStep(page, /^Dans mon dressing/);
   await expect(menu(page).getByRole("link", { name: "Mes articles" })).toHaveAttribute("aria-current", "page");
   await axe(page);
 });

@@ -87,6 +87,7 @@ export const boudoirDark: Theme = {
     "color-label": c.ochre,
     "color-label-ink": c.boudoirInk,
     "color-une": c.nightUne,
+    "color-une-ink": c.nightRose,
     "color-tip": c.nightTip,
     "color-tip-ink": c.nightTipInk,
     "color-button-bg": c.powderRose,

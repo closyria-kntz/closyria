@@ -5,6 +5,7 @@ import {
   filtersFromParams,
   filtersToParams,
   initialMoreState,
+  itemStep,
   moreReducer,
   paramsText,
   STAGE_FILTER_OPTIONS,
@@ -13,21 +14,31 @@ import {
   toItemQuery,
   toViewQuery,
   VIEWS,
-  viewForPath,
   wishSummary,
 } from "./wardrobe-view";
 
 const UUID = "7b1f6a52-3a0b-4a4c-9f0e-5b1c2d3e4f50";
 
 describe("wardrobe views", () => {
-  it("maps each view to its stage and the extra stages to the filter", () => {
-    expect(VIEWS.envies.stage).toBe("spotted");
-    expect(VIEWS.commande.stage).toBe("ordered");
-    expect(VIEWS.dressing.stage).toBe("owned");
-    expect(VIEWS["a-vendre"].stage).toBe("for_sale");
+  it("maps each view to its stages and the extra stages to the filter", () => {
+    expect(VIEWS.tout).toEqual({ stages: ["spotted", "ordered", "owned", "for_sale"] });
+    expect(VIEWS.envies).toEqual({ stage: "spotted" });
+    expect(VIEWS.commande).toEqual({ stage: "ordered" });
+    expect(VIEWS.recu).toEqual({ stage: "owned", received: true });
+    expect(VIEWS.dressing).toEqual({ stage: "owned", received: false });
+    expect(VIEWS["a-vendre"]).toEqual({ stage: "for_sale" });
     expect(STAGE_FILTER_OPTIONS).toEqual(["sold", "returned"]);
-    expect(viewForPath("/dressing")).toBe("dressing");
-    expect(viewForPath("/produits/x")).toBeNull();
+  });
+
+  it("gives each item the step its card shows, from what the server decided (« Reçu » or « Dans mon dressing »)", () => {
+    const of = (stage: string, received = false) => itemStep({ stage, received } as unknown as ItemView);
+    expect(of("spotted")).toBe("envie");
+    expect(of("ordered")).toBe("commande");
+    expect(of("owned", true)).toBe("recu");
+    expect(of("owned", false)).toBe("dressing");
+    expect(of("for_sale")).toBe("a-vendre");
+    expect(of("sold")).toBeNull();
+    expect(of("returned")).toBeNull();
   });
 });
 
@@ -69,6 +80,13 @@ describe("filters in the address", () => {
       stage: "sold",
       sort: "price_desc",
     });
+  });
+
+  it("« Tout » asks for the five steps, « Reçu » and « Dans mon dressing » let the server split « owned »", () => {
+    expect(toItemQuery("tout", {}, UUID)).toEqual({ stages: "spotted,ordered,owned,for_sale", profile: UUID });
+    expect(toItemQuery("recu", {}, null)).toEqual({ stage: "owned", received: "true" });
+    expect(toItemQuery("dressing", {}, null)).toEqual({ stage: "owned", received: "false" });
+    expect(toItemQuery("tout", { stage: "returned" }, null)).toEqual({ stage: "returned" });
   });
 });
 
@@ -116,17 +134,23 @@ describe("stillShown", () => {
   } as unknown as ItemView;
 
   it("keeps a card that still matches the view, its profile and its filters", () => {
-    expect(stillShown(item, "spotted", UUID, { tag: UUID, levels: [3] })).toBe(true);
-    expect(stillShown(item, "spotted", null, {})).toBe(true);
+    expect(stillShown(item, "envies", UUID, { tag: UUID, levels: [3] })).toBe(true);
+    expect(stillShown(item, "envies", null, {})).toBe(true);
+    expect(stillShown(item, "tout", null, {})).toBe(true);
+    expect(stillShown({ ...item, stage: "owned", received: true }, "tout", null, {})).toBe(true);
+    expect(stillShown({ ...item, stage: "owned", received: true }, "recu", null, {})).toBe(true);
+    expect(stillShown({ ...item, stage: "sold" }, "dressing", null, { stage: "sold" })).toBe(true);
   });
 
   it("drops a card whose stage, profile, tag, level or priority no longer match", () => {
-    expect(stillShown(item, "owned", null, {})).toBe(false);
-    expect(stillShown(item, "spotted", "9b1f6a52-3a0b-4a4c-9f0e-5b1c2d3e4f50", {})).toBe(false);
-    expect(stillShown({ ...item, tags: [] }, "spotted", null, { tag: UUID })).toBe(false);
-    expect(stillShown(item, "spotted", null, { levels: [4] })).toBe(false);
-    expect(stillShown({ ...item, loveLevel: null }, "spotted", null, { levels: [4, 3] })).toBe(false);
-    expect(stillShown(item, "spotted", null, { priority: true })).toBe(false);
+    expect(stillShown(item, "dressing", null, {})).toBe(false);
+    expect(stillShown({ ...item, stage: "owned", received: true }, "dressing", null, {})).toBe(false);
+    expect(stillShown({ ...item, stage: "sold" }, "tout", null, {})).toBe(false);
+    expect(stillShown(item, "envies", "9b1f6a52-3a0b-4a4c-9f0e-5b1c2d3e4f50", {})).toBe(false);
+    expect(stillShown({ ...item, tags: [] }, "envies", null, { tag: UUID })).toBe(false);
+    expect(stillShown(item, "envies", null, { levels: [4] })).toBe(false);
+    expect(stillShown({ ...item, loveLevel: null }, "envies", null, { levels: [4, 3] })).toBe(false);
+    expect(stillShown(item, "envies", null, { priority: true })).toBe(false);
   });
 });
 

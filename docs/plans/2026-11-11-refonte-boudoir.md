@@ -69,8 +69,8 @@
 
 **Interfaces:** Consumes `itemListQuerySchema` (`stage` facultatif = tout). Produces : paramètre d'adresse `etape` (`envie|commande|recu|dressing|a-vendre`, absent = Tout) ; onglets « Articles · Listes · Commandes groupées » ; pastilles avec nombres ; étiquette d'étape sur chaque carte ; étiquette de prix ; bouton « Par étape » (ordinateur ≥ 1024 px) affichant 4 colonnes Envies · Commandés · Reçus · Dans mon dressing ; « Préparer une commande » dans le filtre Envies.
 
-- [ ] Tests d'abord : unitaire du passage étape ↔ paramètre ; e2e : « Tout » montre des articles de plusieurs étapes avec leur étiquette ; pastilles et nombres corrects ; filtre Envies garde sélection, budget et « Préparer une commande » ; Listes et Commandes groupées accessibles depuis les onglets ; « Par étape » sur ordinateur ; écran vide expliquant quoi faire ; 200 articles : défilement et chargement par pages ; axe clair/sombre.
-- [ ] Implémenter, relancer, adapter les e2e qui visaient `/envies`, `/dressing`, `/a-vendre`, `/commande` ; commit « feat(refonte): Mes articles ».
+- [x] Tests d'abord : unitaire du passage étape ↔ paramètre ; e2e : « Tout » montre des articles de plusieurs étapes avec leur étiquette ; pastilles et nombres corrects ; filtre Envies garde sélection, budget et « Préparer une commande » ; Listes et Commandes groupées accessibles depuis les onglets ; « Par étape » sur ordinateur ; écran vide expliquant quoi faire ; 200 articles : défilement et chargement par pages ; axe clair/sombre.
+- [x] Implémenter, relancer, adapter les e2e qui visaient `/envies`, `/dressing`, `/a-vendre`, `/commande` ; commit « feat(refonte): Mes articles ».
 
 ### Task 4: Fiche d'un article
 

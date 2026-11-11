@@ -55,6 +55,8 @@ export const defaultSemanticTokens = {
   "color-label": palette.ochre,
   "color-label-ink": palette.boudoirInk,
   "color-une": palette.powderRose,
+  // The price tag's text on its powder-pink fill (mockup --x-acc), and the shadow of the current segment.
+  "color-une-ink": palette.burgundyAccent,
   "color-tip": palette.tipCream,
   "color-tip-ink": palette.tipBrown,
   // Component tokens
@@ -85,6 +87,14 @@ export const defaultSemanticTokens = {
   "spacing-space-4-5": "1.125rem",
   "spacing-space-5-5": "1.375rem",
   "spacing-space-6-5": "1.625rem",
+  // Hair spaces of the mockup (2 and 3 px): the lines of a card, the padding of the clothing tags.
+  "spacing-space-0-5": "0.125rem",
+  "spacing-space-0-75": "0.1875rem",
+  // The punched hole of a clothing tag (5 px) and of a price tag (6 px).
+  "spacing-tag-hole": "0.3125rem",
+  "spacing-price-hole": "0.375rem",
+  // Thumbnails of the « Par étape » columns (48 px wide, 3:4).
+  "spacing-board-thumb": "3rem",
   // Grid of cards: 34 px between rows, 26 px between columns (mockup).
   "spacing-grid-row": "2.125rem",
   "spacing-grid-col": "1.625rem",
@@ -126,6 +136,13 @@ export const defaultSemanticTokens = {
   "radius-toast": "1.25rem",
   "radius-size": "1rem",
   "radius-mark": "0.6875rem",
+  // Clothing tags (mockup .tag / .pricetag): nearly square on the hole's side, round on the other (3 / 10 / 12 px).
+  "radius-tag-in": "0.1875rem",
+  "radius-tag-out": "0.625rem",
+  "radius-price-out": "0.75rem",
+  // A row of the « Par étape » columns and its thumbnail (12 / 8 px).
+  "radius-board-row": "0.75rem",
+  "radius-board-thumb": "0.5rem",
   // Shape C of the item photos: a rectangle whose top corners are much rounder than the bottom ones.
   "radius-photo-top": radius.photoTop,
   "radius-photo-bottom": radius.photoBottom,
@@ -153,6 +170,11 @@ export const defaultSemanticTokens = {
   "text-menu": "0.84375rem",
   "text-tab": "0.65625rem",
   "text-plus": "1.75rem",
+  // « Mes articles » (mockup): the page title 34 px (.t1), a step tag 10.5 px, a card's « type · boutique » 11 px, chips, tabs and prices 12.5 px.
+  "text-page-title": "2.125rem",
+  "text-tag": "0.65625rem",
+  "text-meta": "0.6875rem",
+  "text-chip": "0.78125rem",
   "text-card-title": "clamp(1.0625rem, 0.9489rem + 0.5682vw, 1.3125rem)",
   "text-sheet-title": "clamp(2rem, 1.6023rem + 1.9886vw, 2.875rem)",
   "text-hero": "clamp(2.25rem, 1.3409rem + 4.5455vw, 4.25rem)",
@@ -179,6 +201,8 @@ export const defaultSemanticTokens = {
   "shadow-lifted": shadow.lifted,
   // Blocks of the sheet and « Ma commande » (mockup --shadow).
   "shadow-block": "0 10px 30px rgb(43 20 24 / 0.12)",
+  // The current segment of « Articles · Listes · Commandes groupées » (mockup .seg .on).
+  "shadow-seg": "0 1px 3px rgb(0 0 0 / 0.12)",
   // The raised + of the phone's bottom bar (mockup .plus).
   "shadow-plus": "0 6px 16px rgb(0 0 0 / 0.18)",
   // Frosted glass (theme-independent)

@@ -378,7 +378,7 @@ export function WishlistDetail({ id }: { id: string }) {
       ) : (
         <ul aria-label={t("detail.itemsLabel")} data-testid="item-grid" className={GRID_CLASS}>
           {items.map((item, index) => (
-            <ItemCard key={item.id} item={item} actions={actions} showStage={false}>
+            <ItemCard key={item.id} item={item} actions={actions}>
               <div className="mt-space-2 flex flex-wrap items-center gap-space-2">
                 <MoveButtons
                   id={item.id}

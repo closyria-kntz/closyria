@@ -22,11 +22,13 @@ import {
   giftCheckSchema,
   groupOrderPastListSchema,
   type ItemBulkAction,
+  type ItemCounts,
   type ItemCreate,
   type ItemPage,
   type ItemPatch,
   type ItemStageInput,
   type ItemView,
+  itemCountsSchema,
   itemMutationResultSchema,
   itemOpinionsSchema,
   itemPageSchema,
@@ -272,6 +274,20 @@ export async function fetchItemsPage(
   if (response.status === 401) return { items: [], nextCursor: null };
   if (!response.ok) throw new Error(`items ${response.status}`);
   return itemPageSchema.parse(await response.json());
+}
+
+/** How many of her items are at each step (one profile's with `profileId`). Throws on failure. */
+export async function fetchItemCounts(
+  profileId: string | null,
+  deps: ClientDeps = defaultDeps,
+  signal?: AbortSignal,
+): Promise<ItemCounts> {
+  const query = profileId ? `?profile=${profileId}` : "";
+  const response = await deps.fetch(`/api/me/items/counts${query}`, { cache: "no-store", signal: signal ?? null });
+  // No session yet: nothing kept.
+  if (response.status === 401) return { envie: 0, commande: 0, recu: 0, dressing: 0, aVendre: 0 };
+  if (!response.ok) throw new Error(`counts ${response.status}`);
+  return itemCountsSchema.parse(await response.json());
 }
 
 /** Categories and colours of the filters (public, cached by the browser for an hour). */

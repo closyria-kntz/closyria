@@ -35,6 +35,11 @@ export const MAX_ITEM_PHOTOS = 10;
 export const MAX_BULK_ITEMS = 200;
 export const MAX_ITEMS_CREATED_PER_HOUR = 300;
 export const ITEMS_PAGE_SIZE = 48;
+/**
+ * An `owned` item is « Reçu » for this many Paris days after her last move to `owned`, then « Dans mon dressing »
+ * (founder, 2026-11-11). Chantier 3 replaces it with each order's real return deadline.
+ */
+export const RECEIVED_DAYS = 30;
 export const MAX_PROFILE_NAME = 40;
 export const MAX_WISHLIST_NAME = 80;
 export const MAX_TAG_NAME = 40;
@@ -280,6 +285,28 @@ export type ItemSort = z.infer<typeof itemSortSchema>;
 /** Query string of `GET /api/me/items`. */
 export const itemListQuerySchema = z.object({
   stage: itemStageSchema.optional(),
+  /** Comma-separated stages, e.g. `spotted,ordered,owned,for_sale` (« Tout » of « Mes articles »). */
+  stages: z
+    .string()
+    .max(100)
+    .transform((value, ctx) => {
+      const stages = new Set<ItemStage>();
+      for (const part of value.split(",")) {
+        const stage = itemStageSchema.safeParse(part);
+        if (!stage.success) {
+          ctx.addIssue({ code: "custom", message: "unknown stage" });
+          return z.NEVER;
+        }
+        stages.add(stage.data);
+      }
+      return [...stages];
+    })
+    .optional(),
+  /**
+   * `owned` items only: `true` « Reçu » (moved to `owned` less than RECEIVED_DAYS Paris days ago), `false`
+   * « Dans mon dressing » (the others, and those never moved there).
+   */
+  received: z.stringbool().optional(),
   profile: z.uuid().optional(),
   /** Her item for one product (the product sheet asks whether she keeps it). */
   product: z.uuid().optional(),
@@ -356,6 +383,8 @@ export const itemViewSchema = z.object({
   giftFrom: z.string().nullable(),
   /** « Reçu en cadeau » (and still « Reçu »): « Offert par {giftFrom} », or « Offert par une amie » without names. */
   receivedAsGift: z.boolean(),
+  /** `owned` and moved there less than RECEIVED_DAYS Paris days ago: « Reçu » (else « Dans mon dressing »). */
+  received: z.boolean(),
   pricePaidCents: centsSchema.nullable(),
   salePriceCents: centsSchema.nullable(),
   saleChannel: z.string().nullable(),
@@ -376,6 +405,19 @@ export type ItemView = z.infer<typeof itemViewSchema>;
 
 export const itemPageSchema = z.object({ items: z.array(itemViewSchema), nextCursor: z.string().nullable() });
 export type ItemPage = z.infer<typeof itemPageSchema>;
+
+/** Query string of `GET /api/me/items/counts`. */
+export const itemCountsQuerySchema = z.object({ profile: z.uuid().optional() });
+
+/** How many of her items (not in the trash) are at each step of « Mes articles ». */
+export const itemCountsSchema = z.object({
+  envie: z.number().int().nonnegative(),
+  commande: z.number().int().nonnegative(),
+  recu: z.number().int().nonnegative(),
+  dressing: z.number().int().nonnegative(),
+  aVendre: z.number().int().nonnegative(),
+});
+export type ItemCounts = z.infer<typeof itemCountsSchema>;
 
 export const wishlistViewSchema = z.object({
   id: z.uuid(),
