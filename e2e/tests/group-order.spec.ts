@@ -201,7 +201,7 @@ test("des amies achètent ensemble chez la même boutique", async ({
   await expect(banner(ines)).toContainText(euros("Total 46 € · Plus que 34 € pour la livraison offerte"));
   await expect(summary(ines)).toContainText(euros("Ta part : 26,45 € (articles 23 € + port 3,45 €)"));
   await ines.screenshot({ path: testInfo.outputPath("ines-light.png"), fullPage: true });
-  await setTheme(ines, "equilibre-dark");
+  await setTheme(ines, "boudoir-dark");
   await ines.screenshot({ path: testInfo.outputPath("ines-dark.png"), fullPage: true });
   await axe(ines);
 
@@ -271,7 +271,7 @@ test("des amies achètent ensemble chez la même boutique", async ({
   await expect(banner(lea)).toContainText(euros("Total 92 € · Livraison offerte ✓"));
   await expect(summary(lea)).toContainText(euros("Ta part : 69 € (articles 69 € + port 0 €)"));
   await lea.screenshot({ path: testInfo.outputPath("lea-light.png"), fullPage: true });
-  await setTheme(lea, "equilibre-dark");
+  await setTheme(lea, "boudoir-dark");
   await lea.screenshot({ path: testInfo.outputPath("lea-dark.png"), fullPage: true });
   await axe(lea);
 
@@ -401,7 +401,7 @@ test("le lien des amies : la commande en haut, le détail replié, le filtre, ha
   await expect(itemOf(lea, SECOND)).toBeVisible();
   await lea.screenshot({ path: testInfo.outputPath("top-light.png"), fullPage: true });
   await axe(lea);
-  await setTheme(lea, "equilibre-dark");
+  await setTheme(lea, "boudoir-dark");
   await lea.screenshot({ path: testInfo.outputPath("top-dark.png"), fullPage: true });
   await axe(lea);
   await all.click();

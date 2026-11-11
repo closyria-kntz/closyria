@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
-// Refonte « Cocon lumineux », task 3: frosted glass, aurora behind the page, flat buttons.
+// Refonte « Cocon lumineux », task 3: frosted glass and flat buttons (the aurora went with Boudoir).
 
 async function oneWish(page: Page): Promise<void> {
   await page.goto("/");
@@ -38,12 +38,6 @@ test("aucun bouton visible de /envies n'a d'ombre", async ({ page }) => {
 
 test.describe("mouvement réduit", () => {
   test.use({ reducedMotion: "reduce" });
-  test("l'aurore ne bouge plus", async ({ page }) => {
-    await page.goto("/envies");
-    const name = await page.evaluate(() => getComputedStyle(document.body, "::before").animationName);
-    expect(name).toBe("none");
-  });
-
   test("les cartes sont toutes visibles d'un coup, sans cascade", async ({ page }) => {
     await oneWish(page);
     const seen = await page.evaluate(() =>
@@ -67,37 +61,15 @@ test("sans mouvement réduit, les cartes arrivent en cascade et finissent visibl
   await expect(page.getByTestId("item-card").first()).toHaveCSS("opacity", "1");
 });
 
-test("l'aurore bouge sinon, derrière le contenu", async ({ page }) => {
+// Boudoir: the « Cocon » aurora is gone, the page is the plain surface colour.
+test("le fond de la page est uni, sans aurore", async ({ page }) => {
   await page.goto("/envies");
-  const style = await page.evaluate(() => {
-    const s = getComputedStyle(document.body, "::before");
-    return { name: s.animationName, position: s.position, events: s.pointerEvents, image: s.backgroundImage };
-  });
-  expect(style.name).toBe("aurora-drift");
-  expect(style.position).toBe("fixed");
-  expect(style.events).toBe("none");
-  expect(style.image.match(/radial-gradient/g)).toHaveLength(3);
-
-  // Nothing opaque sits between the aurora and the eye: shell wrapper transparent, aurora below the content.
-  const seen = await page.evaluate(() => {
-    const clear = (c: string) => {
-      const ctx = document.createElement("canvas").getContext("2d");
-      if (!ctx) throw new Error("no canvas");
-      ctx.clearRect(0, 0, 1, 1);
-      ctx.fillStyle = c;
-      ctx.fillRect(0, 0, 1, 1);
-      return ctx.getImageData(0, 0, 1, 1).data[3] === 0;
-    };
-    const wrapper = [...document.querySelectorAll("div")].find((d) => d.classList.contains("h-dvh"));
-    return {
-      zIndex: Number(getComputedStyle(document.body, "::before").zIndex),
-      wrapperClear: wrapper ? clear(getComputedStyle(wrapper).backgroundColor) : null,
-      bodyOpaque: !clear(getComputedStyle(document.body).backgroundColor),
-    };
-  });
-  expect(seen.zIndex).toBeLessThan(0);
-  expect(seen.wrapperClear).toBe(true);
-  expect(seen.bodyOpaque).toBe(true);
+  const seen = await page.evaluate(() => ({
+    before: getComputedStyle(document.body, "::before").backgroundImage,
+    body: getComputedStyle(document.body).backgroundColor,
+  }));
+  expect(seen.before).toBe("none");
+  expect(seen.body).toBe("rgb(251, 247, 244)");
 });
 
 test("sans backdrop-filter, la barre du haut est opaque", async ({ page }) => {

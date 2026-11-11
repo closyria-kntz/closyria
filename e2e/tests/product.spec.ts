@@ -223,7 +223,7 @@ test("ton envie : niveaux en tuiles, « Prioritaire » en petite pastille coché
   expect(Math.abs(pill.y + pill.height / 2 - (title.y + title.height / 2))).toBeLessThan(8);
   await expect(priority.locator("span").first()).toHaveCSS("background-color", await tokenColor(page, "--color-hint"));
 
-  // No field until she asks for it; once saved, the « pourquoi » is a quote in italic Fraunces.
+  // No field until she asks for it; once saved, the « pourquoi » is a quote in italic Gloock.
   await expect(wish(page).getByLabel("Pourquoi ? (facultatif)")).toHaveCount(0);
   await wish(page).getByRole("button", { name: "Dire pourquoi" }).click();
   const why = wish(page).getByLabel("Pourquoi ? (facultatif)");
@@ -235,7 +235,7 @@ test("ton envie : niveaux en tuiles, « Prioritaire » en petite pastille coché
   const quote = wish(page).getByTestId("item-why");
   await expect(quote).toHaveText("« Pour le mariage de Claire »");
   await expect(quote).toHaveCSS("font-style", "italic");
-  expect(await quote.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/Fraunces/i);
+  expect(await quote.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/Gloock/i);
   await expect(wish(page).getByLabel("Pourquoi ? (facultatif)")).toHaveCount(0);
   // « Modifier », then Escape: the field goes, nothing changed.
   await wish(page).getByRole("button", { name: "Modifier le pourquoi" }).click();

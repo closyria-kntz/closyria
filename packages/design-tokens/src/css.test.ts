@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  boudoirDark,
+  boudoirLight,
   defaultSemanticTokens,
-  equilibreDark,
-  equilibreLight,
   primitives,
   renderThemeCss,
   renderTokensCss,
@@ -24,10 +24,10 @@ function contrast(a: string, b: string): number {
 }
 
 describe("renderThemeCss", () => {
-  const css = renderThemeCss(equilibreLight);
+  const css = renderThemeCss(boudoirLight);
 
   it("emits semantic variables under the theme selector", () => {
-    expect(css).toContain('[data-theme="equilibre-light"]');
+    expect(css).toContain('[data-theme="boudoir-light"]');
     expect(css).toContain("--color-surface:");
   });
 
@@ -54,19 +54,19 @@ describe("renderTokensCss", () => {
   });
 
   it("covers both themes and the system dark preference", () => {
-    expect(css).toContain('[data-theme="equilibre-dark"]');
+    expect(css).toContain('[data-theme="boudoir-dark"]');
     expect(css).toContain("prefers-color-scheme: dark");
     // The browser draws scroll bars and native controls in the theme's scheme.
     expect(css).toContain("color-scheme: light;");
     expect(css).toContain("color-scheme: dark;");
-    expect(css).toContain(':root:not([data-theme="equilibre-light"])');
+    expect(css).toContain(':root:not([data-theme="boudoir-light"])');
   });
 });
 
 describe("themeSchema", () => {
   it("accepts the built-in themes", () => {
-    expect(themeSchema.parse(equilibreLight).id).toBe("equilibre-light");
-    expect(themeSchema.parse(equilibreDark).base).toBe("dark");
+    expect(themeSchema.parse(boudoirLight).id).toBe("boudoir-light");
+    expect(themeSchema.parse(boudoirDark).base).toBe("dark");
   });
 
   it("rejects a theme with an unknown token key", () => {
@@ -88,66 +88,81 @@ describe("themeSchema", () => {
   });
 });
 
-describe("Équilibré themes", () => {
-  const themes = [equilibreLight, equilibreDark];
+describe("Boudoir themes", () => {
+  const themes = [boudoirLight, boudoirDark];
   const get = (theme: Theme, key: string) => (theme.tokens as Record<string, string>)[key] as string;
 
   it("never mentions the provisional charter", () => {
     expect(renderTokensCss().toLowerCase()).not.toContain("atelier");
-    expect(themes.map((theme) => theme.id)).toEqual(["equilibre-light", "equilibre-dark"]);
+    expect(themes.map((theme) => theme.id)).toEqual(["boudoir-light", "boudoir-dark"]);
+  });
+
+  it("emits the validated surface and accent in the generated stylesheet", () => {
+    const css = renderTokensCss();
+    // Light on :root (Tailwind's @theme) and under its own selector.
+    expect(css).toContain("--color-surface: #FBF7F4;");
+    expect(css).toContain("--color-accent: #5B1A2A;");
+    // Dark (validated on 2026-11-11) under its selector and the system preference.
+    const dark = renderThemeCss(boudoirDark);
+    expect(dark).toContain("--color-surface: #1C0F12;");
+    expect(dark).toContain("--color-accent: #F3D6DA;");
+    expect(dark).toContain("--color-ink: #F6E9EA;");
+    expect(css).toMatch(/prefers-color-scheme: dark\)[\s\S]*--color-surface: #1C0F12;/);
   });
 
   it("uses the exact validated palette", () => {
-    // « Le mélange des trois » (docs/specs/2026-11-08-refonte-design.md, section 4).
+    // Boudoir (docs/specs/2026-11-11-refonte-boudoir.md, section 4; dark values validated on 2026-11-11).
     const expected: [string, string, string][] = [
-      ["color-surface", "#FBF5F9", "#1A1218"],
-      ["color-surface-raised", "#FFFFFF", "#261922"],
-      ["color-ink", "#2A1A24", "#F6EBF1"],
-      ["color-ink-muted", "#6A5563", "#CBB5C2"],
-      ["color-accent", "#BE185D", "#F48BBE"],
-      ["color-button-bg", "#5E1E2E", "#F6EBF1"],
-      ["color-button-ink", "#FBF5F9", "#1A1218"],
-      ["color-hint", "#F6D6E4", "#47233A"],
-      ["color-selected-surface", "#F6D6E4", "#47233A"],
-      ["color-surface-sunken", "#F3E6EF", "#33222D"],
-      ["color-surface-strong", "#EFE1EB", "#2D1E28"],
-      ["color-detail", "#D9BC80", "#D9BC80"],
+      ["color-surface", "#FBF7F4", "#1C0F12"],
+      ["color-surface-raised", "#FFFFFF", "#2A171B"],
+      ["color-surface-sunken", "#F6E6E3", "#351D22"],
+      ["color-line", "#ECDCD9", "#43282E"],
+      ["color-ink", "#2B1418", "#F6E9EA"],
+      // #86686D in the mockup, darkened in the same hue for AA on the soft fills (ruling of 2026-11-11).
+      ["color-ink-muted", "#755A5F", "#C2A6AB"],
+      ["color-accent", "#5B1A2A", "#F3D6DA"],
+      ["color-accent-ink", "#FFFFFF", "#2B1418"],
+      ["color-button-bg", "#5B1A2A", "#F3D6DA"],
+      ["color-button-ink", "#FFFFFF", "#2B1418"],
+      ["color-focus-ring", "#8C2A3C", "#F0A9B6"],
+      ["color-hint", "#F3D6DA", "#4A2730"],
+      ["color-selected-surface", "#F3D6DA", "#4A2730"],
+      ["color-detail", "#D9A441", "#D9A441"],
+      ["color-label", "#D9A441", "#D9A441"],
+      ["color-label-ink", "#2B1418", "#2B1418"],
+      ["color-band", "#5B1A2A", "#3A1119"],
+      ["color-band-ink", "#FFFFFF", "#F6E9EA"],
+      ["color-une", "#F3D6DA", "#4A2730"],
+      ["color-tip", "#FFF1D6", "#3A2E12"],
+      ["color-tip-ink", "#5A3D00", "#F5DFA8"],
     ];
     for (const [key, light, dark] of expected) {
-      expect(get(equilibreLight, key), `${key} light`).toBe(light);
-      expect(get(equilibreDark, key), `${key} dark`).toBe(dark);
+      expect(get(boudoirLight, key), `${key} light`).toBe(light);
+      expect(get(boudoirDark, key), `${key} dark`).toBe(dark);
     }
     // Success, danger and the budget pills are unchanged.
-    expect(get(equilibreLight, "color-success-soft")).toBe("#E3F1E7");
-    expect(get(equilibreLight, "color-success-edge")).toBe("#6FA58A");
-    expect(get(equilibreLight, "color-danger-soft")).toBe("#FBE3E6");
-    expect(get(equilibreLight, "color-danger-edge")).toBe("#D97F8C");
-    expect(get(equilibreDark, "color-success-soft")).toBe("#1D3A31");
-    expect(get(equilibreDark, "color-success-edge")).toBe("#4E8A6E");
-    expect(get(equilibreDark, "color-danger-soft")).toBe("#4A2228");
-    expect(get(equilibreDark, "color-danger-edge")).toBe("#B4646C");
+    expect(get(boudoirLight, "color-success-soft")).toBe("#E3F1E7");
+    expect(get(boudoirLight, "color-success-edge")).toBe("#6FA58A");
+    expect(get(boudoirLight, "color-danger-soft")).toBe("#FBE3E6");
+    expect(get(boudoirLight, "color-danger-edge")).toBe("#D97F8C");
+    expect(get(boudoirDark, "color-success-soft")).toBe("#1D3A31");
+    expect(get(boudoirDark, "color-success-edge")).toBe("#4E8A6E");
+    expect(get(boudoirDark, "color-danger-soft")).toBe("#4A2228");
+    expect(get(boudoirDark, "color-danger-edge")).toBe("#B4646C");
   });
 
-  it("takes the frosted glass and the translucent aurora from the mockup (palette p5)", () => {
-    // Glass: the raised surface at 60 % (62 % in dark), a white edge (75 %, 7 % in dark).
-    expect(get(equilibreLight, "color-glass")).toBe("color-mix(in srgb, var(--color-surface-raised) 60%, transparent)");
-    expect(get(equilibreDark, "color-glass")).toBe("color-mix(in srgb, var(--color-surface-raised) 62%, transparent)");
-    expect(get(equilibreLight, "color-glass-line")).toBe("color-mix(in srgb, #FFFFFF 75%, transparent)");
-    expect(get(equilibreDark, "color-glass-line")).toBe("color-mix(in srgb, #FFFFFF 7%, transparent)");
-    // The patches fade into transparency (not into a tinted surface), so the page between them stays plain.
-    for (const theme of themes) {
-      for (const n of [1, 2, 3]) expect(get(theme, `color-aurora-${n}`)).toMatch(/, transparent\)$/);
-    }
-    const shares = (theme: Theme) => [1, 2, 3].map((n) => get(theme, `color-aurora-${n}`).match(/ (\d+)%,/)?.[1]);
-    expect(shares(equilibreLight)).toEqual(["18", "28", "30"]);
-    expect(shares(equilibreDark)).toEqual(["18", "12", "12"]);
-    expect(defaultSemanticTokens["aurora-fade"]).toBe("70%");
+  it("keeps the frosted glass and drops the « Cocon » aurora: the page is plain", () => {
+    expect(get(boudoirLight, "color-glass")).toBe("color-mix(in srgb, var(--color-surface-raised) 60%, transparent)");
+    expect(get(boudoirDark, "color-glass")).toBe("color-mix(in srgb, var(--color-surface-raised) 62%, transparent)");
+    expect(renderTokensCss()).not.toContain("aurora");
   });
 
   it("defines the specified shapes, durations and fonts", () => {
     const base = defaultSemanticTokens;
+    // Cards 20 px, pills and buttons fully round.
+    expect(base["radius-card"]).toBe("1.25rem");
+    expect(base["radius-pill"]).toBe("999px");
     expect(base["radius-button"]).toBe("9999px");
-    expect(base["radius-card"]).toBe("1.625rem");
     expect(base["radius-full"]).toBe("9999px");
     // Shape C of the photos: the top more rounded than the bottom (cards 44 / 14 px, thumbnails 20 / 8 px).
     expect(base["radius-photo-top"]).toBe("2.75rem");
@@ -158,13 +173,20 @@ describe("Équilibré themes", () => {
     expect(base["motion-duration-fast"]).toBe("150ms");
     expect(base["motion-duration-base"]).toBe("250ms");
     expect(base["motion-duration-slow"]).toBe("400ms");
-    expect(base["font-body"]).toContain("Jost Variable");
-    expect(base["font-display"]).toContain("Fraunces Variable");
+    // Gloock for titles and item names, Figtree for the text; `font-display` stays an alias of the title font.
+    expect(base["font-title"]).toMatch(/^"Gloock"/);
+    expect(base["font-display"]).toBe(base["font-title"]);
+    expect(base["font-body"]).toMatch(/^"Figtree Variable"/);
+    const css = renderTokensCss();
+    expect(css).toContain('--font-title: "Gloock"');
+    expect(css).toContain('--font-body: "Figtree Variable"');
+    expect(css).not.toMatch(/Fraunces|Jost/);
   });
 
   const textPairs: [string, string, number][] = [
     ["color-ink", "color-surface", 4.5],
     ["color-ink", "color-surface-raised", 4.5],
+    ["color-ink", "color-surface-sunken", 4.5],
     ["color-ink", "color-surface-strong", 4.5],
     ["color-ink-muted", "color-surface", 4.5],
     ["color-ink-muted", "color-surface-raised", 4.5],
@@ -173,6 +195,7 @@ describe("Équilibré themes", () => {
     ["color-ink", "color-hint", 4.5],
     ["color-accent-ink", "color-accent", 4.5],
     ["color-accent", "color-surface", 4.5],
+    ["color-accent", "color-surface-raised", 4.5],
     ["color-success", "color-success-surface", 4.5],
     ["color-premium", "color-premium-surface", 4.5],
     ["color-danger", "color-surface", 4.5],
@@ -183,19 +206,21 @@ describe("Équilibré themes", () => {
     ["color-focus-ring", "color-surface-raised", 4.5],
     ["color-focus-ring", "color-surface-sunken", 3],
     ["color-line", "color-surface", 1],
-    ["color-ink", "color-band", 4.5],
+    ["color-band-ink", "color-band", 4.5],
+    ["color-label-ink", "color-label", 4.5],
     ["color-band-button-ink", "color-band-button", 4.5],
     ["color-band-button-ink", "color-band-button-hover", 4.5],
     ["color-button-ink", "color-button-bg", 4.5],
     ["color-surface", "color-danger", 4.5],
-    ["color-band-line", "color-band", 1.2],
     ["color-ink", "color-selected-surface", 4.5],
     ["color-ink-muted", "color-selected-surface", 4.5],
     ["color-accent", "color-selected-surface", 4.5],
     ["color-success", "color-success-soft", 4.5],
     ["color-danger", "color-danger-soft", 4.5],
-    ["color-success-edge", "color-band", 2],
-    ["color-danger-edge", "color-band", 2],
+    ["color-success-edge", "color-surface-raised", 2],
+    ["color-danger-edge", "color-surface-raised", 2],
+    ["color-ink", "color-une", 4.5],
+    ["color-tip-ink", "color-tip", 4.5],
   ];
 
   describe.each(themes)("$id", (theme) => {

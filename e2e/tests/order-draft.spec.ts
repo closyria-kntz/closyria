@@ -62,8 +62,8 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   }).toPass();
   // A ticked row: a very light pink background and the band's pink edge, not a heavy dark outline.
   const ticked = page.getByRole("listitem").filter({ hasText: "Robe Alma" }).locator("> div");
-  await expect(ticked).toHaveCSS("background-color", "rgb(246, 214, 228)");
-  await expect(ticked).toHaveCSS("border-top-color", "rgb(190, 24, 93)");
+  await expect(ticked).toHaveCSS("background-color", "rgb(243, 214, 218)");
+  await expect(ticked).toHaveCSS("border-top-color", "rgb(140, 42, 60)");
   await expect(ticked.getByText(/89\s€/)).toHaveCSS("font-variant-numeric", "tabular-nums");
   await expect(band(page).getByText(/2 articles/)).toHaveCSS("font-variant-numeric", "tabular-nums");
   // A glass band (refonte « Cocon lumineux », replaces the white one of 2026-11-07), and over the budget in red.
@@ -76,7 +76,7 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   if (!testInfo.project.use.hasTouch) {
     // Only with a mouse: phones and tablets have no hover.
     await ordered.hover();
-    await expect(ordered).toHaveCSS("background-color", "rgb(42, 26, 36)");
+    await expect(ordered).toHaveCSS("background-color", "rgb(43, 20, 24)");
   }
   // Over the budget: a soft red fill, a red edge and red text (version B, same style as the green one).
   const over = band(page).getByText(/au-dessus/);
@@ -84,7 +84,7 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await expect(over).toHaveCSS("border-top-color", "rgb(217, 127, 140)");
   await expect(over).toHaveCSS("color", "rgb(155, 28, 49)");
   // Same in dark mode: a wine fill, an old-rose edge and salmon text.
-  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "equilibre-dark"));
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "boudoir-dark"));
   await expect(over).toHaveCSS("background-color", "rgb(74, 34, 40)");
   await expect(over).toHaveCSS("border-top-color", "rgb(180, 100, 108)");
   await expect(over).toHaveCSS("color", "rgb(244, 163, 168)");
@@ -92,8 +92,8 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await page.screenshot({ path: testInfo.outputPath("commande-sombre.png") });
   // The browser knows the page is dark (scroll bars, native controls), and ticked rows keep their soft tint.
   await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
-  await expect(ticked).toHaveCSS("background-color", "rgb(71, 35, 58)");
-  await expect(ticked).toHaveCSS("border-top-color", "rgb(106, 85, 99)");
+  await expect(ticked).toHaveCSS("background-color", "rgb(74, 39, 48)");
+  await expect(ticked).toHaveCSS("border-top-color", "rgb(240, 169, 182)");
   await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
   await page.screenshot({ path: testInfo.outputPath("commande.png") });
   await axe(page);
@@ -111,7 +111,7 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await expect(left).toHaveCSS("border-top-color", "rgb(111, 165, 138)");
   await expect(left).toHaveCSS("color", "rgb(31, 74, 63)");
   // Same in dark mode: a spruce fill, a fern edge and celadon text.
-  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "equilibre-dark"));
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "boudoir-dark"));
   await expect(left).toHaveCSS("background-color", "rgb(29, 58, 49)");
   await expect(left).toHaveCSS("border-top-color", "rgb(78, 138, 110)");
   await expect(left).toHaveCSS("color", "rgb(169, 220, 191)");

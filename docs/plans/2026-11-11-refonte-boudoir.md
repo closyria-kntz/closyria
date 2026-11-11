@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Couleurs (clair) : fond `#FBF7F4`, encre `#2B1418`, secondaire `#86686D`, filets `#ECDCD9`, cartes `#FFFFFF`, doux `#F6E6E3`, rose poudré `#F3D6DA`, bordeaux `#5B1A2A`, bordeaux accent `#8C2A3C`, ocre `#D9A441`, astuce `#FFF1D6` / `#5A3D00`. Sombre (validé le 2026-11-11) : fond `#1C0F12`, encre `#F6E9EA`, secondaire `#C2A6AB`, filets `#43282E`, cartes `#2A171B`, doux `#351D22`, rose foncé `#4A2730` (« unes »), bandeau `#3A1119`, bouton principal `#F3D6DA` avec texte `#2B1418`, accent de texte `#F0A9B6`, ocre `#D9A441`, astuce `#3A2E12` / `#F5DFA8` ; contrastes AA.
+- Couleurs (clair) : fond `#FBF7F4`, encre `#2B1418`, secondaire `#755A5F` (au lieu de `#86686D`, pour le contraste AA), filets `#ECDCD9`, cartes `#FFFFFF`, doux `#F6E6E3`, rose poudré `#F3D6DA`, bordeaux `#5B1A2A`, bordeaux accent `#8C2A3C`, ocre `#D9A441`, astuce `#FFF1D6` / `#5A3D00`. Sombre (validé le 2026-11-11) : fond `#1C0F12`, encre `#F6E9EA`, secondaire `#C2A6AB`, filets `#43282E`, cartes `#2A171B`, doux `#351D22`, rose foncé `#4A2730` (« unes »), bandeau `#3A1119`, bouton principal `#F3D6DA` avec texte `#2B1418`, accent de texte `#F0A9B6`, ocre `#D9A441`, astuce `#3A2E12` / `#F5DFA8` ; contrastes AA.
 - Polices : Gloock (titres, noms d'articles), Figtree (texte), auto-hébergées. Cartes 20 px, pilules, photos 3:4. Étiquette de prix en forme d'étiquette de vêtement (petit trou).
 - Menu : Accueil · Découvrir · + · Mes articles · Moi ; un seul menu (bas sur téléphone, haut sur ordinateur).
 - Étapes affichées : « Envie · Commandé · Reçu · Dans mon dressing · À vendre » (« Repéré » n'apparaît plus ; identifiants du code inchangés).
@@ -45,10 +45,10 @@
 
 **Interfaces:** Produces : thèmes `boudoirLight` et `boudoirDark` (remplacent `equilibre-*` comme thèmes par défaut ; les identifiants de préférence d'apparence existants restent acceptés et pointent vers Boudoir) ; jetons sémantiques nouveaux : `color-label` (ocre), `color-une` (rose poudré), `color-tip`, `color-tip-ink` ; `--font-title` Gloock, `--font-body` Figtree ; rayons `radius-card` 20 px, `radius-pill` 999 px.
 
-- [ ] Test (`css.test.ts`) : le CSS généré contient `--color-surface: #FBF7F4` et `--color-accent: #5B1A2A` en clair et les valeurs sombres validées ; contraste encre/fond ≥ 4,5 dans les deux thèmes (fonction de contraste existante si présente, sinon ajoutée au test).
-- [ ] Échec attendu, puis implémentation, puis `pnpm --filter @closyria/design-tokens test`, `pnpm lint` (jetons), `pnpm typecheck`.
-- [ ] e2e : adapter les attentes de couleurs/polices des tests existants qui en vérifient (s'il y en a) ; suite complète.
-- [ ] Commit « feat(refonte): jetons et polices Boudoir ».
+- [x] Test (`css.test.ts`) : le CSS généré contient `--color-surface: #FBF7F4` et `--color-accent: #5B1A2A` en clair et les valeurs sombres validées ; contraste encre/fond ≥ 4,5 dans les deux thèmes (fonction de contraste existante si présente, sinon ajoutée au test).
+- [x] Échec attendu, puis implémentation, puis `pnpm --filter @closyria/design-tokens test`, `pnpm lint` (jetons), `pnpm typecheck`.
+- [x] e2e : adapter les attentes de couleurs/polices des tests existants qui en vérifient (s'il y en a) ; suite complète.
+- [x] Commit « feat(refonte): jetons et polices Boudoir ».
 
 ### Task 2: Coque, menu, bouton + et redirections
 

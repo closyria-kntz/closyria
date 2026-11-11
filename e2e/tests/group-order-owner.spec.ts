@@ -22,10 +22,10 @@ const setTheme = (page: Page, theme: string) =>
 async function capture(page: Page, name: string, outputPath: (name: string) => string): Promise<void> {
   await axe(page);
   await page.screenshot({ path: outputPath(`${name}-light.png`), fullPage: true });
-  await setTheme(page, "equilibre-dark");
+  await setTheme(page, "boudoir-dark");
   await page.screenshot({ path: outputPath(`${name}-dark.png`), fullPage: true });
   await axe(page);
-  await setTheme(page, "equilibre");
+  await setTheme(page, "boudoir-light");
 }
 
 const FIRST = "Robe Lina";

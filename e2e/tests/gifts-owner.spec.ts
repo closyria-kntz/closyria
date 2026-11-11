@@ -20,10 +20,10 @@ const setTheme = (page: Page, theme: string) =>
 /** Light and dark captures of the moment, for the design review (kept with the test's results). */
 async function capture(page: Page, name: string, outputPath: (name: string) => string): Promise<void> {
   await page.screenshot({ path: outputPath(`owner-${name}-light.png`), fullPage: true });
-  await setTheme(page, "equilibre-dark");
+  await setTheme(page, "boudoir-dark");
   await page.screenshot({ path: outputPath(`owner-${name}-dark.png`), fullPage: true });
   await axe(page);
-  await setTheme(page, "equilibre");
+  await setTheme(page, "boudoir-light");
 }
 
 const NAMES = ["Robe Lina", "Sac Mila", "Gilet Nora"] as const;

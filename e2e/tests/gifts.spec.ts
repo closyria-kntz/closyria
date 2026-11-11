@@ -164,7 +164,7 @@ test("des amies offrent des articles de la liste", async ({ page, browser, baseU
   await lea.reload();
   await expect(leaFirst.getByText("Tu lui offres")).toBeVisible();
   await lea.screenshot({ path: testInfo.outputPath("page-light.png"), fullPage: true });
-  await setTheme(lea, "equilibre-dark");
+  await setTheme(lea, "boudoir-dark");
   await lea.screenshot({ path: testInfo.outputPath("page-dark.png"), fullPage: true });
   await axe(lea);
 
@@ -174,7 +174,7 @@ test("des amies offrent des articles de la liste", async ({ page, browser, baseU
   await expect(inesFirst.getByText("Réservé par Léa")).toBeVisible();
   await expect(inesFirst.getByRole("button", { name: "Je lui offre" })).toHaveCount(0);
   await ines.screenshot({ path: testInfo.outputPath("reserved-light.png"), fullPage: true });
-  await setTheme(ines, "equilibre-dark");
+  await setTheme(ines, "boudoir-dark");
   await ines.screenshot({ path: testInfo.outputPath("reserved-dark.png"), fullPage: true });
   await axe(ines);
   await give(ines, FIRST, "Je participe", "Inès");

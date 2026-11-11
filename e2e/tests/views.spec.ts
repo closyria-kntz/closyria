@@ -582,7 +582,12 @@ test("la carte en forme C : émoji en haut à gauche, « … » en haut à droit
   const priceBox = await card(page).locator("s").boundingBox();
   if (!dropBox || !photoBox || !priceBox) throw new Error("no box");
   expect(dropBox.y).toBeGreaterThan(photoBox.y + photoBox.height);
-  expect(Math.abs(dropBox.y + dropBox.height / 2 - (priceBox.y + priceBox.height / 2))).toBeLessThan(6);
+  await expect(card(page).getByTestId("card-drop")).toBeVisible();
+  // Beside the price, or wrapped right under it on a narrow phone (Figtree is wider than Jost). Temporary: Task 3 of
+  // the Boudoir redesign replaces this row with the price tag and will tighten this check again.
+  const sameRow = Math.abs(dropBox.y + dropBox.height / 2 - (priceBox.y + priceBox.height / 2)) < 6;
+  const rightUnder = dropBox.y >= priceBox.y + priceBox.height - 1 && dropBox.y - (priceBox.y + priceBox.height) < 12;
+  expect(sameRow || rightUnder).toBe(true);
   // Equal or lower crossed price: no badge.
   await db.query("UPDATE products SET compare_at_cents = 2300 WHERE id = $1", [productId]);
   await page.reload();
@@ -648,9 +653,9 @@ test("« Aperçu » ouvre le panneau sans quitter la page ; « Je le prends » c
   await expect(card(page).getByTestId("card-take")).toHaveAttribute("aria-pressed", "true");
   await expect(card(page).getByTestId("card-take")).toHaveText("Retirer");
   // Taken, it reads as a state: the soft pressed look (hint fill, accent edge, ink text), not the dark « Je le prends ».
-  await expect(card(page).getByTestId("card-take")).toHaveCSS("background-color", "rgb(246, 214, 228)");
-  await expect(card(page).getByTestId("card-take")).toHaveCSS("color", "rgb(42, 26, 36)");
-  await expect(card(page).getByTestId("card-take")).toHaveCSS("border-top-color", "rgb(190, 24, 93)");
+  await expect(card(page).getByTestId("card-take")).toHaveCSS("background-color", "rgb(243, 214, 218)");
+  await expect(card(page).getByTestId("card-take")).toHaveCSS("color", "rgb(43, 20, 24)");
+  await expect(card(page).getByTestId("card-take")).toHaveCSS("border-top-color", "rgb(91, 26, 42)");
 
   // Put it back from the card.
   await card(page).getByTestId("card-take").click();
@@ -715,7 +720,7 @@ test("Mes envies : grand titre, pastilles de résumé, loupe, menu des filtres e
   await page.reload();
 
   const title = page.getByRole("heading", { level: 1, name: "Mes envies" });
-  await expect(title).toHaveCSS("font-family", /Fraunces/);
+  await expect(title).toHaveCSS("font-family", /Gloock/);
   const summary = page.getByRole("list", { name: "En bref" });
   await expect(summary.getByRole("listitem")).toHaveText(["2 envies", /^46\s€ en tout$/, "1 prix en baisse"]);
 

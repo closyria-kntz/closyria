@@ -145,7 +145,7 @@ test("une amie donne son avis", async ({ page, browser, baseURL, db, userAgentTa
   await sheet.getByLabel("Un petit mot").fill("elle t'irait trop bien");
 
   // Dark: the page and the sheet read well.
-  await setTheme(lea, "equilibre-dark");
+  await setTheme(lea, "boudoir-dark");
   await lea.screenshot({ path: testInfo.outputPath("sheet-dark.png") });
   await axe(lea);
 
@@ -341,11 +341,11 @@ test("la fondatrice voit la pastille, l'avis « nouveau », l'efface et l'annule
   await sharePanel.screenshot({ path: testInfo.outputPath("owner-share-light.png") });
   await card.screenshot({ path: testInfo.outputPath("owner-opinions-light.png") });
   await axe(page);
-  await setTheme(page, "equilibre-dark");
+  await setTheme(page, "boudoir-dark");
   await sharePanel.screenshot({ path: testInfo.outputPath("owner-share-dark.png") });
   await card.screenshot({ path: testInfo.outputPath("owner-opinions-dark.png") });
   await axe(page);
-  await setTheme(page, "equilibre");
+  await setTheme(page, "boudoir-light");
 
   // Back on « Listes »: no badge any more; the next visit has no « nouveau ».
   await page.goto("/listes");

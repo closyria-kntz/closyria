@@ -14,17 +14,17 @@ test("Apparence : Sombre puis Clair restent après un rechargement, Automatique 
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
   await page.getByRole("radio", { name: /Clair/ }).check();
-  await expect(html).toHaveAttribute("data-theme", "equilibre-light");
+  await expect(html).toHaveAttribute("data-theme", "boudoir-light");
   // Applied before the first paint on the next visits, on every page.
   await page.goto("/envies");
-  await expect(html).toHaveAttribute("data-theme", "equilibre-light");
+  await expect(html).toHaveAttribute("data-theme", "boudoir-light");
 
   await page.goto("/reglages/apparence");
   await expect(page.getByRole("radio", { name: /Clair/ })).toBeChecked();
   await page.getByRole("radio", { name: /Sombre/ }).check();
-  await expect(html).toHaveAttribute("data-theme", "equilibre-dark");
+  await expect(html).toHaveAttribute("data-theme", "boudoir-dark");
   await page.reload();
-  await expect(html).toHaveAttribute("data-theme", "equilibre-dark");
+  await expect(html).toHaveAttribute("data-theme", "boudoir-dark");
   await expect(page.getByRole("radio", { name: /Sombre/ })).toBeChecked();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
@@ -41,9 +41,9 @@ test("Le bouton de la barre du haut bascule clair ↔ sombre et le choix survit 
   const html = page.locator("html");
   const bar = page.locator("header");
   await bar.getByRole("button", { name: "Passer en mode sombre" }).click();
-  await expect(html).toHaveAttribute("data-theme", "equilibre-dark");
+  await expect(html).toHaveAttribute("data-theme", "boudoir-dark");
   await page.reload();
-  await expect(html).toHaveAttribute("data-theme", "equilibre-dark");
+  await expect(html).toHaveAttribute("data-theme", "boudoir-dark");
   await expect(bar.getByRole("button", { name: "Passer en mode clair" })).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 

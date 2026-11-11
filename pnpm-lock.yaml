@@ -245,10 +245,10 @@ importers:
       '@closyria/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@fontsource-variable/fraunces':
+      '@fontsource-variable/figtree':
         specifier: ^5.3.0
         version: 5.3.0
-      '@fontsource-variable/jost':
+      '@fontsource/gloock':
         specifier: ^5.3.0
         version: 5.3.0
       cmdk:
@@ -1287,11 +1287,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@fontsource-variable/fraunces@5.3.0':
-    resolution: {integrity: sha512-9BYGySn4AHEJdgp9Z28tQ3X+laJMEOITXkQarZXeloWQZDq5oOvXJ3kDA8c7MGIfpogIaZfjrQBqmda8POOCKA==}
+  '@fontsource-variable/figtree@5.3.0':
+    resolution: {integrity: sha512-VRVodD7OiG7apQwE8/2fMjaqpY/a0qRJqL5HtYj8CKIVps+9amaFcdfKmDIf7iqYQx6iPLlArVXAfKeIZmVcNQ==}
 
-  '@fontsource-variable/jost@5.3.0':
-    resolution: {integrity: sha512-9FS8iBMJnfyPqQOi9dfMjSwYBIWd0kBD3/jl8VvtbIMY2pK+CSp3oAaTLS1V60rDoM7AfyPvuT+IUfJfGeCTKg==}
+  '@fontsource/gloock@5.3.0':
+    resolution: {integrity: sha512-vGvBRavw/y3aTCsz1uTNydQjCfRLGNOnSpmn/Qs3EZDqPAKBg6Id4OdHGnWLWXQ57IkzuNk/e9+KdMze+azOxA==}
 
   '@formatjs/fast-memoize@3.1.7':
     resolution: {integrity: sha512-zXfhLpvA6T7+efdt9JLbBwZ00tT7NsBMDVnDu8rpHeNNv8KfRZAMo2gkG0k9lK/Nzc//3kJ9pImsfuJxk3KhUA==}
@@ -4080,9 +4080,9 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@fontsource-variable/fraunces@5.3.0': {}
+  '@fontsource-variable/figtree@5.3.0': {}
 
-  '@fontsource-variable/jost@5.3.0': {}
+  '@fontsource/gloock@5.3.0': {}
 
   '@formatjs/fast-memoize@3.1.7': {}
 
