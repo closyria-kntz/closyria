@@ -144,16 +144,17 @@ function BandSearch() {
     // biome-ignore lint/a11y/useSemanticElements: see above.
     <div role="search" className="hidden lg:block">
       <form onSubmit={submit}>
-        <label htmlFor={id} className="sr-only">
-          {t("label")}
+        {/* The label wraps the field and spreads under it out to a finger's reach (`hit-area-under`). */}
+        <label htmlFor={id} className="relative isolate block hit-area-under">
+          <span className="sr-only">{t("label")}</span>
+          <input
+            id={id}
+            name="recherche"
+            type="search"
+            placeholder={t("placeholder")}
+            className={`h-control-xs min-w-search rounded-pill bg-band-field px-space-3-5 text-caption text-band-ink placeholder:text-band-field-ink ${focusRing}`}
+          />
         </label>
-        <input
-          id={id}
-          name="recherche"
-          type="search"
-          placeholder={t("placeholder")}
-          className={`h-control-xs min-w-search rounded-pill bg-band-field px-space-3-5 text-caption text-band-ink placeholder:text-band-field-ink ${focusRing}`}
-        />
       </form>
     </div>
   );
@@ -259,7 +260,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 onClick={openAdd}
-                className={`hidden h-control-xs shrink-0 items-center rounded-pill bg-label px-space-4 text-caption font-bold text-label-ink md:inline-flex ${focusRing}`}
+                className={`relative hit-area hidden h-control-xs shrink-0 items-center rounded-pill bg-label px-space-4 text-caption font-bold text-label-ink md:inline-flex ${focusRing}`}
               >
                 <span aria-hidden="true">+ {tNav("add")}</span>
                 <span className="sr-only">{tNav("addLabel")}</span>
@@ -289,7 +290,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Suspense>
         </div>
       </div>
-      <AddSheet open={adding} onClose={closeAdd} />
+      <Suspense>
+        <AddSheet open={adding} onClose={closeAdd} />
+      </Suspense>
       <UndoToast />
       <GiftWarning />
     </ProfilesContext.Provider>

@@ -118,8 +118,6 @@ export const defaultSemanticTokens = {
   "radius-button": radius.full,
   // Boudoir: cards 20 px, pills and buttons fully round.
   "radius-card": radius.card,
-  // A phone tab icon (mockup .bnav .ic).
-  "radius-nav-icon": "0.375rem",
   "radius-pill": radius.pill,
   // Mockup radii: blocks of the sheet 30, « Ma commande » 28, budget card 22, toast 20, sizes 16, « taken » mark 11 px.
   "radius-block": "1.875rem",

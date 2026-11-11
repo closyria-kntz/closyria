@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { autoProductUrl, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
@@ -14,6 +14,17 @@ const axe = async (page: Page) => {
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target.join(" ")) }))).toEqual([]);
 };
+
+/** The smallest side a finger can reach on `control`: its own box or its invisible hit area (`pseudo`). */
+async function reach(control: Locator, pseudo: "::after" | "::before"): Promise<number> {
+  return control.evaluate((el, which) => {
+    const own = el.getBoundingClientRect();
+    const hit = getComputedStyle(el, which);
+    const width = Math.max(own.width, Number.parseFloat(hit.width) || 0);
+    const height = Math.max(own.height, Number.parseFloat(hit.height) || 0);
+    return Math.min(width, height);
+  }, pseudo);
+}
 
 async function axeLightAndDark(page: Page) {
   await page.emulateMedia({ colorScheme: "light" });
@@ -56,6 +67,20 @@ test("un seul menu : cinq places en bas sur téléphone, quatre liens et « + Aj
       "+ Ajouter",
     );
     expect((await nav.boundingBox())?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(6 * 16);
+    // Every control of the band is a finger wide: drawn smaller, its invisible hit area reaches 44 px.
+    const band = page.getByRole("banner");
+    const controls = [
+      ...(await nav.getByRole("link").all()),
+      band.getByRole("button", { name: "Ajouter un article" }),
+      band.getByRole("link", { name: /^Mon compte/ }),
+    ];
+    for (const control of controls) expect(await reach(control, "::after")).toBeGreaterThanOrEqual(44);
+    const search = band.getByRole("searchbox", { name: "Rechercher dans mes articles" });
+    if ((page.viewportSize()?.width ?? 0) >= 1024) {
+      // From 1024 px the search field shows in the band (the axe runs below include it).
+      await expect(search).toBeVisible();
+      expect(await reach(search.locator("xpath=.."), "::before")).toBeGreaterThanOrEqual(44);
+    } else await expect(search).toBeHidden();
     await expect(page.getByTestId("app-nav-bottom")).toBeHidden();
   }
   await expect(nav.getByRole("link", { name: "Accueil" })).toHaveAttribute("aria-current", "page");
@@ -101,6 +126,14 @@ test("le + ouvre « Ajouter un article » et ses quatre façons d'ajouter", asyn
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
   await expect(opener).toBeFocused();
+
+  // A link of the sheet closes it, even towards the page she is on.
+  await page.goto("/articles");
+  await opener.click();
+  await sheet.getByRole("button", { name: /^Prendre une photo/ }).click();
+  await sheet.getByRole("link", { name: "Ouvrir Mes articles" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page).toHaveURL(/\/articles$/);
 });
 
 test("les anciennes adresses mènent à « Mes articles », avec l'étape, la liste et les filtres", async ({ page }) => {
