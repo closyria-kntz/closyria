@@ -114,10 +114,11 @@ test("la zone « Colle son lien ici » capture comme avant ; ses envies, ses bou
 
   const shops = page.getByRole("region", { name: "Boutiques à découvrir" });
   await expect(shops.getByRole("link", { name: "Toutes" })).toHaveAttribute("href", "/decouvrir");
-  await expect(shops.getByRole("link", { name: new RegExp(AUTO_SHOP.name) })).toHaveAttribute(
-    "href",
-    /^\/articles\?boutique=/,
-  );
+  // The shops of « Découvrir » (the boutique de la semaine first, four at most), each opening its site.
+  expect(await shops.getByRole("listitem").count()).toBeLessThanOrEqual(4);
+  const shop = shops.getByRole("link", { name: new RegExp(AUTO_SHOP.name) });
+  await expect(shop).toHaveAttribute("href", `https://${AUTO_SHOP.domain}`);
+  await expect(shop).toHaveAttribute("target", "_blank");
 
   const tip = page.getByRole("complementary", { name: "Astuce" });
   await expect(tip).toContainText("Touche deux fois la photo d’un article");

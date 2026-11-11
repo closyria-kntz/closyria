@@ -100,8 +100,8 @@
 
 **Interfaces:** Produces `shopDirectorySchema = { featured: ShopCard|null, shops: ShopCard[] }`, `ShopCard = { id, name, domain, itemCount, imageUrl|null }` ; une seule boutique mise en avant (la plus récente `featured_at`) ; noms d'utilisatrices jamais exposés.
 
-- [ ] Tests d'abord : intégration (seules les boutiques actives ; mise en avant unique ; audit admin) ; e2e (une « boutique de la semaine », grille des boutiques avec lien vers le site, recherche par nom, écran vide si aucune boutique) ; axe.
-- [ ] Implémenter, relancer, commit « feat(refonte): Découvrir, boutiques ».
+- [x] Tests d'abord : intégration (seules les boutiques actives ; mise en avant unique ; audit admin) ; e2e (une « boutique de la semaine », grille des boutiques avec lien vers le site, recherche par nom, écran vide si aucune boutique) ; axe.
+- [x] Implémenter, relancer, commit « feat(refonte): Découvrir, boutiques ».
 
 **Fin d'étape 3 :** comparaison maquette, présentation, mise en dev avec accord.
 

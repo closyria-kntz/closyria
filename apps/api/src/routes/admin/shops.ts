@@ -25,6 +25,7 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { defineAccess } from "../../access";
 import { type AdminEnv, noteAudit } from "../../admin-audit";
 import type { CatalogDeps } from "../../catalog/deps";
+import { featuredShopId } from "../../catalog/directory";
 import { enqueueCapture } from "../../catalog/enqueue";
 import { loadShopStats, type ShopStats, shopHealth } from "../../catalog/health";
 import { createDraftShop, type Shop } from "../../catalog/shops";
@@ -119,6 +120,37 @@ const mergeRoute = defineAccess(
       200: { description: "Merged", content: { "application/json": { schema: adminMergedSchema } } },
       400: errorContent("invalid_merge: same shop, or a merged shop involved"),
       404: errorContent("Unknown shop"),
+    },
+  }),
+  "admin",
+);
+
+const featureRoute = defineAccess(
+  createRoute({
+    method: "post",
+    path: "/admin/shops/{id}/feature",
+    summary: "Make a published shop the « boutique de la semaine » of « Découvrir »",
+    description: "Sets `featured_at` to now: the published shop featured most recently is the one shown.",
+    request: { params: idParam },
+    responses: {
+      204: { description: "Featured" },
+      404: errorContent("Unknown or merged shop"),
+      409: errorContent("not_published: only a published shop is shown"),
+    },
+  }),
+  "admin",
+);
+
+const unfeatureRoute = defineAccess(
+  createRoute({
+    method: "delete",
+    path: "/admin/shops/{id}/feature",
+    summary: "Take a shop off the « une » of « Découvrir »",
+    description: "Clears `featured_at`: the shop featured before it, if any, is shown again.",
+    request: { params: idParam },
+    responses: {
+      204: { description: "Not featured any more" },
+      404: errorContent("Unknown or merged shop"),
     },
   }),
   "admin",
@@ -262,7 +294,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       const { id } = c.req.valid("param");
       const shop = await activeShop(db, id);
       if (!shop) return c.json(notFound, 404);
-      const [domains, stats, errors, monitors] = await Promise.all([
+      const [domains, stats, errors, monitors, featured] = await Promise.all([
         domainsOf(db, [id]),
         loadShopStats(db, now(), [id]),
         db
@@ -283,6 +315,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
           )
           .orderBy(sql`${schema.captures.finishedAt} desc nulls last`, desc(schema.captures.createdAt))
           .limit(1),
+        featuredShopId(db),
       ]);
       const s = stats.get(id);
       const [lastMonitor] = monitors;
@@ -298,6 +331,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
             url: e.url,
             createdAt: e.createdAt.toISOString(),
           })),
+          featured: featured === id,
         },
         200,
       );
@@ -411,5 +445,25 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       if (result === "not_found") return c.json(notFound, 404);
       if (result === "invalid_merge") return c.json({ error: "invalid_merge" } as const, 400);
       return c.json({ targetId }, 200);
+    })
+    .openapi(featureRoute, async (c) => {
+      const { id } = c.req.valid("param");
+      noteAudit(c, { action: "shop.feature", target: `shop:${id}` });
+      const shop = await activeShop(db, id);
+      if (!shop) return c.json(notFound, 404);
+      if (shop.status !== "published") return c.json({ error: "not_published" } as const, 409);
+      await db.update(schema.shops).set({ featuredAt: now() }).where(eq(schema.shops.id, id));
+      return c.body(null, 204);
+    })
+    .openapi(unfeatureRoute, async (c) => {
+      const { id } = c.req.valid("param");
+      noteAudit(c, { action: "shop.unfeature", target: `shop:${id}` });
+      const [shop] = await db
+        .update(schema.shops)
+        .set({ featuredAt: null })
+        .where(and(eq(schema.shops.id, id), isNull(schema.shops.mergedIntoId)))
+        .returning({ id: schema.shops.id });
+      if (!shop) return c.json(notFound, 404);
+      return c.body(null, 204);
     });
 }

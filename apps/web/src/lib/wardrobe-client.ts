@@ -53,9 +53,11 @@ import {
   type ReferenceView,
   recentListSchema,
   referenceViewSchema,
+  type ShopDirectory,
   shareLinkSchema,
   shareResultSchema,
   shippingOptionListSchema,
+  shopDirectorySchema,
   type TagPatch,
   type TagView,
   tagListSchema,
@@ -412,6 +414,20 @@ export async function fetchHome(deps: ClientDeps = defaultDeps): Promise<HomeVie
   if (response.status === 401) return { greetingName: null, hasItems: false, une: null, news: [], wishes: [] };
   if (!response.ok) throw new Error(`home ${response.status}`);
   return homeViewSchema.parse(await response.json());
+}
+
+/**
+ * The shops of « Découvrir » and the « boutique de la semaine ». The route wants a session: a first visit opens her
+ * guest one (as pasting a link would) rather than telling her there is no shop.
+ */
+export async function fetchShopDirectory(deps: ClientDeps = defaultDeps): Promise<ShopDirectory> {
+  let response = await deps.fetch("/api/shops", { cache: "no-store" });
+  if (response.status === 401) {
+    await deps.ensure();
+    response = await deps.fetch("/api/shops", { cache: "no-store" });
+  }
+  if (!response.ok) throw new Error(`shops ${response.status}`);
+  return shopDirectorySchema.parse(await response.json());
 }
 
 /** The fingerprint of her data (null without a session): a new one means something changed elsewhere. */

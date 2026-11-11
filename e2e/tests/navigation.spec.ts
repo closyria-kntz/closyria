@@ -198,7 +198,9 @@ test("la bonne place est marquée sur les sous-pages, et Moi mène à tout ce qu
   await expect(menu(page).getByRole("link", { name: "Moi" })).toHaveAttribute("aria-current", "page");
   await page.goto("/decouvrir");
   await expect(menu(page).getByRole("link", { name: "Découvrir" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByText("Découvrir arrive bientôt : les boutiques que Closyria connaît.")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Les petites boutiques, d’un seul coup d’œil" }),
+  ).toBeVisible();
 
   await menu(page).getByRole("link", { name: "Moi" }).click();
   await expect(page).toHaveURL(/\/moi$/);

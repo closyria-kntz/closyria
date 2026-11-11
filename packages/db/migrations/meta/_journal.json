@@ -134,6 +134,13 @@
       "when": 1794344237944,
       "tag": "0018_acheter_ensemble",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794435122764,
+      "tag": "0019_boutique_de_la_semaine",
+      "breakpoints": true
     }
   ]
 }

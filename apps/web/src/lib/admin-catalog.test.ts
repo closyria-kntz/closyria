@@ -13,6 +13,7 @@ describe("catalogErrorKey", () => {
     expect(catalogErrorKey(409, { error: "slug_taken" })).toBe("slugTaken");
     expect(catalogErrorKey(409, { error: "domain_taken" })).toBe("domainTaken");
     expect(catalogErrorKey(409, { error: "capture_active" })).toBe("captureActive");
+    expect(catalogErrorKey(409, { error: "not_published" })).toBe("notPublished");
     expect(catalogErrorKey(400, { error: "invalid_merge" })).toBe("invalidMerge");
     expect(catalogErrorKey(400, { error: "invalid_url" })).toBe("invalidUrl");
   });

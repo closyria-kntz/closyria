@@ -12,6 +12,7 @@ export type CatalogErrorKey =
   | "invalidProduct"
   | "cycle"
   | "hasChildren"
+  | "notPublished"
   | "generic";
 
 /** The message (under `Admin.shops.errors`) for a refusal of the admin catalog API. */
@@ -21,6 +22,7 @@ export function catalogErrorKey(status: number, body: unknown): CatalogErrorKey 
   if (status === 409 && error === "domain_taken") return "domainTaken";
   if (status === 409 && error === "capture_active") return "captureActive";
   if (status === 409 && error === "kept") return "kept";
+  if (status === 409 && error === "not_published") return "notPublished";
   if (status === 400 && error === "invalid_merge") return "invalidMerge";
   if (status === 400 && error === "invalid_url") return "invalidUrl";
   return "generic";

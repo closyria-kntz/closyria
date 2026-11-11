@@ -1,14 +1,15 @@
 "use client";
 
-import type { FacetsView, HomeView } from "@closyria/shared";
+import type { HomeView, ShopCard } from "@closyria/shared";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useCallback, useEffect, useId, useState } from "react";
 import { ARTICLES_PATH, STEP_PARAM } from "@/lib/articles-address";
 import { useLiveRefresh } from "@/lib/live-changes";
 import { useDesktop } from "@/lib/use-desktop";
-import { fetchFacets, fetchHome } from "@/lib/wardrobe-client";
+import { fetchHome, fetchShopDirectory } from "@/lib/wardrobe-client";
 import { CaptureForm } from "./capture-form";
+import { ShopPhoto, shopSite } from "./discover-screen";
 import { HomeNewsList, moreClass, sectionTitleClass } from "./home-news";
 import { HomeUne } from "./home-une";
 import { ItemCard } from "./item-card";
@@ -18,6 +19,9 @@ import { Tip } from "./tip";
 import { blockClass, focusRing } from "./ui";
 
 type Loaded = { status: "loading" } | { status: "error" } | { status: "ready"; home: HomeView; now: Date };
+
+/** « Boutiques à découvrir »: at most this many shops. */
+const HOME_SHOPS = 4;
 
 const kickerClass = "text-meta font-bold tracking-wide text-une-ink uppercase";
 
@@ -84,11 +88,12 @@ function Row({ titleId, title, link }: { titleId: string; title: string; link: R
 }
 
 /**
- * « Boutiques à découvrir » (mockup .shopcard). « Découvrir » fills it later (Task 6); meanwhile, the shops of her own
- * articles, each opening « Mes articles » on that shop. Hidden when she has none.
+ * « Boutiques à découvrir » (mockup .shopcard): the shops of « Découvrir », the boutique de la semaine first, four at
+ * most, each opening its site in a new tab like there. Hidden when Closyria knows none.
  */
-function Shops({ shops }: { shops: FacetsView["shops"] }) {
+function Shops({ shops }: { shops: ShopCard[] }) {
   const t = useTranslations("Home.shops");
+  const tDiscover = useTranslations("Discover");
   const titleId = useId();
   if (shops.length === 0) return null;
   return (
@@ -105,21 +110,19 @@ function Shops({ shops }: { shops: FacetsView["shops"] }) {
       <ul className="-mx-space-1 flex gap-space-3 overflow-x-auto px-space-1 pb-space-1">
         {shops.map((shop) => (
           <li key={shop.id} className="w-shop-card shrink-0">
-            <Link
-              href={`${ARTICLES_PATH}?boutique=${shop.id}`}
+            <a
+              href={shopSite(shop)}
+              target="_blank"
+              rel="noopener noreferrer"
               className={`flex flex-col overflow-hidden rounded-card bg-surface-raised ${focusRing}`}
             >
-              <span
-                aria-hidden="true"
-                className="grid aspect-square place-items-center bg-surface-sunken font-title text-page-title text-une-ink"
-              >
-                {shop.name.charAt(0).toUpperCase()}
-              </span>
+              <ShopPhoto shop={shop} className="aspect-square w-full" />
               <span className="flex flex-col px-space-2-5 py-space-2 text-meta">
                 <b className="truncate text-sm">{shop.name}</b>
-                <span className="text-ink-muted">{t("yours")}</span>
+                <span className="text-ink-muted">{tDiscover("count", { count: shop.itemCount })}</span>
+                <span className="sr-only">{tDiscover("newTab")}</span>
               </span>
-            </Link>
+            </a>
           </li>
         ))}
       </ul>
@@ -183,13 +186,17 @@ export function HomeScreen({ fieldId }: { fieldId: string }) {
   const t = useTranslations("Home");
   const desktop = useDesktop();
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
-  const [shops, setShops] = useState<FacetsView["shops"]>([]);
+  const [shops, setShops] = useState<ShopCard[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const [home, facets] = await Promise.all([fetchHome(), fetchFacets().catch(() => ({ shops: [] }))]);
+      const home = await fetchHome();
       setLoaded({ status: "ready", home, now: new Date() });
-      setShops(facets.shops);
+      // Only once she keeps something (the row is not on a new account's home): a visit alone opens no session.
+      if (!home.hasItems) return;
+      const directory = await fetchShopDirectory().catch(() => null);
+      if (directory)
+        setShops([...(directory.featured ? [directory.featured] : []), ...directory.shops].slice(0, HOME_SHOPS));
     } catch {
       setLoaded((current) => (current.status === "ready" ? current : { status: "error" }));
     }

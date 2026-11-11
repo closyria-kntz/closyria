@@ -190,7 +190,14 @@ describe("shop and capture reads", () => {
   });
 
   it("reads a shop and reports an unknown one", async () => {
-    const detail = { ...shop, successRate7d: 0.9, lastMonitors: [true], lastMonitor: null, recentErrors: [] };
+    const detail = {
+      ...shop,
+      successRate7d: 0.9,
+      lastMonitors: [true],
+      lastMonitor: null,
+      recentErrors: [],
+      featured: false,
+    };
     const ok = fakeFetch(200, detail);
     const found = await fetchAdminShop(api(ok.fetch), shopId);
     expect(ok.calls[0]?.url).toBe(`http://api/api/admin/shops/${shopId}`);

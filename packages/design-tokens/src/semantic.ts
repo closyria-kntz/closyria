@@ -240,6 +240,8 @@ export const defaultSemanticTokens = {
   // « Accueil »: the une (photo 42 %, text beside it) and the two columns on a computer (mockup 1.3fr 1fr).
   "grid-une": "42% minmax(0, 1fr)",
   "grid-home": "minmax(0, 1.3fr) minmax(0, 1fr)",
+  // « Découvrir » on a computer: the une's photo takes 30 % (mockup decouvrir()).
+  "grid-une-wide": "30% minmax(0, 1fr)",
   "spacing-touch-target": size.touchTarget,
 } as const;
 

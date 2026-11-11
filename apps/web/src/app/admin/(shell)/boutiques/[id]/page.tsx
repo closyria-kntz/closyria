@@ -8,13 +8,14 @@ import { HealthBadge } from "../health-badge";
 import { LinkTester } from "../link-tester";
 import { MergeDialog } from "../merge-dialog";
 import { ShopSettingsForm } from "../shop-settings-form";
+import { FeatureShop } from "./feature-shop";
 import { ShippingOptions } from "./shipping-options";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Props = { params: Promise<{ id: string }> };
 
-/** One shop: settings, health, link tester and merge. */
+/** One shop: settings, « boutique de la semaine », delivery, health, link tester and merge. */
 export default async function AdminShopPage({ params }: Props) {
   await requireAdminPage();
   const { id } = await params;
@@ -49,6 +50,10 @@ export default async function AdminShopPage({ params }: Props) {
         </h2>
         <ShopSettingsForm shop={shop} />
       </section>
+
+      <div className="rounded-card border border-card-border bg-card-bg p-space-4">
+        <FeatureShop shopId={shop.id} status={shop.status} featured={shop.featured} />
+      </div>
 
       <section
         aria-labelledby="shipping-title"

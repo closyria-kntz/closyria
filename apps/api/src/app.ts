@@ -33,6 +33,7 @@ import { createMediaPipeline, type MediaDeps, mediaRoutes } from "./routes/media
 import { productsRoutes } from "./routes/products";
 import { referenceRoutes } from "./routes/reference";
 import { sharedRoutes } from "./routes/shared";
+import { shopsRoutes } from "./routes/shops";
 import { type TestMailDeps, testMailRoutes } from "./routes/test-mail";
 import type { WardrobeDeps } from "./wardrobe/deps";
 import { createImportAttacher } from "./wardrobe/photo-imports";
@@ -125,6 +126,7 @@ export function createApp(deps: AppDeps) {
     .route("/", mediaRoutes(deps.media, mediaPipeline))
     .route("/", capturesRoutes(deps.catalog, captureLimiter))
     .route("/", productsRoutes(deps.catalog, captureLimiter))
+    .route("/", shopsRoutes(deps.catalog))
     .route("/", eventsRoutes(deps.events))
     .route("/", profilesRoutes(deps.wardrobe))
     .route("/", loveLevelsRoutes(deps.wardrobe))

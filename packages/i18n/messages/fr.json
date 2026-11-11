@@ -71,8 +71,7 @@
     },
     "shops": {
       "title": "Boutiques à découvrir",
-      "all": "Toutes",
-      "yours": "Dans tes articles"
+      "all": "Toutes"
     },
     "wishes": {
       "title": "Tes envies du moment",
@@ -161,8 +160,24 @@
   },
   "Discover": {
     "metadata": "Découvrir",
-    "title": "Découvrir",
-    "soon": "Découvrir arrive bientôt : les boutiques que Closyria connaît."
+    "kicker": "Découvrir",
+    "title": "Les petites boutiques, d’un seul coup d’œil",
+    "loading": "Chargement des boutiques",
+    "loadError": "Les boutiques n’ont pas pu être chargées. Réessaie dans un moment.",
+    "empty": "Aucune boutique pour l’instant. Colle le lien d’un article : sa boutique apparaîtra ici.",
+    "search": {
+      "label": "Rechercher une boutique",
+      "placeholder": "Rechercher une boutique…"
+    },
+    "results": "{count, plural, =0 {Aucune boutique} one {# boutique} other {# boutiques}}",
+    "noMatch": "Aucune boutique ne correspond à « {query} ».",
+    "une": {
+      "kicker": "La boutique de la semaine",
+      "open": "Voir la boutique"
+    },
+    "all": "Toutes les boutiques",
+    "count": "{count, plural, =0 {Aucun article pour l’instant} one {# article} other {# articles}}",
+    "newTab": "(s’ouvre dans un nouvel onglet)"
   },
   "Auth": {
     "email": {
@@ -346,7 +361,8 @@
         "cycle": "Ce déplacement créerait une boucle.",
         "hasChildren": "Supprime ou déplace d’abord ses sous-catégories.",
         "invalidEntry": "Vérifie le nom, la teinte et les mots-clés.",
-        "invalidProduct": "Vérifie le nom, la marque, le prix et les choix."
+        "invalidProduct": "Vérifie le nom, la marque, le prix et les choix.",
+        "notPublished": "Seules les boutiques publiées peuvent faire la une."
       }
     },
     "shops": {
@@ -446,6 +462,14 @@
         "useTestUrl": "Utiliser comme page de test",
         "nameTaken": "Nom repris : {name}.",
         "testUrlSet": "Page de test enregistrée."
+      },
+      "feature": {
+        "title": "Boutique de la semaine",
+        "on": "Elle fait la une de « Découvrir » en ce moment.",
+        "off": "Mise en avant en une de « Découvrir », pour tout le monde.",
+        "add": "Mettre en boutique de la semaine",
+        "remove": "Retirer de la une",
+        "draft": "Publie d’abord la boutique : seules les boutiques publiées vont en une."
       }
     },
     "captures": {

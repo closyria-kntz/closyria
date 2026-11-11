@@ -88,6 +88,7 @@ export const adminCatalogErrorSchema = z.object({
     "kept",
     "cycle",
     "has_children",
+    "not_published",
   ]),
   /** With `domain_taken` on shop creation: the shop that owns the domain. */
   shopId: z.uuid().optional(),
@@ -138,6 +139,8 @@ export const adminShopDetailSchema = adminShopSchema.extend({
   lastMonitors: z.array(z.boolean()),
   lastMonitor: adminShopLastCaptureSchema.nullable(),
   recentErrors: z.array(adminShopErrorSchema),
+  /** It is the « boutique de la semaine » of « Découvrir » right now (the published shop featured most recently). */
+  featured: z.boolean(),
 });
 
 const slugSchema = z

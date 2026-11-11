@@ -49,6 +49,8 @@ export const shops = pgTable(
     /** Reference page of the monitoring. */
     testUrl: text("test_url"),
     mergedIntoId: uuid("merged_into_id").references((): AnyPgColumn => shops.id, { onDelete: "set null" }),
+    /** Set by the admin (« boutique de la semaine »): the shop featured most recently is the « une » of « Découvrir ». */
+    featuredAt: timestamp("featured_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
