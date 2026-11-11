@@ -35,7 +35,7 @@ describe("filters in the address", () => {
   it("reads valid values and drops the rest", () => {
     const filters = filtersFromParams(
       new URLSearchParams(
-        `favori=1&boutique=${UUID}&type=${UUID}&couleur=nope&public=women&etiquette=${UUID}&tri=price_asc&etape=sold`,
+        `favori=1&boutique=${UUID}&type=${UUID}&couleur=nope&public=women&etiquette=${UUID}&tri=price_asc&statut=sold`,
       ),
     );
     // `favori` is gone (levels replace it): ignored.

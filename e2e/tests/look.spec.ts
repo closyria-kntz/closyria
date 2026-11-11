@@ -7,7 +7,7 @@ import { expect, test } from "../fixtures/test";
 async function oneWish(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
   await keepWish(page);
   await page.goto("/envies");

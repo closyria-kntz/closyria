@@ -15,7 +15,7 @@ const axe = async (page: Page) => {
 async function wishAt(page: Page, name: string, price: string): Promise<void> {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(manualProductUrl());
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
   await page.getByLabel("Nom de l’article").fill(name);
   await page.getByLabel("Prix (en euros)").fill(price);
   await page.getByRole("button", { name: "Enregistrer la fiche" }).click();
@@ -381,7 +381,7 @@ test("Mes envies : un onglet par liste, la grille filtrée et le budget de la li
   await expect(card).toHaveCSS("font-variant-numeric", "tabular-nums");
 
   await summer.click();
-  await expect(page).toHaveURL(/\/envies\?liste=[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/articles\?etape=envie&liste=[0-9a-f-]{36}$/);
   await expect(summer).toHaveAttribute("aria-current", "true");
   await expect(all).not.toHaveAttribute("aria-current", "true");
   await expect(page.getByTestId("item-card")).toHaveCount(1);
@@ -414,7 +414,7 @@ test("Mes envies : un onglet par liste, la grille filtrée et le budget de la li
   await axe(page);
 
   await all.click();
-  await expect(page).toHaveURL(/\/envies$/);
+  await expect(page).toHaveURL(/\/articles\?etape=envie$/);
   await expect(page.getByTestId("item-card")).toHaveCount(2);
   await expect(card).toContainText("Pas de budget");
   await expect(card).not.toContainText("Budget du mois");

@@ -7,12 +7,10 @@ import { expect, test } from "../fixtures/test";
 test.describe("sur ordinateur", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("sans compte : le menu le dit, la page propose de créer un compte, pas de déconnexion", async ({ page }) => {
+  test("sans compte : la barre le dit, la page propose de créer un compte, pas de déconnexion", async ({ page }) => {
     await page.goto("/");
-    const menu = page.getByRole("navigation", { name: "Menu principal" });
-    await menu.getByRole("button", { name: "Plus" }).click();
-    const link = menu.getByRole("link", { name: /Mon compte/ });
-    await expect(link).toContainText("Sans compte");
+    const link = page.getByRole("banner").getByRole("link", { name: /^Mon compte/ });
+    await expect(link).toHaveAccessibleName("Mon compte : Sans compte");
     await link.click();
     await expect(page).toHaveURL(/\/reglages\/compte$/);
     await expect(page.getByRole("heading", { level: 2, name: "Mon compte" })).toBeVisible();
@@ -30,9 +28,9 @@ test.describe("sur ordinateur", () => {
     await page.goto("/");
     await signInWithEmailCode(page, request, email);
     await page.goto("/reglages/compte");
-    const menu = page.getByRole("navigation", { name: "Menu principal" });
-    await menu.getByRole("button", { name: "Plus" }).click();
-    await expect(menu.getByRole("link", { name: /Mon compte/ })).toContainText(email);
+    await expect(page.getByRole("banner").getByRole("link", { name: /^Mon compte/ })).toHaveAccessibleName(
+      `Mon compte : ${email}`,
+    );
     await expect(page.getByRole("main").getByText(email)).toBeVisible();
     await expect(page.getByText(/^Compte créé le \d{1,2} \S+ \d{4}$/)).toBeVisible();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
@@ -49,13 +47,13 @@ test.describe("sur ordinateur", () => {
 test.describe("sur téléphone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("le compte est dans « Plus »", async ({ page, request }) => {
+  test("le compte est dans « Moi »", async ({ page, request }) => {
     const email = uniqueEmail();
     await page.goto("/");
     await signInWithEmailCode(page, request, email);
-    await page.goto("/envies");
-    await page.getByRole("button", { name: "Plus" }).click();
-    const link = page.getByRole("list", { name: "Autres pages" }).getByRole("link", { name: /Mon compte/ });
+    await page.goto("/articles");
+    await page.getByRole("navigation", { name: "Menu principal" }).getByRole("link", { name: "Moi" }).click();
+    const link = page.getByRole("navigation", { name: "Mes pages" }).getByRole("link", { name: /Mon compte/ });
     await expect(link).toContainText(email);
     await link.click();
     await expect(page).toHaveURL(/\/reglages\/compte$/);

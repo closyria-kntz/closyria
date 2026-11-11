@@ -14,7 +14,7 @@ const PIXEL = Buffer.from(
 async function pasteAndWish(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
   await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
@@ -45,8 +45,8 @@ test("un article gardé apparaît dans Envies, l'onglet courant est marqué, et 
   const card = page.getByTestId("item-card").first();
   await expect(card).toContainText(PRODUCT.name);
   await expect(card.getByRole("button", { name: "Niveau : J’aime. Toucher pour changer" })).toBeVisible();
-  const nav = page.getByRole("navigation", { name: /Menu principal|Onglets/ }).filter({ visible: true });
-  await expect(nav.locator("[aria-current=page]")).toHaveText("Envies");
+  const nav = page.getByRole("navigation", { name: "Menu principal" });
+  await expect(nav.locator("[aria-current=page]")).toHaveText("Mes articles");
 
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
@@ -68,10 +68,10 @@ test("les filtres vivent dans l'adresse et le bouton Précédent les restaure", 
   await page.getByLabel("Trier par").selectOption("price_asc");
   await expect(page).toHaveURL(/tri=price_asc/);
   await page.getByLabel("Étape").selectOption("sold");
-  await expect(page).toHaveURL(/etape=sold/);
+  await expect(page).toHaveURL(/statut=sold/);
   await expect(page.getByRole("heading", { name: "Aucun article ne correspond" })).toBeVisible();
   await page.goBack();
-  await expect(page).not.toHaveURL(/etape=sold/);
+  await expect(page).not.toHaveURL(/statut=sold/);
   await expect(page.getByTestId("item-card")).toHaveCount(1);
   await page.getByLabel("Trier par").selectOption("love");
   await expect(page).toHaveURL(/tri=love/);
@@ -371,41 +371,21 @@ test("téléphone : la barre de sélection reste juste au-dessus du toast et des
 test.describe("barre du haut sur ordinateur", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("pilule en haut, sans menu latéral, le trait suit la page courante", async ({ page }) => {
-    await page.goto("/envies");
+  test("le menu est dans le bandeau, sans menu latéral, la place courante en pilule", async ({ page }) => {
+    await page.goto("/articles?etape=envie");
     const bar = page.getByTestId("app-nav-top");
     await expect(bar).toBeVisible();
     await expect(page.locator("aside")).toHaveCount(0);
     const current = bar.locator("a[aria-current=page]");
-    await expect(current).toHaveText("Envies");
-    const underline = bar.getByTestId("nav-underline");
-    const under = async () => {
-      const link = await current.boundingBox();
-      const line = await underline.boundingBox();
-      if (!link || !line) throw new Error("no box");
-      expect(Math.abs(line.x + line.width / 2 - (link.x + link.width / 2))).toBeLessThan(2);
-      expect(line.y).toBeGreaterThan(link.y + link.height / 2);
-      expect(line.y + line.height).toBeLessThanOrEqual(link.y + link.height + 1);
-    };
-    await expect(async () => under()).toPass();
-    await bar.getByRole("link", { name: "Dressing" }).click();
-    await expect(current).toHaveText("Dressing");
-    await expect(async () => under()).toPass();
+    await expect(current).toHaveText("Mes articles");
+    await bar.getByRole("link", { name: "Moi" }).click();
+    await expect(page).toHaveURL(/\/moi$/);
+    await expect(current).toHaveText("Moi");
+    // The current place is a pill of its own colour, the others sit on the band.
+    const fill = (name: string) =>
+      bar.getByRole("link", { name }).evaluate((node) => getComputedStyle(node).backgroundColor);
+    expect(await fill("Moi")).not.toBe(await fill("Accueil"));
     await axe(page);
-  });
-
-  test("« Plus » garde Listes, Réglages et Mon compte, et le trait passe sous « Plus » quand on y est", async ({
-    page,
-  }) => {
-    await page.goto("/listes");
-    const bar = page.getByTestId("app-nav-top");
-    const more = bar.getByRole("button", { name: "Plus" });
-    await expect(more).toHaveAttribute("aria-current", "true");
-    await more.click();
-    await expect(more).toHaveAttribute("aria-expanded", "true");
-    await bar.getByRole("link", { name: "Réglages" }).click();
-    await expect(page).toHaveURL(/\/reglages\//);
-    await expect(more).toHaveAttribute("aria-expanded", "false");
   });
 });
 
@@ -427,7 +407,7 @@ test("double-clic sur la photo : la bulle des 4 niveaux, rien ne change avant de
   await expect(bubble.getByRole("radio", { name: "J’aime" })).toBeChecked();
   await expect(bubble.getByRole("radio", { name: "J’aime" })).toBeFocused();
   await page.waitForTimeout(450); // longer than the single-click delay
-  await expect(page).toHaveURL(/\/envies/);
+  await expect(page).toHaveURL(/\/articles\?etape=envie/);
   await expect(emoji).toBeVisible(); // nothing changed yet
   await axe(page);
 
@@ -622,6 +602,8 @@ test("« Aperçu » ouvre le panneau sans quitter la page ; « Je le prends » c
     await expect(quick).toHaveCSS("opacity", "1");
   }
   // Drawn at the mockup's size (42 px, 38 on a phone), a finger wide all the same: the invisible hit area reaches 44.
+  // Measured once the card finished rising in (its arrival scales it a little).
+  await first.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
   for (const button of [take, preview]) {
     const box = await button.boundingBox();
     expect(box?.height).toBeLessThanOrEqual(42);
@@ -637,7 +619,7 @@ test("« Aperçu » ouvre le panneau sans quitter la page ; « Je le prends » c
   await preview.click();
   const panel = page.getByRole("dialog", { name: `Aperçu de ${PRODUCT.name}` });
   await expect(panel).toBeVisible();
-  await expect(page).toHaveURL(/\/envies\?.*apercu=/);
+  await expect(page).toHaveURL(/\/articles\?etape=envie&.*apercu=/);
   await expect(panel).toContainText(/23\s€/);
   await expect(panel.getByRole("region", { name: "Photos de l’article" })).toBeVisible();
   await expect(panel.getByText("J’aime")).toBeVisible();
@@ -648,7 +630,7 @@ test("« Aperçu » ouvre le panneau sans quitter la page ; « Je le prends » c
   await expect(panel.getByRole("checkbox", { name: /Je le prends/ })).toBeChecked();
   await page.goBack();
   await expect(panel).toHaveCount(0);
-  await expect(page).toHaveURL(/\/envies$/);
+  await expect(page).toHaveURL(/\/articles\?etape=envie$/);
   await expect(card(page).getByTestId("card-taken")).toBeVisible();
   await expect(card(page).getByTestId("card-take")).toHaveAttribute("aria-pressed", "true");
   await expect(card(page).getByTestId("card-take")).toHaveText("Retirer");
@@ -687,7 +669,7 @@ test("« Aperçu » ouvre le panneau sans quitter la page ; « Je le prends » c
 test("prix inconnu : la carte dit « prix inconnu » ; en sélection, plus de boutons rapides", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(manualProductUrl());
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
   await page.getByLabel("Nom de l’article").fill("Robe sans prix");
   await page.getByRole("button", { name: "Enregistrer la fiche" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Robe sans prix" })).toBeVisible();

@@ -25,7 +25,7 @@ async function axe(page: Page): Promise<void> {
 async function openSheet(page: Page): Promise<string> {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
   const id = /\/produits\/([0-9a-f-]{36})/.exec(page.url())?.[1];
   if (!id) throw new Error(`no product id in ${page.url()}`);
@@ -332,7 +332,7 @@ test("fiche d'une boutique non lisible, pas encore remplie : « Voir chez » res
 }) => {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(manualProductUrl());
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
   await expect(page.getByLabel("Nom de l’article")).toBeVisible();
   const link = page.getByRole("link", { name: `Voir chez ${MANUAL_SHOP.name}` });
   await expect(link).toBeVisible();
@@ -347,7 +347,7 @@ test("boutique non lisible, fiche remplie : phrase claire, tailles à la main, p
 }) => {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(manualProductUrl());
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
   await page.getByLabel("Nom de l’article").fill("Robe en lin");
   await page.getByLabel("Prix (en euros)").fill("49,90");
   await page.getByLabel("Tailles").fill("S, M");

@@ -16,16 +16,20 @@ type Props = {
   hint: string;
   /** Large panel on the right on a computer; otherwise a centered one. A sheet from the bottom on a phone either way. */
   wide?: boolean;
+  /** On a phone, only as tall as its content (a short menu) instead of five sixths of the screen. */
+  fit?: boolean;
   /** Extra classes for the scrolling body (a grid layout, for instance). */
   bodyClassName?: string;
   children: ReactNode;
   footer?: ReactNode;
 };
 
-const PHONE = "m-space-0 mt-auto h-5/6 max-h-full w-full max-w-full rounded-t-card";
+const PHONE = "m-space-0 mt-auto w-full max-w-full rounded-t-card";
 const PANEL =
   "md:mt-space-0 md:mr-space-0 md:ml-auto md:h-full md:w-3/5 md:max-w-panel md:rounded-l-card md:rounded-tr-none";
 const CENTERED = "md:m-auto md:h-auto md:max-h-5/6 md:w-full md:max-w-panel md:rounded-card";
+/** `fit`: the modal dialog is positioned on all sides, so only `fit-content` keeps it as tall as its content. */
+const FIT = "h-fit max-h-5/6 md:m-auto md:max-h-5/6 md:w-full md:max-w-panel md:rounded-card";
 
 /**
  * A native dialog shown as a sheet from the bottom on a phone, a right panel (`wide`) or a centered one on a
@@ -39,6 +43,7 @@ export function Sheet({
   closeLabel,
   hint,
   wide = false,
+  fit = false,
   bodyClassName = "",
   children,
   footer,
@@ -86,7 +91,7 @@ export function Sheet({
       aria-labelledby={labelledBy}
       onClose={onClose}
       onClick={(event) => event.target === ref.current && onClose()}
-      className={`${PHONE} ${wide ? PANEL : CENTERED} overflow-hidden border open:flex open:flex-col border-line bg-surface-raised p-space-0 text-ink shadow-lifted backdrop:bg-ink/40`}
+      className={`${PHONE} ${fit ? FIT : `h-5/6 max-h-full ${wide ? PANEL : CENTERED}`} overflow-hidden border open:flex open:flex-col border-line bg-surface-raised p-space-0 text-ink shadow-lifted backdrop:bg-ink/40`}
     >
       {open && (
         // The dialog is a column with a height cap (centered) or a fixed height (sheet, panel): the body scrolls inside

@@ -46,5 +46,6 @@ describe("profileHref", () => {
     expect(profileHref("/envies", lea.id, false)).toBe(`/envies?profil=${lea.id}`);
     expect(profileHref("/envies", moi.id, true)).toBe("/envies");
     expect(profileHref("/envies", null, true)).toBe("/envies");
+    expect(profileHref("/articles?etape=dressing", lea.id, false)).toBe(`/articles?etape=dressing&profil=${lea.id}`);
   });
 });

@@ -14,26 +14,9 @@
   "Shell": {
     "brand": "Closyria",
     "skipToContent": "Aller au contenu",
-    "nav": {
-      "desktop": "Menu principal",
-      "tabs": "Onglets",
-      "home": "Accueil",
-      "wishes": "Envies",
-      "ordered": "Commandé",
-      "wardrobe": "Dressing",
-      "forSale": "À vendre",
-      "lists": "Listes",
-      "settings": "Réglages",
-      "more": "Plus",
-      "moreMenu": "Autres pages"
-    },
     "profile": {
       "label": "Profil",
       "me": "Moi"
-    },
-    "add": {
-      "open": "+ Ajouter",
-      "close": "Fermer"
     },
     "account": {
       "label": "Mon compte",
@@ -43,6 +26,72 @@
       "toDark": "Passer en mode sombre",
       "toLight": "Passer en mode clair"
     }
+  },
+  "Nav": {
+    "label": "Menu principal",
+    "accueil": "Accueil",
+    "decouvrir": "Découvrir",
+    "articles": "Mes articles",
+    "moi": "Moi",
+    "add": "Ajouter",
+    "addLabel": "Ajouter un article",
+    "search": {
+      "label": "Rechercher dans mes articles",
+      "placeholder": "Rechercher un article, une boutique…"
+    },
+    "account": "Mon compte : {who}"
+  },
+  "Add": {
+    "title": "Ajouter un article",
+    "close": "Fermer",
+    "closeHint": "Glisse vers le bas pour fermer",
+    "back": "Retour",
+    "soon": "Bientôt",
+    "link": {
+      "title": "Coller un lien",
+      "detail": "Depuis le site d’une boutique"
+    },
+    "photo": {
+      "title": "Prendre une photo",
+      "detail": "Une pièce de ton dressing ou vue en boutique",
+      "explain": "Pour l’instant, une photo s’ajoute à un article que tu as déjà : ouvre sa fiche, puis touche « Ajouter une photo ». Créer un article à partir d’une photo seule arrive bientôt.",
+      "open": "Ouvrir Mes articles"
+    },
+    "share": {
+      "title": "Partager depuis une boutique",
+      "detail": "Bouton « Partager » → Closyria",
+      "explain": "Sur la page d’un article, dans le site ou l’app de la boutique, touche « Partager », puis choisis Closyria : l’article s’ajoute tout seul à tes envies.",
+      "android": "Sur Android, Closyria apparaît dans ce menu une fois l’app installée sur ton écran d’accueil.",
+      "iphone": "Sur iPhone, un raccourci à créer une fois l’y ajoute.",
+      "iphoneLink": "Voir l’aide iPhone"
+    },
+    "mail": {
+      "title": "Transférer un e-mail de commande",
+      "detail": "Bientôt : on suit ton colis"
+    }
+  },
+  "Me": {
+    "metadata": "Moi",
+    "title": "Moi",
+    "intro": "Ton dressing, tes listes, ton budget et tes réglages.",
+    "placesLabel": "Mes pages",
+    "places": {
+      "envies": "Mes envies",
+      "commande": "Commandé",
+      "dressing": "Mon dressing",
+      "aVendre": "À vendre",
+      "listes": "Mes listes",
+      "budget": "Mon budget",
+      "reglages": "Réglages",
+      "compte": "Mon compte",
+      "aide": "Aide iPhone"
+    },
+    "budgetWhere": "Dans « Mes envies »"
+  },
+  "Discover": {
+    "metadata": "Découvrir",
+    "title": "Découvrir",
+    "soon": "Découvrir arrive bientôt : les boutiques que Closyria connaît."
   },
   "Auth": {
     "email": {

@@ -30,7 +30,7 @@ async function giftList(page: Page, db: Parameters<typeof sessionsOf>[0], userAg
   for (let i = 0; i < 2; i += 1) {
     await page.goto("/");
     await page.getByLabel("Coller un lien").fill(autoProductUrl());
-    await page.getByRole("button", { name: "Ajouter" }).click();
+    await page.getByRole("button", { name: "Ajouter", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
     await keepWish(page);
   }

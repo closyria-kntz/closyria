@@ -11,7 +11,7 @@ const CAPTURE_BUDGET_MS = 5_000;
 
 async function paste(page: Page, url: string): Promise<void> {
   await page.getByLabel("Coller un lien").fill(url);
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
 }
 
 /** The whole captured sheet: name, price, sizes and at least one photo actually loaded. */

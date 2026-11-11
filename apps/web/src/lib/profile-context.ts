@@ -29,7 +29,8 @@ export function resolveCurrentProfile(profiles: readonly ProfileView[], requeste
 
 /** A link inside the shell: the chosen profile is carried along, the default one is not written. */
 export function profileHref(path: string, profileId: string | null, isDefault: boolean): string {
-  return profileId && !isDefault ? `${path}?${PROFILE_PARAM}=${profileId}` : path;
+  if (!profileId || isDefault) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}${PROFILE_PARAM}=${profileId}`;
 }
 
 export type ProfilesState = {

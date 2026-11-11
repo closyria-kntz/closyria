@@ -1,45 +1,42 @@
 import { describe, expect, it } from "vitest";
-import { desktopNav, isCurrent, moreNav, phoneTabs, pillMoreNav, pillNav, tabletTabs } from "./app-nav";
+import { type AppNavKey, appNav, isCurrent, phoneNav } from "./app-nav";
+
+const place = (key: AppNavKey) => {
+  const found = appNav.find((item) => item.key === key);
+  if (!found) throw new Error(`missing ${key}`);
+  return found;
+};
 
 describe("app navigation", () => {
-  it("shows five tabs on a phone, the rest behind « Plus »", () => {
-    expect(phoneTabs.map((item) => item.key)).toEqual(["home", "wishes", "ordered", "wardrobe", "more"]);
-    expect(moreNav.map((item) => item.key)).toEqual(["forSale", "lists", "settings"]);
-  });
-
-  it("shows the home page and the six places in the side menu, and the tablet tabs", () => {
-    expect(desktopNav.map((item) => item.key)).toEqual([
-      "home",
-      "wishes",
-      "ordered",
-      "wardrobe",
-      "forSale",
-      "lists",
-      "settings",
+  it("has the four places in order, the + between Découvrir and Mes articles on a phone", () => {
+    expect(appNav.map((item) => [item.key, item.href])).toEqual([
+      ["accueil", "/"],
+      ["decouvrir", "/decouvrir"],
+      ["articles", "/articles"],
+      ["moi", "/moi"],
     ]);
-    expect(tabletTabs.map((item) => item.key)).toEqual(desktopNav.map((item) => item.key));
-  });
-
-  it("splits the desktop pill between five places and « Plus », without losing any", () => {
-    expect(pillNav.map((item) => item.key)).toEqual(["home", "wishes", "ordered", "wardrobe", "forSale"]);
-    expect(pillMoreNav.map((item) => item.key)).toEqual(["lists", "settings"]);
-    expect([...pillNav, ...pillMoreNav]).toEqual([...desktopNav]);
-  });
-
-  it("marks the current page, including its sub-pages", () => {
-    const lists = desktopNav.find((item) => item.key === "lists");
-    const wishes = desktopNav.find((item) => item.key === "wishes");
-    if (!lists || !wishes) throw new Error("missing items");
-    expect(isCurrent(lists, "/listes")).toBe(true);
-    expect(isCurrent(lists, "/listes/abc")).toBe(true);
-    expect(isCurrent(lists, "/listesx")).toBe(false);
-    expect(isCurrent(wishes, "/dressing")).toBe(false);
+    expect(phoneNav.map((item) => item.key)).toEqual(["accueil", "decouvrir", "add", "articles", "moi"]);
   });
 
   it("marks « Accueil » on the home page only", () => {
-    const home = desktopNav.find((item) => item.key === "home");
-    if (!home) throw new Error("missing home");
-    expect(isCurrent(home, "/")).toBe(true);
-    expect(isCurrent(home, "/envies")).toBe(false);
+    expect(isCurrent(place("accueil"), "/")).toBe(true);
+    expect(isCurrent(place("accueil"), "/articles")).toBe(false);
+  });
+
+  it("marks « Mes articles » on its sub-pages: sheets, lists, preparing an order", () => {
+    const articles = place("articles");
+    for (const path of ["/articles", "/produits/abc", "/listes", "/listes/abc", "/envies/commande"]) {
+      expect(isCurrent(articles, path), path).toBe(true);
+    }
+    expect(isCurrent(articles, "/listesx")).toBe(false);
+    expect(isCurrent(articles, "/moi")).toBe(false);
+  });
+
+  it("marks « Moi » on the settings and the help, « Découvrir » on its page", () => {
+    for (const path of ["/moi", "/reglages/profils", "/reglages/compte", "/aide/iphone"]) {
+      expect(isCurrent(place("moi"), path), path).toBe(true);
+    }
+    expect(isCurrent(place("decouvrir"), "/decouvrir")).toBe(true);
+    expect(isCurrent(place("decouvrir"), "/")).toBe(false);
   });
 });

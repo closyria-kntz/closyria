@@ -9,7 +9,7 @@ const REM = 16;
 async function openSheet(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible();
   await expect(page.getByRole("img", { name: PRODUCT.name }).first()).toBeVisible();
 }
@@ -39,23 +39,15 @@ async function box(page: Page, selector: string) {
 test.describe("1440 px", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("la fiche a deux colonnes, le menu latéral et un contenu large", async ({ page }) => {
+  test("la fiche a deux colonnes, le menu en haut et un contenu large", async ({ page }) => {
     await openSheet(page);
 
     const side = page.getByRole("navigation", { name: "Menu principal" });
     await expect(side).toBeVisible();
     await expect(page.locator("aside")).toHaveCount(0);
-    await expect(side.getByRole("link")).toHaveText(["Accueil", "Envies", "Commandé", "Dressing", "À vendre"]);
-    // The rest of the places sit behind « Plus ».
-    await side.getByRole("button", { name: "Plus" }).click();
-    await expect(side.getByRole("list", { name: "Autres pages" }).getByRole("link")).toHaveText([
-      "Listes",
-      "Réglages",
-      "Mon compteSans compte",
-    ]);
-    await page.keyboard.press("Escape");
-    // The product sheet is not one of the menu's places: no entry claims to be the current page.
-    await expect(side.locator("[aria-current=page]")).toHaveCount(0);
+    await expect(side.getByRole("link")).toHaveText(["Accueil", "Découvrir", "Mes articles", "Moi"]);
+    // The product sheet belongs to « Mes articles ».
+    await expect(side.locator("[aria-current=page]")).toHaveText("Mes articles");
     await expect(page.getByTestId("app-nav-bottom")).toBeHidden();
 
     const gallery = await box(page, "[data-testid=product-gallery]");
@@ -70,8 +62,12 @@ test.describe("1440 px", () => {
     page,
   }) => {
     await openSheet(page);
-    const button = page.getByRole("button", { name: "+ Ajouter" });
+    const button = page.getByRole("banner").getByRole("button", { name: "Ajouter un article" });
     await button.click();
+    await page
+      .getByRole("dialog", { name: "Ajouter un article" })
+      .getByRole("button", { name: /Coller un lien/ })
+      .click();
     const field = page.getByLabel("Coller un lien");
     await expect(field).toBeVisible();
     await expect(field).toBeFocused();
@@ -115,10 +111,8 @@ test.describe("1440 px", () => {
     await page.goto("/");
     const side = page.getByRole("navigation", { name: "Menu principal" });
     await expect(side.getByRole("link", { name: "Accueil" })).toHaveAttribute("aria-current", "page");
-    // The paste field is on the page itself: no « + Ajouter » in the header.
-    await expect(page.getByRole("button", { name: "+ Ajouter" })).toHaveCount(0);
-    await side.getByRole("link", { name: "Envies" }).click();
-    await expect(page).toHaveURL(/\/envies$/);
+    await side.getByRole("link", { name: "Mes articles" }).click();
+    await expect(page).toHaveURL(/\/articles$/);
     await side.getByRole("link", { name: "Accueil" }).click();
     await expect(page.getByLabel("Coller un lien")).toBeVisible();
   });
@@ -136,11 +130,11 @@ test.describe("390 px", () => {
   test("la barre d'onglets est en bas, la fiche sur une colonne", async ({ page }) => {
     await openSheet(page);
 
-    const bar = page.getByRole("navigation", { name: "Onglets" });
+    const bar = page.getByRole("navigation", { name: "Menu principal" });
     await expect(bar).toBeVisible();
-    await expect(bar.getByRole("link")).toHaveText(["Accueil", "Envies", "Commandé", "Dressing"]);
-    await expect(bar.getByRole("button", { name: "Plus" })).toBeVisible();
-    await expect(bar.locator("[aria-current=page]")).toHaveCount(0);
+    await expect(bar.getByRole("link")).toHaveText(["Accueil", "Découvrir", "Mes articles", "Moi"]);
+    await expect(bar.getByRole("button", { name: "Ajouter un article" })).toBeVisible();
+    await expect(bar.locator("[aria-current=page]")).toHaveText("Mes articles");
     const barBox = await box(page, "[data-testid=app-nav-bottom]");
     expect(barBox.y + barBox.height).toBeGreaterThan(844 - 2);
     for (const target of await bar.locator("a, button").all()) {
@@ -158,16 +152,9 @@ test.describe("390 px", () => {
     const gallery = await box(page, "[data-testid=product-gallery]");
     const info = await box(page, "[data-testid=product-info]");
     expect(info.y).toBeGreaterThan(gallery.y + gallery.height - 1);
-
-    await bar.getByRole("button", { name: "Plus" }).click();
-    await expect(page.getByRole("link", { name: "À vendre" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Listes" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Réglages" })).toBeVisible();
   });
 
-  test("tout en bas de la page, le dernier élément reste visible au-dessus de la barre, « Plus » ouvert ou non", async ({
-    page,
-  }) => {
+  test("tout en bas de la page, le dernier élément reste visible au-dessus de la barre", async ({ page }) => {
     await openSheet(page);
     const last = page.locator("[data-testid=product-info] > :last-child");
     const bar = page.getByTestId("app-nav-bottom");
@@ -182,24 +169,20 @@ test.describe("390 px", () => {
     };
 
     await expectLastAboveBar();
-    await bar.getByRole("button", { name: "Plus" }).click();
-    await expect(page.getByRole("link", { name: "Listes" })).toBeVisible();
-    await expectLastAboveBar();
   });
 });
 
 test.describe("820 px", () => {
   test.use({ viewport: { width: 820, height: 1180 } });
 
-  test("les onglets sont en haut", async ({ page }) => {
+  test("le menu est en haut", async ({ page }) => {
     await openSheet(page);
 
-    const tabs = page.getByRole("navigation", { name: "Onglets" });
+    const tabs = page.getByRole("navigation", { name: "Menu principal" });
     await expect(tabs).toBeVisible();
-    await expect(tabs.getByRole("link")).toHaveCount(7);
-    expect((await box(page, "[data-testid=app-nav-tabs]")).y).toBeLessThan(6 * REM);
+    await expect(tabs.getByRole("link")).toHaveCount(4);
+    expect((await box(page, "[data-testid=app-nav-top]")).y).toBeLessThan(6 * REM);
     await expect(page.getByTestId("app-nav-bottom")).toBeHidden();
-    await expect(page.getByRole("navigation", { name: "Menu principal" })).toBeHidden();
   });
 });
 
@@ -316,8 +299,8 @@ test.describe("cadre fixe", () => {
     await openSheet(page);
     const contentTop = () => page.evaluate(() => document.getElementById("app-content")?.scrollTop ?? -1);
     expect(await scrollContentToBottom(page)).toBeGreaterThan(0);
-    await page.getByRole("navigation", { name: "Onglets" }).getByRole("link", { name: "Envies" }).click();
-    await expect(page).toHaveURL(/\/envies/);
+    await page.getByRole("navigation", { name: "Menu principal" }).getByRole("link", { name: "Mes articles" }).click();
+    await expect(page).toHaveURL(/\/articles/);
     await expect.poll(contentTop).toBe(0);
     await page.goBack();
     await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible();

@@ -2,185 +2,122 @@
 
 import { DEFAULT_LOVE_LEVELS, type LoveLevelView, type ProfileView, type SummaryView } from "@closyria/shared";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { type ReactNode, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
+import { ARTICLES_PATH } from "@/lib/articles-address";
 import { fetchSummary } from "@/lib/catalog-client";
 import { useChangesPoller, useLiveRefresh } from "@/lib/live-changes";
 import { ProfilesContext, profileHref, useAccount, useCurrentProfile } from "@/lib/profile-context";
 import { fetchLoveLevels } from "@/lib/wardrobe-client";
 import { AccountPrompt } from "./account-prompt";
-import { type AppNavItem, isCurrent, moreNav, phoneTabs, pillMoreNav, pillNav, tabletTabs } from "./app-nav";
-import { CaptureForm } from "./capture-form";
+import { AddSheet } from "./add-sheet";
+import { type AppNavItem, type AppNavKey, appNav, isCurrent, phoneNav } from "./app-nav";
 import { GiftWarning } from "./gift-warning";
-import { NavUnderline } from "./nav-underline";
 import { ProfileSwitcher } from "./profile-switcher";
-import { ThemeButton } from "./theme-button";
-import { buttonClass, focusRing } from "./ui";
+import { focusRing } from "./ui";
 import { UndoToast } from "./undo-toast";
 
-const linkShape = `flex min-h-touch-target items-center justify-center rounded-button hover:bg-surface-strong aria-[current=page]:bg-surface-strong aria-[current=page]:font-strong aria-[current=page]:text-accent ${focusRing}`;
-const linkBase = `${linkShape} px-space-3 text-sm`;
-/** Phone tabs: five across the narrowest screens, so no side padding. */
-const tabBase = `${linkShape} min-w-space-0 px-space-0 text-caption`;
+/** A place of the band (mockup .links): quiet on the burgundy, the current one a powder-pink pill. */
+const topLink = `relative hit-area flex h-control-xs items-center rounded-pill px-space-3 text-menu font-strong text-band-ink hover:bg-band-field aria-[current=page]:bg-band-tab-on aria-[current=page]:text-band-tab-on-ink ${focusRing}`;
+/** A place of the phone's bottom bar (mockup .bnav): icon over the name, the current one in the accent. */
+const tabLink = `flex min-h-touch-target min-w-space-0 flex-col items-center justify-end gap-space-1 rounded-button text-tab font-strong text-ink-muted aria-[current=page]:text-accent ${focusRing}`;
 
-function NavLink({ item, className }: { item: AppNavItem; className: string }) {
-  const t = useTranslations("Shell.nav");
-  const pathname = usePathname();
+function useHref(href: string): string {
   const { id, isDefault } = useCurrentProfile();
+  return profileHref(href, id, isDefault);
+}
+
+/** Line icons of the bottom bar, filled for the current place. */
+function TabIcon({ name }: { name: AppNavKey }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="size-nav-icon fill-none group-aria-[current=page]:fill-current"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {name === "accueil" && <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z" />}
+      {name === "decouvrir" && <path d="M12 3l2.4 5.6L20 11l-5.6 2.4L12 19l-2.4-5.6L4 11l5.6-2.4z" />}
+      {name === "articles" && (
+        <>
+          <rect x="4" y="4" width="7" height="7" rx="2" />
+          <rect x="13" y="4" width="7" height="7" rx="2" />
+          <rect x="4" y="13" width="7" height="7" rx="2" />
+          <rect x="13" y="13" width="7" height="7" rx="2" />
+        </>
+      )}
+      {name === "moi" && (
+        <>
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function NavLink({ item, variant }: { item: AppNavItem; variant: "top" | "tab" }) {
+  const t = useTranslations("Nav");
+  const pathname = usePathname();
+  const href = useHref(item.href);
   return (
     <Link
-      href={profileHref(item.href, id, isDefault)}
+      href={href}
       aria-current={isCurrent(item, pathname) ? "page" : undefined}
-      className={className}
+      className={variant === "top" ? topLink : `group ${tabLink}`}
     >
+      {variant === "tab" && <TabIcon name={item.key} />}
       {t(item.key)}
     </Link>
   );
 }
 
-/**
- * Who is signed in, always in sight (bottom of the side menu, end of « Plus »): her e-mail, or « Sans compte ».
- * Opens « Mon compte », where she signs out.
- */
-function AccountLink({ className }: { className: string }) {
-  const t = useTranslations("Shell.account");
-  const pathname = usePathname();
-  const account = useAccount();
-  const href = "/reglages/compte";
+/** From a tablet up: the four places in the band, next to the logo (mockup .hdr .links). */
+function TopNav() {
+  const t = useTranslations("Nav");
   return (
-    <Link href={href} aria-current={pathname === href ? "page" : undefined} className={className}>
-      <span className="flex min-w-space-0 flex-col items-start">
-        <span>{t("label")}</span>
-        {account && <span className="max-w-full truncate text-ink-muted">{account.email ?? t("anonymous")}</span>}
-      </span>
-    </Link>
-  );
-}
-
-/** Links of the top pill: quiet text, the current one darker and bolder; the sliding line marks it. */
-const pillLink = `flex min-h-touch-target items-center rounded-button px-space-3 text-sm text-ink-muted hover:text-ink aria-[current=page]:font-strong aria-[current=page]:text-ink ${focusRing}`;
-
-/** The desktop menu inside the glass pill: five places, then « Plus » (Listes, Réglages, Mon compte). */
-function PillNav() {
-  const t = useTranslations("Shell");
-  const pathname = usePathname();
-  const list = useRef<HTMLUListElement>(null);
-  const more = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
-  const panel = useId();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the « Plus » panel closes on every navigation.
-  useEffect(() => setOpen(false), [pathname]);
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setOpen(false);
-      more.current?.focus();
-    };
-    const onPointerDown = (event: PointerEvent) => {
-      if (!list.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("pointerdown", onPointerDown);
-    };
-  }, [open]);
-  const moreCurrent = pillMoreNav.some((item) => isCurrent(item, pathname)) || pathname === "/reglages/compte";
-  return (
-    <nav aria-label={t("nav.desktop")} data-testid="app-nav-top" className="hidden lg:block">
-      <ul ref={list} className="relative flex items-center gap-space-1">
-        <Suspense>
-          {pillNav.map((item) => (
-            <li key={item.key} className="flex flex-col">
-              <NavLink item={item} className={pillLink} />
-            </li>
-          ))}
-          <li className="relative flex flex-col">
-            <button
-              ref={more}
-              type="button"
-              aria-expanded={open}
-              aria-controls={panel}
-              aria-current={moreCurrent ? "true" : undefined}
-              onClick={() => setOpen((value) => !value)}
-              className={`${pillLink} aria-[current=true]:font-strong aria-[current=true]:text-ink`}
-            >
-              {t("nav.more")}
-            </button>
-            {open && (
-              <ul
-                id={panel}
-                aria-label={t("nav.moreMenu")}
-                className="glass absolute top-full right-space-0 z-20 mt-space-2 flex min-w-sidebar flex-col gap-space-1 rounded-card p-space-2"
-              >
-                {pillMoreNav.map((item) => (
-                  <li key={item.key} className="flex flex-col">
-                    <NavLink item={item} className={`${linkBase} justify-start`} />
-                  </li>
-                ))}
-                <li className="flex flex-col">
-                  <AccountLink className={`${linkBase} justify-start py-space-1`} />
-                </li>
-              </ul>
-            )}
+    <nav aria-label={t("label")} data-testid="app-nav-top" className="hidden md:block">
+      <ul className="flex items-center gap-space-1-5">
+        {appNav.map((item) => (
+          <li key={item.key} className="flex">
+            <NavLink item={item} variant="top" />
           </li>
-        </Suspense>
-        <NavUnderline containerRef={list} activeSelector=":scope > li > [aria-current]" />
+        ))}
       </ul>
     </nav>
   );
 }
 
-function BottomTabs({
-  open,
-  setOpen,
-}: {
-  open: boolean;
-  setOpen: (open: boolean | ((open: boolean) => boolean)) => void;
-}) {
-  const t = useTranslations("Shell.nav");
-  const pathname = usePathname();
-  const panel = useId();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the « Plus » panel closes on every navigation.
-  useEffect(() => setOpen(false), [pathname]);
-  const moreCurrent = moreNav.some((item) => isCurrent(item, pathname));
+/** Phone: Accueil · Découvrir · + · Mes articles · Moi at the bottom, the + raised above the bar (mockup .bnav). */
+function BottomNav({ onAdd }: { onAdd: () => void }) {
+  const t = useTranslations("Nav");
   return (
     <nav
-      aria-label={t("tabs")}
+      aria-label={t("label")}
       data-testid="app-nav-bottom"
-      className="tabbar-safe relative z-20 shrink-0 border-t border-line bg-surface-raised md:hidden"
+      className="tabbar-safe relative z-20 shrink-0 bg-nav md:hidden"
     >
-      {open && (
-        <ul id={panel} aria-label={t("moreMenu")} className="flex flex-col gap-space-1 border-b border-line p-space-2">
-          {moreNav.map((item) => (
-            <li key={item.key} className="flex flex-col">
-              <NavLink item={item} className={`${linkBase} justify-start`} />
-            </li>
-          ))}
-          <li className="flex flex-col">
-            <AccountLink className={`${linkBase} justify-start py-space-1`} />
-          </li>
-        </ul>
-      )}
-      <ul className="flex">
-        {phoneTabs.map((tab) => (
-          <li key={tab.key} className="flex min-w-space-0 flex-1 flex-col py-space-1">
-            {tab.href === null ? (
-              <button
-                type="button"
-                aria-expanded={open}
-                aria-controls={panel}
-                aria-current={moreCurrent ? "true" : undefined}
-                onClick={() => setOpen((value) => !value)}
-                className={`${tabBase} flex-1`}
-              >
-                {t("more")}
+      <ul className="grid grid-cols-5 items-end px-space-1-5 pt-space-2 pb-space-4">
+        {phoneNav.map((slot) => (
+          <li key={slot.key} className="flex min-w-space-0 flex-col">
+            {slot.href === null ? (
+              <button type="button" onClick={onAdd} className={tabLink}>
+                <span
+                  data-plus
+                  aria-hidden="true"
+                  className="-mt-space-5-5 grid size-plus place-items-center rounded-full bg-accent font-regular text-plus text-accent-ink shadow-plus"
+                >
+                  +
+                </span>
+                <span aria-hidden="true">{t("add")}</span>
+                <span className="sr-only">{t("addLabel")}</span>
               </button>
             ) : (
-              <NavLink item={tab} className={`${tabBase} flex-1`} />
+              <NavLink item={slot} variant="tab" />
             )}
           </li>
         ))}
@@ -189,70 +126,70 @@ function BottomTabs({
   );
 }
 
-function AddLink() {
-  const t = useTranslations("Shell.add");
-  const pathname = usePathname();
-  const [open, setOpen] = useState(false);
-  const panel = useId();
-  const button = useRef<HTMLButtonElement>(null);
-  const field = useRef<HTMLDivElement>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: opening a sheet closes the field.
-  useEffect(() => setOpen(false), [pathname]);
-  useEffect(() => {
-    if (open) field.current?.querySelector("input")?.focus();
-  }, [open]);
-  const close = useCallback(() => {
-    setOpen(false);
-    button.current?.focus();
-  }, []);
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, close]);
+/** The band's search (computer, mockup .srch): her articles whose name, brand or shop has the words. */
+function BandSearch() {
+  const t = useTranslations("Nav.search");
+  const router = useRouter();
+  const id = useId();
+  const base = useHref(ARTICLES_PATH);
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const words = new FormData(event.currentTarget).get("recherche");
+    const q = typeof words === "string" ? words.trim() : "";
+    if (!q) return;
+    router.push(`${base}${base.includes("?") ? "&" : "?"}recherche=${encodeURIComponent(q)}`);
+  };
   return (
-    <>
-      <button
-        ref={button}
-        type="button"
-        aria-expanded={open}
-        aria-controls={panel}
-        onClick={() => setOpen((value) => !value)}
-        className="inline-flex min-h-touch-target items-center justify-center rounded-button bg-button-bg px-space-4 text-sm font-strong text-button-ink"
-      >
-        {t("open")}
-      </button>
-      {open && (
-        <div
-          id={panel}
-          ref={field}
-          className="absolute inset-x-space-0 top-full z-20 border-b border-line bg-surface-raised px-space-4 py-space-4 shadow-lifted lg:mt-space-2 lg:rounded-card lg:border"
-        >
-          <div className="mx-auto flex max-w-measure flex-col items-end gap-space-2">
-            <CaptureForm />
-            <button type="button" className={buttonClass} onClick={close}>
-              {t("close")}
-            </button>
-          </div>
-        </div>
-      )}
-    </>
+    // A `<search>` element would be found by the views' own search (`locator("search")`): the role says the same.
+    // biome-ignore lint/a11y/useSemanticElements: see above.
+    <div role="search" className="hidden lg:block">
+      <form onSubmit={submit}>
+        <label htmlFor={id} className="sr-only">
+          {t("label")}
+        </label>
+        <input
+          id={id}
+          name="recherche"
+          type="search"
+          placeholder={t("placeholder")}
+          className={`h-control-xs min-w-search rounded-pill bg-band-field px-space-3-5 text-caption text-band-ink placeholder:text-band-field-ink ${focusRing}`}
+        />
+      </form>
+    </div>
+  );
+}
+
+/** Her initial in the band (mockup .avatar): opens « Mon compte », and says who is signed in. */
+function Avatar() {
+  const t = useTranslations("Nav");
+  const tAccount = useTranslations("Shell.account");
+  const account = useAccount();
+  const { profile } = useCurrentProfile();
+  const pathname = usePathname();
+  const href = "/reglages/compte";
+  const initial = (account?.email ?? profile?.name ?? t("moi")).charAt(0).toUpperCase();
+  return (
+    <Link
+      href={href}
+      aria-current={pathname === href ? "page" : undefined}
+      className={`relative hit-area grid size-control-2xs shrink-0 place-items-center rounded-full bg-une font-bold text-avatar-ink ${focusRing}`}
+    >
+      <span aria-hidden="true">{initial}</span>
+      <span className="sr-only">{t("account", { who: account?.email ?? tAccount("anonymous") })}</span>
+    </Link>
   );
 }
 
 /**
- * The adaptive frame of the signed-in pages (spec §4): tab bar at the bottom on a phone, tabs at the top on a
- * tablet, side menu on a desktop. Content grows up to `container.app`.
+ * The frame of the signed-in pages (refonte Boudoir, spec §2 R2): a burgundy band at the top with the logo and her
+ * initial; one menu, at the bottom on a phone (with the raised +), in the band from a tablet up (with « + Ajouter »).
+ * Content grows up to `container.app`.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const t = useTranslations("Shell");
+  const tNav = useTranslations("Nav");
   const pathname = usePathname();
-  const onHome = pathname === "/";
   const content = useRef<HTMLElement>(null);
-  const tabs = useRef<HTMLUListElement>(null);
   // Only the content scrolls (Passe design §1): every new page, and a page reached back, starts at the top.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs on every navigation.
   useEffect(() => {
@@ -261,7 +198,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [profiles, setProfiles] = useState<readonly ProfileView[]>([]);
   const [account, setAccount] = useState<SummaryView["account"] | null>(null);
   const [ready, setReady] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const openAdd = useCallback(() => setAdding(true), []);
+  const closeAdd = useCallback(() => setAdding(false), []);
   const [loveLevels, setLoveLevels] = useState<readonly LoveLevelView[]>(DEFAULT_LOVE_LEVELS);
   const alive = useRef(true);
 
@@ -305,38 +244,31 @@ export function AppShell({ children }: { children: ReactNode }) {
       </a>
       <div className="flex h-dvh overflow-hidden text-ink">
         <div className="flex min-h-space-0 min-w-space-0 flex-1 flex-col">
-          <header className="glass relative z-10 shrink-0 lg:mx-space-5 lg:mt-space-3 lg:rounded-full">
-            <div className="relative flex items-center justify-between gap-space-3 px-space-4 py-space-2 md:px-space-5">
-              <Link href="/" className={`font-display text-lead font-strong ${focusRing}`}>
+          <header className="relative z-10 shrink-0 bg-band text-band-ink">
+            <div className="flex items-center gap-space-3 px-space-4 py-space-2 md:px-space-5 lg:gap-space-5-5">
+              <Link href="/" className={`font-title text-logo leading-none ${focusRing}`}>
                 {t("brand")}
               </Link>
-              <PillNav />
-              <div className="flex items-center gap-space-2">
-                <Suspense>
-                  <ProfileSwitcher />
-                </Suspense>
-                {!onHome && <AddLink />}
-                <span className="hidden md:inline-flex">
-                  <ThemeButton />
-                </span>
-              </div>
+              <Suspense>
+                <TopNav />
+              </Suspense>
+              <span className="flex-1" />
+              <Suspense>
+                <BandSearch />
+              </Suspense>
+              <button
+                type="button"
+                onClick={openAdd}
+                className={`hidden h-control-xs shrink-0 items-center rounded-pill bg-label px-space-4 text-caption font-bold text-label-ink md:inline-flex ${focusRing}`}
+              >
+                <span aria-hidden="true">+ {tNav("add")}</span>
+                <span className="sr-only">{tNav("addLabel")}</span>
+              </button>
+              <Suspense>
+                <ProfileSwitcher />
+                <Avatar />
+              </Suspense>
             </div>
-            <nav
-              aria-label={t("nav.tabs")}
-              data-testid="app-nav-tabs"
-              className="hidden border-t border-line px-space-4 md:block lg:hidden"
-            >
-              <ul ref={tabs} className="relative flex gap-space-1 py-space-1">
-                <Suspense>
-                  {tabletTabs.map((item) => (
-                    <li key={item.key} className="flex flex-col">
-                      <NavLink item={item} className={linkBase} />
-                    </li>
-                  ))}
-                </Suspense>
-                <NavUnderline containerRef={tabs} activeSelector=":scope > li > [aria-current=page]" />
-              </ul>
-            </nav>
           </header>
 
           <main
@@ -353,10 +285,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </main>
           <Suspense>
-            <BottomTabs open={moreOpen} setOpen={setMoreOpen} />
+            <BottomNav onAdd={openAdd} />
           </Suspense>
         </div>
       </div>
+      <AddSheet open={adding} onClose={closeAdd} />
       <UndoToast />
       <GiftWarning />
     </ProfilesContext.Provider>

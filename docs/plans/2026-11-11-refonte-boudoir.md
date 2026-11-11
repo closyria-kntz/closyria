@@ -56,8 +56,8 @@
 
 **Interfaces:** Produces : `appNav: readonly { key: "accueil"|"decouvrir"|"articles"|"moi"; href: string }[]` + action `add` ; `AddSheet` (ouvre : « Coller un lien » → champ de capture existant, « Prendre une photo » → `add-photo-dialog`, « Partager depuis une boutique » → aide de partage, « Transférer un e-mail de commande » → désactivé « Bientôt ») ; pages `/articles`, `/moi`, `/decouvrir` (contenu en Tasks 3, 6, 7).
 
-- [ ] e2e d'abord (3 appareils) : menu téléphone à 5 places dans l'ordre exact, bouton + au centre ouvre la feuille avec les 4 options ; ordinateur : menu en haut seulement (pas de menu bas) ; chaque ancienne adresse (avec `?liste=<id>` et un filtre) redirige vers `/articles` avec l'étape et les filtres gardés ; axe clair et sombre.
-- [ ] Implémenter, relancer, suite e2e complète (adapter les tests qui naviguaient par l'ancien menu), commit « feat(refonte): coque, menu et bouton Ajouter ».
+- [x] e2e d'abord (3 appareils) : menu téléphone à 5 places dans l'ordre exact, bouton + au centre ouvre la feuille avec les 4 options ; ordinateur : menu en haut seulement (pas de menu bas) ; chaque ancienne adresse (avec `?liste=<id>` et un filtre) redirige vers `/articles` avec l'étape et les filtres gardés ; axe clair et sombre.
+- [x] Implémenter, relancer, suite e2e complète (adapter les tests qui naviguaient par l'ancien menu), commit « feat(refonte): coque, menu et bouton Ajouter ».
 
 **Fin d'étape 1 :** captures téléphone/ordinateur comparées à la maquette ; montrer à la fondatrice ; mise en dev avec son accord.
 

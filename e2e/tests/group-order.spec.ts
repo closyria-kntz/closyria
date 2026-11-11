@@ -30,7 +30,7 @@ async function groupList(page: Page, db: Parameters<typeof sessionsOf>[0], userA
   for (let i = 0; i < 2; i += 1) {
     await page.goto("/");
     await page.getByLabel("Coller un lien").fill(autoProductUrl());
-    await page.getByRole("button", { name: "Ajouter" }).click();
+    await page.getByRole("button", { name: "Ajouter", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
     await keepWish(page);
   }
@@ -175,7 +175,7 @@ test("des amies achètent ensemble chez la même boutique", async ({
   const add = ines.getByRole("dialog");
   await add.getByLabel(/Lien de l'article/).fill(manualProductUrl());
   await add.getByLabel("Ton prénom").fill("Inès");
-  await add.getByRole("button", { name: "Ajouter" }).click();
+  await add.getByRole("button", { name: "Ajouter", exact: true }).click();
   await expect(add.getByRole("alert")).toHaveText(`Ce lien n'est pas chez ${AUTO_SHOP.name}.`);
   // While the page is read, the line says so (the answer is held as « reading » until released).
   let reading = true;
@@ -191,7 +191,7 @@ test("des amies achètent ensemble chez la même boutique", async ({
     await route.fulfill({ response, json: body });
   });
   await add.getByLabel(/Lien de l'article/).fill(autoProductUrl());
-  await add.getByRole("button", { name: "Ajouter" }).click();
+  await add.getByRole("button", { name: "Ajouter", exact: true }).click();
   await expect(add).toBeHidden();
   await expect(summary(ines).getByText("Lecture de l'article…")).toBeVisible();
   reading = false;
@@ -351,7 +351,7 @@ test("le lien des amies : la commande en haut, le détail replié, le filtre, ha
   const OTHER = "Robe Alma";
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(manualProductUrl());
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
   await page.getByLabel("Nom de l’article").fill(OTHER);
   await page.getByLabel("Prix (en euros)").fill("89");
   await page.getByRole("button", { name: "Enregistrer la fiche" }).click();

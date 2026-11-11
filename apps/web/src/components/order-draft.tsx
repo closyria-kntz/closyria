@@ -191,7 +191,7 @@ export function OrderDraft() {
   const budgetTitle = t(isList ? "budget.listTitle" : "budget.profileTitle");
   const back = isList
     ? { href: `/listes/${listId}`, label: t("backToList", { name: items.listName ?? "" }) }
-    : { href: profileHref("/envies", current.id, current.isDefault), label: t("backToWishes") };
+    : { href: profileHref("/articles?etape=envie", current.id, current.isDefault), label: t("backToWishes") };
 
   if (!ready || items.status === "loading") {
     return (

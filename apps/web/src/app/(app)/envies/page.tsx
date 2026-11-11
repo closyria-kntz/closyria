@@ -1,17 +1,9 @@
-import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
-import { Suspense } from "react";
-import { WardrobeView } from "@/components/wardrobe-view";
+import { redirect } from "next/navigation";
+import { oldViewRedirect } from "@/lib/articles-address";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("Views.metadata");
-  return { title: t("envies"), robots: { index: false, follow: false } };
-}
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-export default function Page() {
-  return (
-    <Suspense>
-      <WardrobeView view="envies" />
-    </Suspense>
-  );
+/** The old address of this view: « Mes articles », with its step and every parameter (refonte Boudoir, spec §3.1). */
+export default async function Page({ searchParams }: Props) {
+  redirect(oldViewRedirect("envies", await searchParams));
 }

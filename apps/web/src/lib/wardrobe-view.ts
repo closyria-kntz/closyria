@@ -75,7 +75,8 @@ const PARAMS = {
   levels: "niveau",
   priority: "prioritaire",
   sort: "tri",
-  stage: "etape",
+  // « Vendu » / « Retourné »: not `etape`, which is the step of « Mes articles » (refonte Boudoir).
+  stage: "statut",
   q: "recherche",
 } as const;
 

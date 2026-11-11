@@ -36,6 +36,14 @@ export const defaultSemanticTokens = {
   // The burgundy header band of Boudoir and its ink.
   "color-band": palette.burgundy,
   "color-band-ink": palette.white,
+  // The menu in the band (mockup .hdr): the current place as a powder-pink pill, the search field a light veil.
+  "color-band-tab-on": palette.powderRose,
+  "color-band-tab-on-ink": palette.burgundy,
+  "color-band-field": `color-mix(in srgb, ${palette.white} 14%, transparent)`,
+  "color-band-field-ink": palette.powderRose,
+  // Her initial in the band (mockup .avatar) and the phone's bottom bar (mockup .bnav).
+  "color-avatar-ink": palette.burgundyAccent,
+  "color-nav": palette.white,
   // The main button of « Préparer une commande » and of the item preview.
   "color-band-button": palette.burgundy,
   "color-band-button-ink": palette.white,
@@ -97,6 +105,9 @@ export const defaultSemanticTokens = {
   "spacing-hit-inset": "min(0px, (100% - var(--spacing-touch-target)) / 2)",
   // Undo toast stack: each older message sits one step higher and one step smaller than the next.
   "spacing-toast-stack": "0.75rem",
+  // The shell: a phone tab icon (20 px), the raised + (52 px).
+  "spacing-nav-icon": "1.25rem",
+  "spacing-plus": "3.25rem",
   "scale-toast-stack": "0.05",
   // Radii
   "radius-none": radius.none,
@@ -107,6 +118,8 @@ export const defaultSemanticTokens = {
   "radius-button": radius.full,
   // Boudoir: cards 20 px, pills and buttons fully round.
   "radius-card": radius.card,
+  // A phone tab icon (mockup .bnav .ic).
+  "radius-nav-icon": "0.375rem",
   "radius-pill": radius.pill,
   // Mockup radii: blocks of the sheet 30, « Ma commande » 28, budget card 22, toast 20, sizes 16, « taken » mark 11 px.
   "radius-block": "1.875rem",
@@ -137,6 +150,11 @@ export const defaultSemanticTokens = {
   "text-control": "1rem",
   "text-quote": "1.125rem",
   "text-heading": "1.25rem",
+  // The shell (mockup .logo 25 px, .links 13.5 px, .bnav 10.5 px, .plus 28 px).
+  "text-logo": "1.5625rem",
+  "text-menu": "0.84375rem",
+  "text-tab": "0.65625rem",
+  "text-plus": "1.75rem",
   "text-card-title": "clamp(1.0625rem, 0.9489rem + 0.5682vw, 1.3125rem)",
   "text-sheet-title": "clamp(2rem, 1.6023rem + 1.9886vw, 2.875rem)",
   "text-hero": "clamp(2.25rem, 1.3409rem + 4.5455vw, 4.25rem)",
@@ -163,6 +181,8 @@ export const defaultSemanticTokens = {
   "shadow-lifted": shadow.lifted,
   // Blocks of the sheet and « Ma commande » (mockup --shadow).
   "shadow-block": "0 10px 30px rgb(43 20 24 / 0.12)",
+  // The raised + of the phone's bottom bar (mockup .plus).
+  "shadow-plus": "0 6px 16px rgb(0 0 0 / 0.18)",
   // Frosted glass (theme-independent)
   "blur-glass": "20px",
   "saturate-glass": "1.2",
@@ -184,6 +204,8 @@ export const defaultSemanticTokens = {
   // « Ma commande » (640 px) and the big photo of the sheet (480 px).
   "container-band": "40rem",
   "container-photo": "30rem",
+  // The search field of the band (mockup .srch, 260 px at least).
+  "container-search": "16.25rem",
   "container-budget": "32.5rem",
   // Level tiles (at least 92 px each) and the blocks side by side on the sheet (at least 250 px each).
   "grid-levels": "repeat(auto-fit, minmax(5.75rem, 1fr))",

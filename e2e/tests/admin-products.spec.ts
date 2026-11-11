@@ -13,7 +13,7 @@ test("une admin retrouve une fiche capturée, corrige son type et voit « Corrig
 }) => {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
   // Keep the sheet: « Gardée par » then counts one active item.
   await keepWish(page);
@@ -129,7 +129,7 @@ test("une admin supprime une fiche que personne ne garde ; une fiche gardée ne 
   const open = async () => {
     await page.goto("/");
     await page.getByLabel("Coller un lien").fill(autoProductUrl());
-    await page.getByRole("button", { name: "Ajouter" }).click();
+    await page.getByRole("button", { name: "Ajouter", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
     return /\/produits\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? "";
   };

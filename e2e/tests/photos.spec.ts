@@ -48,7 +48,7 @@ function bigPng(width: number, height: number): Buffer {
 async function keepWithPhotos(page: Page, count: number): Promise<void> {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
   await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
@@ -197,7 +197,7 @@ test("la page derrière ne défile plus, un clic à côté de la photo ferme, un
 test("la fiche d'un article pas encore gardé ouvre aussi les photos de la boutique", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
   const opener = page.getByRole("button", { name: "Agrandir la photo 1" });
   await opener.click();
@@ -214,7 +214,7 @@ const dialog = (page: Page) => page.getByRole("dialog", { name: "Ajouter une pho
 async function keepItem(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByLabel("Coller un lien").fill(autoProductUrl());
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByRole("button", { name: "Ajouter", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: PRODUCT.name })).toBeVisible({ timeout: 10_000 });
   await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
