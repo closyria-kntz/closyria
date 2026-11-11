@@ -8,6 +8,7 @@ export * from "./events";
 export * from "./gifts";
 export * from "./group-orders";
 export * from "./health";
+export * from "./home";
 export * from "./love-level";
 export * from "./media";
 export * from "./opinions";

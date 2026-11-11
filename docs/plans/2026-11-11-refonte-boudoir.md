@@ -91,8 +91,8 @@
 
 **Interfaces:** Produces `GET /api/me/home` → `{ greetingName: string|null, une: NewsItem|null, news: NewsItem[] (≤ 5), wishes: ItemView[] (≤ 4) }` avec `NewsItem = { kind: "price_drop"|"size_back"|"opinion"|"group_order"|"gift_reminder", itemId?, title, detail, href, at }`, construit uniquement à partir de données existantes (baisses de prix et tailles revenues depuis 7 jours, avis nouveaux non vus, commandes groupées ouvertes/closes, rappel cadeau dû) ; la « une » est la nouvelle la plus récente avec photo.
 
-- [ ] Tests d'abord : intégration (chaque type de nouvelle apparaît avec son lien ; aucune nouvelle d'une autre utilisatrice ; vide → `une: null, news: []`) ; e2e (une, nouvelles, zone « Colle son lien ici » qui capture comme aujourd'hui, astuce fermable, boutiques à découvrir, envies du moment ; écran vide d'une nouvelle utilisatrice qui explique quoi faire ; axe).
-- [ ] Implémenter, relancer, commit « feat(refonte): accueil ».
+- [x] Tests d'abord : intégration (chaque type de nouvelle apparaît avec son lien ; aucune nouvelle d'une autre utilisatrice ; vide → `une: null, news: []`) ; e2e (une, nouvelles, zone « Colle son lien ici » qui capture comme aujourd'hui, astuce fermable, boutiques à découvrir, envies du moment ; écran vide d'une nouvelle utilisatrice qui explique quoi faire ; axe).
+- [x] Implémenter, relancer, commit « feat(refonte): accueil ».
 
 ### Task 6: Découvrir — boutiques
 

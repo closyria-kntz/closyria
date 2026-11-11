@@ -4,7 +4,7 @@ import type { BudgetView, ItemCounts, ItemView, ReferenceView, TagView, Wishlist
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { z } from "zod";
 import { ARTICLES_PATH, BOARD_PARAM, BOARD_VALUE, viewStep } from "@/lib/articles-address";
@@ -15,6 +15,7 @@ import { useLiveRefresh } from "@/lib/live-changes";
 import { profileHref, useCurrentProfile, useLoveLevels, useProfilesReady } from "@/lib/profile-context";
 import { createTickQueue, type TickQueue } from "@/lib/tick-queue";
 import { pushUndo } from "@/lib/undo";
+import { useDesktop } from "@/lib/use-desktop";
 import {
   type BudgetScope,
   fetchAllWishes,
@@ -63,20 +64,6 @@ const touch = "min-h-touch-target";
 /** The text buttons of the tools row: the mockup's light clay (38 px on a phone, 44 above; a finger wide anyway). */
 const toolButtonClass = `hit-area relative inline-flex h-control-sm items-center rounded-button border border-line bg-surface-raised px-space-3-5 text-sm font-strong text-ink hover:bg-surface-strong sm:h-touch-target ${focusRing}`;
 const toolPrimaryClass = `hit-area relative inline-flex h-control-sm items-center rounded-button bg-button-bg px-space-3-5 text-sm font-strong text-button-ink sm:h-touch-target ${focusRing}`;
-
-/** « Par étape » needs a computer's width (64 rem and up). */
-const DESKTOP_UP = "(min-width: 64rem)";
-const subscribeDesktop = (onChange: () => void) => {
-  const media = window.matchMedia(DESKTOP_UP);
-  media.addEventListener("change", onChange);
-  return () => media.removeEventListener("change", onChange);
-};
-const useDesktop = () =>
-  useSyncExternalStore(
-    subscribeDesktop,
-    () => window.matchMedia(DESKTOP_UP).matches,
-    () => false,
-  );
 
 /**
  * « Mes articles » (refonte Boudoir): « Tout » or one step (Envies, Commandés, Reçus, Dans mon dressing, À vendre),

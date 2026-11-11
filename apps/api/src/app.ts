@@ -20,6 +20,7 @@ import { changesRoutes } from "./routes/me/changes";
 import { facetsRoutes } from "./routes/me/facets";
 import { giftsRoutes } from "./routes/me/gifts";
 import { groupOrdersRoutes } from "./routes/me/group-orders";
+import { homeRoutes } from "./routes/me/home";
 import { itemMediaRoutes } from "./routes/me/item-media";
 import { itemsRoutes } from "./routes/me/items";
 import { loveLevelsRoutes } from "./routes/me/love-levels";
@@ -143,6 +144,7 @@ export function createApp(deps: AppDeps) {
     .route("/", tagsRoutes(deps.wardrobe))
     .route("/", recentsRoutes(deps.wardrobe))
     .route("/", facetsRoutes(deps.wardrobe))
+    .route("/", homeRoutes(deps.wardrobe))
     .route("/", referenceRoutes(deps.wardrobe))
     .route("/", wishlistsRoutes(deps.wardrobe))
     .route("/", groupOrdersRoutes({ ...deps.wardrobe, queue: deps.catalog.queue }, captureLimiter))

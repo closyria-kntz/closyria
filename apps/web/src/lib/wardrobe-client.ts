@@ -21,6 +21,8 @@ import {
   type GroupOrderPatch,
   giftCheckSchema,
   groupOrderPastListSchema,
+  type HomeView,
+  homeViewSchema,
   type ItemBulkAction,
   type ItemCounts,
   type ItemCreate,
@@ -402,6 +404,14 @@ export async function fetchLoveLevels(deps: ClientDeps = defaultDeps): Promise<L
   if (response.status === 401) return [...DEFAULT_LOVE_LEVELS];
   if (!response.ok) throw new Error(`love levels ${response.status}`);
   return loveLevelsSchema.parse(await response.json()).levels;
+}
+
+/** What « Accueil » shows; without a session yet, the empty home of a new account. Throws on failure. */
+export async function fetchHome(deps: ClientDeps = defaultDeps): Promise<HomeView> {
+  const response = await deps.fetch("/api/me/home", { cache: "no-store" });
+  if (response.status === 401) return { greetingName: null, hasItems: false, une: null, news: [], wishes: [] };
+  if (!response.ok) throw new Error(`home ${response.status}`);
+  return homeViewSchema.parse(await response.json());
 }
 
 /** The fingerprint of her data (null without a session): a new one means something changed elsewhere. */

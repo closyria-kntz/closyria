@@ -5,7 +5,78 @@
   },
   "Home": {
     "title": "Closyria",
-    "tagline": "Ton dressing en ligne arrive bientôt.",
+    "greeting": "Bonjour {name}",
+    "greetingNoName": "Bonjour",
+    "newsCount": "{count, plural, one {# nouvelle pour toi} other {# nouvelles pour toi}}",
+    "quiet": "Rien de neuf pour l’instant",
+    "welcome": "Bienvenue sur Closyria",
+    "loadError": "L’accueil ne s’affiche pas en entier. Réessaie dans un instant.",
+    "start": {
+      "title": "Comment ça marche",
+      "paste": "Colle le lien d’un vêtement vu sur le site d’une boutique.",
+      "follow": "Closyria suit son prix et ta taille, et te prévient ici quand ils changent.",
+      "keep": "Range tes envies, demande l’avis de tes amies, puis suis tes commandes jusqu’à ton dressing."
+    },
+    "kind": {
+      "price_drop": "Baisse de prix",
+      "size_back": "Ta taille est revenue",
+      "opinion": "Avis d’une amie",
+      "group_order": "Commande groupée",
+      "gift_reminder": "Rappel des cadeaux"
+    },
+    "une": {
+      "price_drop": "{name} passe à {price}",
+      "size_back": "{name} : ta taille {size} est revenue",
+      "opinion": "{author} a donné son avis sur {name}",
+      "open": {
+        "price_drop": "Voir l’article",
+        "size_back": "Voir l’article",
+        "opinion": "Lire l’avis"
+      }
+    },
+    "news": {
+      "title": "Ce qui a changé",
+      "all": "Tout voir",
+      "fewer": "Voir moins",
+      "price_drop": "<b>{name}</b> passe à {price}",
+      "priceDropDetail": "−{drop} chez {shop}",
+      "size_back": "<b>{name}</b> : ta taille {size} est revenue",
+      "sizeBackDetail": "Chez {shop}",
+      "opinion": "{others, plural, =0 {<b>{author}</b> a donné son avis sur {name}} one {<b>{author}</b> et une autre amie ont donné leur avis sur {name}} other {<b>{author}</b> et # autres amies ont donné leur avis sur {name}}}",
+      "opinionNote": "« {note} »",
+      "group_order": "<b>Commande groupée {shop}</b>",
+      "groupOrderOpen": "Ouverte à tes amies · liste « {list} »",
+      "groupOrderClosed": "Close : il reste à la passer · liste « {list} »",
+      "gift_reminder": "<b>{list}</b> : as-tu reçu tes cadeaux ?",
+      "giftOccasion": "{occasion} est passé",
+      "giftDate": "La date est passée",
+      "action": {
+        "price_drop": "Voir",
+        "size_back": "Voir",
+        "opinion": "Lire",
+        "group_order": "Ouvrir",
+        "gift_reminder": "Ouvrir"
+      }
+    },
+    "add": {
+      "title": "Tu as vu un vêtement qui te plaît ?",
+      "placeholder": "Colle son lien ici…",
+      "more": "ou ajoute une photo · ou partage depuis le site de la boutique"
+    },
+    "tip": {
+      "label": "Astuce",
+      "close": "Fermer l’astuce",
+      "levels": "Touche deux fois la photo d’un article pour lui donner ton niveau d’envie."
+    },
+    "shops": {
+      "title": "Boutiques à découvrir",
+      "all": "Toutes",
+      "yours": "Dans tes articles"
+    },
+    "wishes": {
+      "title": "Tes envies du moment",
+      "all": "Mes articles"
+    },
     "recents": {
       "title": "Derniers liens",
       "forget": "Retirer {name} de la liste"

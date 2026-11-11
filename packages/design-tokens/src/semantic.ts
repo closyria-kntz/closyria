@@ -93,6 +93,8 @@ export const defaultSemanticTokens = {
   // The punched hole of a clothing tag (5 px) and of a price tag (6 px).
   "spacing-tag-hole": "0.3125rem",
   "spacing-price-hole": "0.375rem",
+  // A card of « Boutiques à découvrir » (mockup .shopcard, 150 px).
+  "spacing-shop-card": "9.375rem",
   // Thumbnails of the « Par étape » columns (48 px wide, 3:4).
   "spacing-board-thumb": "3rem",
   // Grid of cards: 34 px between rows, 26 px between columns (mockup).
@@ -177,6 +179,9 @@ export const defaultSemanticTokens = {
   "text-chip": "0.78125rem",
   "text-card-title": "clamp(1.0625rem, 0.9489rem + 0.5682vw, 1.3125rem)",
   "text-sheet-title": "clamp(2rem, 1.6023rem + 1.9886vw, 2.875rem)",
+  // « Accueil » (mockup .t2 and .t3: 72 % and 55 % of the 34 px page title): the une's title, a section's title.
+  "text-une-title": "1.53rem",
+  "text-section-title": "1.17rem",
   "text-hero": "clamp(2.25rem, 1.3409rem + 4.5455vw, 4.25rem)",
   "text-emoji-card": "clamp(1.5rem, 1.3295rem + 0.8523vw, 1.875rem)",
   "text-emoji-sheet": "2.25rem",
@@ -232,6 +237,9 @@ export const defaultSemanticTokens = {
   // Level tiles (at least 92 px each) and the blocks side by side on the sheet (at least 250 px each).
   "grid-levels": "repeat(auto-fit, minmax(5.75rem, 1fr))",
   "grid-blocks": "repeat(auto-fit, minmax(15.625rem, 1fr))",
+  // « Accueil »: the une (photo 42 %, text beside it) and the two columns on a computer (mockup 1.3fr 1fr).
+  "grid-une": "42% minmax(0, 1fr)",
+  "grid-home": "minmax(0, 1.3fr) minmax(0, 1fr)",
   "spacing-touch-target": size.touchTarget,
 } as const;
 
