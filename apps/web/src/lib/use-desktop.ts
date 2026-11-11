@@ -17,3 +17,23 @@ export const useDesktop = () =>
     () => window.matchMedia(DESKTOP_UP).matches,
     () => false,
   );
+
+/** A finger rather than a mouse (phone, tablet): « Messenger » to share, « Coller le lien copié » to add. */
+const COARSE = "(pointer: coarse)";
+const subscribeCoarse = (onChange: () => void) => {
+  const media = window.matchMedia(COARSE);
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+};
+
+/** True on a touch screen (phone or tablet); false on the server and with a mouse. */
+export const useCoarsePointer = () =>
+  useSyncExternalStore(
+    subscribeCoarse,
+    () => window.matchMedia(COARSE).matches,
+    () => false,
+  );
+
+/** An iPhone or an iPad (iPadOS says it is a Mac, but with a touch screen). */
+export const isAppleMobile = (agent: string, maxTouchPoints: number): boolean =>
+  /iPhone|iPad|iPod/.test(agent) || (/Macintosh/.test(agent) && maxTouchPoints > 1);

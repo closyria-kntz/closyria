@@ -2,13 +2,13 @@
 
 import { type ItemStage, type ItemView, MAX_ITEM_PHOTOS } from "@closyria/shared";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Dialog } from "@/components/dialog";
 import { Choices } from "@/components/item-menu";
+import { ShareSheet } from "@/components/share-sheet";
 import { Tick } from "@/components/tick";
 import { focusRing } from "@/components/ui";
 import { canReceiveAsGift, confirmUnlessReserved } from "@/lib/gift-check";
-import { COPIED_FEEDBACK_MS } from "@/lib/timing";
 import { pushUndo } from "@/lib/undo";
 import { patchItem, receiveAsGift, undoWith } from "@/lib/wardrobe-client";
 import { StageDialog } from "./stage-dialog";
@@ -34,8 +34,8 @@ type Action =
  * « Partager ». Commandé: « Je l’ai reçu », « Voir chez … », « Je l’ai retourné », « Reçu en cadeau », « Partager ».
  * Reçu / Dans mon dressing: « Je le mets en vente », « Je l’ai retourné » (Reçu only), « Ajouter une photo »,
  * « Partager ». Each opens what the sheet already did (the stage window, which asks first when a friend plans to give
- * it). Not kept: « Voir chez … » and « Partager ». « Partager » gives the SHOP's address (the sheet needs an account):
- * the phone's share menu when there is one, else the clipboard (« Lien de la boutique copié »).
+ * it). Not kept: « Voir chez … » and « Partager ». « Partager » opens the share window (task 9) with « {nom} chez
+ * {boutique} » and the SHOP's address (the sheet needs an account).
  */
 export function ProductActions({
   shop,
@@ -62,12 +62,11 @@ export function ProductActions({
   const tTodo = useTranslations("Item.todo");
   const tGifts = useTranslations("Gifts.received");
   const tMenu = useTranslations("Views.menu");
+  const tShare = useTranslations("Share");
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<ItemStage | null>(null);
   const [listsOpen, setListsOpen] = useState(false);
-  const [shared, setShared] = useState<{ ok: true } | { ok: false; url: string } | null>(null);
-  const clear = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(clear.current), []);
+  const [sharing, setSharing] = useState(false);
   const fail = (code: string) => pushUndo(tItem(`errors.${code}` as "errors.failed"), null);
 
   async function take(current: ItemView) {
@@ -91,30 +90,9 @@ export function ProductActions({
     pushUndo(tGifts("toast"), undoWith(result.undo, reload));
   }
 
-  async function share(name: string) {
-    clearTimeout(clear.current);
-    setShared(null);
-    if (typeof navigator.share === "function") {
-      try {
-        await navigator.share({ title: name, url });
-        return;
-      } catch (error) {
-        // She closed the share menu: nothing to say.
-        if (error instanceof DOMException && error.name === "AbortError") return;
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      setShared({ ok: true });
-      clear.current = setTimeout(() => setShared(null), COPIED_FEEDBACK_MS);
-    } catch {
-      setShared({ ok: false, url });
-    }
-  }
-
   const viewAt: Action | null = isHttpUrl(url) ? { key: "shop", label: t("viewAt", { shop }), href: url } : null;
   const shareAction: Action | null =
-    title !== null && isHttpUrl(url) ? { key: "share", label: t("share"), onClick: () => void share(title) } : null;
+    title !== null && isHttpUrl(url) ? { key: "share", label: t("share"), onClick: () => setSharing(true) } : null;
   const toStage = (key: string, label: string, target: ItemStage): Action => ({
     key,
     label,
@@ -173,74 +151,78 @@ export function ProductActions({
   const shown = actions.filter((action): action is Action => action !== null);
 
   return (
-    <section
-      aria-labelledby="todo-title"
-      aria-busy={busy || undefined}
-      data-testid="product-actions"
-      className="flex flex-col gap-space-2"
-    >
-      <h2 id="todo-title" className="text-meta font-bold tracking-wide text-ink uppercase">
-        {tTodo("title")}
-      </h2>
-      <div className="grid grid-cols-2 gap-space-2">
-        {shown.map((action, index) => {
-          const look = index === 0 ? LOOK.primary : "href" in action ? LOOK.outline : LOOK.soft;
-          const primary = index === 0 ? "true" : undefined;
-          return "href" in action ? (
-            <a
-              key={action.key}
-              href={action.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-primary={primary}
-              className={`${actionClass} ${look}`}
+    <>
+      <section
+        aria-labelledby="todo-title"
+        aria-busy={busy || undefined}
+        data-testid="product-actions"
+        className="flex flex-col gap-space-2"
+      >
+        <h2 id="todo-title" className="text-meta font-bold tracking-wide text-ink uppercase">
+          {tTodo("title")}
+        </h2>
+        <div className="grid grid-cols-2 gap-space-2">
+          {shown.map((action, index) => {
+            const look = index === 0 ? LOOK.primary : "href" in action ? LOOK.outline : LOOK.soft;
+            const primary = index === 0 ? "true" : undefined;
+            return "href" in action ? (
+              <a
+                key={action.key}
+                href={action.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-primary={primary}
+                className={`${actionClass} ${look}`}
+              >
+                {action.label}
+              </a>
+            ) : (
+              <button
+                key={action.key}
+                type="button"
+                disabled={busy}
+                aria-pressed={action.pressed}
+                data-primary={primary}
+                onClick={action.onClick}
+                className={`${actionClass} ${look} aria-pressed:border-selected-line aria-pressed:bg-hint`}
+              >
+                {action.tick && <Tick draw />}
+                {action.label}
+              </button>
+            );
+          })}
+        </div>
+        {item && (
+          <>
+            <StageDialog item={item} stage={stage} onClose={() => setStage(null)} onDone={onChange} reload={reload} />
+            <Dialog
+              open={listsOpen}
+              onClose={() => setListsOpen(false)}
+              title={tTodo("listsTitle")}
+              closeLabel={tMenu("close")}
             >
-              {action.label}
-            </a>
-          ) : (
-            <button
-              key={action.key}
-              type="button"
-              disabled={busy}
-              aria-pressed={action.pressed}
-              data-primary={primary}
-              onClick={action.onClick}
-              className={`${actionClass} ${look} aria-pressed:border-selected-line aria-pressed:bg-hint`}
-            >
-              {action.tick && <Tick draw />}
-              {action.label}
-            </button>
-          );
-        })}
-      </div>
-      <p role="status" className="min-h-space-5 text-sm text-ink-muted">
-        {shared?.ok ? (
-          t("copied")
-        ) : shared ? (
-          <span className="break-all">{t("copyFailed", { url: shared.url })}</span>
-        ) : null}
-      </p>
-      {item && (
-        <>
-          <StageDialog item={item} stage={stage} onClose={() => setStage(null)} onDone={onChange} reload={reload} />
-          <Dialog
-            open={listsOpen}
-            onClose={() => setListsOpen(false)}
-            title={tTodo("listsTitle")}
-            closeLabel={tMenu("close")}
-          >
-            {listsOpen && (
-              <Choices
-                choice="list"
-                item={item}
-                onChanged={onChange}
-                onClose={() => setListsOpen(false)}
-                reload={reload}
-              />
-            )}
-          </Dialog>
-        </>
+              {listsOpen && (
+                <Choices
+                  choice="list"
+                  item={item}
+                  onChanged={onChange}
+                  onClose={() => setListsOpen(false)}
+                  reload={reload}
+                />
+              )}
+            </Dialog>
+          </>
+        )}
+      </section>
+      {title !== null && isHttpUrl(url) && (
+        <ShareSheet
+          open={sharing}
+          onClose={() => setSharing(false)}
+          title={title}
+          text={tShare("productText", { name: title, shop })}
+          url={url}
+        />
       )}
-    </section>
+    </>
   );
 }

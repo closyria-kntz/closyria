@@ -36,6 +36,7 @@ import {
   useShopShippingOptions,
 } from "./group-order-open-dialog";
 import { GroupOrderOrderedDialog } from "./group-order-ordered-dialog";
+import { ShareSheet } from "./share-sheet";
 import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
 
 const touch = "min-h-touch-target";
@@ -281,8 +282,10 @@ function Ready({
   // Once ordered (or cancelled, or a past one): what it came to, items and shipping (frozen at « J'ai commandé »).
   const grandTotal = money(order.totals.totalCents + order.totals.shippingTotalCents);
 
-  // « Copier le message » while it is open: the list's link to send to her friends (none for a link of before).
+  // « Partager le message » while it is open: the list's link to send to her friends (none for a link of before), in
+  // the share window (task 9), whose first choice copies the whole message.
   const inviting = order.status === "open" && !pinned;
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [noLink, setNoLink] = useState(false);
   useEffect(() => {
@@ -354,7 +357,21 @@ function Ready({
           {stateText}
         </p>
         {settled && <p className="font-strong text-accent">{t("state.settled")}</p>}
-        {inviting && invitation && <CopyButton label={t("copy.message")} text={invitation} />}
+        {inviting && invitation && shareUrl && (
+          <>
+            <button type="button" onClick={() => setInviteOpen(true)} className={`${buttonClass} ${touch} self-start`}>
+              {t("copy.message")}
+            </button>
+            <ShareSheet
+              open={inviteOpen}
+              onClose={() => setInviteOpen(false)}
+              title={title}
+              text={invitation}
+              url={shareUrl}
+              copy="message"
+            />
+          </>
+        )}
         {inviting && !invitation && noLink && (
           <p data-testid="group-no-link" className="text-sm text-ink-muted">
             {t("copy.noLink")}

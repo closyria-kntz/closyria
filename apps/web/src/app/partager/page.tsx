@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { CaptureForm } from "@/components/capture-form";
+import { ShareTarget } from "@/components/share-target";
 import { extractSharedUrl } from "@/lib/shared-url";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -12,7 +12,10 @@ type Param = string | string[] | undefined;
 type Props = { searchParams: Promise<{ url?: Param; text?: Param; title?: Param }> };
 const first = (value: Param) => (Array.isArray(value) ? value[0] : value);
 
-/** Web Share Target of the installed PWA (GET /partager?title&text&url): adds the shared link, or asks for one. */
+/**
+ * Web Share Target of the installed PWA (GET /partager?title&text&url) and of the iOS shortcut (`?url=` followed by the
+ * link, encoded or not): adds the shared link, or asks for one.
+ */
 export default async function SharePage({ searchParams }: Props) {
   const t = await getTranslations("Capture");
   const params = await searchParams;
@@ -20,16 +23,7 @@ export default async function SharePage({ searchParams }: Props) {
   return (
     <main className="mx-auto flex min-h-dvh max-w-narrow flex-col justify-center gap-space-4 px-space-5 py-space-7">
       <h1 className="font-display text-title font-strong">{t("share.title")}</h1>
-      {url ? (
-        <CaptureForm initialUrl={url} autoSubmit />
-      ) : (
-        <>
-          <p role="status" className="text-ink-muted">
-            {t("share.noLink")}
-          </p>
-          <CaptureForm />
-        </>
-      )}
+      <ShareTarget parsed={url} />
     </main>
   );
 }

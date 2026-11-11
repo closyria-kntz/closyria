@@ -96,7 +96,8 @@ test("une nouvelle utilisatrice voit l’accueil vide qui explique quoi faire, s
   await page.getByRole("button", { name: "Autres façons d’ajouter" }).click();
   const sheet = page.getByRole("dialog", { name: "Ajouter un article" });
   await expect(sheet.getByRole("button", { name: /Prendre une photo/ })).toBeVisible();
-  await expect(sheet.getByRole("button", { name: /Partager depuis une boutique/ })).toBeVisible();
+  // A link to the iPhone help on an iPhone or an iPad (task 9), a button elsewhere.
+  await expect(sheet.locator("[data-option=share]")).toContainText("Partager depuis une boutique");
 });
 
 test("la zone « Colle son lien ici » capture comme avant ; ses envies, ses boutiques et l’astuce qu’elle ferme", async ({

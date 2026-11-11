@@ -246,7 +246,7 @@ test("ton envie : niveaux en tuiles, « Prioritaire » en petite pastille coché
   await axe(page);
 });
 
-test("« Que veux-tu faire ? » : « Voir chez », « Je le prends » et « Partager » (l'adresse de la boutique, copiée)", async ({
+test("« Que veux-tu faire ? » : « Voir chez », « Je le prends » et « Partager » (l'adresse de la boutique, à copier)", async ({
   page,
   context,
   baseURL,
@@ -294,19 +294,25 @@ test("« Que veux-tu faire ? » : « Voir chez », « Je le prends » et « Part
   await toast(page).getByRole("button", { name: "Annuler" }).last().click();
   await expect(take).toHaveAttribute("aria-pressed", "false");
 
-  // The sheet needs an account: a friend gets the shop's page, never /produits/….
+  // The sheet needs an account: a friend gets the shop's page, never /produits/… (the share window, task 9).
   await actions.getByRole("button", { name: "Partager" }).click();
-  await expect(actions.getByText("Lien de la boutique copié")).toBeVisible();
+  const shareSheet = page.getByRole("dialog", { name: "Partager" });
+  await shareSheet.getByRole("button", { name: "Copier le lien" }).click();
+  await expect(shareSheet.getByRole("button", { name: "Copié ✓" })).toBeVisible();
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toBe(await shopLink.getAttribute("href"));
   expect(copied).not.toContain("/produits/");
+  await page.keyboard.press("Escape");
+  await expect(shareSheet).toBeHidden();
   for (const target of await actions.locator("a, button").all()) {
     expect((await boxOf(target)).height).toBeGreaterThanOrEqual(44);
   }
   await axe(page);
 });
 
-test("« Partager » ouvre le menu de partage du téléphone quand il existe ; le fermer ne dit rien", async ({ page }) => {
+test("« Partager » donne au menu de partage du téléphone, quand il existe, le nom et l'adresse de la boutique", async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     const calls: unknown[] = [];
     (window as unknown as { shareCalls: unknown[] }).shareCalls = calls;
@@ -314,22 +320,17 @@ test("« Partager » ouvre le menu de partage du téléphone quand il existe ; l
       configurable: true,
       value: (data: unknown) => {
         calls.push(data);
-        return calls.length === 1 ? Promise.resolve() : Promise.reject(new DOMException("closed", "AbortError"));
+        return Promise.resolve();
       },
     });
   });
   await openSheet(page);
   const href = await page.getByRole("link", { name: "Voir chez Fausse boutique" }).getAttribute("href");
-  const share = page.getByRole("button", { name: "Partager" });
-  await share.click();
+  await page.getByRole("button", { name: "Partager" }).click();
+  await page.getByRole("dialog", { name: "Partager" }).getByRole("button", { name: "Autres applis…" }).click();
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { shareCalls: unknown[] }).shareCalls))
-    .toEqual([{ title: PRODUCT.name, url: href }]);
-  await share.click();
-  await expect
-    .poll(() => page.evaluate(() => (window as unknown as { shareCalls: unknown[] }).shareCalls.length))
-    .toBe(2);
-  await expect(page.getByText(/copié|Copie impossible/)).toHaveCount(0);
+    .toEqual([{ title: PRODUCT.name, text: `${PRODUCT.name} chez Fausse boutique`, url: href }]);
 });
 
 test("fiche d'une boutique non lisible, pas encore remplie : « Voir chez » reste là, pas de « Partager »", async ({

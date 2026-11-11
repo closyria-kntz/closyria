@@ -117,6 +117,11 @@
     "close": "Fermer",
     "closeHint": "Glisse vers le bas pour fermer",
     "back": "Retour",
+    "paste": {
+      "title": "Coller le lien copié",
+      "detail": "Le lien que tu viens de copier dans la boutique",
+      "empty": "Copie d’abord le lien de l’article dans la boutique."
+    },
     "link": {
       "title": "Coller un lien",
       "detail": "Depuis le site d’une boutique"
@@ -132,13 +137,29 @@
       "detail": "Bouton « Partager » → Closyria",
       "explain": "Sur la page d’un article, dans le site ou l’app de la boutique, touche « Partager », puis choisis Closyria : l’article s’ajoute tout seul à tes envies.",
       "android": "Sur Android, Closyria apparaît dans ce menu une fois l’app installée sur ton écran d’accueil.",
-      "iphone": "Sur iPhone, un raccourci à créer une fois l’y ajoute.",
+      "iphone": "Sur iPhone, un raccourci à installer une fois l’y ajoute.",
       "iphoneLink": "Voir l’aide iPhone"
     },
     "mail": {
       "title": "Transférer un e-mail de commande",
       "detail": "Bientôt : on suit ton colis"
     }
+  },
+  "Share": {
+    "title": "Partager",
+    "close": "Fermer",
+    "closeHint": "Glisse vers le bas pour fermer",
+    "choices": "Partager avec",
+    "copy": "Copier le lien",
+    "copyMessage": "Copier le message",
+    "copied": "Copié ✓",
+    "copyFailed": "Copie impossible ici : copie-le à la main.",
+    "whatsapp": "WhatsApp",
+    "sms": "SMS",
+    "email": "E-mail",
+    "messenger": "Messenger",
+    "more": "Autres applis…",
+    "productText": "{name} chez {shop}"
   },
   "Me": {
     "metadata": "Moi",
@@ -750,8 +771,6 @@
       "sinceDate": "le {date}",
       "take": "Je le prends",
       "share": "Partager",
-      "copied": "Lien de la boutique copié",
-      "copyFailed": "Copie impossible. Voici le lien : {url}",
       "yourSize": "ta taille"
     },
     "manual": {
@@ -1317,10 +1336,6 @@
       "linkLabel": "Lien de partage",
       "linkLoading": "Chargement du lien…",
       "linkError": "Le lien ne s’affiche pas. Réessaie dans un instant.",
-      "copy": "Copier le lien",
-      "copied": "Lien copié",
-      "copyFailed": "Copie impossible ici : le lien est sélectionné, copie-le à la main.",
-      "send": "Envoyer…",
       "renew": "Changer le lien",
       "renewTitle": "Changer le lien ?",
       "renewed": "Nouveau lien créé : l’ancien ne marche plus.",
@@ -1814,30 +1829,24 @@
   "IphoneHelp": {
     "metadata": "Aide iPhone",
     "back": "← Réglages",
-    "title": "Ajouter Closyria au menu Partager",
-    "intro": "Sur iPhone, Closyria n’apparaît pas tout seul dans le menu Partager. Un Raccourci que tu crées en 4 étapes ajoute « Envoyer à Closyria » à ce menu.",
-    "stepsLabel": "Les 4 étapes",
-    "steps": {
-      "1": {
-        "title": "Crée le raccourci",
-        "body": "Ouvre l’app Raccourcis, touche +, puis nomme le raccourci « Envoyer à Closyria »."
-      },
-      "2": {
-        "title": "Montre-le dans le menu Partager",
-        "body": "Touche l’icône de détails, active « Afficher dans la feuille de partage », puis garde seulement « URL » dans les types acceptés."
-      },
-      "3": {
-        "title": "Encode le lien, puis ouvre-le",
-        "body": "Ajoute d’abord l’action « Encoder l’URL » : elle prend l’« Entrée du raccourci », le lien partagé. Ajoute ensuite l’action « Ouvrir les URL » et écris dans son champ l’adresse ci-dessous, suivie du résultat de « Encoder l’URL »."
-      },
-      "4": {
-        "title": "Essaie",
-        "body": "Dans Safari, ouvre la page d’un article, touche Partager, puis « Envoyer à Closyria ». L’article s’ajoute à tes envies."
-      }
-    },
-    "addressLabel": "Adresse à écrire dans l’action",
-    "address": "https://closyria.com/partager?url=",
-    "note": "Le fichier du raccourci n’est pas fourni : tu le crées toi-même, en quelques secondes."
+    "title": "Ajouter un article depuis l’iPhone",
+    "intro": "Installe une fois le raccourci « Envoyer à Closyria » : il ajoute Closyria au menu Partager de l’iPhone.",
+    "shortcutTitle": "Closyria dans le menu Partager",
+    "install": "Installer le raccourci",
+    "installNote": "Ensuite, dans une boutique : Partager → Envoyer à Closyria.",
+    "aiTitle": "Ou demande à l’IA de ton iPhone",
+    "aiIntro": "Copie cette phrase et donne-la à l’IA de ton iPhone : elle crée le raccourci pour toi.",
+    "aiLabel": "Phrase à donner à l’IA",
+    "aiSentence": "Crée un raccourci \"Envoyer à Closyria\" qui apparaît dans le menu Partager et qui ouvre https://closyria.com/partager?url= suivi du lien partagé.",
+    "copy": "Copier la phrase",
+    "copied": "Copié ✓",
+    "copyFailed": "Copie impossible ici : la phrase est sélectionnée, copie-la à la main.",
+    "pasteTitle": "Ou : Coller le lien copié",
+    "pasteLabel": "Les 2 gestes",
+    "paste": {
+      "1": "Dans la boutique (son site ou son app), sur la page de l’article, touche « Partager », puis « Copier » ou « Copier le lien ».",
+      "2": "Dans Closyria, touche +, puis « Coller le lien copié » : l’article s’ajoute à tes envies."
+    }
   },
   "Gifts": {
     "warning": {
@@ -1995,10 +2004,10 @@
       "seeFor": "— {shop}, {date}"
     },
     "copy": {
-      "message": "Copier le message",
+      "message": "Partager le message",
       "messageText": "Commande groupée chez {shop} jusqu'au {date} : ajoute tes articles ici 👉 {link}",
       "messageTextNoDate": "Commande groupée chez {shop} : ajoute tes articles ici 👉 {link}",
-      "noLink": "Pour copier le message, recrée le lien dans « Partage ».",
+      "noLink": "Pour partager le message, recrée le lien dans « Partage ».",
       "reminder": "Copier un rappel",
       "reminderText": "Coucou {name}, tu me dois {amount} pour la commande {shop} 🙂",
       "done": "Copié ✓",

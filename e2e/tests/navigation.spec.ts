@@ -95,7 +95,7 @@ test("un seul menu : cinq places en bas sur téléphone, quatre liens et « + Aj
   await axeLightAndDark(page);
 });
 
-test("le + ouvre « Ajouter un article » et ses quatre façons d'ajouter", async ({ page }) => {
+test("le + ouvre « Ajouter un article » et ses façons d'ajouter", async ({ page }) => {
   await page.goto("/decouvrir");
   const opener = isPhone(page)
     ? menu(page).getByRole("button", { name: "Ajouter un article" })
@@ -103,7 +103,10 @@ test("le + ouvre « Ajouter un article » et ses quatre façons d'ajouter", asyn
   await opener.click();
   const sheet = page.getByRole("dialog", { name: "Ajouter un article" });
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole("button", { name: /^(Coller|Prendre|Partager|Transférer)/ })).toHaveText([
+  // On a touch screen, « Coller le lien copié » comes first (task 9).
+  const touch = Boolean(test.info().project.use.hasTouch);
+  await expect(sheet.locator("[data-option]")).toHaveText([
+    ...(touch ? [/Coller le lien copié/] : []),
     /Coller un lien/,
     /Prendre une photo/,
     /Partager depuis une boutique/,
@@ -114,10 +117,13 @@ test("le + ouvre « Ajouter un article » et ses quatre façons d'ajouter", asyn
   await expect(mail).toContainText("Bientôt");
   await axe(page);
 
-  // « Partager depuis une boutique » explains how, in words.
-  await sheet.getByRole("button", { name: /^Partager depuis une boutique/ }).click();
-  await expect(sheet.getByText(/« Partager »/).first()).toBeVisible();
-  await sheet.getByRole("button", { name: "Retour" }).click();
+  // « Partager depuis une boutique » explains how, in words (on an iPhone or an iPad it leads to the iPhone help:
+  // share.spec.ts).
+  if (!/iPhone|iPad/.test(test.info().project.use.userAgent ?? "")) {
+    await sheet.getByRole("button", { name: /^Partager depuis une boutique/ }).click();
+    await expect(sheet.getByText(/« Partager »/).first()).toBeVisible();
+    await sheet.getByRole("button", { name: "Retour" }).click();
+  }
 
   // « Coller un lien » shows the paste field, which adds the article.
   await sheet.getByRole("button", { name: /^Coller un lien/ }).click();

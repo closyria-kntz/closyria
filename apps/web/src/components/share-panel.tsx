@@ -11,6 +11,7 @@ import { fetchShareLink, patchWishlistSettings, shareWishlist, unshareWishlist }
 import { Dialog } from "./dialog";
 import { groupOrderHref } from "./group-order-banner";
 import { GroupOrderOpenDialog, type ListShop } from "./group-order-open-dialog";
+import { ShareSheet } from "./share-sheet";
 import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
 
 const touch = "min-h-touch-target";
@@ -25,8 +26,8 @@ type Switches = Pick<WishlistView, Setting>;
 type Link = { status: "loading" } | { status: "error" } | { status: "ready"; url: string | null; legacy: boolean };
 
 /**
- * « Partage » for one list (spec §4.2): the link, always shown while the list is shared (Copier, Envoyer…, Changer le
- * lien), what friends see and the four settings that change it, saved at once, and « Arrêter le partage ».
+ * « Partage » for one list (spec §4.2): the link, always shown while the list is shared (« Partager », which opens the
+ * share window of task 9 — copy, WhatsApp, SMS, e-mail… —, and « Changer le lien »), what friends see and the four settings that change it, saved at once, and « Arrêter le partage ».
  */
 export function SharePanel({
   list,
@@ -48,22 +49,16 @@ export function SharePanel({
   const [confirming, setConfirming] = useState(false);
   const [confirmingStop, setConfirmingStop] = useState(false);
   const [confirmingGiftsOff, setConfirmingGiftsOff] = useState(false);
-  // The browser's share menu (phones mostly): known only in the browser.
-  const [canShare, setCanShare] = useState(false);
+  const [sending, setSending] = useState(false);
   // A setting being saved shows its new value until the API answers; it goes back if the save fails.
   const [pending, setPending] = useState<Partial<Switches>>({});
-  const field = useRef<HTMLTextAreaElement>(null);
-  const copyButton = useRef<HTMLButtonElement>(null);
-  // After « Créer le lien », the button she pressed is gone: the focus goes to « Copier le lien » once it shows.
-  const [focusCopy, setFocusCopy] = useState(false);
+  const shareButton = useRef<HTMLButtonElement>(null);
+  // After « Créer le lien », the button she pressed is gone: the focus goes to « Partager » once it shows.
+  const [focusShare, setFocusShare] = useState(false);
   // The list as last rendered: a save that answers late changes only its own setting on it, never the others.
   const latest = useRef(list);
   latest.current = list;
   const fieldId = useId();
-
-  useEffect(() => {
-    setCanShare(typeof navigator.share === "function");
-  }, []);
 
   // The link again whenever it may have changed (shared, changed from another device): `sharedAt` moves with it.
   const { id, shared, sharedAt } = list;
@@ -93,10 +88,10 @@ export function SharePanel({
   const legacy = link.status === "ready" && link.legacy;
 
   useEffect(() => {
-    if (!focusCopy || !url) return;
-    copyButton.current?.focus();
-    setFocusCopy(false);
-  }, [focusCopy, url]);
+    if (!focusShare || !url) return;
+    shareButton.current?.focus();
+    setFocusShare(false);
+  }, [focusShare, url]);
 
   /** Shares the list, or makes a new link (the old one stops working). */
   async function share() {
@@ -110,34 +105,9 @@ export function SharePanel({
     if (!result.ok) return setMessage({ text: t("failed"), kind: "error" });
     setLink({ status: "ready", url: absoluteShareUrl(window.location.origin, result.url), legacy: false });
     if (renewing) setMessage({ text: t("renewed"), kind: "info" });
-    if (wasLegacy) setFocusCopy(true);
+    if (wasLegacy) setFocusShare(true);
     onChange({ ...list, shared: true, sharedAt: new Date().toISOString() });
     if (!renewing) void requestAccountPrompt("share");
-  }
-
-  async function copy() {
-    if (!url) return;
-    setMessage(null);
-    try {
-      await navigator.clipboard.writeText(url);
-      setMessage({ text: t("copied"), kind: "info" });
-    } catch {
-      field.current?.select();
-      setMessage({ text: t("copyFailed"), kind: "error" });
-    }
-  }
-
-  async function send() {
-    if (!url) return;
-    setMessage(null);
-    try {
-      await navigator.share({ title: list.name, url });
-    } catch (error) {
-      // Closed without sending: nothing to say. Anything else: the link is selected, to copy by hand.
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      field.current?.select();
-      setMessage({ text: t("copyFailed"), kind: "error" });
-    }
   }
 
   async function stop() {
@@ -213,7 +183,6 @@ export function SharePanel({
           </label>
           <textarea
             id={fieldId}
-            ref={field}
             readOnly
             rows={2}
             value={url}
@@ -222,18 +191,13 @@ export function SharePanel({
           />
           <div className="flex flex-wrap gap-space-2">
             <button
-              ref={copyButton}
+              ref={shareButton}
               type="button"
-              onClick={() => void copy()}
+              onClick={() => setSending(true)}
               className={`${primaryButtonClass} ${touch}`}
             >
-              {t("copy")}
+              {t("action")}
             </button>
-            {canShare && (
-              <button type="button" onClick={() => void send()} className={`${buttonClass} ${touch}`}>
-                {t("send")}
-              </button>
-            )}
             <button
               type="button"
               disabled={busy}
@@ -330,6 +294,9 @@ export function SharePanel({
         </button>
       )}
 
+      {list.shared && url && (
+        <ShareSheet open={sending} onClose={() => setSending(false)} title={list.name} text={list.name} url={url} />
+      )}
       {list.shared && !list.groupOrder && shops.length > 0 && (
         <GroupOrderOpenDialog open={opening} onClose={() => setOpening(false)} listId={list.id} shops={shops} />
       )}

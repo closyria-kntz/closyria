@@ -28,3 +28,27 @@ export function extractSharedUrl(params: {
   if (direct && isHttpUrl(direct)) return direct;
   return firstUrlIn(params.text) ?? firstUrlIn(params.title);
 }
+
+const URL_PARAM = /(?:^\?|^|&)url=/;
+const ENCODED_HTTP = /^https?%3A/i;
+
+/**
+ * The link of `/partager?url=…` read from the raw query (`location.search`): an iOS Shortcut may put the link there
+ * without encoding it, so everything after the first `url=` is the link, its own `?` and `&` included. An encoded
+ * link (the share target, a shortcut that encodes) is decoded, up to the next parameter. Null without an http(s) link.
+ */
+export function sharedUrlFromQuery(search: string): string | null {
+  const found = URL_PARAM.exec(search);
+  if (!found) return null;
+  const raw = search.slice(found.index + found[0].length);
+  let link = raw;
+  if (ENCODED_HTTP.test(raw)) {
+    try {
+      link = decodeURIComponent(raw.split("&")[0] ?? "");
+    } catch {
+      return null;
+    }
+  }
+  link = link.trim();
+  return isHttpUrl(link) ? link : null;
+}

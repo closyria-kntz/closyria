@@ -6,15 +6,17 @@ import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { ARTICLES_PATH } from "@/lib/articles-address";
 import { profileHref, useCurrentProfile } from "@/lib/profile-context";
+import { extractSharedUrl } from "@/lib/shared-url";
+import { isAppleMobile, useCoarsePointer } from "@/lib/use-desktop";
 import { CaptureForm } from "./capture-form";
 import { Sheet } from "./sheet";
 import { buttonClass, focusRing } from "./ui";
 
 type Step = "choose" | "link" | "photo" | "share";
 
-/** The four ways to add an article (mockup .opt), the e-mail one still to come. */
+/** The ways to add an article (mockup .opt), the e-mail one still to come; « Coller le lien copié » on a touch screen. */
 const OPTIONS = ["link", "photo", "share", "mail"] as const;
-type Option = (typeof OPTIONS)[number];
+type Option = "paste" | (typeof OPTIONS)[number];
 
 /** Line icons of the options, drawn like the bottom bar's. */
 function OptionIcon({ name }: { name: Option }) {
@@ -28,6 +30,13 @@ function OptionIcon({ name }: { name: Option }) {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
+      {name === "paste" && (
+        <>
+          <path d="M9 4h6v3H9z" />
+          <path d="M9 5.5H7a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-2" />
+          <path d="M9.5 13.5l2 2 3.5-4" />
+        </>
+      )}
       {name === "link" && (
         <>
           <path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1" />
@@ -61,7 +70,9 @@ const optionClass = `flex min-h-touch-target w-full items-center gap-space-3 rou
 /**
  * « Ajouter un article » (refonte Boudoir, spec §2 R7): the + of the phone and « + Ajouter » of the band open it — a
  * sheet from the bottom on a phone, a centered window on a computer. « Coller un lien » shows the paste field, the
- * other ways explain themselves; transferring an order e-mail comes later.
+ * other ways explain themselves; transferring an order e-mail comes later. On a touch screen, « Coller le lien copié »
+ * comes first: it reads the clipboard in the tap and adds the link at once, or asks her to copy it first and opens the
+ * paste field. On an iPhone or an iPad, « Partager depuis une boutique » leads to the iPhone help.
  */
 export function AddSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useTranslations("Add");
@@ -70,6 +81,13 @@ export function AddSheet({ open, onClose }: { open: boolean; onClose: () => void
   const titleId = useId();
   const pathname = usePathname();
   const [step, setStep] = useState<Step>("choose");
+  const touch = useCoarsePointer();
+  const [apple, setApple] = useState(false);
+  // « Coller le lien copié »: the link read from the clipboard (added at once), or nothing usable there.
+  const [pasted, setPasted] = useState<{ url: string } | { empty: true } | null>(null);
+  useEffect(() => {
+    setApple(isAppleMobile(navigator.userAgent, navigator.maxTouchPoints));
+  }, []);
   const body = useRef<HTMLDivElement>(null);
   const opened = useRef(pathname);
 
@@ -77,6 +95,22 @@ export function AddSheet({ open, onClose }: { open: boolean; onClose: () => void
   useEffect(() => {
     if (open) setStep("choose");
   }, [open]);
+  useEffect(() => {
+    if (step !== "link") setPasted(null);
+  }, [step]);
+
+  /** Reads the clipboard in the tap: a link is added like a pasted one; nothing usable opens the field. */
+  async function pasteCopied() {
+    let copied = "";
+    try {
+      copied = await navigator.clipboard.readText();
+    } catch {
+      // Refused: same as nothing copied.
+    }
+    const url = extractSharedUrl({ text: copied });
+    setPasted(url ? { url } : { empty: true });
+    setStep("link");
+  }
   // An added link opens its sheet: the window closes on the way.
   useEffect(() => {
     if (!open) opened.current = pathname;
@@ -110,28 +144,39 @@ export function AddSheet({ open, onClose }: { open: boolean; onClose: () => void
         {(step === "share" || step === "photo") && <h3 className="font-bold">{t(`${step}.title`)}</h3>}
         {step === "choose" && (
           <ul className="flex flex-col gap-space-2-5">
-            {OPTIONS.map((key) => {
+            {(touch ? (["paste", ...OPTIONS] as const) : OPTIONS).map((key: Option) => {
               const soon = key === "mail";
+              const inner = (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="grid size-touch-target shrink-0 place-items-center rounded-full bg-surface-raised text-accent"
+                  >
+                    <OptionIcon name={key} />
+                  </span>
+                  <span className="flex flex-col">
+                    <span className="font-bold">{t(`${key}.title`)}</span>
+                    <span className="text-sm text-ink-muted">{t(`${key}.detail`)}</span>
+                  </span>
+                </>
+              );
               return (
                 <li key={key} className="flex flex-col">
-                  <button
-                    type="button"
-                    data-option={key}
-                    disabled={soon}
-                    onClick={soon ? undefined : () => setStep(key)}
-                    className={optionClass}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="grid size-touch-target shrink-0 place-items-center rounded-full bg-surface-raised text-accent"
+                  {key === "share" && apple ? (
+                    <Link href="/aide/iphone" onClick={onClose} data-option={key} className={optionClass}>
+                      {inner}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      data-option={key}
+                      disabled={soon}
+                      onClick={soon ? undefined : key === "paste" ? () => void pasteCopied() : () => setStep(key)}
+                      className={optionClass}
                     >
-                      <OptionIcon name={key} />
-                    </span>
-                    <span className="flex flex-col">
-                      <span className="font-bold">{t(`${key}.title`)}</span>
-                      <span className="text-sm text-ink-muted">{t(`${key}.detail`)}</span>
-                    </span>
-                  </button>
+                      {inner}
+                    </button>
+                  )}
                 </li>
               );
             })}
@@ -139,7 +184,16 @@ export function AddSheet({ open, onClose }: { open: boolean; onClose: () => void
         )}
         {step === "link" && (
           <>
-            <CaptureForm />
+            {pasted && "empty" in pasted && (
+              <p role="alert" className="font-bold">
+                {t("paste.empty")}
+              </p>
+            )}
+            {pasted && "url" in pasted ? (
+              <CaptureForm key={pasted.url} initialUrl={pasted.url} autoSubmit replace={false} />
+            ) : (
+              <CaptureForm />
+            )}
             {back}
           </>
         )}

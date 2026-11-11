@@ -479,9 +479,11 @@ test("son lien, la livraison de la boutique, les messages à copier", async ({
   await expect(editing.getByRole("radio", { name: new RegExp(relay) })).toBeChecked();
   await editing.getByRole("button", { name: "Annuler" }).click();
 
-  // « Copier le message »: the validated text with the list's link; « Copié ✓ » for a moment.
+  // « Partager le message » (task 9): the share window copies the validated text with the list's link.
   const message = `Commande groupée chez ${AUTO_SHOP.name} jusqu'au 12 mars : ajoute tes articles ici 👉 ${origin}/l/${owner.token}`;
-  const copyMessage = page.getByRole("button", { name: /^Copier le message|^Copié ✓/ });
+  await page.getByRole("button", { name: "Partager le message" }).click();
+  const shareSheet = page.getByRole("dialog", { name: "Partager" });
+  const copyMessage = shareSheet.getByRole("button", { name: /^Copier le message|^Copié ✓/ });
   await copyMessage.click();
   await expect(copyMessage).toHaveText("Copié ✓");
   expect(await clipboardOf(page)).toBe(message);
@@ -491,14 +493,15 @@ test("son lien, la livraison de la boutique, les messages à copier", async ({
     navigator.clipboard.writeText = () => Promise.reject(new Error("refused"));
   });
   await copyMessage.click();
-  await expect(page.getByRole("textbox", { name: /Copie impossible ici/ })).toHaveValue(message);
+  await expect(shareSheet.getByRole("textbox", { name: /Copie impossible ici/ })).toHaveValue(message);
+  await page.keyboard.press("Escape");
   // A list whose link was not kept (a link of before): no message to copy, a hint to recreate the link.
   await db.query("update wishlists set share_token_encrypted = null where id = $1", [owner.listId]);
   await page.reload();
   await expect(page.getByTestId("group-no-link")).toHaveText(
-    "Pour copier le message, recrée le lien dans « Partage ».",
+    "Pour partager le message, recrée le lien dans « Partage ».",
   );
-  await expect(copyMessage).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Partager le message" })).toHaveCount(0);
 
   // Léa takes the first item; ordered: « Copier un rappel » for her while she has not paid.
   const lea = await friend(browser, baseURL, `10.233.${testInfo.workerIndex % 250}.1`);
@@ -523,7 +526,7 @@ test("son lien, la livraison de la boutique, les messages à copier", async ({
   });
   expect(ordered.status(), await ordered.text()).toBe(200);
   await page.reload();
-  await expect(page.getByRole("button", { name: "Copier le message" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Partager le message" })).toHaveCount(0);
   await expect(me.getByRole("heading", { name: "Ajouter un autre article" })).toHaveCount(0);
   const leaBlock = page.getByRole("region", { name: "Léa" });
   await expect(leaBlock).toContainText(euros("Doit 25,45 €"));

@@ -31,11 +31,14 @@ const boxButtonClass = `inline-flex min-h-touch-target shrink-0 items-center jus
 export function CaptureForm({
   initialUrl = "",
   autoSubmit = false,
+  replace = autoSubmit,
   fieldId,
   look = "plain",
 }: {
   initialUrl?: string;
   autoSubmit?: boolean;
+  /** The product page replaces this one in the history (the share target), instead of being added after it. */
+  replace?: boolean;
   /** A fixed id for the field, when something else on the page must find it (the recents send the focus back). */
   fieldId?: string;
   look?: "plain" | "box";
@@ -71,7 +74,7 @@ export function CaptureForm({
       );
     }
     const target = `/produits/${result.productId}?capture=${result.captureId}`;
-    if (autoSubmit) router.replace(target);
+    if (replace) router.replace(target);
     else router.push(target);
   };
 

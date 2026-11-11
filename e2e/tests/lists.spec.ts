@@ -156,48 +156,14 @@ async function sharedList(page: Page, name: string): Promise<string> {
   return field.inputValue();
 }
 
-test("le lien se copie, et « Envoyer… » n'apparaît que si le navigateur sait partager", async ({
-  page,
-  context,
-  baseURL,
-}) => {
+test("le lien se copie depuis la fenêtre « Partager » (refonte, task 9)", async ({ page, context, baseURL }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(baseURL ?? "").origin });
   const shareUrl = await sharedList(page, "Copie");
-  await page.getByRole("button", { name: "Copier le lien" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Lien copié" })).toBeVisible();
+  await page.getByRole("button", { name: "Partager", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Partager" });
+  await sheet.getByRole("button", { name: "Copier le lien" }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Copié ✓");
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(shareUrl);
-
-  const canShare = await page.evaluate(() => typeof navigator.share === "function");
-  await expect(page.getByRole("button", { name: "Envoyer…" })).toHaveCount(canShare ? 1 : 0);
-  // A browser with the share menu: the button shows and hands it the link.
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, "share", {
-      configurable: true,
-      value: async (data: ShareData) => {
-        const outcome = (window as unknown as { shareOutcome?: string }).shareOutcome;
-        if (outcome) throw new DOMException("no", outcome);
-        (window as unknown as { shared?: ShareData }).shared = data;
-      },
-    });
-  });
-  await page.reload();
-  await page.getByRole("button", { name: "Envoyer…" }).click();
-  expect(await page.evaluate(() => (window as unknown as { shared?: ShareData }).shared?.url)).toBe(shareUrl);
-  // Closed without sending: nothing said. Refused: the link is selected, to copy by hand.
-  const setOutcome = (outcome: string) =>
-    page.evaluate((name) => {
-      (window as unknown as { shareOutcome?: string }).shareOutcome = name;
-    }, outcome);
-  await page.getByRole("button", { name: "Copier le lien" }).click();
-  await expect(page.getByText("Lien copié")).toBeVisible();
-  await setOutcome("AbortError");
-  await page.getByRole("button", { name: "Envoyer…" }).click();
-  await expect(page.getByText("Lien copié")).toHaveCount(0);
-  const copyFailed = page.getByText("Copie impossible ici : le lien est sélectionné, copie-le à la main.");
-  await expect(copyFailed).toHaveCount(0);
-  await setOutcome("NotAllowedError");
-  await page.getByRole("button", { name: "Envoyer…" }).click();
-  await expect(copyFailed).toBeVisible();
 });
 
 test("une liste partagée avant que les liens soient gardés : « Créer un lien à garder »", async ({
@@ -229,8 +195,8 @@ test("une liste partagée avant que les liens soient gardés : « Créer un lien
   await confirm.getByRole("button", { name: "Créer le lien" }).click();
   const field = page.getByLabel("Lien de partage");
   await expect(field).toHaveValue(/\/l\/[A-Za-z0-9_-]{20,}$/);
-  // The button she pressed is gone: the focus is on « Copier le lien », not lost on the page.
-  await expect(page.getByRole("button", { name: "Copier le lien" })).toBeFocused();
+  // The button she pressed is gone: the focus is on « Partager », not lost on the page.
+  await expect(page.getByRole("button", { name: "Partager", exact: true })).toBeFocused();
   await expect(page.getByText("Ce lien ne peut pas être réaffiché.")).toHaveCount(0);
   const kept = await field.inputValue();
   expect((await other.goto(shareUrl))?.status()).toBe(404);
@@ -398,14 +364,12 @@ test("étiquettes : créer, renommer, supprimer", async ({ page }) => {
   await expect(page.getByText("Aucune étiquette pour l’instant.")).toBeVisible();
 });
 
-test("l'aide iPhone explique le Raccourci en 4 étapes, depuis les réglages", async ({ page }) => {
+test("l'aide iPhone s'ouvre depuis les réglages", async ({ page }) => {
   await page.goto("/reglages/profils");
   await page.getByRole("link", { name: "Aide iPhone" }).click();
   await expect(page).toHaveURL(/\/aide\/iphone$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Ajouter Closyria au menu Partager" })).toBeVisible();
-  await expect(page.getByRole("list", { name: "Les 4 étapes" }).getByRole("listitem")).toHaveCount(4);
-  await expect(page.getByText("https://closyria.com/partager?url=")).toBeVisible();
-  await expect(page.getByText("Ouvrir les URL")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ajouter un article depuis l’iPhone" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Installer le raccourci" })).toBeVisible();
   await axe(page);
 });
 
