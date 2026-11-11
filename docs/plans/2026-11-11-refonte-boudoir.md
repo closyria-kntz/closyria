@@ -124,3 +124,16 @@
 - [ ] Commit « feat(refonte): lien des amies, commande groupée, finitions ».
 
 **Fin d'étape 4 :** revue d'ensemble de la branche, présentation, mise en dev avec accord.
+
+## Ajout du 2026-11-12 — partager (validé par la fondatrice)
+
+### Task 9: Fenêtre « Partager » et ajout depuis l'iPhone
+
+**Files:** nouveau `apps/web/src/components/share-sheet.tsx` (+ test unitaire des liens), `apps/web/src/lib/share-links.ts`, `apps/web/src/app/(app)/produits/[id]/product-actions.tsx`, `apps/web/src/components/share-panel.tsx`, `apps/web/src/components/group-order-view.tsx` (« Copier le message » → « Partager le message »), `apps/web/src/components/add-sheet.tsx`, `apps/web/src/app/(app)/aide/iphone/page.tsx`, `fr.json`, e2e `e2e/tests/share.spec.ts`.
+
+**Interfaces:** Produces `shareLinks({ text, url }): { whatsapp: string; sms: string; email: string; messenger: string }` (`https://wa.me/?text=…`, `sms:?&body=…`, `mailto:?subject=…&body=…`, `fb-messenger://share/?link=…`) ; `ShareSheet({ open, onClose, title, text, url })` avec, dans l'ordre : « Copier le lien », « WhatsApp », « SMS », « E-mail », « Messenger » (téléphone seulement), « Autres applis… » (seulement si `navigator.share` existe) ; constante `IOS_SHORTCUT_URL: string | null` (lien iCloud du raccourci, fourni par la fondatrice ; nul tant qu'il n'existe pas).
+
+- [ ] Tests d'abord : unitaire de `shareLinks` (encodage des accents, des espaces et de `&` ; texte + lien) ; e2e : chaque « Partager » (fiche, liste, commande groupée) ouvre la fenêtre avec les choix dans l'ordre ; « Copier le lien » copie et affiche « Copié ✓ » (repli : texte sélectionnable) ; les liens WhatsApp/SMS/E-mail ont la bonne adresse ; Messenger absent sur ordinateur ; « Autres applis… » absent sans `navigator.share` ; axe clair/sombre.
+- [ ] « + Ajouter » : nouvelle option en tête sur téléphone « Coller le lien copié » (lit le presse-papiers au toucher ; si refusé ou vide : message « Copie d'abord le lien de l'article dans la boutique. » et le champ de lien s'ouvre) ; e2e avec presse-papiers simulé.
+- [ ] Aide iPhone : en tête, « Installer le raccourci » (lien iCloud) quand `IOS_SHORTCUT_URL` existe, sinon les 4 étapes actuelles ; « Partager depuis une boutique » dans « + Ajouter » mène à cette aide sur iPhone.
+- [ ] Commit « feat(refonte): fenêtre Partager et ajout depuis l'iPhone ».
