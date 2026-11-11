@@ -257,6 +257,7 @@ test("avertissement, reçu en cadeau, aucune trace des réservations", async ({
 
   // From the sheet: « Offert par Léa et Inès ».
   await page.goto(`/produits/${first.productId}`);
+  await page.getByRole("button", { name: "Changer d’étape" }).click();
   await page.getByRole("button", { name: "Reçu en cadeau" }).click();
   await expect(page.getByText("Offert par Léa et Inès")).toBeVisible();
   expect(await stageOf(first.id)).toBe("owned");
@@ -265,6 +266,7 @@ test("avertissement, reçu en cadeau, aucune trace des réservations", async ({
 
   // Nobody had planned the third: « Offert par une amie ».
   await page.goto(`/produits/${third.productId}`);
+  await page.getByRole("button", { name: "Changer d’étape" }).click();
   await page.getByRole("button", { name: "Reçu en cadeau" }).click();
   await expect(page.getByText("Offert par une amie")).toBeVisible();
 

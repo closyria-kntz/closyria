@@ -221,7 +221,7 @@ test.describe("structure de la fiche", () => {
     await expect(more.getByRole("button", { name: "Déplacer" })).toBeVisible();
     await expect(more.getByRole("button", { name: "Supprimer" })).toBeVisible();
     // Her item keeps its own controls in its own block, not in the shop's part.
-    await expect(mine.getByRole("button", { name: /Passer à/ }).first()).toBeVisible();
+    await expect(mine.getByRole("button", { name: "Changer d’étape" })).toBeVisible();
     await expect(mine.getByLabel("Taille", { exact: true })).toBeVisible();
     await expect(shop.getByLabel("Taille", { exact: true })).toHaveCount(0);
 

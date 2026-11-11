@@ -751,7 +751,8 @@
       "whyEditLabel": "Modifier le pourquoi",
       "whyAdd": "Dire pourquoi",
       "whyCancel": "Annuler",
-      "whyQuote": "« {why} »"
+      "whyQuote": "« {why} »",
+      "changeStageOpen": "Changer d’étape"
     },
     "stage": {
       "spotted": "Envie",

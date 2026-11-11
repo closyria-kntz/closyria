@@ -125,42 +125,51 @@ export function ProductActions({
       ? { key: "photo", label: tTodo("addPhoto"), onClick: onAddPhoto }
       : null;
 
-  const actions: (Action | null)[] = !item
-    ? [viewAt, shareAction]
-    : item.stage === "spotted"
-      ? [
+  /** By step, the main one first (« Voir chez … » stays reachable at every step). */
+  function actionsAt(current: ItemView): (Action | null)[] {
+    switch (current.stage) {
+      case "spotted":
+        return [
           toStage("ordered", tTodo("ordered"), "ordered"),
           viewAt,
           { key: "list", label: tTodo("addToList"), onClick: () => setListsOpen(true) },
           {
             key: "take",
             label: t("take"),
-            onClick: () => void take(item),
-            pressed: item.inOrderDraft,
-            tick: item.inOrderDraft,
+            onClick: () => void take(current),
+            pressed: current.inOrderDraft,
+            tick: current.inOrderDraft,
           },
           shareAction,
-        ]
-      : item.stage === "ordered"
-        ? [
-            toStage("received", tTodo("received"), "owned"),
-            viewAt,
-            toStage("returned", tTodo("returned"), "returned"),
-            canReceiveAsGift(item) ? { key: "gift", label: tGifts("action"), onClick: () => void receive(item) } : null,
-            shareAction,
-          ]
-        : item.stage === "owned"
-          ? [
-              toStage("forSale", tTodo("forSale"), "for_sale"),
-              item.received ? toStage("returned", tTodo("returned"), "returned") : null,
-              photo,
-              shareAction,
-            ]
-          : item.stage === "for_sale"
-            ? [toStage("sold", tTodo("sold"), "sold"), photo, shareAction]
-            : item.stage === "sold"
-              ? [shareAction, photo]
-              : [viewAt, shareAction];
+        ];
+      case "ordered":
+        return [
+          toStage("received", tTodo("received"), "owned"),
+          viewAt,
+          toStage("returned", tTodo("returned"), "returned"),
+          canReceiveAsGift(current)
+            ? { key: "gift", label: tGifts("action"), onClick: () => void receive(current) }
+            : null,
+          shareAction,
+        ];
+      case "owned":
+        return [
+          toStage("forSale", tTodo("forSale"), "for_sale"),
+          viewAt,
+          current.received ? toStage("returned", tTodo("returned"), "returned") : null,
+          photo,
+          shareAction,
+        ];
+      case "for_sale":
+        return [toStage("sold", tTodo("sold"), "sold"), viewAt, photo, shareAction];
+      case "sold":
+        return [shareAction, viewAt, photo];
+      case "returned":
+        return [viewAt, shareAction];
+    }
+  }
+
+  const actions = item ? actionsAt(item) : [viewAt, shareAction];
   const shown = actions.filter((action): action is Action => action !== null);
 
   return (

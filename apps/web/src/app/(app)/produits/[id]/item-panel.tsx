@@ -15,6 +15,7 @@ import {
 } from "@closyria/shared";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
+import { Dialog } from "@/components/dialog";
 import { ItemOpinionsSection } from "@/components/item-opinions-section";
 import { LoveLevelPicker } from "@/components/love-level-picker";
 import { Tick } from "@/components/tick";
@@ -37,6 +38,7 @@ import {
   undoWith,
   whyOrNull,
 } from "@/lib/wardrobe-client";
+import { itemStep } from "@/lib/wardrobe-view";
 import { StageDialog } from "./stage-dialog";
 
 const STAGES = Object.keys(ITEM_STAGE_ORDER) as ItemStage[];
@@ -71,6 +73,11 @@ export function ItemPanel({ item, onChange, onGone, reload, top, shop }: Props) 
   const money = (cents: number) => formatPrice(locale, cents, currency);
   const [error, setError] = useState<{ text: string; inWish: boolean } | null>(null);
   const [stage, setStage] = useState<ItemStage | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const tStep = useTranslations("Views.step");
+  // Where it is, as « Mes articles » says it (« Reçu » or « Dans mon dressing » from the server); else the stage.
+  const step = itemStep(item);
+  const stepLabel = step ? tStep(step) : t(`stage.${item.stage}`);
   const [sizeLabel, setSizeLabel] = useState(item.sizeLabel ?? "");
   const [sizeNote, setSizeNote] = useState(item.sizeNote ?? "");
   const [notes, setNotes] = useState(item.notes ?? "");
@@ -389,11 +396,37 @@ export function ItemPanel({ item, onChange, onGone, reload, top, shop }: Props) 
           <h3 id="stages-title" className="text-sm font-strong">
             {t("panel.stages")}
           </h3>
-          <ol className="flex flex-wrap gap-space-2">
+          <div className="flex flex-wrap items-center gap-space-3">
+            <p className="text-sm">{stepLabel}</p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setChoosing(true)}
+              className={`${buttonClass} ${touch} inline-flex items-center font-strong`}
+            >
+              {t("panel.changeStageOpen")}
+            </button>
+          </div>
+          {item.receivedAsGift && (
+            <p className="text-sm font-strong">
+              <span aria-hidden="true">🎁 </span>
+              {item.giftFrom ? tGifts("from", { names: item.giftFrom }) : tGifts("fromFriend")}
+            </p>
+          )}
+        </section>
+        {/* Every move stays here (back to Envie, Vendu, « Reçu en cadeau »…); the usual ones are also in « Que veux-tu
+            faire ? ». Choosing one opens its window (date, amount), as before. */}
+        <Dialog
+          open={choosing}
+          onClose={() => setChoosing(false)}
+          title={t("panel.changeStageOpen")}
+          closeLabel={t("stageDialog.cancel")}
+        >
+          <ul className="flex flex-col gap-space-2">
             {STAGES.map((value) => {
               const current = value === item.stage;
               return (
-                <li key={value}>
+                <li key={value} className="flex flex-col">
                   <button
                     type="button"
                     aria-current={current ? "step" : undefined}
@@ -403,8 +436,11 @@ export function ItemPanel({ item, onChange, onGone, reload, top, shop }: Props) 
                         ? `${t(`stage.${value}`)} (${t("panel.currentStage")})`
                         : t("panel.changeStage", { stage: t(`stage.${value}`) })
                     }
-                    onClick={() => setStage(value)}
-                    className={`${current ? "rounded-button bg-button-bg px-space-3 text-sm font-strong text-button-ink" : buttonClass} ${touch} inline-flex items-center`}
+                    onClick={() => {
+                      setChoosing(false);
+                      setStage(value);
+                    }}
+                    className={`${current ? "rounded-button bg-button-bg px-space-3 text-sm font-strong text-button-ink" : buttonClass} ${touch} inline-flex items-center justify-start`}
                   >
                     {t(`stage.${value}`)}
                   </button>
@@ -413,25 +449,22 @@ export function ItemPanel({ item, onChange, onGone, reload, top, shop }: Props) 
             })}
             {/* On an order, « Reçu en cadeau » is one of « Que veux-tu faire ? »'s buttons. */}
             {canReceiveAsGift(item) && item.stage !== "ordered" && (
-              <li>
+              <li className="flex flex-col">
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => void receive()}
-                  className={`${buttonClass} ${touch} inline-flex items-center`}
+                  onClick={() => {
+                    setChoosing(false);
+                    void receive();
+                  }}
+                  className={`${buttonClass} ${touch} inline-flex items-center justify-start`}
                 >
                   {tGifts("action")}
                 </button>
               </li>
             )}
-          </ol>
-          {item.receivedAsGift && (
-            <p className="text-sm font-strong">
-              <span aria-hidden="true">🎁 </span>
-              {item.giftFrom ? tGifts("from", { names: item.giftFrom }) : tGifts("fromFriend")}
-            </p>
-          )}
-        </section>
+          </ul>
+        </Dialog>
         <StageDialog item={item} stage={stage} onClose={() => setStage(null)} onDone={onChange} reload={reload} />
 
         <form onSubmit={saveDetails} className="flex flex-col gap-space-3 border-t border-line pt-space-4">

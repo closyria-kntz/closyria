@@ -114,7 +114,7 @@ test("d'Envie à À vendre : la ligne marque la bonne étape et chaque action pr
   // Reçu (moved today).
   await confirmStage(page, "Je l’ai reçu", "Reçu");
   await expectStep(page, "Reçu");
-  await expectActions(page, ["Je le mets en vente", "Je l’ai retourné", "Ajouter une photo", "Partager"]);
+  await expectActions(page, ["Je le mets en vente", SHOP, "Je l’ai retourné", "Ajouter une photo", "Partager"]);
   await todo(page).getByRole("button", { name: "Ajouter une photo" }).click();
   const photo = page.getByRole("dialog", { name: "Ajouter une photo" });
   await expect(photo).toBeVisible();
@@ -128,13 +128,13 @@ test("d'Envie à À vendre : la ligne marque la bonne étape et chaque action pr
   );
   await page.reload();
   await expectStep(page, "Dans mon dressing");
-  await expectActions(page, ["Je le mets en vente", "Ajouter une photo", "Partager"]);
+  await expectActions(page, ["Je le mets en vente", SHOP, "Ajouter une photo", "Partager"]);
   await axeLightAndDark(page);
 
   // À vendre: the line stays on « Dans mon dressing », a small chip says the rest.
   await confirmStage(page, "Je le mets en vente", "À vendre");
   await expectStep(page, "Dans mon dressing", "À vendre");
-  await expectActions(page, ["Je l’ai vendu", "Ajouter une photo", "Partager"]);
+  await expectActions(page, ["Je l’ai vendu", SHOP, "Ajouter une photo", "Partager"]);
   await axeLightAndDark(page);
 });
 
@@ -184,4 +184,35 @@ test("le « … » d'une carte parle comme la fiche : « Je l’ai reçu », « 
   await expect(menu.getByRole("button", { name: "Je l’ai reçu" })).toBeVisible();
   await expect(menu.getByRole("button", { name: "Je l’ai retourné" })).toBeVisible();
   await expect(menu.getByRole("button", { name: "Reçu", exact: true })).toHaveCount(0);
+});
+
+test("« Mon article » : un seul bouton « Changer d’étape » ouvre toutes les étapes, retour en Envie compris", async ({
+  page,
+}) => {
+  await keptSheet(page);
+  await confirmStage(page, "Je l’ai commandé", "Commandé");
+  const mine = page.getByRole("region", { name: "Mon article" });
+  await expect(mine.getByRole("button", { name: /Passer à/ })).toHaveCount(0);
+  const change = mine.getByRole("button", { name: "Changer d’étape" });
+  await change.click();
+  const choices = page.getByRole("dialog", { name: "Changer d’étape" });
+  await expect(choices.getByRole("button")).toHaveText([
+    "Fermer",
+    "Envie",
+    "Commandé",
+    "Reçu",
+    "Retourné",
+    "À vendre",
+    "Vendu",
+  ]);
+  await expect(choices.getByRole("button", { name: /Commandé \(étape actuelle\)/ })).toBeDisabled();
+  await choices.getByRole("button", { name: "Passer à « Envie »" }).click();
+  const dialog = page.getByRole("dialog", { name: "Passer à « Envie »" });
+  await dialog.getByRole("button", { name: "Valider" }).click();
+  await expect(toast(page)).toContainText("Étape : Envie");
+  await expectStep(page, "Envie");
+  // Back on a wish, « Reçu en cadeau » is one of the choices.
+  await change.click();
+  await expect(choices.getByRole("button", { name: "Reçu en cadeau" })).toBeVisible();
+  await axeLightAndDark(page);
 });

@@ -20,7 +20,8 @@ export function ItemOpinionsSection({
   itemId,
   boxed = false,
 }: {
-  itemId: string /** A block of its own (the sheet). */;
+  itemId: string;
+  /** A block of its own (the sheet), with its own title; else a part of another block. */
   boxed?: boolean;
 }) {
   const t = useTranslations("Lists.opinions");

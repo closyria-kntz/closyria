@@ -73,20 +73,21 @@ const boxOf = async (locator: Locator) => {
   return found;
 };
 
-test("la galerie : une grande photo en forme C, des vignettes de même forme dessous, des points qui s'étirent", async ({
+test("la galerie : une grande photo aux coins de carte, des vignettes arrondies dessous, des points qui s'étirent", async ({
   page,
 }) => {
   await keptWithPhoto(page);
   const main = gallery(page).getByTestId("gallery-main");
-  await expect(main).toHaveCSS("border-top-left-radius", "44px");
-  await expect(main).toHaveCSS("border-bottom-right-radius", "14px");
+  // Boudoir: the card radius on every corner, no more arch (task 4, fix round 1).
+  await expect(main).toHaveCSS("border-top-left-radius", "20px");
+  await expect(main).toHaveCSS("border-bottom-right-radius", "20px");
   await expect(gallery(page).getByTestId("gallery-photo").locator("img")).toHaveCSS("object-fit", "cover");
   const thumbs = gallery(page).getByTestId("gallery-thumbs").getByRole("button");
   const count = await thumbs.count();
   expect(count).toBeGreaterThanOrEqual(2);
   for (const thumb of await thumbs.all()) {
-    await expect(thumb).toHaveCSS("border-top-left-radius", "20px");
-    await expect(thumb).toHaveCSS("border-bottom-left-radius", "8px");
+    await expect(thumb).toHaveCSS("border-top-left-radius", "12px");
+    await expect(thumb).toHaveCSS("border-bottom-left-radius", "12px");
   }
   // Below the big photo, not beside it.
   const mainBox = await boxOf(main);

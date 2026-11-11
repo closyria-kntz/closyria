@@ -138,10 +138,10 @@ body {
   }
 }
 
-/* Shape C of an item photo (cards, big photo of the sheet): a rectangle whose top corners are much rounder than the
-   bottom ones. The photo always fills it (object-cover). */
+/* An item photo (big photo of the sheet, preview): Boudoir's card radius on every corner (mockup), no more arch. The
+   photo always fills it (object-cover). */
 @utility photo-shape {
-  border-radius: var(--radius-photo-top) var(--radius-photo-top) var(--radius-photo-bottom) var(--radius-photo-bottom);
+  border-radius: var(--radius-card);
 }
 
 /* Boudoir signature (mockup .tag): the step of an item as an ochre clothing tag, square on the side of its small
@@ -195,9 +195,9 @@ body {
   }
 }
 
-/* The same shape, smaller, for thumbnails (sheet gallery, preview strip). */
+/* The same, smaller, for thumbnails (sheet gallery): an even radius (mockup's small photos), no arch. */
 @utility thumb-shape {
-  border-radius: var(--radius-thumb-top) var(--radius-thumb-top) var(--radius-thumb-bottom) var(--radius-thumb-bottom);
+  border-radius: var(--radius-board-row);
 }
 
 /* The grid arrives in a short cascade: each card rises and fades in, the first twelve one after the other (later ones

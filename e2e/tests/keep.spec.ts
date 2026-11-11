@@ -99,17 +99,20 @@ test("Mims, Prioritaire et « Trop mims » avant d'ajouter ; sur la fiche gardé
 test("l'étape se change dans une fenêtre accessible, avec date et montant", async ({ page }) => {
   await openSheet(page);
   await page.getByRole("button", { name: "Déjà commandé" }).click();
+  // Refonte Boudoir: « Changer d’étape » lists them all (task 4, fix round 1).
+  const change = page.getByRole("button", { name: "Changer d’étape" });
+  await change.click();
   await expect(page.getByRole("button", { name: /Commandé \(étape actuelle\)/ })).toBeDisabled();
 
-  const open = page.getByRole("button", { name: "Passer à « Reçu »" });
-  await open.click();
+  await page.getByRole("button", { name: "Passer à « Reçu »" }).click();
   const dialog = page.getByRole("dialog", { name: "Passer à « Reçu »" });
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  await expect(open).toBeFocused();
+  await expect(change).toBeFocused();
 
-  await open.click();
+  await change.click();
+  await page.getByRole("button", { name: "Passer à « Reçu »" }).click();
   await dialog.getByLabel("Montant payé (facultatif)").fill("39,90");
   await dialog.getByRole("button", { name: "Valider" }).click();
   await expect(page.getByText("Payé : 39,90")).toBeVisible();
@@ -187,8 +190,9 @@ test("passer à « Reçu » avec le prix payé : l'article est dans Reçus, puis
   await keepWish(page);
   await expect(page.getByRole("heading", { name: "Mon article" })).toBeVisible();
 
+  await page.getByRole("button", { name: "Changer d’étape" }).click();
   await page.getByRole("button", { name: "Passer à « Reçu »" }).click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: "Passer à « Reçu »" });
   await dialog.getByLabel("Montant payé (facultatif)").fill("19,90");
   await dialog.getByRole("button", { name: "Valider" }).click();
   await expect(page.getByText("Payé : 19,90")).toBeVisible();
