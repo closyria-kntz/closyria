@@ -364,11 +364,11 @@ test("étiquettes : créer, renommer, supprimer", async ({ page }) => {
   await expect(page.getByText("Aucune étiquette pour l’instant.")).toBeVisible();
 });
 
-test("l'aide iPhone s'ouvre depuis les réglages", async ({ page }) => {
+test("l'aide du téléphone s'ouvre depuis les réglages", async ({ page }) => {
   await page.goto("/reglages/profils");
-  await page.getByRole("link", { name: "Aide iPhone" }).click();
-  await expect(page).toHaveURL(/\/aide\/iphone$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Ajouter un article depuis l’iPhone" })).toBeVisible();
+  await page.getByRole("link", { name: "Ajouter depuis le téléphone" }).click();
+  await expect(page).toHaveURL(/\/aide\/telephone$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Ajouter depuis ton téléphone" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Installer le raccourci" })).toBeVisible();
   await axe(page);
 });

@@ -221,7 +221,7 @@ test("la bonne place est marquée sur les sous-pages, et Moi mène à tout ce qu
     /^Mon budget/,
     "Réglages",
     /^Mon compte/,
-    "Aide iPhone",
+    "Ajouter depuis le téléphone",
   ]);
   await expect(places.getByRole("link", { name: /^Mon compte/ })).toContainText("Sans compte");
   await places.getByRole("link", { name: "Mon dressing" }).click();

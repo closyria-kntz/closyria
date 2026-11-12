@@ -112,7 +112,7 @@ test("Moi mène toujours à toutes ses pages d’avant, et à l’apparence", as
     [/^Mon budget/, /\/articles\?etape=envie$/],
     ["Réglages", /\/reglages\/profils$/],
     [/^Mon compte/, /\/reglages\/compte$/],
-    ["Aide iPhone", /\/aide\/iphone$/],
+    ["Ajouter depuis le téléphone", /\/aide\/telephone$/],
   ];
   for (const [name, href] of expected) {
     await expect(places.getByRole("link", { name, exact: typeof name === "string" })).toHaveAttribute("href", href);

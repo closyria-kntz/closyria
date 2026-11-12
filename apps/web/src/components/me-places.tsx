@@ -16,7 +16,7 @@ const PLACES = [
   { key: "budget", href: `${ARTICLES_PATH}?etape=envie` },
   { key: "reglages", href: "/reglages/profils" },
   { key: "compte", href: "/reglages/compte" },
-  { key: "aide", href: "/aide/iphone" },
+  { key: "aide", href: "/aide/telephone" },
 ] as const;
 
 const rowClass = `flex min-h-touch-target items-center justify-between gap-space-3 rounded-card bg-surface-raised px-space-4 py-space-3 font-strong hover:bg-surface-strong ${focusRing}`;

@@ -33,7 +33,7 @@ describe("app navigation", () => {
   });
 
   it("marks « Moi » on the settings and the help, « Découvrir » on its page", () => {
-    for (const path of ["/moi", "/reglages/profils", "/reglages/compte", "/aide/iphone"]) {
+    for (const path of ["/moi", "/reglages/profils", "/reglages/compte", "/aide/telephone"]) {
       expect(isCurrent(place("moi"), path), path).toBe(true);
     }
     expect(isCurrent(place("decouvrir"), "/decouvrir")).toBe(true);

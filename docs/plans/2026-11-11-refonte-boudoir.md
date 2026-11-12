@@ -143,6 +143,6 @@
 
 **Files:** `apps/web/src/app/(app)/aide/iphone/page.tsx` → nouvelle page `apps/web/src/app/(app)/aide/telephone/page.tsx` (l'ancienne adresse redirige), `add-sheet.tsx`, `me-places`/Moi, `fr.json`, e2e `share.spec.ts` (ou `aide.spec.ts`).
 
-- [ ] Page « Ajouter depuis ton téléphone » : deux parties, iPhone (reprend l'aide iPhone actuelle : Installer le raccourci, demander à l'IA, Coller le lien copié) et Android (« Installe Closyria : dans Chrome, menu ⋮ → Installer l'application (ou Ajouter à l'écran d'accueil) » puis « Dans une boutique : Partager → Closyria », et « Coller le lien copié ») ; la partie du téléphone détecté s'affiche en premier, l'autre reste visible dessous ; ordinateur : les deux.
-- [ ] `/aide/iphone` redirige vers `/aide/telephone` ; « Partager depuis une boutique » dans « + Ajouter » mène à cette page sur iPhone et Android ; Moi y mène.
-- [ ] e2e (3 appareils, agent iPhone et Android simulés) : bonne partie en premier, lien du raccourci, redirection, axe clair/sombre ; commit « feat(refonte): aide pour ajouter depuis le téléphone ».
+- [x] Page « Ajouter depuis ton téléphone » : deux parties, iPhone (reprend l'aide iPhone actuelle : Installer le raccourci, demander à l'IA, Coller le lien copié) et Android (« Installe Closyria : dans Chrome, menu ⋮ → Installer l'application (ou Ajouter à l'écran d'accueil) » puis « Dans une boutique : Partager → Closyria », et « Coller le lien copié ») ; la partie du téléphone détecté s'affiche en premier, l'autre reste visible dessous ; ordinateur : les deux.
+- [x] `/aide/iphone` redirige vers `/aide/telephone` ; « Partager depuis une boutique » dans « + Ajouter » mène à cette page sur iPhone et Android ; Moi y mène.
+- [x] e2e (3 appareils, agent iPhone et Android simulés) : bonne partie en premier, lien du raccourci, redirection, axe clair/sombre ; commit « feat(refonte): aide pour ajouter depuis le téléphone ».

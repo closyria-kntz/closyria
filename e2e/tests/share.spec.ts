@@ -298,39 +298,93 @@ test("« Coller le lien copié » en tête sur un écran tactile : le lien copi�
   await expect(sheet.getByRole("alert")).toHaveCount(0);
 });
 
-test("« Partager depuis une boutique » mène à l'aide iPhone sur iPhone et iPad, l'explique ailleurs", async ({
+test("« Partager depuis une boutique » mène à l'aide du téléphone sur iPhone et iPad, l'explique sur ordinateur", async ({
   page,
 }, testInfo) => {
   await page.goto("/decouvrir");
   const sheet = await openAdd(page);
-  await sheet.getByRole(appleOf(testInfo) ? "link" : "button", { name: /^Partager depuis une boutique/ }).click();
   if (appleOf(testInfo)) {
-    await expect(page).toHaveURL(/\/aide\/iphone$/);
+    await sheet.getByRole("link", { name: /^Partager depuis une boutique/ }).click();
+    await expect(page).toHaveURL(/\/aide\/telephone$/);
     await expect(sheet).toBeHidden();
   } else {
+    await sheet.getByRole("button", { name: /^Partager depuis une boutique/ }).click();
     await expect(sheet.getByText(/« Partager »/).first()).toBeVisible();
+    await sheet.getByRole("link", { name: "Voir l’aide du téléphone" }).click();
+    await expect(page).toHaveURL(/\/aide\/telephone$/);
   }
 });
 
-test("l'aide iPhone : installer le raccourci, sinon la phrase pour l'IA, sinon copier-coller en 2 gestes", async ({
+const ANDROID_AGENT =
+  "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
+
+test.describe("agent Android", () => {
+  test.use({ userAgent: ANDROID_AGENT, hasTouch: true });
+
+  test("« Partager depuis une boutique » mène aussi à l'aide du téléphone", async ({ page }) => {
+    await page.goto("/decouvrir");
+    const sheet = await openAdd(page);
+    await sheet.getByRole("link", { name: /^Partager depuis une boutique/ }).click();
+    await expect(page).toHaveURL(/\/aide\/telephone$/);
+  });
+});
+
+const IPHONE_FIRST = ["Sur iPhone", "Sur Android"];
+const ANDROID_FIRST = ["Sur Android", "Sur iPhone"];
+
+test("/aide/iphone redirige vers l'aide du téléphone, partie iPhone", async ({ page }) => {
+  await page.goto("/aide/iphone");
+  await expect(page).toHaveURL(/\/aide\/telephone#iphone$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Ajouter depuis ton téléphone" })).toBeVisible();
+});
+
+test("l'aide du téléphone : la partie de l'appareil en premier, l'autre dessous", async ({ page }) => {
+  await page.goto("/aide/telephone");
+  await expect(page.getByRole("heading", { level: 1, name: "Ajouter depuis ton téléphone" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText(IPHONE_FIRST);
+  await expect(page.locator("section#iphone")).toBeVisible();
+  await expect(page.locator("section#android")).toBeVisible();
+});
+
+test("l'aide du téléphone : Android d'abord avec un agent Android", async ({ browser, baseURL }) => {
+  const context = await browser.newContext({
+    baseURL: baseURL ?? "",
+    userAgent: ANDROID_AGENT,
+    hasTouch: true,
+    isMobile: true,
+  });
+  const page = await context.newPage();
+  await page.goto("/aide/telephone");
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText(ANDROID_FIRST);
+  const android = page.locator("section#android");
+  await expect(android.getByRole("heading", { level: 3 })).toHaveText([
+    "Installe Closyria",
+    "Partage depuis une boutique",
+    "Ou colle le lien copié",
+  ]);
+  await expect(android).toContainText("Dans Chrome, touche le menu ⋮ puis « Installer l’application »");
+  await expect(android).toContainText("touche Partager puis choisis Closyria");
+  await expect(android.getByRole("list", { name: "Les 2 gestes" }).getByRole("listitem")).toHaveCount(2);
+  await context.close();
+});
+
+test("l'aide du téléphone, partie iPhone : le raccourci, la phrase pour l'IA, copier-coller en 2 gestes", async ({
   page,
   context,
   baseURL,
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(baseURL ?? "").origin });
-  await page.goto("/aide/iphone");
-  await expect(page.getByRole("heading", { level: 1, name: "Ajouter un article depuis l’iPhone" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+  await page.goto("/aide/telephone");
+  const iphone = page.locator("section#iphone");
+  await expect(iphone.getByRole("heading", { level: 3 })).toHaveText([
     "Closyria dans le menu Partager",
     "Ou demande à l’IA de ton iPhone",
     "Ou : Coller le lien copié",
   ]);
-  // 1. The founder's shortcut, in a new tab.
-  const install = page.getByRole("link", { name: "Installer le raccourci" });
+  const install = iphone.getByRole("link", { name: "Installer le raccourci" });
   await expect(install).toHaveAttribute("href", "https://www.icloud.com/shortcuts/25fa594f43114b2ea534f076f50509b4");
   await expect(install).toHaveAttribute("target", "_blank");
   await expect(page.getByText("Ensuite, dans une boutique : Partager → Envoyer à Closyria.")).toBeVisible();
-  // 2. The sentence for the iPhone's AI: copied in the click, « Copié ✓ »; refused, selected to copy by hand.
   const sentence =
     'Crée un raccourci "Envoyer à Closyria" qui apparaît dans le menu Partager et qui ouvre https://closyria.com/partager?url= suivi du lien partagé.';
   await expect(page.getByLabel("Phrase à donner à l’IA")).toHaveValue(sentence);
@@ -349,11 +403,23 @@ test("l'aide iPhone : installer le raccourci, sinon la phrase pour l'IA, sinon c
       .filter({ hasText: "Copie impossible ici : la phrase est sélectionnée, copie-la à la main." }),
   ).toBeVisible();
   await expect(page.getByLabel("Phrase à donner à l’IA")).toBeFocused();
-  // 3. Copy, then paste: 2 gestures.
-  const gestures = page.getByRole("list", { name: "Les 2 gestes" });
+  const gestures = iphone.getByRole("list", { name: "Les 2 gestes" });
   await expect(gestures.getByRole("listitem")).toHaveCount(2);
   await expect(gestures).toContainText("Coller le lien copié");
   await axeLightAndDark(page);
+});
+
+test("l'aide du téléphone : axe clair et sombre, Android en premier aussi", async ({ browser, baseURL }) => {
+  const context = await browser.newContext({
+    baseURL: baseURL ?? "",
+    userAgent: ANDROID_AGENT,
+    hasTouch: true,
+    isMobile: true,
+  });
+  const page = await context.newPage();
+  await page.goto("/aide/telephone");
+  await axeLightAndDark(page);
+  await context.close();
 });
 
 test("/partager prend un lien non encodé : tout ce qui suit url=, avec ses ?, & et #", async ({ page }) => {

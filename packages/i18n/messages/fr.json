@@ -136,7 +136,7 @@
       "explain": "Sur la page d’un article, dans le site ou l’app de la boutique, touche « Partager », puis choisis Closyria : l’article s’ajoute tout seul à tes envies.",
       "android": "Sur Android, Closyria apparaît dans ce menu une fois l’app installée sur ton écran d’accueil.",
       "iphone": "Sur iPhone, un raccourci à installer une fois l’y ajoute.",
-      "iphoneLink": "Voir l’aide iPhone"
+      "iphoneLink": "Voir l’aide du téléphone"
     },
     "mail": {
       "title": "Transférer un e-mail de commande",
@@ -171,7 +171,7 @@
       "budget": "Mon budget",
       "reglages": "Réglages",
       "compte": "Mon compte",
-      "aide": "Aide iPhone"
+      "aide": "Ajouter depuis le téléphone"
     },
     "budgetWhere": "Dans « Mes envies »",
     "kicker": "Moi",
@@ -1715,7 +1715,7 @@
       "appearance": "Apparence",
       "trash": "Corbeille",
       "account": "Mon compte",
-      "iphone": "Aide iPhone"
+      "iphone": "Ajouter depuis le téléphone"
     },
     "colors": {
       "plum": "Prune",
@@ -1868,11 +1868,19 @@
       "create": "Créer mon compte"
     }
   },
-  "IphoneHelp": {
-    "metadata": "Aide iPhone",
+  "PhoneHelp": {
+    "metadata": "Ajouter depuis ton téléphone",
     "back": "← Réglages",
-    "title": "Ajouter un article depuis l’iPhone",
-    "intro": "Installe une fois le raccourci « Envoyer à Closyria » : il ajoute Closyria au menu Partager de l’iPhone.",
+    "title": "Ajouter depuis ton téléphone",
+    "intro": "Depuis une boutique, un article arrive dans Closyria en deux gestes. Choisis ton téléphone.",
+    "iphoneSection": "Sur iPhone",
+    "iphoneIntro": "Installe une fois le raccourci « Envoyer à Closyria » : il ajoute Closyria au menu Partager de l’iPhone.",
+    "androidSection": "Sur Android",
+    "androidIntro": "Une fois Closyria installé depuis Chrome, il apparaît dans le menu Partager d’Android.",
+    "androidInstallTitle": "Installe Closyria",
+    "androidInstall": "Dans Chrome, touche le menu ⋮ puis « Installer l’application » (ou « Ajouter à l’écran d’accueil »).",
+    "androidShareTitle": "Partage depuis une boutique",
+    "androidShare": "Dans la boutique, touche Partager puis choisis Closyria : l’article s’ajoute à tes envies.",
     "shortcutTitle": "Closyria dans le menu Partager",
     "install": "Installer le raccourci",
     "installNote": "Ensuite, dans une boutique : Partager → Envoyer à Closyria.",
@@ -1884,6 +1892,7 @@
     "copied": "Copié ✓",
     "copyFailed": "Copie impossible ici : la phrase est sélectionnée, copie-la à la main.",
     "pasteTitle": "Ou : Coller le lien copié",
+    "androidPasteTitle": "Ou colle le lien copié",
     "pasteLabel": "Les 2 gestes",
     "paste": {
       "1": "Dans la boutique (son site ou son app), sur la page de l’article, touche « Partager », puis « Copier » ou « Copier le lien ».",

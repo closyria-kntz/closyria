@@ -72,7 +72,7 @@ const optionClass = `flex min-h-touch-target w-full items-center gap-space-3 rou
  * sheet from the bottom on a phone, a centered window on a computer. « Coller un lien » shows the paste field, the
  * other ways explain themselves; transferring an order e-mail comes later. On a touch screen, « Coller le lien copié »
  * comes first: it reads the clipboard in the tap and adds the link at once, or asks her to copy it first and opens the
- * paste field. On an iPhone or an iPad, « Partager depuis une boutique » leads to the iPhone help.
+ * paste field. On an iPhone, an iPad or an Android phone, « Partager depuis une boutique » leads to the phone help.
  */
 export function AddSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useTranslations("Add");
@@ -82,11 +82,11 @@ export function AddSheet({ open, onClose }: { open: boolean; onClose: () => void
   const pathname = usePathname();
   const [step, setStep] = useState<Step>("choose");
   const touch = useCoarsePointer();
-  const [apple, setApple] = useState(false);
+  const [phone, setPhone] = useState(false);
   // « Coller le lien copié »: the link read from the clipboard (added at once), or nothing usable there.
   const [pasted, setPasted] = useState<{ url: string } | { empty: true } | null>(null);
   useEffect(() => {
-    setApple(isAppleMobile(navigator.userAgent, navigator.maxTouchPoints));
+    setPhone(isAppleMobile(navigator.userAgent, navigator.maxTouchPoints) || /Android/i.test(navigator.userAgent));
   }, []);
   const body = useRef<HTMLDivElement>(null);
   const opened = useRef(pathname);
@@ -162,8 +162,8 @@ export function AddSheet({ open, onClose }: { open: boolean; onClose: () => void
               );
               return (
                 <li key={key} className="flex flex-col">
-                  {key === "share" && apple ? (
-                    <Link href="/aide/iphone" onClick={onClose} data-option={key} className={optionClass}>
+                  {key === "share" && phone ? (
+                    <Link href="/aide/telephone" onClick={onClose} data-option={key} className={optionClass}>
                       {inner}
                     </Link>
                   ) : (
@@ -203,7 +203,7 @@ export function AddSheet({ open, onClose }: { open: boolean; onClose: () => void
             <p className="text-ink-muted">{t("share.android")}</p>
             <p className="text-ink-muted">
               {t("share.iphone")}{" "}
-              <Link href="/aide/iphone" onClick={onClose} className={`font-strong text-ink underline ${focusRing}`}>
+              <Link href="/aide/telephone" onClick={onClose} className={`font-strong text-ink underline ${focusRing}`}>
                 {t("share.iphoneLink")}
               </Link>
             </p>
