@@ -21,8 +21,9 @@ const HREFS: Record<ArticlesTab, string> = {
 };
 
 /**
- * « Articles · Listes · Commandes groupées » at the top of « Mes articles » (mockup .seg): three links in a soft pill,
- * the current one raised on the card colour. The lists and the running group orders are counted once read.
+ * « Articles · Listes · Commandes groupées » at the top of « Mes articles »: a quiet row of text links (navigation
+ * 2026-11-12, decision 5), the current one in ink and underlined, so the clothes come up. The lists and the running
+ * group orders are counted once read.
  */
 export function ArticlesTabs({ current, lists }: { current: ArticlesTab; lists?: readonly WishlistView[] | null }) {
   const t = useTranslations("Views.tabs");
@@ -45,17 +46,20 @@ export function ArticlesTabs({ current, lists }: { current: ArticlesTab; lists?:
     groupOrders: known?.filter(isRunningGroupOrder).length ?? 0,
   };
   return (
-    <nav aria-label={t("label")} className="flex gap-space-1 rounded-pill bg-surface-strong p-space-1">
-      {(Object.keys(HREFS) as ArticlesTab[]).map((tab) => (
-        <Link
-          key={tab}
-          href={HREFS[tab]}
-          aria-current={tab === current ? "page" : undefined}
-          className={`hit-area relative flex min-w-space-0 flex-1 items-center justify-center rounded-pill px-space-1-5 py-space-2 text-center text-chip font-bold text-ink aria-[current=page]:bg-surface-raised aria-[current=page]:shadow-seg ${focusRing}`}
-        >
-          {counts[tab] > 0 ? t("count", { label: t(tab), count: counts[tab] }) : t(tab)}
-        </Link>
-      ))}
+    <nav aria-label={t("label")} className="-my-space-2">
+      <ul className="flex flex-wrap gap-x-space-4">
+        {(Object.keys(HREFS) as ArticlesTab[]).map((tab) => (
+          <li key={tab} className="flex">
+            <Link
+              href={HREFS[tab]}
+              aria-current={tab === current ? "page" : undefined}
+              className={`inline-flex min-h-touch-target items-center rounded-button text-sm font-strong text-ink-muted underline-offset-4 hover:text-ink aria-[current=page]:text-ink aria-[current=page]:underline ${focusRing}`}
+            >
+              {counts[tab] > 0 ? t("count", { label: t(tab), count: counts[tab] }) : t(tab)}
+            </Link>
+          </li>
+        ))}
+      </ul>
     </nav>
   );
 }

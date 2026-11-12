@@ -45,7 +45,7 @@ test.describe("1440 px", () => {
     const side = page.getByRole("navigation", { name: "Menu principal" });
     await expect(side).toBeVisible();
     await expect(page.locator("aside")).toHaveCount(0);
-    await expect(side.getByRole("link")).toHaveText(["Accueil", "Découvrir", "Mes articles", "Moi"]);
+    await expect(side.getByRole("link")).toHaveText(["Accueil", "Découvrir", "Mes articles", "Compte"]);
     // The product sheet belongs to « Mes articles ».
     await expect(side.locator("[aria-current=page]")).toHaveText("Mes articles");
     await expect(page.getByTestId("app-nav-bottom")).toBeHidden();
@@ -132,7 +132,7 @@ test.describe("390 px", () => {
 
     const bar = page.getByRole("navigation", { name: "Menu principal" });
     await expect(bar).toBeVisible();
-    await expect(bar.getByRole("link")).toHaveText(["Accueil", "Découvrir", "Mes articles", "Moi"]);
+    await expect(bar.getByRole("link")).toHaveText(["Accueil", "Découvrir", "Mes articles", "Compte"]);
     await expect(bar.getByRole("button", { name: "Ajouter un article" })).toBeVisible();
     await expect(bar.locator("[aria-current=page]")).toHaveText("Mes articles");
     const barBox = await box(page, "[data-testid=app-nav-bottom]");

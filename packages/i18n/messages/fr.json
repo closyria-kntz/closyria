@@ -90,10 +90,6 @@
     "account": {
       "label": "Mon compte",
       "anonymous": "Sans compte"
-    },
-    "theme": {
-      "toDark": "Passer en mode sombre",
-      "toLight": "Passer en mode clair"
     }
   },
   "Nav": {
@@ -101,14 +97,33 @@
     "accueil": "Accueil",
     "decouvrir": "Découvrir",
     "articles": "Mes articles",
-    "moi": "Moi",
+    "compte": "Compte",
     "add": "Ajouter",
     "addLabel": "Ajouter un article",
     "search": {
       "label": "Rechercher dans mes articles",
       "placeholder": "Rechercher un article, une boutique…"
+    }
+  },
+  "AccountHub": {
+    "metadata": "Compte",
+    "title": "Compte",
+    "profile": {
+      "title": "Mon profil",
+      "row": "Prénom, e-mail et connexion"
     },
-    "account": "Mon compte : {who}"
+    "family": {
+      "title": "Profils de la famille",
+      "row": "Gérer les profils"
+    },
+    "settings": {
+      "title": "Réglages"
+    },
+    "help": {
+      "title": "Aide",
+      "phone": "Ajouter depuis ton téléphone",
+      "phoneHint": "Sur iPhone et sur Android"
+    }
   },
   "Add": {
     "title": "Ajouter un article",
@@ -159,67 +174,12 @@
     "more": "Autres applis…",
     "productText": "{name} chez {shop}"
   },
-  "Me": {
-    "metadata": "Moi",
-    "placesLabel": "Mes pages",
-    "places": {
-      "envies": "Mes envies",
-      "commande": "Commandé",
-      "dressing": "Mon dressing",
-      "aVendre": "À vendre",
-      "listes": "Mes listes",
-      "budget": "Mon budget",
-      "reglages": "Réglages",
-      "compte": "Mon compte",
-      "aide": "Ajouter depuis le téléphone"
-    },
-    "budgetWhere": "Dans « Mes envies »",
-    "kicker": "Moi",
-    "noName": "Mon espace",
-    "settings": "Réglages",
-    "loading": "Chargement de ton aperçu…",
-    "loadError": "Ton aperçu ne s’affiche pas. Réessaie dans un instant.",
-    "placesTitle": "Toutes mes pages",
-    "glance": {
-      "title": "En un coup d’œil",
-      "dressing": {
-        "label": "Dressing",
-        "line": "{count, plural, =0 {aucune pièce pour l’instant} one {pièce} other {pièces}}"
-      },
-      "forSale": {
-        "label": "À vendre",
-        "line": "{count, plural, =0 {rien en vente} one {pièce en vente} other {pièces en vente}}"
-      },
-      "orders": {
-        "label": "Commandes",
-        "soon": "Bientôt",
-        "line": "Le suivi de tes colis arrivera ici."
-      },
-      "budget": {
-        "label": "Budget",
-        "none": "Aucun",
-        "add": "Ajouter un budget",
-        "ended": "Budget terminé",
-        "of": {
-          "week": "sur {amount} cette semaine",
-          "month": "sur {amount} ce mois",
-          "custom": "sur {amount} pour ces dates",
-          "none": "sur {amount}"
-        }
-      }
-    },
-    "returns": {
-      "kicker": "Bientôt",
-      "title": "Tes retours à faire",
-      "text": "Les dates limites de retour, remboursements et avoirs arriveront ici."
-    },
-    "dressing": {
-      "title": "Mon dressing",
-      "all": "Tout voir",
-      "empty": "Ton dressing est vide : passe un article reçu dans « Dans mon dressing » pour le retrouver ici.",
-      "noPhoto": "Sans photo",
-      "noName": "Article sans nom"
-    }
+  "Account": {
+    "title": "Garde tes articles",
+    "body": "Garde tes articles : crée ton compte avec ton e-mail.",
+    "action": "Créer mon compte",
+    "dismiss": "Plus tard",
+    "label": "Proposition de compte"
   },
   "Discover": {
     "metadata": "Découvrir",
@@ -1003,13 +963,6 @@
       "listsTitle": "Ajouter à une liste"
     },
     "back": "← Mes articles"
-  },
-  "Account": {
-    "title": "Garde tes articles",
-    "body": "Garde tes articles : crée ton compte avec ton e-mail.",
-    "action": "Créer mon compte",
-    "dismiss": "Plus tard",
-    "label": "Proposition de compte"
   },
   "Views": {
     "title": {
@@ -1874,7 +1827,7 @@
   },
   "PhoneHelp": {
     "metadata": "Ajouter depuis ton téléphone",
-    "back": "← Moi",
+    "back": "← Compte",
     "title": "Ajouter depuis ton téléphone",
     "intro": "Depuis une boutique, un article arrive dans Closyria en deux gestes. Choisis ton téléphone.",
     "iphoneSection": "Sur iPhone",

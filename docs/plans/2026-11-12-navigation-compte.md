@@ -11,7 +11,12 @@
 
 **Contraintes :** celles du plan Boudoir (`docs/plans/2026-11-11-refonte-boudoir.md`, Global Constraints) ; rien ne disparaît (chaque destination de l'ancienne page Moi reste atteignable) ; e2e adaptés ; axe clair/sombre ; 44 px.
 
-- [ ] Compte : page, redirection `/moi` → `/compte`, menu (téléphone et ordinateur), e2e « chaque ancienne destination de Moi est atteignable » (depuis Compte ou Mes articles).
-- [ ] Sélecteur de profil : prénom du profil ; avatar retiré ; e2e.
-- [ ] Mes articles : ligne de liens discrète ; capture téléphone : premier article visible dans la première moitié de l'écran.
-- [ ] Suite e2e complète ; une relecture d'ensemble ; commit « feat(navigation): Mes articles et Compte ».
+- [x] Compte : page, redirection `/moi` → `/compte`, menu (téléphone et ordinateur), e2e « chaque ancienne destination de Moi est atteignable » (depuis Compte ou Mes articles).
+- [x] Sélecteur de profil : prénom du profil ; avatar retiré ; e2e.
+- [x] Mes articles : ligne de liens discrète ; capture téléphone : premier article visible dans la première moitié de l'écran (haut de la première carte à 352 px sur 844, iPhone 15).
+- [x] Suite e2e complète ; une relecture d'ensemble ; commit « feat(navigation): Mes articles et Compte ».
+
+**Notes de réalisation (2026-11-12) :**
+- « Compte » : sections « Mon profil » (→ Mon compte), « Profils de la famille » (→ Profils), « Apparence » (le choix Automatique / Clair / Sombre sur la page même), « Réglages » (Mes niveaux, Étiquettes, Corbeille), « Aide » (« Ajouter depuis ton téléphone »). Le bouton lune/soleil de l'ancienne page Moi est remplacé par ce choix ; la tuile « Commandes · Bientôt » et l'encadré « Tes retours à faire » (annonces sans destination) disparaissent avec la page.
+- Suite e2e complète : 619 réussis, 2 ignorés (3 appareils).
+- Sélecteur : le premier profil, tant qu'il s'appelle « Moi », affiche le prénom du compte (« Camille ») ; sans prénom (visiteuse sans compte), « Moi ».

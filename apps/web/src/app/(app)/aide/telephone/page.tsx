@@ -127,7 +127,7 @@ export default async function Page() {
   return (
     <article className="flex max-w-measure flex-col gap-space-5 pb-space-6">
       <Link
-        href="/moi"
+        href="/compte"
         className={`inline-flex min-h-touch-target items-center self-start rounded-button text-sm text-accent ${focusRing}`}
       >
         {t("back")}

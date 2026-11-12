@@ -1,20 +1,20 @@
-export type AppNavKey = "accueil" | "decouvrir" | "articles" | "moi";
+export type AppNavKey = "accueil" | "decouvrir" | "articles" | "compte";
 export type AppNavItem = { key: AppNavKey; href: string };
 /** A place of the phone's bottom bar: a page, or the + in the middle. */
 export type PhoneSlot = AppNavItem | { key: "add"; href: null };
 
-/** The four places of the app (refonte Boudoir, spec §2 R2), in this order; the + sits between Découvrir and Mes articles. */
+/** The four places of the app (refonte Boudoir, spec §2 R2; « Moi » became « Compte » on 2026-11-12), in this order; the + sits between Découvrir and Mes articles. */
 export const appNav: readonly AppNavItem[] = [
   { key: "accueil", href: "/" },
   { key: "decouvrir", href: "/decouvrir" },
   { key: "articles", href: "/articles" },
-  { key: "moi", href: "/moi" },
+  { key: "compte", href: "/compte" },
 ];
 
 /** The action of the menu: « Ajouter un article » (the + on a phone, « + Ajouter » in the band). */
 export const addAction = { key: "add", href: null } as const;
 
-/** Phone: Accueil · Découvrir · + · Mes articles · Moi. */
+/** Phone: Accueil · Découvrir · + · Mes articles · Compte. */
 export const phoneNav: readonly PhoneSlot[] = [...appNav.slice(0, 2), addAction, ...appNav.slice(2)];
 
 /** The pages each place covers, with their sub-pages (spec §3.1): what she reaches from it stays marked. */
@@ -22,7 +22,7 @@ const SECTIONS: Record<AppNavKey, readonly string[]> = {
   accueil: [],
   decouvrir: ["/decouvrir"],
   articles: ["/articles", "/produits", "/listes", "/envies", "/dressing", "/a-vendre", "/commande"],
-  moi: ["/moi", "/reglages", "/aide"],
+  compte: ["/compte", "/moi", "/reglages", "/aide"],
 };
 
 export function isCurrent(item: AppNavItem, pathname: string): boolean {

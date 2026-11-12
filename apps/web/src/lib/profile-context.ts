@@ -33,6 +33,19 @@ export function profileHref(path: string, profileId: string | null, isDefault: b
   return `${path}${path.includes("?") ? "&" : "?"}${PROFILE_PARAM}=${profileId}`;
 }
 
+/** The name every account's first profile starts with (`apps/api/src/wardrobe/profiles.ts`). */
+const OWN_PROFILE_NAME = "Moi";
+
+/**
+ * What the band's switcher says for a profile (navigation 2026-11-12): her first name for her own profile (the first
+ * one) while it still has its starting name « Moi », the profile's name otherwise; « Moi » when there is no name.
+ */
+export function profileLabel(profile: ProfileView, index: number, firstName: string | null): string {
+  const name = profile.name.trim();
+  if (index === 0 && name === OWN_PROFILE_NAME && firstName) return firstName;
+  return name || OWN_PROFILE_NAME;
+}
+
 export type ProfilesState = {
   profiles: readonly ProfileView[];
   /** False until the first read of the profiles ended (a view waits for it to know which profile to ask). */

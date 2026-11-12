@@ -1,13 +1,20 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { readAppThemeMode, saveAppThemeMode, THEME_CHANGE_EVENT, type ThemeMode } from "@/lib/theme-mode";
 
 const MODES: readonly ThemeMode[] = ["system", "light", "dark"];
 
-/** Réglages → Apparence: like the phone or computer, always light, or always dark. Kept on this device. */
-export function AppearanceSettings() {
+/**
+ * Réglages → Apparence, and « Compte »: like the phone or computer, always light, or always dark. Kept on this device.
+ * `headingClassName` lets « Compte » give the title the look of its other sections.
+ */
+export function AppearanceSettings({
+  headingClassName = "font-display text-lead font-strong",
+}: {
+  headingClassName?: string;
+}) {
   const t = useTranslations("Settings.appearance");
   // Read after mounting: the server does not know her device's choice.
   const [mode, setMode] = useState<ThemeMode | null>(null);
@@ -24,9 +31,12 @@ export function AppearanceSettings() {
     setMode(next);
   };
 
+  const titleId = useId();
   return (
-    <section className="flex max-w-measure flex-col gap-space-4">
-      <h2 className="font-display text-lead font-strong">{t("title")}</h2>
+    <section aria-labelledby={titleId} className="flex max-w-measure flex-col gap-space-4">
+      <h2 id={titleId} className={headingClassName}>
+        {t("title")}
+      </h2>
       <fieldset className="flex flex-col gap-space-2">
         <legend className="mb-space-2 text-ink-muted">{t("intro")}</legend>
         {MODES.map((option) => (

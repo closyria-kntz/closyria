@@ -379,13 +379,13 @@ test.describe("barre du haut sur ordinateur", () => {
     await expect(page.locator("aside")).toHaveCount(0);
     const current = bar.locator("a[aria-current=page]");
     await expect(current).toHaveText("Mes articles");
-    await bar.getByRole("link", { name: "Moi" }).click();
-    await expect(page).toHaveURL(/\/moi$/);
-    await expect(current).toHaveText("Moi");
+    await bar.getByRole("link", { name: "Compte" }).click();
+    await expect(page).toHaveURL(/\/compte$/);
+    await expect(current).toHaveText("Compte");
     // The current place is a pill of its own colour, the others sit on the band.
     const fill = (name: string) =>
       bar.getByRole("link", { name }).evaluate((node) => getComputedStyle(node).backgroundColor);
-    expect(await fill("Moi")).not.toBe(await fill("Accueil"));
+    expect(await fill("Compte")).not.toBe(await fill("Accueil"));
     await axe(page);
   });
 });

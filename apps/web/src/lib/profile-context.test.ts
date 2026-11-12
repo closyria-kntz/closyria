@@ -1,6 +1,6 @@
 import type { ProfileView } from "@closyria/shared";
 import { describe, expect, it } from "vitest";
-import { profileHref, readProfileParam, resolveCurrentProfile } from "./profile-context";
+import { profileHref, profileLabel, readProfileParam, resolveCurrentProfile } from "./profile-context";
 
 const profile = (id: string, name: string, position: number): ProfileView => ({
   id,
@@ -47,5 +47,22 @@ describe("profileHref", () => {
     expect(profileHref("/envies", moi.id, true)).toBe("/envies");
     expect(profileHref("/envies", null, true)).toBe("/envies");
     expect(profileHref("/articles?etape=dressing", lea.id, false)).toBe(`/articles?etape=dressing&profil=${lea.id}`);
+  });
+});
+
+describe("profileLabel", () => {
+  it("says her first name for her own profile, still called « Moi »", () => {
+    expect(profileLabel(moi, 0, "Camille")).toBe("Camille");
+  });
+
+  it("keeps « Moi » without a first name, and any name she chose", () => {
+    expect(profileLabel(moi, 0, null)).toBe("Moi");
+    expect(profileLabel({ ...moi, name: "Cam" }, 0, "Camille")).toBe("Cam");
+  });
+
+  it("keeps the other profiles' names, and « Moi » for a profile without a name", () => {
+    expect(profileLabel(lea, 1, "Camille")).toBe("Léa");
+    expect(profileLabel({ ...lea, name: "Moi" }, 1, "Camille")).toBe("Moi");
+    expect(profileLabel({ ...lea, name: "  " }, 1, "Camille")).toBe("Moi");
   });
 });

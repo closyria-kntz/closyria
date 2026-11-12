@@ -3,7 +3,7 @@ import type { Locator, Page } from "@playwright/test";
 import { autoProductUrl, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
-// Refonte Boudoir, task 2: one menu (Accueil · Découvrir · + · Mes articles · Moi), at the bottom on a phone and at
+// Refonte Boudoir, task 2: one menu (Accueil · Découvrir · + · Mes articles · Compte), at the bottom on a phone and at
 // the top from a tablet up; the + opens « Ajouter un article »; the old addresses lead to « Mes articles ».
 
 const PHONE_MAX = 767;
@@ -55,7 +55,7 @@ test("un seul menu : cinq places en bas sur téléphone, quatre liens et « + Aj
   await expect(nav).toBeVisible();
   if (isPhone(page)) {
     await expect(nav).toHaveAttribute("data-testid", "app-nav-bottom");
-    await expect(nav.locator("a, button")).toHaveText(["Accueil", "Découvrir", /Ajouter/, "Mes articles", "Moi"]);
+    await expect(nav.locator("a, button")).toHaveText(["Accueil", "Découvrir", /Ajouter/, "Mes articles", "Compte"]);
     await expect(nav.getByRole("button", { name: "Ajouter un article" })).toBeVisible();
     // The bar sits at the bottom of the screen, every place reachable with a finger.
     const bar = await nav.boundingBox();
@@ -70,18 +70,16 @@ test("un seul menu : cinq places en bas sur téléphone, quatre liens et « + Aj
     await expect(page.getByTestId("app-nav-top")).toBeHidden();
   } else {
     await expect(nav).toHaveAttribute("data-testid", "app-nav-top");
-    await expect(nav.getByRole("link")).toHaveText(["Accueil", "Découvrir", "Mes articles", "Moi"]);
+    await expect(nav.getByRole("link")).toHaveText(["Accueil", "Découvrir", "Mes articles", "Compte"]);
     await expect(page.getByRole("banner").getByRole("button", { name: "Ajouter un article" })).toContainText(
       "+ Ajouter",
     );
     expect((await nav.boundingBox())?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(6 * 16);
     // Every control of the band is a finger wide: drawn smaller, its invisible hit area reaches 44 px.
     const band = page.getByRole("banner");
-    const controls = [
-      ...(await nav.getByRole("link").all()),
-      band.getByRole("button", { name: "Ajouter un article" }),
-      band.getByRole("link", { name: /^Mon compte/ }),
-    ];
+    const controls = [...(await nav.getByRole("link").all()), band.getByRole("button", { name: "Ajouter un article" })];
+    // No avatar beside the switcher any more: her account is « Compte » (navigation 2026-11-12).
+    await expect(band.getByRole("link", { name: /^Mon compte/ })).toHaveCount(0);
     for (const control of controls) expect(await reach(control, "::after")).toBeGreaterThanOrEqual(44);
     const search = band.getByRole("searchbox", { name: "Rechercher dans mes articles" });
     if ((page.viewportSize()?.width ?? 0) >= 1024) {
@@ -195,38 +193,28 @@ test("les anciennes adresses mènent à « Mes articles », avec l'étape, la li
   await atStep(page, /^Dans mon dressing/);
 });
 
-test("la bonne place est marquée sur les sous-pages, et Moi mène à tout ce que l'ancien menu donnait", async ({
-  page,
-}) => {
+test("la bonne place est marquée sur les sous-pages, et Compte mène aux réglages", async ({ page }) => {
   await page.goto("/listes");
   await expect(menu(page).getByRole("link", { name: "Mes articles" })).toHaveAttribute("aria-current", "page");
   await page.goto("/reglages/profils");
-  await expect(menu(page).getByRole("link", { name: "Moi" })).toHaveAttribute("aria-current", "page");
+  await expect(menu(page).getByRole("link", { name: "Compte" })).toHaveAttribute("aria-current", "page");
   await page.goto("/decouvrir");
   await expect(menu(page).getByRole("link", { name: "Découvrir" })).toHaveAttribute("aria-current", "page");
   await expect(
     page.getByRole("heading", { level: 1, name: "Les petites boutiques, d’un seul coup d’œil" }),
   ).toBeVisible();
 
-  await menu(page).getByRole("link", { name: "Moi" }).click();
-  await expect(page).toHaveURL(/\/moi$/);
-  await expect(menu(page).getByRole("link", { name: "Moi" })).toHaveAttribute("aria-current", "page");
-  const places = page.getByRole("main").getByRole("navigation", { name: "Mes pages" });
-  await expect(places.getByRole("link")).toHaveText([
-    "Mes envies",
-    "Commandé",
-    "Mon dressing",
-    "À vendre",
-    "Mes listes",
-    /^Mon budget/,
-    "Réglages",
-    /^Mon compte/,
-    "Ajouter depuis le téléphone",
-  ]);
-  await expect(places.getByRole("link", { name: /^Mon compte/ })).toContainText("Sans compte");
-  await places.getByRole("link", { name: "Mon dressing" }).click();
-  await expect(page).toHaveURL(/\/articles\?etape=dressing$/);
-  await atStep(page, /^Dans mon dressing/);
-  await expect(menu(page).getByRole("link", { name: "Mes articles" })).toHaveAttribute("aria-current", "page");
+  await menu(page).getByRole("link", { name: "Compte" }).click();
+  await expect(page).toHaveURL(/\/compte$/);
+  await expect(menu(page).getByRole("link", { name: "Compte" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("main").getByRole("link", { name: /^Prénom, e-mail et connexion/ })).toContainText(
+    "Sans compte",
+  );
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: /^Gérer les profils/ })
+    .click();
+  await expect(page).toHaveURL(/\/reglages\/profils$/);
+  await expect(menu(page).getByRole("link", { name: "Compte" })).toHaveAttribute("aria-current", "page");
   await axe(page);
 });

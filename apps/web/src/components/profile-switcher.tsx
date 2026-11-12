@@ -2,11 +2,21 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useId } from "react";
-import { PROFILE_PARAM, resolveCurrentProfile, useCurrentProfile, useProfiles } from "@/lib/profile-context";
+import { useContext, useId } from "react";
+import {
+  PROFILE_PARAM,
+  ProfilesContext,
+  profileLabel,
+  resolveCurrentProfile,
+  useCurrentProfile,
+  useProfiles,
+} from "@/lib/profile-context";
 import { focusRing } from "./ui";
 
-/** Band control (on the burgundy): who the wardrobe is for. The choice goes into the address (`?profil=`), so it can be shared and kept. */
+/**
+ * Band control (on the burgundy): who the wardrobe is for, by the chosen profile's name (her first name for her own,
+ * navigation 2026-11-12). The choice goes into the address (`?profil=`), so it can be shared and kept.
+ */
 export function ProfileSwitcher() {
   const t = useTranslations("Shell.profile");
   const id = useId();
@@ -15,12 +25,13 @@ export function ProfileSwitcher() {
   const search = useSearchParams();
   const profiles = useProfiles();
   const current = useCurrentProfile();
+  const firstName = useContext(ProfilesContext).account?.firstName ?? null;
 
   if (profiles.length === 0) {
     return (
       <p className="inline-flex h-control-xs items-center rounded-pill bg-band-field px-space-3 text-caption text-band-ink">
         <span className="sr-only">{t("label")} : </span>
-        {t("me")}
+        {firstName ?? t("me")}
       </p>
     );
   }
@@ -44,9 +55,9 @@ export function ProfileSwitcher() {
         onChange={(event) => choose(event.target.value)}
         className={`min-h-touch-target max-w-narrow truncate rounded-pill bg-band-field px-space-3 text-caption font-strong text-band-ink *:bg-surface-raised *:text-ink ${focusRing}`}
       >
-        {profiles.map((profile) => (
+        {profiles.map((profile, index) => (
           <option key={profile.id} value={profile.id}>
-            {profile.name}
+            {profileLabel(profile, index, firstName)}
           </option>
         ))}
       </select>

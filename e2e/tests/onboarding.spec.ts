@@ -126,7 +126,7 @@ test("« Passer » la ferme pour de bon, même sur un autre navigateur du même 
   browserAuthScript,
 }) => {
   const email = await newAccount(page, request);
-  await page.goto("/moi");
+  await page.goto("/compte");
   const dialog = discovery(page);
   await expect(dialog.getByText("1 sur 3")).toBeVisible();
   await clickAndSave(page, dialog, "Passer");
@@ -183,7 +183,7 @@ test("une visiteuse sans compte la voit à sa première ouverture, une seule foi
     session?.userId,
   ]);
   expect(rows[0]?.onboarded_at).not.toBeNull();
-  for (const path of ["/", "/moi", "/articles"]) {
+  for (const path of ["/", "/compte", "/articles"]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(discovery(page)).toHaveCount(0);

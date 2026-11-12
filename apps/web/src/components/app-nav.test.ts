@@ -13,9 +13,9 @@ describe("app navigation", () => {
       ["accueil", "/"],
       ["decouvrir", "/decouvrir"],
       ["articles", "/articles"],
-      ["moi", "/moi"],
+      ["compte", "/compte"],
     ]);
-    expect(phoneNav.map((item) => item.key)).toEqual(["accueil", "decouvrir", "add", "articles", "moi"]);
+    expect(phoneNav.map((item) => item.key)).toEqual(["accueil", "decouvrir", "add", "articles", "compte"]);
   });
 
   it("marks « Accueil » on the home page only", () => {
@@ -29,12 +29,12 @@ describe("app navigation", () => {
       expect(isCurrent(articles, path), path).toBe(true);
     }
     expect(isCurrent(articles, "/listesx")).toBe(false);
-    expect(isCurrent(articles, "/moi")).toBe(false);
+    expect(isCurrent(articles, "/compte")).toBe(false);
   });
 
-  it("marks « Moi » on the settings and the help, « Découvrir » on its page", () => {
-    for (const path of ["/moi", "/reglages/profils", "/reglages/compte", "/aide/telephone"]) {
-      expect(isCurrent(place("moi"), path), path).toBe(true);
+  it("marks « Compte » on its page, the settings and the help, « Découvrir » on its page", () => {
+    for (const path of ["/compte", "/reglages/profils", "/reglages/compte", "/reglages/niveaux", "/aide/telephone"]) {
+      expect(isCurrent(place("compte"), path), path).toBe(true);
     }
     expect(isCurrent(place("decouvrir"), "/decouvrir")).toBe(true);
     expect(isCurrent(place("decouvrir"), "/")).toBe(false);

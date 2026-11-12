@@ -206,6 +206,30 @@ test("les onglets mènent aux Listes et aux Commandes groupées, et reviennent a
   await page.goto("/articles");
   await expect(tabs(page).getByRole("link")).toHaveText(["Articles", "Listes · 1", "Commandes groupées"]);
   await expect(tabs(page).getByRole("link", { name: "Articles" })).toHaveAttribute("aria-current", "page");
+  // A quiet row of text links (navigation 2026-11-12): no pill, the current one underlined, each a finger wide.
+  const look = await tabs(page)
+    .getByRole("link", { name: "Articles" })
+    .evaluate((link) => {
+      const style = getComputedStyle(link);
+      const hit = getComputedStyle(link, "::after");
+      const own = link.getBoundingClientRect();
+      return {
+        background: style.backgroundColor,
+        underline: style.textDecorationLine,
+        reach: Math.min(
+          Math.max(own.width, Number.parseFloat(hit.width) || 0),
+          Math.max(own.height, Number.parseFloat(hit.height) || 0),
+        ),
+      };
+    });
+  expect(look.background).toBe("rgba(0, 0, 0, 0)");
+  expect(look.underline).toBe("underline");
+  expect(look.reach).toBeGreaterThanOrEqual(44);
+  expect(
+    await tabs(page).evaluate((nav) => getComputedStyle(nav).backgroundColor),
+    "the row has no pill behind it",
+  ).toBe("rgba(0, 0, 0, 0)");
+  await expect(tabs(page).getByRole("link", { name: "Listes · 1" })).not.toHaveAttribute("aria-current");
 
   await tabs(page).getByRole("link", { name: "Listes · 1" }).click();
   await expect(page).toHaveURL(/\/listes$/);

@@ -1,21 +1,13 @@
-import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
-import { Suspense } from "react";
-import { MeHeader, MeScreen } from "@/components/me-screen";
+import { redirect } from "next/navigation";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("Me");
-  return { title: t("metadata"), robots: { index: false, follow: false } };
-}
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-/** « Moi » (refonte Boudoir, spec R6): her tiles, the return dates to come, « Mon dressing » and all her pages. */
-export default function Page() {
-  return (
-    <div className="flex flex-col gap-space-4-5">
-      <MeHeader />
-      <Suspense>
-        <MeScreen />
-      </Suspense>
-    </div>
-  );
+/** The old « Moi » (navigation 2026-11-12): « Compte », with every parameter (the browser keeps the `#…`). */
+export default async function Page({ searchParams }: Props) {
+  const params = new URLSearchParams();
+  for (const [name, value] of Object.entries(await searchParams)) {
+    for (const one of Array.isArray(value) ? value : value === undefined ? [] : [value]) params.append(name, one);
+  }
+  const query = params.toString();
+  redirect(query ? `/compte?${query}` : "/compte");
 }

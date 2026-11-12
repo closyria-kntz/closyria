@@ -34,26 +34,24 @@ test("Apparence : Sombre puis Clair restent après un rechargement, Automatique 
   await expect(html).not.toHaveAttribute("data-theme");
 });
 
-test("Le bouton de « Moi » bascule clair ↔ sombre et le choix survit au rechargement", async ({ page }) => {
+test("« Compte » a le même choix d'apparence, gardé après un rechargement", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ colorScheme: "light" });
-  await page.goto("/moi");
+  await page.goto("/compte");
   const html = page.locator("html");
   const main = page.getByRole("main");
-  await main.getByRole("button", { name: "Passer en mode sombre" }).click();
+  await main.getByRole("radio", { name: /Sombre/ }).check();
   await expect(html).toHaveAttribute("data-theme", "boudoir-dark");
   await page.reload();
   await expect(html).toHaveAttribute("data-theme", "boudoir-dark");
-  await expect(main.getByRole("button", { name: "Passer en mode clair" })).toBeVisible();
+  await expect(main.getByRole("radio", { name: /Sombre/ })).toBeChecked();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
   // Same storage as Réglages → Apparence.
   await page.goto("/reglages/apparence");
   await expect(page.getByRole("radio", { name: /Sombre/ })).toBeChecked();
   await page.getByRole("radio", { name: /Clair/ }).check();
-  await page.goto("/moi");
-  await expect(main.getByRole("button", { name: "Passer en mode sombre" })).toBeVisible();
-  await main.getByRole("button", { name: "Passer en mode sombre" }).click();
-  await page.goto("/reglages/apparence");
-  await expect(page.getByRole("radio", { name: /Sombre/ })).toBeChecked();
+  await page.goto("/compte");
+  await expect(main.getByRole("radio", { name: /Clair/ })).toBeChecked();
+  await expect(html).toHaveAttribute("data-theme", "boudoir-light");
 });

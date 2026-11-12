@@ -27,7 +27,7 @@ import {
   type PreferencesState,
   withSeenTip,
 } from "@/lib/preferences";
-import { ProfilesContext, profileHref, useAccount, useCurrentProfile } from "@/lib/profile-context";
+import { ProfilesContext, profileHref, useCurrentProfile } from "@/lib/profile-context";
 import { fetchLoveLevels, fetchPreferences, savePreferences } from "@/lib/wardrobe-client";
 import { AccountPrompt } from "./account-prompt";
 import { AddSheet } from "./add-sheet";
@@ -70,7 +70,7 @@ function TabIcon({ name }: { name: AppNavKey }) {
           <rect x="13" y="13" width="7" height="7" rx="2" />
         </>
       )}
-      {name === "moi" && (
+      {name === "compte" && (
         <>
           <circle cx="12" cy="8" r="4" />
           <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z" />
@@ -112,7 +112,7 @@ function TopNav() {
   );
 }
 
-/** Phone: Accueil · Découvrir · + · Mes articles · Moi at the bottom, the + raised above the bar (mockup .bnav). */
+/** Phone: Accueil · Découvrir · + · Mes articles · Compte at the bottom, the + raised above the bar (mockup .bnav). */
 function BottomNav({ onAdd }: { onAdd: () => void }) {
   const t = useTranslations("Nav");
   return (
@@ -180,30 +180,9 @@ function BandSearch() {
   );
 }
 
-/** Her initial in the band (mockup .avatar): opens « Mon compte », and says who is signed in. */
-function Avatar() {
-  const t = useTranslations("Nav");
-  const tAccount = useTranslations("Shell.account");
-  const account = useAccount();
-  const { profile } = useCurrentProfile();
-  const pathname = usePathname();
-  const href = "/reglages/compte";
-  const initial = (account?.email ?? profile?.name ?? t("moi")).charAt(0).toUpperCase();
-  return (
-    <Link
-      href={href}
-      aria-current={pathname === href ? "page" : undefined}
-      className={`relative hit-area grid size-control-2xs shrink-0 place-items-center rounded-full bg-une font-bold text-avatar-ink ${focusRing}`}
-    >
-      <span aria-hidden="true">{initial}</span>
-      <span className="sr-only">{t("account", { who: account?.email ?? tAccount("anonymous") })}</span>
-    </Link>
-  );
-}
-
 /**
- * The frame of the signed-in pages (refonte Boudoir, spec §2 R2): a burgundy band at the top with the logo and her
- * initial; one menu, at the bottom on a phone (with the raised +), in the band from a tablet up (with « + Ajouter »).
+ * The frame of the signed-in pages (refonte Boudoir, spec §2 R2): a burgundy band at the top with the logo and the
+ * profile switcher (her account is the « Compte » place, navigation 2026-11-12); one menu, at the bottom on a phone (with the raised +), in the band from a tablet up (with « + Ajouter »).
  * Content grows up to `container.app`.
  */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -327,7 +306,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </button>
                   <Suspense>
                     <ProfileSwitcher />
-                    <Avatar />
                   </Suspense>
                 </div>
               </header>
