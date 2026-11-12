@@ -561,10 +561,10 @@ export function WardrobeView({ view }: { view: ViewKey }) {
           <div className="flex min-w-space-0 flex-col gap-space-3">
             {summary && (
               <ul aria-label={t("summary.label")} data-testid="wish-summary" className="flex flex-wrap gap-space-2">
-                <li className="glass rounded-pill px-space-3 py-space-1-5 text-sm tabular-nums">
+                <li className="rounded-pill bg-surface-sunken px-space-3 py-space-1-5 text-sm tabular-nums">
                   {t.rich("summary.count", { count: summary.count, b: (chunks) => <b>{chunks}</b> })}
                 </li>
-                <li className="glass rounded-pill px-space-3 py-space-1-5 text-sm tabular-nums">
+                <li className="rounded-pill bg-surface-sunken px-space-3 py-space-1-5 text-sm tabular-nums">
                   {t.rich("summary.total", {
                     amount: formatAmount(locale, summary.totalCents),
                     b: (chunks) => <b>{chunks}</b>,
@@ -632,7 +632,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
       {adding && (
         <section
           aria-label={t("tools.addTitle")}
-          className="glass flex flex-col items-end gap-space-2 rounded-card p-space-4"
+          className="flex flex-col items-end gap-space-2 rounded-card bg-surface-sunken p-space-4"
         >
           <div className="w-full">
             <CaptureForm />

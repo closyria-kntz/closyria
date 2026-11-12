@@ -120,8 +120,8 @@
 
 **Files:** `apps/web/src/app/l/[token]/*`, `group-order-view.tsx` et dialogues, `share-panel.tsx`, anciens jetons retirés de `packages/design-tokens`, utilitaires CSS « Cocon » supprimés de `globals.css`, tous les e2e, docs (spec § « Décisions de construction », plan coché).
 
-- [ ] Restyler le lien des amies (actions écrites : « Je lui offre », « Je participe », « Je le prends aussi », « Donner mon avis ») et la commande groupée selon la maquette ; retirer les jetons et classes de l'ancienne direction (le contrôle des jetons ne doit plus en trouver) ; suite e2e complète sur les 3 appareils en clair et sombre ; captures comparées à la maquette pour chaque écran.
-- [ ] Commit « feat(refonte): lien des amies, commande groupée, finitions ».
+- [x] Restyler le lien des amies (actions écrites : « Je lui offre », « Je participe », « Je le prends aussi », « Donner mon avis ») et la commande groupée selon la maquette ; retirer les jetons et classes de l'ancienne direction (le contrôle des jetons ne doit plus en trouver) ; suite e2e complète sur les 3 appareils en clair et sombre ; captures comparées à la maquette pour chaque écran.
+- [x] Commit « feat(refonte): lien des amies, commande groupée, finitions ».
 
 **Fin d'étape 4 :** revue d'ensemble de la branche, présentation, mise en dev avec accord.
 

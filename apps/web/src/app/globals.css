@@ -79,23 +79,6 @@ body {
   font-synthesis-weight: none;
 }
 
-/* Frosted glass for floating bars and panels. Without backdrop-filter (old browser, or the no-backdrop class on
-   <html>), the panel falls back to the opaque raised surface so the text stays readable. */
-@utility glass {
-  background: var(--color-glass);
-  @apply border border-glass-line;
-  backdrop-filter: blur(var(--blur-glass)) saturate(var(--saturate-glass));
-
-  @supports not (backdrop-filter: blur(1px)) {
-    background: var(--color-surface-raised);
-  }
-
-  html.no-backdrop & {
-    background: var(--color-surface-raised);
-    backdrop-filter: none;
-  }
-}
-
 /* A control drawn smaller than a finger keeps a finger-wide hit area: an invisible layer reaches out to the touch
    target around it (none when the control is already larger). The control must be positioned. */
 @utility hit-area {
@@ -271,7 +254,7 @@ body {
   animation-delay: calc(11 * var(--motion-duration-stagger));
 }
 
-/* The little photo shape that flies from a card to « Ma commande » (lib/fly-to.ts sets --fly-color and moves it). */
+/* The little photo (Boudoir: an even small radius, no more arch) that flies from a card to « Ma commande » (lib/fly-to.ts sets --fly-color and moves it). */
 .fly-photo {
   position: fixed;
   top: 0;
@@ -281,7 +264,7 @@ body {
   aspect-ratio: 3 / 4;
   pointer-events: none;
   background: var(--fly-color);
-  border-radius: var(--radius-thumb-top) var(--radius-thumb-top) var(--radius-thumb-bottom) var(--radius-thumb-bottom);
+  border-radius: var(--radius-board-thumb);
 }
 
 /* « Aperçu » and « Je le prends » on a card: under a mouse they show when the card is hovered or has the focus (the

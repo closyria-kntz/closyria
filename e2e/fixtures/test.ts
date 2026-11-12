@@ -52,11 +52,19 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
         (url) => url.origin === origin && url.pathname === "/api/me/preferences",
         async (route) => {
           if (route.request().method() !== "GET") return route.continue();
-          const response = await route.fetch();
           const seen = { seenTips: [] as string[], onboardedAt: "2026-01-01T00:00:00.000Z" };
-          if (response.status() === 401) return route.fulfill({ status: 200, json: seen });
-          const body = (await response.json()) as { seenTips: string[]; onboardedAt: string | null };
-          return route.fulfill({ response, json: { ...body, onboardedAt: body.onboardedAt ?? seen.onboardedAt } });
+          try {
+            const response = await route.fetch();
+            if (response.status() === 401) return await route.fulfill({ status: 200, json: seen });
+            const body = (await response.json()) as { seenTips: string[]; onboardedAt: string | null };
+            return await route.fulfill({
+              response,
+              json: { ...body, onboardedAt: body.onboardedAt ?? seen.onboardedAt },
+            });
+          } catch {
+            // The page went on (a redirect, the next goto) while this read was on its way: nothing to answer.
+            return;
+          }
         },
       );
     }

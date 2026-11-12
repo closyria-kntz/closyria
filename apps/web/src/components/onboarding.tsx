@@ -69,7 +69,6 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   return (
     <dialog
       ref={ref}
-      aria-modal="true"
       aria-labelledby={titleId}
       aria-describedby={textId}
       onClose={onDone}

@@ -33,6 +33,23 @@ describe("findHardcodedStyles", () => {
     expect(rules(source)).toEqual([]);
   });
 
+  it("rejects the retired « Cocon » direction: glass, aurora, arched photo shapes", () => {
+    expect(rules('<div className="glass flex rounded-photo-top" />')).toEqual(["retired-token", "retired-token"]);
+    expect(rules("a { background: var(--color-glass); border-radius: var(--radius-thumb-top); }", "a.css")).toEqual([
+      "retired-token",
+      "retired-token",
+    ]);
+    expect(rules("html.no-backdrop .aurora { color: var(--color-ink); }", "a.css")).toEqual([
+      "retired-token",
+      "retired-token",
+    ]);
+  });
+
+  it("does not take a retired word inside another name or a comment for the token", () => {
+    expect(rules('<div className="glassy bg-surface" /> // glass')).toEqual([]);
+    expect(rules("/* the frosted glass is gone */ a { color: var(--color-ink); }", "a.css")).toEqual([]);
+  });
+
   it("allows var() references in css", () => {
     expect(rules("body { color: var(--color-ink); }", "a.css")).toEqual([]);
   });

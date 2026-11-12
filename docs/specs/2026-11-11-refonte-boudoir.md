@@ -102,3 +102,44 @@ l'interface ; le code garde ses identifiants). Chaque bouton dit ce qu'il fait (
 - Le catalogue « Découvrir » lui-même (collecte des catalogues de boutiques, recherche, annuaire).
 - Les fonctions des chantiers 3 à 6 (commandes et colis, alertes, annuaire, paiement) : seulement leur place.
 - L'admin (hors jetons communs).
+
+## 8. Décisions de construction (2026-11-12)
+
+Ce qui a été tranché pendant la construction, en plus des décisions validées du § 2.
+
+- **Couleurs** : le gris secondaire clair passe de `#86686D` à `#755A5F` (même teinte, un peu plus foncé) pour que le
+  texte reste lisible (AA) sur les fonds rose poudré ; le sombre suit les valeurs validées le 2026-11-11. Les
+  anciennes préférences d'apparence (« Clair », « Sombre », « Automatique ») restent valables et mènent à Boudoir.
+- **Fin du « Cocon »** : plus d'aurore en fond, plus de verre dépoli (barres et panneaux sur des fonds pleins Boudoir),
+  plus de photos en arche (coins arrondis réguliers partout, y compris la petite photo qui vole vers « Ma commande »).
+  Les jetons de l'ancienne direction sont retirés et le contrôle des jetons refuse leur retour. `font-display` reste
+  un simple synonyme de la police des titres (Gloock), utilisé dans beaucoup d'écrans.
+- **Adresses** : `/commande` mène à la vue « Commandé » de Mes articles ; « Préparer une commande » garde
+  `/envies/commande`. Le filtre de statut s'appelle `statut` dans l'adresse.
+- **« Reçu » ou « Dans mon dressing »** : un article reçu depuis moins de 30 jours est « Reçu », sinon « Dans mon
+  dressing » (calculé par l'API ; remplacé plus tard par la vraie date limite de retour).
+- **Mes articles** : les niveaux d'envie et « Prioritaires » passent dans le panneau des filtres (la maquette ne montre
+  que les étapes) ; les nombres des pastilles comptent par étape, sans les autres filtres.
+- **Fiche** : les déplacements rares passent par un seul bouton « Changer d'étape » ; « Demander un avis » et
+  « M'alerter si le prix baisse » n'existent pas encore et ne sont pas affichés.
+- **Accueil** : seules les nouvelles qui reposent sur des données sûres sont montrées ; le titre dit « {n} nouvelles
+  pour toi » (elles couvrent 7 jours).
+- **Découvrir** : les boutiques actives et publiées, la « boutique de la semaine » choisie en admin (une seule à la
+  fois, tracée dans le journal) ; une carte ouvre le site de la boutique.
+- **Partager** : une seule fenêtre « Partager » (fiche, liste, commande groupée) ; Messenger seulement sur un écran
+  tactile ; pour la commande groupée, le premier choix copie tout le message.
+- **Ajouter depuis le téléphone** : une page pour l'iPhone (raccourci « Envoyer à Closyria », phrase pour l'IA,
+  « Coller le lien copié ») et Android (installer l'app, puis Partager → Closyria) ; la partie du téléphone utilisé
+  vient en premier ; elle se trouve dans Moi et son lien de retour mène à Moi.
+- **Découverte et astuces** : la découverte s'affiche une seule fois par compte, invitées comprises ; un compte qui a
+  déjà des articles ne la voit pas ; elle ne s'affiche jamais sur le lien des amies ni dans l'admin. Les astuces
+  fermées sont retenues par compte (les 200 plus récentes), et suivent la fusion d'une invitée dans son compte.
+- **Lien des amies** : bandeau bordeaux avec « Liste de {prénom} » ; l'occasion du cadeau en boîte rose poudré avec
+  « Ce que tu offres reste une surprise » ; la commande groupée en boîte douce avec sa barre vers la livraison
+  offerte ; « Tu es {prénom} · Ce n'est pas toi ? » en astuce ; cartes en grille (2 colonnes sur téléphone) avec
+  l'étiquette ocre « Réservé par {prénom} » sur la photo et les actions écrites « Je lui offre », « Je participe »,
+  « Je le prends aussi », « Donner mon avis ».
+- **Commande groupée (côté propriétaire)** : sur ordinateur, les personnes à gauche et le résumé à droite (total en
+  grand, barre, « Plus que … · jusqu'au … ») ; le bouton principal est l'étape suivante (« Clôturer » tant qu'elle est
+  ouverte, « J'ai commandé » une fois close) ; chaque personne a sa tuile avec son initiale et « Doit {montant} »
+  (sa part tant que ce n'est pas commandé, puis ce qu'elle doit) ; « Modifier » et « Annuler » restent en liens écrits.

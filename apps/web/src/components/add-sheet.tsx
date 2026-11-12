@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { ARTICLES_PATH } from "@/lib/articles-address";
+import { phoneKind } from "@/lib/phone-kind";
 import { profileHref, useCurrentProfile } from "@/lib/profile-context";
 import { extractSharedUrl } from "@/lib/shared-url";
-import { isAppleMobile, useCoarsePointer } from "@/lib/use-desktop";
+import { useCoarsePointer } from "@/lib/use-desktop";
 import { CaptureForm } from "./capture-form";
 import { Sheet } from "./sheet";
 import { buttonClass, focusRing } from "./ui";
@@ -86,7 +87,7 @@ export function AddSheet({ open, onClose }: { open: boolean; onClose: () => void
   // « Coller le lien copié »: the link read from the clipboard (added at once), or nothing usable there.
   const [pasted, setPasted] = useState<{ url: string } | { empty: true } | null>(null);
   useEffect(() => {
-    setPhone(isAppleMobile(navigator.userAgent, navigator.maxTouchPoints) || /Android/i.test(navigator.userAgent));
+    setPhone(phoneKind(navigator.userAgent, navigator.maxTouchPoints) !== null);
   }, []);
   const body = useRef<HTMLDivElement>(null);
   const opened = useRef(pathname);
@@ -204,7 +205,7 @@ export function AddSheet({ open, onClose }: { open: boolean; onClose: () => void
             <p className="text-ink-muted">
               {t("share.iphone")}{" "}
               <Link href="/aide/telephone" onClick={onClose} className={`font-strong text-ink underline ${focusRing}`}>
-                {t("share.iphoneLink")}
+                {t("share.phoneLink")}
               </Link>
             </p>
             {back}

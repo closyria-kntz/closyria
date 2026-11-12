@@ -21,6 +21,11 @@ const NUMBER_WITH_UNIT = new RegExp(`(?:(?<![\\w.-])|(?<=[\\s(,:])-)(?:\\d+\\.?\
 const CSS_DECLARATION = /(?<![\w-])(-{0,2}[a-z][\w-]*)\s*:\s*([^;{}]+)(?=[;}]|$)/dgi;
 const VAR_ONLY_STRING = /^(["'`])(?:var\(--[\w-]+(?:,[^()]*)?\)\s*)+\1$/;
 
+// The « Cocon lumineux » direction, retired by Boudoir (refonte task 8): its frosted glass, aurora and arched photo
+// shapes must not come back, as classes, utilities or custom properties.
+const RETIRED =
+  /(?<![\w-])(?:glass|aurora|no-backdrop|(?:bg|border)-glass(?:-line)?|(?:rounded|radius)-(?:photo|thumb)-(?:top|bottom)|(?:rounded|radius)-arch)(?![\w-])|--(?:color-glass(?:-line)?|blur-glass|saturate-glass|radius-(?:photo|thumb)-(?:top|bottom)|radius-arch)\b/g;
+
 const lineOf = (source: string, index: number): number => source.slice(0, index).split("\n").length;
 const blank = (text: string): string => text.replace(/[^\n]/g, " ");
 
@@ -193,6 +198,9 @@ export function findHardcodedStyles(source: string, file: string): Violation[] {
   const stripped = stripComments(source, isCss);
   const withoutArbitrary = checkArbitraryValues(stripped, normalized, found);
   checkColors(withoutArbitrary, normalized, found);
+  for (const m of stripped.matchAll(RETIRED)) {
+    found.push({ file: normalized, line: lineOf(stripped, m.index), match: m[0], rule: "retired-token" });
+  }
   if (isCss) checkCssDeclarations(stripped, normalized, found);
   else checkInlineStyles(stripped, normalized, found);
   return found.sort((a, b) => a.line - b.line);
@@ -214,7 +222,9 @@ function main(): void {
   }
   for (const v of violations) console.error(`${v.file}:${v.line}: ${v.rule} — ${v.match}`);
   if (violations.length > 0) {
-    console.error(`${violations.length} hard-coded style value(s) found: use design tokens.`);
+    console.error(
+      `${violations.length} hard-coded style value(s) or retired token(s) found: use Boudoir's design tokens.`,
+    );
     process.exit(1);
   }
 }

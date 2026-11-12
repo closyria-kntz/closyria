@@ -378,7 +378,7 @@ export function FiltersMenu({
           ref={panel}
           id={panelId}
           aria-labelledby={titleId}
-          className="glass absolute inset-x-space-0 top-full z-20 mt-space-2 flex flex-col gap-space-3 rounded-card p-space-4 text-left text-ink shadow-lifted sm:left-auto sm:w-narrow"
+          className="absolute border border-line bg-surface-raised inset-x-space-0 top-full z-20 mt-space-2 flex flex-col gap-space-3 rounded-card p-space-4 text-left text-ink shadow-lifted sm:left-auto sm:w-narrow"
         >
           <h2 id={titleId} className="font-display text-lead">
             {t("menuTitle")}

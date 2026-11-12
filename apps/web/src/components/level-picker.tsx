@@ -6,7 +6,7 @@ import { stepFocus } from "./level-picker-logic";
 import { focusRing } from "./ui";
 
 /**
- * The small glass bubble with her 4 levels (emoji, her own name as the accessible name). Opens on the current
+ * The small bubble with her 4 levels (emoji, her own name as the accessible name). Opens on the current
  * level; Escape or a click outside closes it without changing anything, and focus goes back to `anchor`.
  */
 export function LevelPicker({
@@ -61,7 +61,7 @@ export function LevelPicker({
       ref={group}
       role="radiogroup"
       aria-label={label}
-      className="glass level-picker absolute top-1/3 left-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 gap-space-1 rounded-full p-space-1"
+      className="level-picker bg-surface-raised shadow-lifted absolute top-1/3 left-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 gap-space-1 rounded-full p-space-1"
     >
       {levels.map((level, index) => (
         // biome-ignore lint/a11y/useSemanticElements: a round emoji button in a radiogroup (a native radio cannot be styled so).

@@ -11,7 +11,7 @@ import {
 import { useLocale, useTranslations } from "next-intl";
 import { useId, useRef, useState } from "react";
 import { Sheet } from "@/components/sheet";
-import { focusRing, primaryButtonClass } from "@/components/ui";
+import { blockTitleClass, cardPrimaryClass, cardSoftClass, focusRing, primaryButtonClass } from "@/components/ui";
 import type { FriendDevice } from "@/lib/friend-device";
 import { type GiftError, giveGift } from "@/lib/shared-list";
 import { cleanName, FriendNameStep, NameTakenQuestion, nameFits } from "./friend-name";
@@ -33,7 +33,16 @@ export const namesOf = (locale: string, names: readonly string[]) =>
  * without a date the occasion alone, neither: « Tu peux offrir un article de cette liste 🎁 ». Her name only when
  * she shows it.
  */
-export function GiftBanner({ gifts, ownerName }: { gifts: SharedGifts; ownerName: string | null }) {
+export function GiftBanner({
+  gifts,
+  ownerName,
+  viewerIsOwner,
+}: {
+  gifts: SharedGifts;
+  ownerName: string | null;
+  /** Her own link: no word about the surprise (she must not see who gives). */
+  viewerIsOwner: boolean;
+}) {
   const t = useTranslations("SharedList.gifts");
   const locale = useLocale();
   if (!gifts.open) return null;
@@ -46,18 +55,34 @@ export function GiftBanner({ gifts, ownerName }: { gifts: SharedGifts; ownerName
   else if (occasion) text = name ? t("occasionName", { occasion, name }) : t("occasion", { occasion });
   else if (date) text = name ? t("dateName", { name, date }) : t("date", { date });
   else text = t("none");
+  // Boudoir's powder-pink box (mockup .gift): the occasion as its kicker, then that it stays a surprise.
   return (
-    <p
-      data-testid="gift-banner"
-      className="self-start rounded-card border-2 border-selected-line bg-selected-surface px-space-4 py-space-3 font-strong break-words"
-    >
-      {text}
-    </p>
+    <div className="flex flex-col gap-space-1-5 rounded-card bg-une p-space-3-5 text-ink">
+      <p data-testid="gift-banner" className={`${blockTitleClass} text-une-ink break-words`}>
+        {text}
+      </p>
+      {!viewerIsOwner && <p className="text-sm">{name ? t("surprise", { name }) : t("surpriseHidden")}</p>}
+    </div>
   );
 }
 
-const linkButtonClass = `hit-area relative rounded-button px-space-2 text-sm text-ink-muted underline hover:text-ink disabled:opacity-60 ${focusRing}`;
+const linkButtonClass = `hit-area relative rounded-button text-chip font-bold underline underline-offset-2 disabled:opacity-60 ${focusRing}`;
 const actionButtonClass = `${primaryButtonClass} min-h-touch-target w-full`;
+
+/**
+ * Who gives a reserved item, for the ochre tag on its photo (mockup .tag « Réservé par Inès »): « Réservé par
+ * {prénom} », or « Offert par {prénoms} » once others joined. Null otherwise (the other states are said in the card).
+ */
+export function giftTagOf(
+  gift: SharedGiftState | null,
+  locale: string,
+  t: (key: "reservedBy" | "givenBy", values: Record<string, string>) => string,
+): string | null {
+  if (gift?.state !== "reserved") return null;
+  return gift.contributors.length === 0
+    ? t("reservedBy", { name: gift.reserver })
+    : t("givenBy", { names: namesOf(locale, [gift.reserver, ...gift.contributors]) });
+}
 
 /**
  * The gift part of an item on the link (spec §3): her size, who gives it (never seen by the owner), and « Je lui
@@ -90,22 +115,14 @@ export function GiftActions({
   onLeave: () => void;
 }) {
   const t = useTranslations("SharedList.gifts");
-  const locale = useLocale();
   if (!gift) return null;
   const hidden = ownerName === null;
   // `hidden`: the server's paint, before the browser's re-read says what is what.
   const mine = "mine" in gift ? (gift.mine?.role ?? null) : null;
   const disabled = busy || checked !== "ok";
-  const givers =
-    gift.state === "reserved" ? [gift.reserver, ...gift.contributors] : gift.state === "owner_took" ? gift.givers : [];
-
+  // Who reserved it is on the photo's tag (giftTagOf); the other states are said here.
   let who: string | null = null;
-  if (gift.state === "reserved")
-    who =
-      gift.contributors.length === 0
-        ? t("reservedBy", { name: gift.reserver })
-        : t("givenBy", { names: namesOf(locale, givers) });
-  else if (gift.state === "owner_took") who = hidden ? t("ownerTookHidden") : t("ownerTook", { name: ownerName });
+  if (gift.state === "owner_took") who = hidden ? t("ownerTookHidden") : t("ownerTook", { name: ownerName });
   else if (gift.state === "removed") who = hidden ? t("removedHidden") : t("removed", { name: ownerName });
 
   const mineLabel =
@@ -121,19 +138,19 @@ export function GiftActions({
       id={blockId}
       tabIndex={-1}
       aria-busy={checked === "pending" || undefined}
-      className={`flex flex-col gap-space-2 rounded-md ${focusRing}`}
+      className={`flex flex-col gap-space-1-5 rounded-md ${focusRing}`}
     >
       <div
         data-testid="gift"
-        className={`flex flex-col gap-space-1 rounded-md border px-space-3 py-space-2 text-sm ${
-          mine ? "border-selected-line bg-selected-surface" : "border-line bg-surface-raised"
+        className={`flex flex-col gap-space-0-5 rounded-md px-space-2-5 py-space-1-5 text-chip ${
+          mine ? "bg-une" : "bg-surface-sunken"
         }`}
       >
         {gift.state !== "removed" && <p className="text-ink-muted">{size ? t("size", { size }) : t("noSize")}</p>}
-        {who && <p className="font-strong break-words">{who}</p>}
+        {who && <p className="font-bold break-words">{who}</p>}
         {mineLabel && (
           <p className="flex flex-wrap items-center justify-between gap-x-space-3 gap-y-space-1">
-            <span className="font-strong text-accent">{mineLabel}</span>
+            <span className="font-bold text-une-ink">{mineLabel}</span>
             <button type="button" disabled={disabled} onClick={onLeave} className={linkButtonClass}>
               {t("leave")}
               {forItem}
@@ -142,18 +159,18 @@ export function GiftActions({
         )}
       </div>
       {gift.state === "free" && (
-        <button type="button" disabled={disabled} onClick={() => onGive("reserve")} className={actionButtonClass}>
+        <button type="button" disabled={disabled} onClick={() => onGive("reserve")} className={cardPrimaryClass}>
           {t(hidden ? "giveHidden" : "give")}
           {forItem}
         </button>
       )}
       {gift.state === "reserved" && !mine && (
-        <button type="button" disabled={disabled} onClick={() => onGive("join")} className={actionButtonClass}>
+        <button type="button" disabled={disabled} onClick={() => onGive("join")} className={cardSoftClass}>
           {t("join")}
           {forItem}
         </button>
       )}
-      {checked === "failed" && <p className="text-sm text-danger">{t("errors.unchecked")}</p>}
+      {checked === "failed" && <p className="text-chip text-danger">{t("errors.unchecked")}</p>}
     </div>
   );
 }
@@ -314,7 +331,7 @@ export function GiftSheet({
         </div>
       }
     >
-      <h2 id={titleId} className="font-display text-lead font-strong break-words">
+      <h2 id={titleId} className="font-title text-heading break-words">
         {t("sheetTitle", { action, name: item.name })}
       </h2>
       <form

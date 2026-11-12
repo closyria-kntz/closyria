@@ -91,8 +91,8 @@ test("créer une liste, y mettre un article, la partager, l'ouvrir ailleurs, arr
   expect(response?.status()).toBe(200);
   expect(response?.headers()["x-robots-tag"]).toBe("noindex");
   await expect(other.getByRole("heading", { level: 1, name: "Été à Nice" })).toBeVisible();
-  // She is a guest (no account): no « La liste de Anonymous ».
-  await expect(other.getByText(/La liste de/)).toHaveCount(0);
+  // She is a guest (no account): no « Liste de Anonymous ».
+  await expect(other.getByText(/Liste de/)).toHaveCount(0);
   await expect(other.getByText(/Anonymous/)).toHaveCount(0);
   const items = other.getByRole("list", { name: "Articles" }).getByRole("listitem");
   await expect(items).toHaveCount(1);

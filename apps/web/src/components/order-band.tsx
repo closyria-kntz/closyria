@@ -115,7 +115,7 @@ export function OrderBand({
       ref={setElement}
       aria-labelledby={titleId}
       data-testid="order-band"
-      className="glass sticky bottom-space-4 z-10 mx-auto flex w-full max-w-band flex-col gap-space-2 rounded-band py-space-2 pr-space-2 pl-space-4 text-ink shadow-block sm:gap-space-2-5 sm:py-space-2-5 sm:pr-space-2-5 sm:pl-space-5"
+      className="sticky border border-line bg-surface-raised bottom-space-4 z-10 mx-auto flex w-full max-w-band flex-col gap-space-2 rounded-band py-space-2 pr-space-2 pl-space-4 text-ink shadow-block sm:gap-space-2-5 sm:py-space-2-5 sm:pr-space-2-5 sm:pl-space-5"
     >
       {/* One line: what is taken, what the budget would have left, « Voir » and « J'ai commandé (n) ». On a narrow
           phone the bar stays slim (two lines at most): the title steps aside (screen readers keep it) when the budget

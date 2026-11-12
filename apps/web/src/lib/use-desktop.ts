@@ -33,7 +33,3 @@ export const useCoarsePointer = () =>
     () => window.matchMedia(COARSE).matches,
     () => false,
   );
-
-/** An iPhone or an iPad (iPadOS says it is a Mac, but with a touch screen). */
-export const isAppleMobile = (agent: string, maxTouchPoints: number): boolean =>
-  /iPhone|iPad|iPod/.test(agent) || (/Macintosh/.test(agent) && maxTouchPoints > 1);

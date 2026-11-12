@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { type Auth, createAuth, memoryMailer } from "@closyria/auth";
 import { and, asc, createDb, eq, inArray, isNull, schema, sql } from "@closyria/db";
+import { MAX_SEEN_TIPS } from "@closyria/shared";
 import type { TestDatabase } from "@closyria/testing";
 import { createTestDatabase } from "@closyria/testing/vitest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -702,6 +703,22 @@ describe("anonymous -> account merge: her preferences (refonte Boudoir, task 7)"
     const other = await signInAnonymously();
     await signInWithEmail(second, other.cookie);
     expect(await preferencesOf(secondId)).toEqual({ seenTips: ["home-levels"], onboardedAt: LATE });
+  });
+
+  it("keeps the newest tips past the cap, like PATCH", async () => {
+    const email = `prefs-${randomUUID()}@example.com`;
+    const accountId = await signInWithEmail(email);
+    const old = Array.from({ length: MAX_SEEN_TIPS }, (_, i) => `old-${i}`);
+    await setPreferences(accountId, old, LATE);
+    const guest = await signInAnonymously();
+    await setPreferences(guest.userId, ["new-a", "new-b"], EARLY);
+    await signInWithEmail(email, guest.cookie);
+    const merged = (await preferencesOf(accountId))?.seenTips ?? [];
+    expect(merged).toHaveLength(MAX_SEEN_TIPS);
+    expect(merged.slice(-2)).toEqual(["new-a", "new-b"]);
+    expect(merged).not.toContain("old-0");
+    expect(merged).not.toContain("old-1");
+    expect(merged[0]).toBe("old-2");
   });
 
   it("gives a brand new account the guest's discovery and tips", async () => {

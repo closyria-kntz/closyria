@@ -5,6 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { CopySentence } from "@/components/copy-sentence";
 import { focusRing, primaryButtonClass } from "@/components/ui";
 import { IOS_SHORTCUT_URL } from "@/lib/ios-shortcut";
+import { phoneKind } from "@/lib/phone-kind";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("PhoneHelp");
@@ -17,9 +18,6 @@ const numberClass =
   "flex size-space-6 shrink-0 items-center justify-center rounded-full bg-button-bg text-sm font-strong text-button-ink";
 const sectionClass = "flex flex-col gap-space-3 rounded-card border border-line bg-surface-raised p-space-4";
 const partClass = "flex scroll-mt-space-4 flex-col gap-space-4";
-
-/** The part to show first: an Android phone's, otherwise the iPhone's (an iPhone, an iPad, a computer). */
-const androidFirst = (agent: string): boolean => /Android/i.test(agent) && !/iPhone|iPad|iPod/.test(agent);
 
 /** « Coller le lien copié » in 2 gestures (copy in the shop, then + → « Coller le lien copié »). */
 function PasteSteps({ t, id, title }: { t: Translate; id: string; title: string }) {
@@ -122,13 +120,14 @@ function AndroidPart({ t }: { t: Translate }) {
  */
 export default async function Page() {
   const t = await getTranslations("PhoneHelp");
-  const first = androidFirst((await headers()).get("user-agent") ?? "") ? "android" : "iphone";
+  // An Android phone's part first, otherwise the iPhone's (an iPhone, an iPad, a computer).
+  const first = phoneKind((await headers()).get("user-agent") ?? "") === "android" ? "android" : "iphone";
   const iphone = <IphonePart key="iphone" t={t} />;
   const android = <AndroidPart key="android" t={t} />;
   return (
     <article className="flex max-w-measure flex-col gap-space-5 pb-space-6">
       <Link
-        href="/reglages/profils"
+        href="/moi"
         className={`inline-flex min-h-touch-target items-center self-start rounded-button text-sm text-accent ${focusRing}`}
       >
         {t("back")}

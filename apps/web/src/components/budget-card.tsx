@@ -91,7 +91,7 @@ export function BudgetCard({
     <section
       aria-labelledby={titleId}
       data-testid="budget-card"
-      className="glass flex max-w-budget flex-col gap-space-2 rounded-panel px-space-3-5 py-space-3 text-sm tabular-nums sm:px-space-4-5 sm:py-space-3-5 sm:text-ui"
+      className="flex max-w-budget flex-col bg-surface-sunken gap-space-2 rounded-panel px-space-3-5 py-space-3 text-sm tabular-nums sm:px-space-4-5 sm:py-space-3-5 sm:text-ui"
     >
       <h2 id={titleId} className="sr-only">
         {t("label")}

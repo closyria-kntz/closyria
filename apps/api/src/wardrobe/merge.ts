@@ -176,7 +176,8 @@ export async function mergeRecentProducts(fromUserId: string, toUserId: string, 
 
 /**
  * Her preferences (refonte Boudoir, task 7), kept on the `user` row: the discovery counts as seen from the earliest of
- * the two dates (LEAST skips a null), the closed tips are the union, the account's first, MAX_SEEN_TIPS at most.
+ * the two dates (LEAST skips a null), the closed tips are the union, the account's first; past MAX_SEEN_TIPS, the
+ * newest are kept (the oldest forgotten first), as PATCH /api/me/preferences does.
  */
 export async function mergePreferences(fromUserId: string, toUserId: string, tx: DbTransaction): Promise<void> {
   await tx.execute(sql`
@@ -185,7 +186,7 @@ export async function mergePreferences(fromUserId: string, toUserId: string, tx:
            seen_tips = (select coalesce(array_agg(tip order by first_at), '{}'::text[]) from (
              select tip, min(pos) as first_at
                from unnest(target.seen_tips || source.seen_tips) with ordinality as u(tip, pos)
-              group by tip order by first_at limit ${MAX_SEEN_TIPS}) kept)
+              group by tip order by first_at desc limit ${MAX_SEEN_TIPS}) kept)
       from ${schema.user} as source
      where target.id = ${toUserId} and source.id = ${fromUserId}`);
 }

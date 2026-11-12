@@ -344,6 +344,8 @@ test("l'aide du téléphone : la partie de l'appareil en premier, l'autre dessou
   await expect(page.getByRole("heading", { level: 2 })).toHaveText(IPHONE_FIRST);
   await expect(page.locator("section#iphone")).toBeVisible();
   await expect(page.locator("section#android")).toBeVisible();
+  // Back to « Moi », where the page is listed.
+  await expect(page.getByRole("link", { name: "← Moi" })).toHaveAttribute("href", "/moi");
 });
 
 test("l'aide du téléphone : Android d'abord avec un agent Android", async ({ browser, baseURL }) => {

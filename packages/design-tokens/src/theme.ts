@@ -93,8 +93,6 @@ export const boudoirDark: Theme = {
     "color-button-bg": c.powderRose,
     "color-button-ink": c.boudoirInk,
     "color-detail": c.ochre,
-    "color-glass": "color-mix(in srgb, var(--color-surface-raised) 62%, transparent)",
-    "color-glass-line": `color-mix(in srgb, ${c.white} 7%, transparent)`,
     "color-toast-action": "color-mix(in srgb, var(--color-button-ink) 16%, transparent)",
     "shadow-block": "0 10px 30px rgb(0 0 0 / 0.4)",
   },

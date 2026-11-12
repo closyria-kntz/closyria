@@ -63,9 +63,6 @@ export const defaultSemanticTokens = {
   "color-button-bg": palette.burgundy,
   "color-button-ink": palette.white,
   "color-detail": palette.ochre,
-  // Frosted glass: the raised surface, see-through, with a white edge.
-  "color-glass": "color-mix(in srgb, var(--color-surface-raised) 60%, transparent)",
-  "color-glass-line": `color-mix(in srgb, ${palette.white} 75%, transparent)`,
   // The « Annuler » of a toast: a light veil of the toast's own text colour.
   "color-toast-action": "color-mix(in srgb, var(--color-button-ink) 16%, transparent)",
   "color-card-bg": "var(--color-surface-raised)",
@@ -80,13 +77,12 @@ export const defaultSemanticTokens = {
   "spacing-space-6": space[6],
   "spacing-space-7": space[7],
   "spacing-space-8": space[8],
-  // Half steps of the mockup (6, 10, 14, 18, 22, 26 px).
+  // Half steps of the mockup (6, 10, 14, 18, 22 px).
   "spacing-space-1-5": "0.375rem",
   "spacing-space-2-5": "0.625rem",
   "spacing-space-3-5": "0.875rem",
   "spacing-space-4-5": "1.125rem",
   "spacing-space-5-5": "1.375rem",
-  "spacing-space-6-5": "1.625rem",
   // Hair spaces of the mockup (2 and 3 px): the lines of a card, the padding of the clothing tags.
   "spacing-space-0-5": "0.125rem",
   "spacing-space-0-75": "0.1875rem",
@@ -97,9 +93,6 @@ export const defaultSemanticTokens = {
   "spacing-shop-card": "9.375rem",
   // Thumbnails of the « Par étape » columns (48 px wide, 3:4).
   "spacing-board-thumb": "3rem",
-  // Grid of cards: 34 px between rows, 26 px between columns (mockup).
-  "spacing-grid-row": "2.125rem",
-  "spacing-grid-col": "1.625rem",
   // Visible heights of the controls (mockup): the hit area stays at least the touch target (`hit-area` utility).
   "spacing-control-2xs": "2.125rem",
   "spacing-control-xs": "2.25rem",
@@ -108,7 +101,6 @@ export const defaultSemanticTokens = {
   "spacing-control-lg": "2.625rem",
   "spacing-control-plus": "2.875rem",
   "spacing-control-xl": "3.125rem",
-  "spacing-control-2xl": "3.375rem",
   // A size of the sheet (58 × 48 px) and a level tile (66 px, 58 px on a phone).
   "spacing-size-chip": "3.625rem",
   "spacing-level-tile": "4.125rem",
@@ -117,6 +109,11 @@ export const defaultSemanticTokens = {
   "spacing-hit-inset": "min(0px, (100% - var(--spacing-touch-target)) / 2)",
   // Undo toast stack: each older message sits one step higher and one step smaller than the next.
   "spacing-toast-stack": "0.75rem",
+  // A person's initial on the group order (mockup .av, 28 px) and a line's thumbnail there (56 px wide, 3:4).
+  "spacing-initial": "1.75rem",
+  "spacing-order-thumb": "3.5rem",
+  // The progress bar towards free shipping (mockup: 6 px high).
+  "spacing-bar": "0.375rem",
   // The shell: a phone tab icon (20 px), the raised + (52 px).
   "spacing-nav-icon": "1.25rem",
   "spacing-plus": "3.25rem",
@@ -125,14 +122,12 @@ export const defaultSemanticTokens = {
   "radius-none": radius.none,
   "radius-sm": radius.sm,
   "radius-md": radius.md,
-  "radius-lg": radius.lg,
   "radius-full": radius.full,
   "radius-button": radius.full,
   // Boudoir: cards 20 px, pills and buttons fully round.
   "radius-card": radius.card,
   "radius-pill": radius.pill,
-  // Mockup radii: blocks of the sheet 30, « Ma commande » 28, budget card 22, toast 20, sizes 16, « taken » mark 11 px.
-  "radius-block": "1.875rem",
+  // Mockup radii: « Ma commande » 28, budget card 22, toast 20, sizes 16, « taken » mark 11 px.
   "radius-band": "1.75rem",
   "radius-panel": "1.375rem",
   "radius-toast": "1.25rem",
@@ -147,12 +142,6 @@ export const defaultSemanticTokens = {
   "radius-board-thumb": "0.5rem",
   // The picture of a discovery screen (mockup bienvenue(): 28 px).
   "radius-discovery": "1.75rem",
-  // Shape C of the item photos: a rectangle whose top corners are much rounder than the bottom ones.
-  "radius-photo-top": radius.photoTop,
-  "radius-photo-bottom": radius.photoBottom,
-  // The same shape, smaller, for the thumbnails (sheet gallery, preview strip, flight to « Ma commande »).
-  "radius-thumb-top": radius.thumbTop,
-  "radius-thumb-bottom": radius.thumbBottom,
   // Typography
   // Boudoir: Figtree for the text, Gloock for titles and item names (`font-display` kept as its alias for now).
   "font-body": font.body,
@@ -179,19 +168,15 @@ export const defaultSemanticTokens = {
   "text-tag": "0.65625rem",
   "text-meta": "0.6875rem",
   "text-chip": "0.78125rem",
-  "text-card-title": "clamp(1.0625rem, 0.9489rem + 0.5682vw, 1.3125rem)",
-  "text-sheet-title": "clamp(2rem, 1.6023rem + 1.9886vw, 2.875rem)",
   // « Accueil » (mockup .t2 and .t3: 72 % and 55 % of the 34 px page title): the une's title, a section's title.
   "text-une-title": "1.53rem",
   "text-section-title": "1.17rem",
-  "text-hero": "clamp(2.25rem, 1.3409rem + 4.5455vw, 4.25rem)",
   "text-emoji-card": "clamp(1.5rem, 1.3295rem + 0.8523vw, 1.875rem)",
   "text-emoji-sheet": "2.25rem",
   "text-emoji-level": "1.375rem",
   // « Moi » (mockup .big 28 px): the number of a tile; the first-opening discovery's title (30 px).
   "text-stat": "1.75rem",
   "text-discovery-title": "1.875rem",
-  "tracking-display": "-0.02em",
   "font-weight-regular": fontWeight.regular,
   "font-weight-medium": fontWeight.medium,
   "font-weight-strong": fontWeight.strong,
@@ -215,9 +200,6 @@ export const defaultSemanticTokens = {
   "shadow-seg": "0 1px 3px rgb(0 0 0 / 0.12)",
   // The raised + of the phone's bottom bar (mockup .plus).
   "shadow-plus": "0 6px 16px rgb(0 0 0 / 0.18)",
-  // Frosted glass (theme-independent)
-  "blur-glass": "20px",
-  "saturate-glass": "1.2",
   // The level emoji laid alone on a photo: its soft shadow follows the glyph (a drop-shadow, not a box), and the
   // sparks of the highest level fly this far.
   "drop-shadow-emoji": "0 0.1875rem 0.3125rem color-mix(in srgb, var(--color-ink) 28%, transparent)",
@@ -241,12 +223,13 @@ export const defaultSemanticTokens = {
   "container-budget": "32.5rem",
   // The first-opening discovery's column (mockup bienvenue(): 520 px on a computer).
   "container-discovery": "32.5rem",
-  // Level tiles (at least 92 px each) and the blocks side by side on the sheet (at least 250 px each).
+  // Level tiles (at least 92 px each).
   "grid-levels": "repeat(auto-fit, minmax(5.75rem, 1fr))",
-  "grid-blocks": "repeat(auto-fit, minmax(15.625rem, 1fr))",
   // « Accueil »: the une (photo 42 %, text beside it) and the two columns on a computer (mockup 1.3fr 1fr).
   "grid-une": "42% minmax(0, 1fr)",
   "grid-home": "minmax(0, 1.3fr) minmax(0, 1fr)",
+  // The group order on a computer: the people on the left, the summary (360 px) on the right (mockup commandeG()).
+  "grid-order": "minmax(0, 1fr) 22.5rem",
   // « Découvrir » on a computer: the une's photo takes 30 % (mockup decouvrir()).
   "grid-une-wide": "30% minmax(0, 1fr)",
   "spacing-touch-target": size.touchTarget,

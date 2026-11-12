@@ -12,7 +12,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackToTop } from "@/components/back-to-top";
 import { FriendOpinions } from "@/components/friend-opinions";
-import { buttonClass, focusRing, toggleButtonClass } from "@/components/ui";
+import { buttonClass, focusRing, moreButtonClass, toggleButtonClass } from "@/components/ui";
 import { formatAmount } from "@/lib/budget";
 import { type FriendDevice, friendDevice } from "@/lib/friend-device";
 import { levelOf } from "@/lib/love-levels";
@@ -29,7 +29,7 @@ import {
   putOpinion,
 } from "@/lib/shared-list";
 import { CoverPhoto } from "./cover-photo";
-import { GiftActions, GiftBanner, GiftSheet } from "./gifts";
+import { GiftActions, GiftBanner, GiftSheet, giftTagOf } from "./gifts";
 import { GivenItems } from "./given";
 import { GroupLineSheet, type GroupLineTarget, groupErrorKey } from "./group-line-sheet";
 import { GroupItemActions, GroupOrderBlock, groupOrderWritable, mineLines } from "./group-order";
@@ -456,7 +456,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
   if (gone) {
     return (
       <section className="flex flex-col gap-space-4 py-space-6">
-        <h1 ref={goneTitle} tabIndex={-1} className="font-display text-title font-strong focus:outline-none">
+        <h1 ref={goneTitle} tabIndex={-1} className="font-title text-page-title leading-none focus:outline-none">
           {tGone("title")}
         </h1>
         <p className="text-ink-muted">{tGone("body")}</p>
@@ -466,27 +466,21 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
 
   return (
     <>
-      <header className="flex flex-col gap-space-2">
-        <p className="font-display text-lead font-strong text-accent">
+      <header className="flex flex-col gap-space-1">
+        <p className="text-meta font-bold tracking-wide text-une-ink uppercase">
           {view.ownerName ? t("ownerList", { name: view.ownerName }) : t("metadata")}
         </p>
-        <h1 ref={title} tabIndex={-1} className="font-display text-title font-strong focus:outline-none">
+        <h1
+          ref={title}
+          tabIndex={-1}
+          className="font-title text-page-title leading-none break-words focus:outline-none"
+        >
           {view.name}
         </h1>
-        <p className="text-ink-muted">{view.allowOpinions ? t("invite") : tOpinions("closed")}</p>
-        {device && deviceName && (
-          <p data-testid="friend-switch" className="flex flex-wrap items-center gap-x-space-1 text-sm text-ink-muted">
-            <span>{tFriend("youAre", { name: deviceName })}</span>
-            <button
-              type="button"
-              onClick={() => void switchFriend()}
-              className={`rounded-button px-space-2 text-accent underline min-h-touch-target ${focusRing}`}
-            >
-              {tFriend("switch")}
-            </button>
-          </p>
-        )}
+        <p className="text-chip text-ink-muted">{view.allowOpinions ? t("invite") : tOpinions("closed")}</p>
       </header>
+
+      <GiftBanner gifts={view.gifts} ownerName={view.ownerName} viewerIsOwner={view.viewerIsOwner} />
 
       {view.groupOrder && (
         <GroupOrderBlock
@@ -502,8 +496,6 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
         />
       )}
 
-      <GiftBanner gifts={view.gifts} ownerName={view.ownerName} />
-
       {view.gifts.open && view.viewerIsOwner && (
         <p data-testid="owner-gifts-note" className="self-start text-ink-muted">
           {tGifts("ownerNote")}
@@ -511,9 +503,31 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
       )}
 
       {view.budget && (
-        <p className="flex items-center justify-between gap-space-3 self-start rounded-card border-2 border-selected-line bg-surface-raised px-space-4 py-space-3 font-strong tabular-nums">
+        <p className="self-start rounded-pill bg-surface-sunken px-space-4 py-space-2 text-sm font-bold tabular-nums">
           {t("budget", { amount: formatAmount(locale, view.budget.amountCents, view.budget.currency) })}
         </p>
+      )}
+
+      {device && deviceName && (
+        <div
+          data-testid="friend-switch"
+          className="flex items-start gap-space-2-5 rounded-card bg-tip px-space-3-5 py-space-3 text-chip text-tip-ink"
+        >
+          <span aria-hidden="true">👋</span>
+          <p className="flex flex-col items-start">
+            <b>{tFriend("youAre", { name: deviceName })}</b>
+            <span>
+              <button
+                type="button"
+                onClick={() => void switchFriend()}
+                className={`hit-area relative rounded-button underline underline-offset-2 ${focusRing}`}
+              >
+                {tFriend("switch")}
+              </button>{" "}
+              {tFriend("switchHint")}
+            </span>
+          </p>
+        </div>
       )}
 
       {filterOrder && (
@@ -538,7 +552,7 @@ export function SharedListView({ token, initial }: { token: string; initial: Sha
         <ul
           aria-label={t("itemsLabel")}
           data-testid="shared-items"
-          className="grid grid-cols-1 items-start gap-space-4 md:grid-cols-2 lg:grid-cols-3"
+          className="grid grid-cols-2 items-start gap-space-3 md:grid-cols-3 lg:grid-cols-4"
         >
           {shownItems.map((item) => (
             <ItemCard
@@ -690,6 +704,7 @@ function ItemCard({
 }) {
   const t = useTranslations("SharedList");
   const tOpinions = useTranslations("SharedList.opinions");
+  const tGifts = useTranslations("SharedList.gifts");
   const locale = useLocale();
   const name = item.name?.trim() || t("noName");
   const mine = deviceName !== null && item.opinions.some((o) => opinionNameKey(o.name) === opinionNameKey(deviceName));
@@ -704,104 +719,111 @@ function ItemCard({
   const inGroupOrder =
     groupOrder !== null && groupOrder.status !== "cancelled" && groupOrder.eligibleItemIds.includes(item.itemId);
 
+  // « Réservé par Inès », « Offert par Léa et Inès »: the ochre clothing tag on the photo (mockup .tag).
+  const giftTag = giftTagOf(gift, locale, tGifts);
+
   return (
-    <li className="card flex flex-col gap-space-3 rounded-card border border-card-border bg-card-bg p-space-3">
-      <div className="flex gap-space-3">
-        <div className="relative aspect-3/4 w-1/3 shrink-0 overflow-hidden rounded-card bg-media-backdrop">
-          {item.imageUrl && item.imageWidth && item.imageHeight ? (
-            <CoverPhoto
-              photos={[{ url: item.imageUrl, width: item.imageWidth, height: item.imageHeight }]}
-              name={name}
-            />
-          ) : (
-            <span
-              aria-hidden="true"
-              className="flex size-full items-center justify-center p-space-2 text-center text-caption text-ink-muted"
-            >
-              {t("noPhoto")}
+    <li className="card flex min-w-space-0 flex-col overflow-hidden rounded-card bg-surface-raised">
+      <div className="relative aspect-3/4 overflow-hidden bg-media-backdrop">
+        {item.imageUrl && item.imageWidth && item.imageHeight ? (
+          <CoverPhoto photos={[{ url: item.imageUrl, width: item.imageWidth, height: item.imageHeight }]} name={name} />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="flex size-full items-center justify-center p-space-2 text-center text-caption text-ink-muted"
+          >
+            {t("noPhoto")}
+          </span>
+        )}
+        {giftTag && (
+          <span className="pointer-events-none absolute inset-x-space-2 top-space-2 flex">
+            <span data-testid="gift-tag" className="clothing-tag relative whitespace-normal">
+              {giftTag}
             </span>
-          )}
-        </div>
-        <div className="flex min-w-space-0 flex-1 flex-col gap-space-1">
-          <h2 className={`font-strong break-words ${removed ? "text-ink-muted line-through" : ""}`}>{name}</h2>
-          {item.brand && <p className="text-sm text-ink-muted">{item.brand}</p>}
-          <p className="font-strong tabular-nums">
+          </span>
+        )}
+      </div>
+      <div className="flex min-w-space-0 flex-1 flex-col gap-space-0-5 px-space-2-5 pt-space-2 pb-space-3">
+        <h2 className={`font-title text-ui leading-tight break-words ${removed ? "text-ink-muted line-through" : ""}`}>
+          {name}
+        </h2>
+        <p className="truncate text-meta text-ink-muted">{item.brand ?? item.shopName}</p>
+        <p className="pt-space-1">
+          <span className="price-tag tabular-nums">
             {formatOptionalPrice(locale, item.priceCents, item.currency ?? "EUR", t("noPrice"))}
-          </p>
-          {isHttpUrl(item.url) && (
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer nofollow"
-              className={`mt-auto inline-flex min-h-touch-target items-center self-start rounded-button text-sm text-ink-muted underline hover:text-ink ${focusRing}`}
+          </span>
+        </p>
+        {isHttpUrl(item.url) && (
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+            className={`hit-area relative inline-flex min-h-control-2xs items-center self-start rounded-button text-meta text-ink-muted underline hover:text-ink ${focusRing}`}
+          >
+            {t("visit", { shop: item.shopName })}
+            <span className="sr-only"> — {t("visitFor", { name })}</span>
+          </a>
+        )}
+
+        <div className="mt-space-2 flex flex-col gap-space-2">
+          {owner && (
+            <div
+              data-testid="owner-opinion"
+              className="flex flex-col gap-space-0-5 rounded-md bg-surface-sunken px-space-2-5 py-space-2 text-chip"
             >
-              {t("visit", { shop: item.shopName })}
-              <span className="sr-only"> — {t("visitFor", { name })}</span>
-            </a>
+              <p className="flex flex-wrap items-center gap-x-space-1">
+                <span className="font-bold">{view.ownerName ?? tOpinions("ownerFallback")}</span>
+                {ownerLevel && (
+                  <span>
+                    <span aria-hidden="true">{ownerLevel.emoji}</span> {ownerLevel.label}
+                  </span>
+                )}
+                {owner.priority && (
+                  <span className="rounded-pill bg-une px-space-2 text-meta font-bold text-une-ink">
+                    {tOpinions("priority")}
+                  </span>
+                )}
+              </p>
+              {owner.why && <p className="break-words">« {owner.why} »</p>}
+            </div>
+          )}
+
+          <FriendOpinions opinions={item.opinions} levels={view.levels} />
+
+          <GiftActions
+            itemName={name}
+            gift={gift}
+            size={item.size}
+            ownerName={view.ownerName}
+            blockId={giftBlockId(item.itemId)}
+            checked={giftsChecked}
+            busy={leaving}
+            onGive={onGift}
+            onLeave={onLeave}
+          />
+
+          {inGroupOrder && !removed && (
+            <GroupItemActions
+              itemName={name}
+              order={groupOrder}
+              lines={mineLines(groupOrder).filter((line) => line.itemId === item.itemId)}
+              blockId={groupBlockId(item.itemId)}
+              canAct={groupCanAct}
+              busy={groupBusy}
+              onTake={onGroupTake}
+              onEdit={onGroupEdit}
+              onRemove={onGroupRemove}
+            />
+          )}
+
+          {view.allowOpinions && !removed && (
+            <button type="button" onClick={onGive} className={moreButtonClass}>
+              {mine ? tOpinions("edit") : tOpinions("give")}
+              <span className="sr-only"> {tOpinions("forItem", { name })}</span>
+            </button>
           )}
         </div>
       </div>
-
-      {owner && (
-        <div
-          data-testid="owner-opinion"
-          className="flex flex-col gap-space-1 rounded-md border border-selected-line bg-selected-surface px-space-3 py-space-2 text-sm"
-        >
-          <p className="flex flex-wrap items-center gap-x-space-1">
-            <span className="font-strong">{view.ownerName ?? tOpinions("ownerFallback")}</span>
-            {ownerLevel && (
-              <span>
-                <span aria-hidden="true">{ownerLevel.emoji}</span> {ownerLevel.label}
-              </span>
-            )}
-            {owner.priority && (
-              <span className="rounded-full border border-line bg-surface-raised px-space-2 text-caption">
-                {tOpinions("priority")}
-              </span>
-            )}
-          </p>
-          {owner.why && <p className="break-words">« {owner.why} »</p>}
-        </div>
-      )}
-
-      <FriendOpinions opinions={item.opinions} levels={view.levels} />
-
-      <GiftActions
-        itemName={name}
-        gift={gift}
-        size={item.size}
-        ownerName={view.ownerName}
-        blockId={giftBlockId(item.itemId)}
-        checked={giftsChecked}
-        busy={leaving}
-        onGive={onGift}
-        onLeave={onLeave}
-      />
-
-      {inGroupOrder && !removed && (
-        <GroupItemActions
-          itemName={name}
-          order={groupOrder}
-          lines={mineLines(groupOrder).filter((line) => line.itemId === item.itemId)}
-          blockId={groupBlockId(item.itemId)}
-          canAct={groupCanAct}
-          busy={groupBusy}
-          onTake={onGroupTake}
-          onEdit={onGroupEdit}
-          onRemove={onGroupRemove}
-        />
-      )}
-
-      {view.allowOpinions && !removed && (
-        <button
-          type="button"
-          onClick={onGive}
-          className={`mt-auto inline-flex min-h-touch-target items-center justify-center rounded-button border border-selected-line bg-surface-raised px-space-3 text-sm font-strong text-ink hover:bg-selected-surface ${focusRing}`}
-        >
-          {mine ? tOpinions("edit") : tOpinions("give")}
-          <span className="sr-only"> {tOpinions("forItem", { name })}</span>
-        </button>
-      )}
     </li>
   );
 }

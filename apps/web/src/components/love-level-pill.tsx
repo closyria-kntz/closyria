@@ -103,7 +103,7 @@ export function LoveLevelPill({
           ) : (
             <span
               aria-hidden="true"
-              className="glass flex size-space-6 items-center justify-center rounded-full text-body font-strong text-ink"
+              className="flex size-space-6 bg-surface-raised items-center justify-center rounded-full text-body font-strong text-ink"
             >
               +
             </span>

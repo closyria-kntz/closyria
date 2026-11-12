@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
-import { sessionsOf, signInWithEmailCode, uniqueEmail } from "../fixtures/auth";
+import { sessionsOf, signInAsAdmin, signInWithEmailCode, uniqueEmail } from "../fixtures/auth";
 import { CLIENT_IP_HEADER } from "../fixtures/proxy";
 import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
@@ -188,6 +188,39 @@ test("une visiteuse sans compte la voit à sa première ouverture, une seule foi
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(discovery(page)).toHaveCount(0);
   }
+});
+
+test("ni le lien des amies ni l’admin ne la montrent", async ({ page, request, db, userAgentTag }) => {
+  // An admin whose account never saw the discovery.
+  await signInAsAdmin(page, request, db, userAgentTag);
+  await page.goto("/admin");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(discovery(page)).toHaveCount(0);
+
+  // Her list, shared: its friends' link (opened by her here, and by a friend without an account) never shows it.
+  const created = await page.request.post("/api/me/wishlists", { data: { name: "Anniversaire" } });
+  expect(created.status()).toBe(201);
+  const { id } = (await created.json()) as { id: string };
+  const shared = await page.request.post(`/api/me/wishlists/${id}/share`, { data: {} });
+  expect(shared.ok()).toBe(true);
+  const { url } = (await shared.json()) as { url: string };
+  await page.goto(url);
+  await expect(page.getByRole("heading", { level: 1, name: "Anniversaire" })).toBeVisible();
+  await expect(discovery(page)).toHaveCount(0);
+  const friend = await page
+    .context()
+    .browser()
+    ?.newContext({ baseURL: new URL(page.url()).origin });
+  const friendPage = await friend?.newPage();
+  if (!friend || !friendPage) throw new Error("no browser");
+  await friendPage.goto(url);
+  await expect(friendPage.getByRole("heading", { level: 1, name: "Anniversaire" })).toBeVisible();
+  await expect(discovery(friendPage)).toHaveCount(0);
+  await friend.close();
+
+  // Not seen yet: back in the app, it does show.
+  await page.goto("/");
+  await expect(discovery(page).getByText("1 sur 3")).toBeVisible();
 });
 
 test.describe("un compte qui a déjà des articles", () => {

@@ -151,10 +151,17 @@ describe("Boudoir themes", () => {
     expect(get(boudoirDark, "color-danger-edge")).toBe("#B4646C");
   });
 
-  it("keeps the frosted glass and drops the « Cocon » aurora: the page is plain", () => {
-    expect(get(boudoirLight, "color-glass")).toBe("color-mix(in srgb, var(--color-surface-raised) 60%, transparent)");
-    expect(get(boudoirDark, "color-glass")).toBe("color-mix(in srgb, var(--color-surface-raised) 62%, transparent)");
-    expect(renderTokensCss()).not.toContain("aurora");
+  it("drops the « Cocon » direction: no aurora, no frosted glass, no arched photos", () => {
+    const css = renderTokensCss();
+    for (const retired of [
+      "aurora",
+      "--color-glass",
+      "--blur-glass",
+      "--saturate-glass",
+      "--radius-photo-",
+      "--radius-thumb-",
+    ])
+      expect(css).not.toContain(retired);
   });
 
   it("defines the specified shapes, durations and fonts", () => {
@@ -164,12 +171,9 @@ describe("Boudoir themes", () => {
     expect(base["radius-pill"]).toBe("999px");
     expect(base["radius-button"]).toBe("9999px");
     expect(base["radius-full"]).toBe("9999px");
-    // Shape C of the photos: the top more rounded than the bottom (cards 44 / 14 px, thumbnails 20 / 8 px).
-    expect(base["radius-photo-top"]).toBe("2.75rem");
-    expect(base["radius-photo-bottom"]).toBe("0.875rem");
-    expect(base["radius-thumb-top"]).toBe("1.25rem");
-    expect(base["radius-thumb-bottom"]).toBe("0.5rem");
+    // Boudoir photos are plain rounded rectangles: no arch, no « shape C ».
     expect(base).not.toHaveProperty("radius-arch");
+    expect(base).not.toHaveProperty("radius-photo-top");
     expect(base["motion-duration-fast"]).toBe("150ms");
     expect(base["motion-duration-base"]).toBe("250ms");
     expect(base["motion-duration-slow"]).toBe("400ms");

@@ -137,7 +137,13 @@ test("sa commande groupée, de l'ouverture au paiement", async ({
     `Commande groupée chez ${AUTO_SHOP.name}, jusqu'au 12\u00a0mars`,
   );
   await expect(page.getByText(euros(`${relay} · port 4,90 € · offerte dès 80 €`))).toBeVisible();
-  await expect(page.getByText(euros("Total 0 € · Plus que 80 € pour la livraison offerte"))).toBeVisible();
+  // The summary (mockup commandeG()): the total big, the way to free shipping and the deadline on one line.
+  const summary = page.getByRole("region", { name: `Commande groupée · ${AUTO_SHOP.name}` });
+  await expect(summary.getByText(/^0\s€$/)).toBeVisible();
+  await expect(
+    summary.getByText(euros("Plus que 80 € pour la livraison offerte · jusqu'au 12\u00a0mars")),
+  ).toBeVisible();
+  await expect(summary.getByRole("button", { name: "Clôturer" })).toBeVisible();
   const { rows: opened } = await db.query<{ shipping_label: string; shipping_cents: number }>(
     "select shipping_label, shipping_cents from group_orders where wishlist_id = $1",
     [owner.listId],
@@ -181,7 +187,12 @@ test("sa commande groupée, de l'ouverture au paiement", async ({
     .getByLabel(/^Taille/)
     .selectOption("S");
   await expect(me).toContainText(euros("Articles 46 € + port 4,90 € = 50,90 €"));
-  await expect(page.getByText(euros("Total 46 € · Plus que 34 € pour la livraison offerte"))).toBeVisible();
+  await expect(summary.getByText(/^46\s€$/)).toBeVisible();
+  await expect(
+    summary.getByText(euros("Plus que 34 € pour la livraison offerte · jusqu'au 12\u00a0mars")),
+  ).toBeVisible();
+  // Her tile's price tag: her share.
+  await expect(me.locator(".price-tag")).toHaveText(/^50,90\s€$/);
   await expect
     .poll(async () => {
       const { rows } = await db.query<{ size_label: string | null }>(
@@ -273,7 +284,7 @@ test("sa commande groupée, de l'ouverture au paiement", async ({
   await expect(leaBlock).toContainText(euros("Doit 22,75 €"));
   await expect(me).toContainText(euros("Articles 46 € + port 2,75 € = 48,75 €"));
   // At the top, what it came to: 46 € + 20 € + 5,50 € of shipping.
-  await expect(page.getByTestId("group-total")).toHaveText(euros("Total 71,50 €"));
+  await expect(page.getByTestId("group-total")).toHaveText(/^71,50\s€$/);
   await expect(page.getByRole("button", { name: /Clôturer|Rouvrir|J'ai commandé|Annuler la commande/ })).toHaveCount(0);
   expect(await statusOf()).toBe("ordered");
   const stages = await db.query<{ stage: string }>("select stage from items where id = any($1)", [owner.items]);
@@ -316,7 +327,7 @@ test("sa commande groupée, de l'ouverture au paiement", async ({
   await past.getByRole("link", { name: /^Voir/ }).click();
   await expect(page).toHaveURL(new RegExp(`/listes/${owner.listId}/commande-groupee\\?commande=[0-9a-f-]{36}$`));
   await expect(page.getByTestId("group-state")).toHaveText(/^Commandé le \d{1,2}\s\S+\.$/);
-  await expect(page.getByTestId("group-total")).toHaveText(euros("Total 71,50 €"));
+  await expect(page.getByTestId("group-total")).toHaveText(/^71,50\s€$/);
   await expect(
     page.getByRole("button", { name: /Clôturer|Rouvrir|J'ai commandé|Annuler la commande|Retirer/ }),
   ).toHaveCount(0);
@@ -352,7 +363,7 @@ test("annuler une commande groupée", async ({ page, db, userAgentTag }, testInf
   );
   await page.getByRole("region", { name: "Partage" }).getByRole("link", { name: "Voir la commande groupée" }).click();
   await expect(page).toHaveURL(pageUrl(other));
-  await expect(page.getByText(euros("Total 0 € · Port 6,90 €, partagé entre celles qui commandent"))).toBeVisible();
+  await expect(page.getByText(euros("Port 6,90 €, partagé entre celles qui commandent"))).toBeVisible();
 
   // « Garder » keeps it; « Oui, annuler » cancels it.
   await page.getByRole("button", { name: "Annuler la commande groupée" }).click();

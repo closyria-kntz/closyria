@@ -20,3 +20,16 @@ export const blockClass =
 
 /** The title of a block of the sheet (mockup .k): small capitals in the accent. */
 export const blockTitleClass = "text-meta font-bold tracking-wide text-accent uppercase";
+
+/** A written action of a card (mockup .btn, 38 px, a finger-wide hit area): the main one, burgundy (powder in dark). */
+export const cardPrimaryClass = `hit-area relative inline-flex min-h-control-sm w-full items-center justify-center rounded-pill bg-button-bg px-space-3 py-space-1-5 text-center text-sm leading-tight font-bold text-button-ink disabled:opacity-60 ${focusRing}`;
+
+/** The same on the soft fill (mockup .btn.soft): « Je participe », « Je le prends aussi ». */
+export const cardSoftClass = `hit-area relative inline-flex min-h-control-sm w-full items-center justify-center rounded-pill bg-surface-sunken px-space-3 py-space-1-5 text-center text-sm leading-tight font-bold text-ink hover:bg-surface-strong disabled:opacity-60 ${focusRing}`;
+
+/** A written link-like action (mockup .more): bold, underlined, finger-wide. */
+export const moreButtonClass = `hit-area relative inline-flex min-h-control-2xs items-center self-start rounded-button text-chip font-bold underline underline-offset-3 disabled:opacity-60 ${focusRing}`;
+
+/** A person's initial in a round (mockup .av, 28 px). */
+export const initialClass =
+  "flex size-initial shrink-0 items-center justify-center rounded-full bg-une text-meta font-bold text-avatar-ink";

@@ -33,7 +33,7 @@ type Props = {
   selectId?: string | null;
 };
 
-const roundButton = `glass flex size-touch-target items-center justify-center rounded-full text-ink ${focusRing}`;
+const roundButton = `flex bg-surface-raised size-touch-target items-center justify-center rounded-full text-ink ${focusRing}`;
 
 function Arrow({ back }: { back?: boolean }) {
   return (
@@ -147,7 +147,7 @@ export function ProductGallery({
               <div
                 data-testid="gallery-dots"
                 aria-hidden="true"
-                className="glass flex items-center gap-space-1-5 rounded-full px-space-3 py-space-2-5"
+                className="flex items-center gap-space-1-5 bg-surface-raised rounded-full px-space-3 py-space-2-5"
               >
                 {photos.map((photo, n) => (
                   <span

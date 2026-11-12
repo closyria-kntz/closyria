@@ -136,7 +136,7 @@
       "explain": "Sur la page d’un article, dans le site ou l’app de la boutique, touche « Partager », puis choisis Closyria : l’article s’ajoute tout seul à tes envies.",
       "android": "Sur Android, Closyria apparaît dans ce menu une fois l’app installée sur ton écran d’accueil.",
       "iphone": "Sur iPhone, un raccourci à installer une fois l’y ajoute.",
-      "iphoneLink": "Voir l’aide du téléphone"
+      "phoneLink": "Voir l’aide du téléphone"
     },
     "mail": {
       "title": "Transférer un e-mail de commande",
@@ -1534,7 +1534,8 @@
       "home": "Découvrir Closyria"
     },
     "visitFor": "{name}, s’ouvre dans un nouvel onglet",
-    "ownerList": "La liste de {name}",
+    "ownerList": "Liste de {name}",
+    "band": "Liste de {name}",
     "invite": "Dis-lui ce que tu en penses 💬",
     "budget": "Budget de la liste : {amount}",
     "friend": {
@@ -1544,7 +1545,8 @@
       "itsMe": "Oui, c'est moi",
       "notHer": "Non",
       "nameTaken": "Une {name} est déjà passée sur cette liste. C'est toi ?",
-      "youAre": "Tu es {name} ·",
+      "youAre": "Tu es {name}",
+      "switchHint": "Change de prénom ici.",
       "switch": "Ce n'est pas toi ?",
       "switched": "Ce n'est plus {name} sur cet appareil. Ton prénom te sera demandé."
     },
@@ -1589,6 +1591,8 @@
       "dateName": "Pour {name}, le {date} 🎁",
       "date": "Pour le {date} 🎁",
       "none": "Tu peux offrir un article de cette liste 🎁",
+      "surprise": "Ce que tu offres reste une surprise : {name} ne le voit pas.",
+      "surpriseHidden": "Ce que tu offres reste une surprise : elle ne le voit pas.",
       "give": "Je lui offre",
       "giveHidden": "Je l'offre",
       "join": "Je participe",
@@ -1715,7 +1719,7 @@
       "appearance": "Apparence",
       "trash": "Corbeille",
       "account": "Mon compte",
-      "iphone": "Ajouter depuis le téléphone"
+      "phone": "Ajouter depuis le téléphone"
     },
     "colors": {
       "plum": "Prune",
@@ -1870,7 +1874,7 @@
   },
   "PhoneHelp": {
     "metadata": "Ajouter depuis ton téléphone",
-    "back": "← Réglages",
+    "back": "← Moi",
     "title": "Ajouter depuis ton téléphone",
     "intro": "Depuis une boutique, un article arrive dans Closyria en deux gestes. Choisis ton téléphone.",
     "iphoneSection": "Sur iPhone",
@@ -1978,6 +1982,13 @@
     },
     "totals": "Articles {items} + port {shipping} = {total}",
     "grandTotal": "Total {total}",
+    "summary": {
+      "kicker": "Commande groupée · {shop}",
+      "remaining": "Plus que {remaining} pour la livraison offerte",
+      "free": "Livraison offerte ✓",
+      "shared": "Port {shipping}, partagé entre celles qui commandent",
+      "until": "jusqu'au {date}"
+    },
     "owes": "Doit {amount}",
     "paid": "Payé",
     "paidFor": "pour {name}",

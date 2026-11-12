@@ -12,7 +12,7 @@ const LINKS = [
   { key: "appearance", href: "/reglages/apparence" },
   { key: "trash", href: "/reglages/corbeille" },
   { key: "account", href: "/reglages/compte" },
-  { key: "iphone", href: "/aide/telephone" },
+  { key: "phone", href: "/aide/telephone" },
 ] as const;
 
 /** Sub-navigation of « Réglages »: profiles, tags, levels, appearance, trash, her account and the phone help page. */

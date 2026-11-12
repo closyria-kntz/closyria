@@ -3,7 +3,7 @@
 import type { BudgetView, ItemCounts, ItemView } from "@closyria/shared";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { type ReactNode, Suspense, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, Suspense, useCallback, useContext, useEffect, useId, useState } from "react";
 import { ARTICLES_PATH, STEP_PARAM } from "@/lib/articles-address";
 import { formatAmount } from "@/lib/budget";
 import { useLiveRefresh } from "@/lib/live-changes";
@@ -11,6 +11,7 @@ import { ProfilesContext, profileHref, useCurrentProfile } from "@/lib/profile-c
 import { fetchBudget, fetchItemCounts, fetchItemsPage } from "@/lib/wardrobe-client";
 import { moreClass, sectionTitleClass } from "./home-news";
 import { MePlaces } from "./me-places";
+import { ProgressBar } from "./progress-bar";
 import { ThemeButton } from "./theme-button";
 import { focusRing } from "./ui";
 
@@ -61,23 +62,12 @@ function Tile({
   );
 }
 
-/** The tile's bar: the share already ordered (its width goes through a custom property, no inline value). */
-function SpentBar({ share }: { share: number }) {
-  const bar = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    bar.current?.style.setProperty("--spent-share", `${share}%`);
-  }, [share]);
-  return (
-    <span ref={bar} aria-hidden="true" className="mt-space-1 block h-space-1-5 overflow-hidden rounded-pill bg-line">
-      <span className="block h-full w-(--spent-share,0) rounded-pill bg-accent" />
-    </span>
-  );
-}
-
 /** The budget tile: what is already ordered over the amount, and the bar (mockup: « 132 € sur 200 € ce mois »). */
-function BudgetTile({ budget, href }: { budget: BudgetView | null; href: string }) {
+function BudgetTile({ budget, href }: { budget: BudgetView | null | undefined; href: string }) {
   const t = useTranslations("Me.glance.budget");
   const locale = useLocale();
+  // Not read (the glance failed): a dash, like the other tiles, rather than « Aucun · Ajouter un budget ».
+  if (budget === undefined) return <Tile testId="tile-budget" label={t("label")} big="–" line="" href={href} />;
   if (!budget) return <Tile testId="tile-budget" label={t("label")} big={t("none")} line={t("add")} href={href} />;
   const amount = formatAmount(locale, budget.amountCents);
   if (!budget.current) {
@@ -93,7 +83,7 @@ function BudgetTile({ budget, href }: { budget: BudgetView | null; href: string 
       line={t(`of.${budget.period}`, { amount })}
       href={href}
     >
-      <SpentBar share={share} />
+      <ProgressBar share={share} className="mt-space-1" />
     </Tile>
   );
 }
@@ -262,7 +252,10 @@ export function MeScreen() {
               big={t("glance.orders.soon")}
               line={t("glance.orders.line")}
             />
-            <BudgetTile budget={loaded.status === "ready" ? loaded.glance.budget : null} href={stepHref("envie")} />
+            <BudgetTile
+              budget={loaded.status === "ready" ? loaded.glance.budget : undefined}
+              href={stepHref("envie")}
+            />
           </ul>
         )}
       </section>

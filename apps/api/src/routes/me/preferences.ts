@@ -72,8 +72,11 @@ export function preferencesRoutes(deps: WardrobeDeps) {
   return app
     .openapi(getRoute, async (c) => {
       const userId = userIdOf(c);
+      const [row] = await db.select(columns).from(schema.user).where(eq(schema.user.id, userId));
+      if (!row || row.onboardedAt !== null) return c.json(toView(row), 200);
       // Existing accounts (articles kept before the discovery existed, or brought by an anonymous merge) are done.
-      await db
+      // Only tried while the discovery is not done: most reads write nothing.
+      const [marked] = await db
         .update(schema.user)
         .set({ onboardedAt: now() })
         .where(
@@ -82,9 +85,9 @@ export function preferencesRoutes(deps: WardrobeDeps) {
             isNull(schema.user.onboardedAt),
             sql`exists (select 1 from ${schema.items} where ${schema.items.userId} = ${userId})`,
           ),
-        );
-      const [row] = await db.select(columns).from(schema.user).where(eq(schema.user.id, userId));
-      return c.json(toView(row), 200);
+        )
+        .returning(columns);
+      return c.json(toView(marked ?? row), 200);
     })
     .openapi(patchRoute, async (c) => {
       const userId = userIdOf(c);

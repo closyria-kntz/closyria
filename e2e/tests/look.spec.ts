@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
-// Refonte « Cocon lumineux », task 3: frosted glass and flat buttons (the aurora went with Boudoir).
+// Refonte « Cocon lumineux », task 3: flat buttons (the aurora and the frosted glass went with Boudoir).
 
 async function oneWish(page: Page): Promise<void> {
   await page.goto("/");
@@ -72,23 +72,19 @@ test("le fond de la page est uni, sans aurore", async ({ page }) => {
   expect(seen.body).toBe("rgb(251, 247, 244)");
 });
 
-test("sans backdrop-filter, la barre du haut est opaque", async ({ page }) => {
-  await page.goto("/envies");
-  const glass = page.locator(".glass").first();
-  await expect(glass).toBeVisible();
-  const alpha = async () =>
-    glass.evaluate((el) => {
-      const c = document.createElement("canvas").getContext("2d");
-      if (!c) throw new Error("no canvas");
-      c.clearRect(0, 0, 1, 1);
-      c.fillStyle = getComputedStyle(el).backgroundColor;
-      c.fillRect(0, 0, 1, 1);
-      return c.getImageData(0, 0, 1, 1).data[3];
-    });
-  expect(await alpha()).toBeLessThan(255);
-  await page.evaluate(() => document.documentElement.classList.add("no-backdrop"));
-  expect(await alpha()).toBe(255);
-  expect(await glass.evaluate((el) => getComputedStyle(el).backdropFilter)).toBe("none");
+// Boudoir (task 8): the « Cocon » frosted glass is gone, every bar and panel is an opaque Boudoir surface.
+test("plus de verre dépoli : aucun élément n'a de backdrop-filter", async ({ page }) => {
+  await oneWish(page);
+  await page.getByTestId("item-card").first().hover();
+  await page.getByTestId("card-take").first().click();
+  await expect(page.getByTestId("order-band")).toBeVisible();
+  const frosted = await page.evaluate(() =>
+    [...document.querySelectorAll("*")]
+      .filter((el) => getComputedStyle(el).backdropFilter !== "none")
+      .map((el) => el.getAttribute("class")),
+  );
+  expect(frosted).toEqual([]);
+  await expect(page.locator(".glass")).toHaveCount(0);
 });
 
 test("« Je le prends » : le bandeau est là aussitôt, une petite photo y vole puis disparaît", async ({ page }) => {
@@ -99,7 +95,7 @@ test("« Je le prends » : le bandeau est là aussitôt, une petite photo y vole
   // Right after the take: the photo shape flies and nothing else moves (one effect per moment).
   const right = await page.evaluate(() => ({
     arches: document.querySelectorAll(".fly-photo").length,
-    // Shape C, like the thumbnails: round top, small bottom corners.
+    // Boudoir: an even small radius (8 px), no more arch.
     shape: [...document.querySelectorAll(".fly-photo")].map((el) => {
       const style = getComputedStyle(el);
       return [style.borderTopLeftRadius, style.borderBottomLeftRadius];
@@ -109,7 +105,7 @@ test("« Je le prends » : le bandeau est là aussitôt, une petite photo y vole
       .map((a) => (a as CSSAnimation).animationName)
       .filter((n) => n === "count-roll" || n === "chip-check-draw"),
   }));
-  expect(right).toEqual({ arches: 1, shape: [["20px", "8px"]], running: [] });
+  expect(right).toEqual({ arches: 1, shape: [["8px", "8px"]], running: [] });
   await expect(page.locator(".fly-photo")).toHaveCount(0, { timeout: 5_000 });
   await expect(page.getByTestId("card-take").first()).toHaveAttribute("aria-pressed", "true");
 });

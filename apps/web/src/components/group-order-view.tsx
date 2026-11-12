@@ -36,10 +36,15 @@ import {
   useShopShippingOptions,
 } from "./group-order-open-dialog";
 import { GroupOrderOrderedDialog } from "./group-order-ordered-dialog";
+import { ProgressBar } from "./progress-bar";
 import { ShareSheet } from "./share-sheet";
-import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
+import { buttonClass, focusRing, initialClass, inputClass, moreButtonClass, primaryButtonClass } from "./ui";
 
 const touch = "min-h-touch-target";
+/** The summary's kicker (mockup .k) and its two buttons (mockup .btn.pri and .btn, 44 px). */
+const kickerClass = "text-meta font-bold tracking-wide text-une-ink uppercase";
+const boxPrimaryClass = `inline-flex min-h-touch-target items-center justify-center rounded-pill bg-button-bg px-space-3 py-space-1-5 text-center text-sm leading-tight font-bold text-button-ink disabled:opacity-60 ${focusRing}`;
+const boxOutlineClass = `inline-flex min-h-touch-target items-center justify-center rounded-pill border-2 border-ink px-space-3 py-space-1-5 text-center text-sm leading-tight font-bold text-ink hover:bg-surface-strong disabled:opacity-60 ${focusRing}`;
 /** Read again this often while the page shows and the order may still change (friends add, she is elsewhere). */
 export const GROUP_ORDER_POLL_MS = 10_000;
 const QUANTITIES = [1, 2, 3, 4, 5] as const;
@@ -229,7 +234,6 @@ function Ready({
   change: Change;
 }) {
   const t = useTranslations("GroupOrder");
-  const tShared = useTranslations("SharedList.groupOrder");
   const locale = useLocale();
   const money = (cents: number) => formatAmount(locale, cents, order.currency);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -256,15 +260,7 @@ function Ready({
           shipping: money(order.shipping.shippingCents),
           threshold: money(order.shipping.freeFromCents),
         });
-  // « Total … · Plus que … pour la livraison offerte » and the two others (spec § 3.1).
-  const total = money(order.totals.totalCents);
   const remaining = order.totals.remainingForFreeCents;
-  const progress =
-    remaining === null
-      ? tShared("progressShared", { total, shipping: money(order.shipping.shippingCents) })
-      : remaining > 0
-        ? tShared("progressRemaining", { total, remaining: money(remaining) })
-        : tShared("progressFree", { total });
   const friends = order.people.filter((person) => !person.isOwner);
   const owed = friends.flatMap((person) => (person.payment ? [person.payment] : []));
   const settled = order.status === "ordered" && owed.length > 0 && owed.every((payment) => payment.paidAt !== null);
@@ -333,8 +329,40 @@ function Ready({
       }));
   }
 
+  // The summary's line (mockup commandeG(): « Plus que 8,50 € pour la livraison offerte · jusqu'au 20 novembre »).
+  const way =
+    remaining === null
+      ? t("summary.shared", { shipping: money(order.shipping.shippingCents) })
+      : remaining > 0
+        ? t("summary.remaining", { remaining: money(remaining) })
+        : t("summary.free");
+  const wayLine = order.deadline ? `${way} · ${t("summary.until", { date: dayOf(locale, order.deadline) })}` : way;
+  const share =
+    remaining === null
+      ? null
+      : remaining > 0
+        ? (order.totals.totalCents / (order.totals.totalCents + remaining)) * 100
+        : 100;
+  const orderedButton = (primary: boolean) => (
+    <button
+      type="button"
+      disabled={blocked}
+      onClick={() =>
+        setOrdered((previous) => ({
+          open: true,
+          key: previous.keep ? previous.key : previous.key + 1,
+          error: null,
+          keep: false,
+        }))
+      }
+      className={primary ? boxPrimaryClass : boxOutlineClass}
+    >
+      {t("actions.ordered")}
+    </button>
+  );
+
   return (
-    <div className="flex flex-col gap-space-5 pb-space-6">
+    <div className="flex flex-col gap-space-4 pb-space-6">
       <Link
         href={`/listes/${listId}`}
         className={`self-start rounded-button text-sm text-accent ${touch} inline-flex items-center ${focusRing}`}
@@ -343,25 +371,52 @@ function Ready({
         {t("back")}
       </Link>
 
-      <div className="flex flex-col gap-space-2 rounded-card border-2 border-selected-line bg-selected-surface p-space-4">
-        <h1 className="font-display text-title font-strong break-words">{title}</h1>
-        <p className="text-sm text-ink-muted tabular-nums">{delivery}</p>
-        {editable ? (
-          <p className="font-strong tabular-nums">{progress}</p>
-        ) : (
-          <p data-testid="group-total" className="font-strong tabular-nums">
-            {t("grandTotal", { total: grandTotal })}
+      {/* Phone: title, summary, people. Computer: the people on the left, the summary on the right (mockup). */}
+      <div className="grid items-start gap-space-3-5 lg:grid-cols-(--grid-order) lg:gap-x-space-6">
+        <h1 className="font-title text-page-title leading-tight break-words lg:col-start-1">{title}</h1>
+
+        <section
+          aria-label={t("summary.kicker", { shop })}
+          className="flex flex-col gap-space-2 rounded-card bg-surface-sunken p-space-3-5 lg:sticky lg:top-space-4 lg:col-start-2 lg:row-span-3 lg:row-start-1"
+        >
+          <p className={kickerClass}>{t("summary.kicker", { shop })}</p>
+          {editable ? (
+            <p className="font-title text-stat leading-none tabular-nums">{money(order.totals.totalCents)}</p>
+          ) : (
+            <p data-testid="group-total" className="font-title text-stat leading-none tabular-nums">
+              {grandTotal}
+            </p>
+          )}
+          {editable && share !== null && <ProgressBar share={share} />}
+          {editable && <p className="text-sm tabular-nums">{wayLine}</p>}
+          <p className="text-meta text-ink-muted tabular-nums">{delivery}</p>
+          <p data-testid="group-state" className="text-sm font-bold">
+            {stateText}
           </p>
-        )}
-        <p data-testid="group-state" className="font-strong">
-          {stateText}
-        </p>
-        {settled && <p className="font-strong text-accent">{t("state.settled")}</p>}
-        {inviting && invitation && shareUrl && (
-          <>
-            <button type="button" onClick={() => setInviteOpen(true)} className={`${buttonClass} ${touch} self-start`}>
-              {t("copy.message")}
-            </button>
+          {settled && <p className="text-sm font-bold text-une-ink">{t("state.settled")}</p>}
+          {editable && (
+            <div className="grid grid-cols-2 gap-space-2">
+              {order.status === "open" ? (
+                <button type="button" disabled={busy} onClick={() => void act("close")} className={boxPrimaryClass}>
+                  {t("actions.close")}
+                </button>
+              ) : (
+                orderedButton(true)
+              )}
+              {inviting && invitation && shareUrl ? (
+                <button type="button" onClick={() => setInviteOpen(true)} className={boxOutlineClass}>
+                  {t("copy.message")}
+                </button>
+              ) : order.status === "open" ? (
+                orderedButton(false)
+              ) : (
+                <button type="button" disabled={busy} onClick={() => void act("reopen")} className={boxOutlineClass}>
+                  {t("actions.reopen")}
+                </button>
+              )}
+            </div>
+          )}
+          {inviting && invitation && shareUrl && (
             <ShareSheet
               open={inviteOpen}
               onClose={() => setInviteOpen(false)}
@@ -370,88 +425,53 @@ function Ready({
               url={shareUrl}
               copy="message"
             />
-          </>
-        )}
-        {inviting && !invitation && noLink && (
-          <p data-testid="group-no-link" className="text-sm text-ink-muted">
-            {t("copy.noLink")}
-          </p>
-        )}
-      </div>
-
-      {error && (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      )}
-
-      {editable && (
-        <div className="flex flex-wrap gap-space-2">
-          {order.status === "open" ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void act("close")}
-              className={`${buttonClass} ${touch}`}
-            >
-              {t("actions.close")}
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void act("reopen")}
-              className={`${buttonClass} ${touch}`}
-            >
-              {t("actions.reopen")}
-            </button>
           )}
-          <button
-            type="button"
-            disabled={blocked}
-            onClick={() =>
-              setOrdered((previous) => ({
-                open: true,
-                key: previous.keep ? previous.key : previous.key + 1,
-                error: null,
-                keep: false,
-              }))
-            }
-            className={`${primaryButtonClass} ${touch}`}
-          >
-            {t("actions.ordered")}
-          </button>
-          <button type="button" disabled={busy} onClick={() => setEditing(true)} className={`${buttonClass} ${touch}`}>
-            {t("actions.edit")}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => setConfirmCancel(true)}
-            className={`${buttonClass} ${touch}`}
-          >
-            {t("actions.cancel")}
-          </button>
+          {inviting && !invitation && noLink && (
+            <p data-testid="group-no-link" className="text-meta text-ink-muted">
+              {t("copy.noLink")}
+            </p>
+          )}
+          {editable && (
+            <div className="flex flex-col items-start">
+              {order.status === "open" && inviting && invitation && shareUrl && (
+                <div className="mb-space-1 grid w-full">{orderedButton(false)}</div>
+              )}
+              <button type="button" disabled={busy} onClick={() => setEditing(true)} className={moreButtonClass}>
+                {t("actions.edit")}
+              </button>
+              <button type="button" disabled={busy} onClick={() => setConfirmCancel(true)} className={moreButtonClass}>
+                {t("actions.cancel")}
+              </button>
+            </div>
+          )}
+        </section>
+
+        <div className="flex min-w-space-0 flex-col gap-space-3-5 lg:col-start-1">
+          {error && (
+            <p role="alert" className="text-sm text-danger">
+              {error}
+            </p>
+          )}
+
+          <MeBlock order={order} editable={editable} money={money} change={change} onSaving={setSaving} />
+
+          {friends.length === 0 ? (
+            <p className="max-w-measure text-sm text-ink-muted">{t("friends.empty")}</p>
+          ) : (
+            friends.map((person) => (
+              <FriendBlock
+                key={person.key}
+                order={order}
+                person={person}
+                editable={editable}
+                busy={busy}
+                money={money}
+                change={change}
+              />
+            ))
+          )}
         </div>
-      )}
-
-      <MeBlock order={order} editable={editable} money={money} change={change} onSaving={setSaving} />
-
-      {friends.length === 0 ? (
-        <p className="max-w-measure text-sm text-ink-muted">{t("friends.empty")}</p>
-      ) : (
-        friends.map((person) => (
-          <FriendBlock
-            key={person.key}
-            order={order}
-            person={person}
-            editable={editable}
-            busy={busy}
-            money={money}
-            change={change}
-          />
-        ))
-      )}
+      </div>
 
       <GroupOrderOrderedDialog
         open={ordered.open}
@@ -492,17 +512,23 @@ function Ready({
   );
 }
 
-/** A block of the page, named by its heading (« Toi », a friend's name). */
-function Block({ title, children }: { title: string; children: ReactNode }) {
+/**
+ * A person's tile (mockup .tile), named by its heading (« Toi », a friend's name): her initial, her name and what she
+ * owes on a price tag, then her lines.
+ */
+function Block({ title, tag, children }: { title: string; tag: string | null; children: ReactNode }) {
   const id = useId();
   return (
-    <section
-      aria-labelledby={id}
-      className="flex flex-col gap-space-3 rounded-card border border-card-border bg-card-bg p-space-4"
-    >
-      <h2 id={id} className="font-display text-lead font-strong break-words">
-        {title}
-      </h2>
+    <section aria-labelledby={id} className="flex flex-col gap-space-2-5 rounded-card bg-surface-raised p-space-3-5">
+      <div className="flex items-center gap-space-2">
+        <span aria-hidden="true" className={initialClass}>
+          {title.trim().charAt(0).toLocaleUpperCase()}
+        </span>
+        <h2 id={id} className="min-w-space-0 flex-1 text-chip font-bold break-words">
+          {title}
+        </h2>
+        {tag && <span className="price-tag shrink-0 tabular-nums">{tag}</span>}
+      </div>
       {children}
     </section>
   );
@@ -514,7 +540,7 @@ function Totals({ order, personKey, money }: { order: Order; personKey: string; 
   const share = order.totals.perPerson[personKey];
   if (!share) return null;
   return (
-    <p className="font-strong tabular-nums">
+    <p className="text-meta text-ink-muted tabular-nums">
       {t("totals", {
         items: money(share.itemsCents),
         shipping: money(share.shippingCents),
@@ -631,7 +657,12 @@ function MeBlock({
   };
 
   return (
-    <Block title={t("me.title")}>
+    <Block
+      title={t("me.title")}
+      tag={
+        owner && order.totals.perPerson[owner.key] ? money(order.totals.perPerson[owner.key]?.totalCents ?? 0) : null
+      }
+    >
       {order.ownItems.length === 0 ? (
         <p className="text-sm text-ink-muted">{t("me.empty", { shop: order.shop.name })}</p>
       ) : (
@@ -654,10 +685,10 @@ function MeBlock({
                         {tShared("reading")}
                       </span>
                     ) : (
-                      <span className="font-strong break-words">{name}</span>
+                      <span className="font-title text-ui leading-tight break-words">{name}</span>
                     )}
                     {line && (
-                      <span className="text-ink-muted tabular-nums">
+                      <span className="text-meta text-ink-muted tabular-nums">
                         {line.unitPriceCents === null ? t("line.unknownPrice") : money(line.unitPriceCents)}
                       </span>
                     )}
@@ -829,6 +860,8 @@ function FriendBlock({
   const tShared = useTranslations("SharedList.groupOrder");
   const [paying, setPaying] = useState<boolean | null>(null);
   const paid = paying ?? Boolean(person.payment?.paidAt);
+  // What she owes: her payment once ordered, her share until then.
+  const owes = person.payment?.amountCents ?? order.totals.perPerson[person.key]?.totalCents ?? null;
 
   async function remove(line: Line) {
     const result = await change(() => removeGroupLine(order.id, line.id));
@@ -846,7 +879,7 @@ function FriendBlock({
   }
 
   return (
-    <Block title={person.name}>
+    <Block title={person.name} tag={owes === null ? null : t("owes", { amount: money(owes) })}>
       <ul className="flex flex-col gap-space-3">
         {person.lines.map((line) => {
           const removed = line.removedAt !== null;
@@ -858,22 +891,23 @@ function FriendBlock({
             <li
               key={line.id}
               data-testid={removed ? "removed-line" : undefined}
-              className="flex flex-wrap items-center gap-space-3 text-sm"
+              className="flex items-center gap-space-3 text-sm"
             >
               <Thumb url={line.imageUrl} />
-              <span className="flex min-w-space-0 flex-1 flex-col">
+              <span className="flex min-w-space-0 flex-1 flex-col items-start">
                 {line.status === "reading" ? (
                   <span aria-busy="true" className="text-ink-muted">
                     {tShared("reading")}
                   </span>
                 ) : (
-                  <span className={`font-strong break-words ${removed ? "text-ink-muted line-through" : ""}`}>
+                  <span
+                    className={`font-title text-ui leading-tight break-words ${removed ? "text-ink-muted line-through" : ""}`}
+                  >
                     {name}
                   </span>
                 )}
-                <span className="flex flex-wrap gap-x-space-2 text-ink-muted tabular-nums">
+                <span className="flex flex-wrap gap-x-space-2 text-meta text-ink-muted tabular-nums">
                   <span>{detail}</span>
-                  <span>{line.unitPriceCents === null ? t("line.unknownPrice") : money(line.unitPriceCents)}</span>
                   {removed && <span>{t("line.removed")}</span>}
                 </span>
                 {line.url && (
@@ -881,33 +915,30 @@ function FriendBlock({
                     href={line.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`hit-area relative self-start rounded-button text-accent underline ${focusRing}`}
+                    className={`hit-area relative self-start rounded-button text-meta text-accent underline ${focusRing}`}
                   >
                     {t("line.seeAtShop", { shop: order.shop.name })}
                     <span className="sr-only"> — {name}</span>
                   </a>
                 )}
+                {editable && !removed && (
+                  <button type="button" disabled={busy} onClick={() => void remove(line)} className={moreButtonClass}>
+                    {t("line.remove")}
+                    <span className="sr-only"> {t("line.forItem", { name, person: person.name })}</span>
+                  </button>
+                )}
               </span>
-              {editable && !removed && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void remove(line)}
-                  className={`${buttonClass} ${touch}`}
-                >
-                  {t("line.remove")}
-                  <span className="sr-only"> {t("line.forItem", { name, person: person.name })}</span>
-                </button>
-              )}
+              <b className={`shrink-0 tabular-nums ${removed ? "text-ink-muted line-through" : ""}`}>
+                {line.unitPriceCents === null ? t("line.unknownPrice") : money(line.unitPriceCents)}
+              </b>
             </li>
           );
         })}
       </ul>
       <Totals order={order} personKey={person.key} money={money} />
       {order.status === "ordered" && person.payment && (
-        <div className="flex flex-wrap items-center justify-between gap-space-3 rounded-md border border-selected-line bg-selected-surface px-space-3 py-space-2">
-          <p className="font-strong tabular-nums">{t("owes", { amount: money(person.payment.amountCents) })}</p>
-          <label className={`flex items-center gap-space-2 text-sm font-strong ${touch}`}>
+        <div className="flex flex-wrap items-center justify-between gap-space-3 rounded-md bg-surface-sunken px-space-3 py-space-1">
+          <label className={`flex items-center gap-space-2 text-sm font-bold ${touch}`}>
             <input
               type="checkbox"
               checked={paid}
@@ -1004,7 +1035,7 @@ function CopyButton({ label, labelSuffix, text }: { label: string; labelSuffix?:
 
 function Thumb({ url }: { url: string | null }) {
   return (
-    <span className="size-touch-target shrink-0 overflow-hidden rounded-md bg-media-backdrop">
+    <span className="aspect-3/4 w-order-thumb shrink-0 overflow-hidden rounded-md bg-media-backdrop">
       {url && (
         // biome-ignore lint/performance/noImgElement: photos come from our own API, already resized.
         <img src={url} alt="" loading="lazy" decoding="async" className="size-full object-cover" />

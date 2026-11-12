@@ -25,7 +25,7 @@ export function CoverPhoto({
         className="size-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring focus-visible:outline-solid"
       >
         {/* biome-ignore lint/performance/noImgElement: photos come from our own API, already resized. */}
-        <img src={first.url} alt="" loading="lazy" decoding="async" className="card-photo size-full object-contain" />
+        <img src={first.url} alt="" loading="lazy" decoding="async" className="card-photo size-full object-cover" />
       </button>
       <PhotoViewer photos={photos} index={viewing} alt={name} onClose={() => setViewing(null)} />
     </>

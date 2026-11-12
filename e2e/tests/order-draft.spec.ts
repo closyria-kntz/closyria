@@ -66,9 +66,9 @@ test("budget de la semaine, deux envies cochées, « J’ai commandé » puis «
   await expect(ticked).toHaveCSS("border-top-color", "rgb(140, 42, 60)");
   await expect(ticked.getByText(/89\s€/)).toHaveCSS("font-variant-numeric", "tabular-nums");
   await expect(band(page).getByText(/2 articles/)).toHaveCSS("font-variant-numeric", "tabular-nums");
-  // A glass band (refonte « Cocon lumineux », replaces the white one of 2026-11-07), and over the budget in red.
-  await expect(band(page)).toHaveClass(/glass/);
-  await expect(band(page)).toHaveCSS("background-color", "color(srgb 1 1 1 / 0.6)");
+  // An opaque white band (Boudoir: the « Cocon » glass is gone), and over the budget in red.
+  await expect(band(page)).not.toHaveClass(/glass/);
+  await expect(band(page)).toHaveCSS("background-color", "rgb(255, 255, 255)");
   // Buttons show the hand, like links, and « J'ai commandé » darkens on hover.
   const ordered = band(page).getByRole("button", { name: "J’ai commandé" });
   await expect(ordered).toHaveCSS("cursor", "pointer");
@@ -476,7 +476,7 @@ test("Mes envies : le bandeau « Ma commande », trois envies prises, une décoc
   await expect(bar.getByRole("heading", { name: "Ma commande" })).toBeVisible();
   await expect(bar).toContainText(/3 articles, 184\s€/);
   await expect(bar).toContainText(/Il te resterait 116\s€/);
-  await expect(bar).toHaveClass(/glass/);
+  await expect(bar).not.toHaveClass(/glass/);
   await expect(bar.getByTestId("budget-bars")).toBeVisible();
   await axe(page);
   await page.screenshot({ path: testInfo.outputPath("envies-bandeau.png") });

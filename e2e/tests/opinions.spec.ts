@@ -82,7 +82,10 @@ test("une amie donne son avis", async ({ page, browser, baseURL, db, userAgentTa
 
   const lea = await friend(browser, baseURL, `10.201.${testInfo.workerIndex % 250}.1`);
   await lea.goto(shareUrl);
-  await expect(lea.getByText("La liste de Camille", { exact: true })).toBeVisible();
+  await expect(lea.getByRole("main").getByText("Liste de Camille", { exact: true })).toBeVisible();
+  // Boudoir's burgundy band (mockup lienAmies()): the logo and whose list it is.
+  await expect(lea.getByRole("banner").getByRole("link", { name: "Closyria" })).toBeVisible();
+  await expect(lea.getByRole("banner")).toContainText("Liste de Camille");
   await expect(lea.getByRole("heading", { level: 1, name: "Mariage" })).toBeVisible();
   await expect(lea.getByText("Dis-lui ce que tu en penses 💬")).toBeVisible();
   const item = lea.getByRole("list", { name: "Articles" }).getByRole("listitem").first();
@@ -432,7 +435,7 @@ test("les réglages du partage changent ce que voit le lien", async ({
   await flip(page, "Montrer mon prénom", false);
   await lea.reload();
   await expect(lea.getByRole("heading", { level: 1, name: "Mariage" })).toBeVisible();
-  await expect(lea.getByText(/La liste de/)).toHaveCount(0);
+  await expect(lea.getByText(/Liste de/)).toHaveCount(0);
 
   // A setting is kept: back on the page, it is as she left it.
   await page.reload();
@@ -517,7 +520,7 @@ test("deux réglages enregistrés coup sur coup : la réponse en retard ne défa
   const lea = await friend(browser, baseURL, `10.206.${testInfo.workerIndex % 250}.1`);
   await lea.goto(shareUrl);
   await expect(lea.getByRole("heading", { level: 1, name: "Mariage" })).toBeVisible();
-  await expect(lea.getByText(/La liste de/)).toHaveCount(0);
+  await expect(lea.getByText(/Liste de/)).toHaveCount(0);
   await lea.context().close();
 });
 

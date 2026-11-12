@@ -3,7 +3,8 @@
 import type { SharedGroupOrder } from "@closyria/shared";
 import { useLocale, useTranslations } from "next-intl";
 import { useId } from "react";
-import { focusRing, primaryButtonClass } from "@/components/ui";
+import { ProgressBar } from "@/components/progress-bar";
+import { cardSoftClass, focusRing, initialClass, primaryButtonClass } from "@/components/ui";
 import { formatAmount } from "@/lib/budget";
 import { occasionDay } from "./gifts";
 
@@ -59,19 +60,29 @@ function GroupBanner({ order, titleId }: { order: SharedGroupOrder; titleId: str
     state = t("ordered", { date: orderedDay(locale, order.orderedAt) });
   else if (order.status === "closed" || order.locked) state = name ? t("closed", { name }) : t("closedHidden");
 
+  // The way to free shipping as a bar too (mockup .box): what is ordered over what it takes.
+  const share =
+    progress === null || remaining === null
+      ? null
+      : remaining > 0
+        ? (order.totals.totalCents / (order.totals.totalCents + remaining)) * 100
+        : 100;
   return (
-    <div data-testid="group-banner" className="flex flex-col gap-space-1 break-words">
-      <h2 id={titleId} className="font-display text-lead font-strong">
+    <div data-testid="group-banner" className="flex flex-col gap-space-2 break-words">
+      <h2 id={titleId} className={groupKickerClass}>
         <span aria-hidden="true">🛍️ </span>
         {title}
       </h2>
-      {progress && <p className="tabular-nums">{progress}</p>}
-      {state && <p className="font-strong">{state}</p>}
+      {progress && <p className="text-sm tabular-nums">{progress}</p>}
+      {share !== null && <ProgressBar share={share} />}
+      {state && <p className="text-sm font-bold">{state}</p>}
     </div>
   );
 }
 
-const linkButtonClass = `hit-area relative rounded-button px-space-2 text-sm text-ink-muted underline hover:text-ink disabled:opacity-60 ${focusRing}`;
+const linkButtonClass = `hit-area relative rounded-button text-chip font-bold underline underline-offset-2 disabled:opacity-60 ${focusRing}`;
+/** The kicker of a Boudoir box (mockup .k): small capitals in the accent. */
+const groupKickerClass = "text-meta font-bold tracking-wide text-une-ink uppercase";
 
 /** « Tu le prends aussi (T38 × 1) ». */
 function useMineLabel() {
@@ -116,13 +127,13 @@ export function GroupItemActions({
   if (lines.length === 0 && !writable) return null;
   const forItem = <span className="sr-only"> {t("forItem", { name: itemName })}</span>;
   return (
-    <div id={blockId} tabIndex={-1} className={`flex flex-col gap-space-2 rounded-md ${focusRing}`}>
+    <div id={blockId} tabIndex={-1} className={`flex flex-col gap-space-1-5 rounded-md ${focusRing}`}>
       {lines.map((line) => (
         <p
           key={line.id}
-          className="flex flex-wrap items-center justify-between gap-x-space-3 gap-y-space-1 rounded-md border border-selected-line bg-selected-surface px-space-3 py-space-2 text-sm"
+          className="flex flex-wrap items-center justify-between gap-x-space-3 gap-y-space-1 rounded-md bg-une px-space-2-5 py-space-1-5 text-chip"
         >
-          <span className="font-strong text-accent">{mineLabel(line)}</span>
+          <span className="font-bold text-une-ink">{mineLabel(line)}</span>
           {writable && (
             <span className="flex items-center gap-space-1">
               <button type="button" disabled={busy} onClick={() => onEdit(line)} className={linkButtonClass}>
@@ -139,13 +150,7 @@ export function GroupItemActions({
         </p>
       ))}
       {writable && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onTake}
-          className={`inline-flex min-h-touch-target items-center justify-center rounded-button border border-selected-line bg-surface-raised px-space-3 text-sm font-strong text-ink hover:bg-selected-surface disabled:opacity-60 ${focusRing}`}
-        >
-          <span aria-hidden="true">🛍️&nbsp;</span>
+        <button type="button" disabled={busy} onClick={onTake} className={cardSoftClass}>
           {t("take")}
           {forItem}
         </button>
@@ -199,14 +204,14 @@ export function GroupOrderBlock({
       aria-labelledby={titleId}
       id="group-order"
       tabIndex={-1}
-      className={`flex flex-col gap-space-3 rounded-card border-2 border-selected-line bg-card-bg p-space-4 ${focusRing}`}
+      className={`flex flex-col gap-space-2-5 rounded-card bg-surface-sunken p-space-3-5 ${focusRing}`}
     >
       <GroupBanner order={order} titleId={titleId} />
 
       {live && mine && mine.lineIds.length > 0 && (
-        <div className="flex flex-col gap-space-1 rounded-md border border-selected-line bg-selected-surface px-space-3 py-space-2">
+        <div className="flex flex-col gap-space-1 rounded-md bg-surface-raised px-space-3 py-space-2 text-sm">
           <p className="tabular-nums">
-            <span className="font-strong">
+            <span className="font-bold">
               {t("share", {
                 amount: money(mine.totalCents),
                 items: money(mine.itemsCents),
@@ -217,9 +222,9 @@ export function GroupOrderBlock({
           </p>
           {order.status === "ordered" &&
             (mine.paidAt ? (
-              <p className="font-strong text-accent">{t("paid")}</p>
+              <p className="font-bold text-une-ink">{t("paid")}</p>
             ) : (
-              <p className="font-strong tabular-nums">
+              <p className="font-bold tabular-nums">
                 {ownerName
                   ? t("owe", { amount: money(mine.totalCents), name: ownerName })
                   : t("oweHidden", { amount: money(mine.totalCents) })}
@@ -235,7 +240,7 @@ export function GroupOrderBlock({
             aria-expanded={detailOpen}
             aria-controls={detailOpen ? detailId : undefined}
             onClick={onToggleDetail}
-            className={`group inline-flex min-h-touch-target items-center gap-space-1 self-start rounded-button text-sm font-strong underline underline-offset-2 ${focusRing}`}
+            className={`group hit-area relative inline-flex min-h-control-2xs items-center gap-space-1 self-start rounded-button text-chip font-bold underline underline-offset-3 ${focusRing}`}
           >
             {t("detail", { count: lineCount })}
             <svg
@@ -261,7 +266,12 @@ export function GroupOrderBlock({
                     const who = person.isOwner ? person.name || ownerName || t("ownerFallback") : person.name;
                     return (
                       <li key={person.lines[0]?.id ?? person.name} className="flex flex-col gap-space-1">
-                        <p className="font-strong">{isMe ? t("you", { name: who }) : who}</p>
+                        <p className="flex items-center gap-space-2 text-chip font-bold">
+                          <span aria-hidden="true" className={initialClass}>
+                            {who.trim().charAt(0).toLocaleUpperCase()}
+                          </span>
+                          {isMe ? t("you", { name: who }) : who}
+                        </p>
                         <ul className="flex flex-col gap-space-2">
                           {person.lines.map((line) => (
                             <SummaryLine
@@ -327,7 +337,7 @@ export function GroupOrderBlock({
           type="button"
           disabled={busy}
           onClick={onAdd}
-          className={`${primaryButtonClass} min-h-touch-target self-start`}
+          className={`${primaryButtonClass} min-h-touch-target self-start rounded-pill font-bold`}
         >
           {t("addOther")}
         </button>
@@ -354,7 +364,7 @@ function SummaryLine({
     : t("quantityOnly", { quantity: line.quantity });
   return (
     <li className="flex items-center gap-space-3 text-sm">
-      <span className="size-touch-target shrink-0 overflow-hidden rounded-md bg-media-backdrop">
+      <span className="aspect-3/4 w-touch-target shrink-0 overflow-hidden rounded-md bg-media-backdrop">
         {line.imageUrl && (
           // biome-ignore lint/performance/noImgElement: photos come from our own API, already resized.
           <img src={line.imageUrl} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
@@ -366,9 +376,9 @@ function SummaryLine({
             {t("reading")}
           </span>
         ) : (
-          <span className="font-strong break-words">{line.name || noName}</span>
+          <span className="font-title text-ui leading-tight break-words">{line.name || noName}</span>
         )}
-        <span className="flex flex-wrap gap-x-space-2 text-ink-muted tabular-nums">
+        <span className="flex flex-wrap gap-x-space-2 text-meta text-ink-muted tabular-nums">
           <span>{detail}</span>
           {!reading && <span>{line.unitPriceCents === null ? t("unknownPrice") : money(line.unitPriceCents)}</span>}
         </span>
