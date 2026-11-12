@@ -6,7 +6,7 @@ import { type CspRecord, collectCspViolations } from "./csp";
 import { BROWSER_AUTH_BUNDLE, CSP_DIR, setupValue } from "./paths";
 import { CLIENT_IP_HEADER } from "./proxy";
 
-type Fixtures = { userAgentTag: string };
+type Fixtures = { userAgentTag: string; discovery: boolean };
 type WorkerFixtures = { db: pg.Pool; browserAuthScript: string };
 
 let clientCounter = 0;
@@ -17,7 +17,10 @@ let clientCounter = 0;
  *   database rows of one test can be found without seeing the others' (`userAgentTag`);
  * - every page gets the browser auth helpers (`window.closyriaE2E`, see browser-auth.ts);
  * - every test's CSP violations are written for the suite's artefact (R17);
- * - no request leaves the stack's origin: they are aborted, and the test fails.
+ * - no request leaves the stack's origin: they are aborted, and the test fails;
+ * - the first-opening discovery (refonte Boudoir, task 7) is counted as seen, so its dialog never covers the pages a
+ *   journey visits: the read of `/api/me/preferences` answers `onboardedAt` (a visitor without a session yet has
+ *   no account to mark). `test.use({ discovery: true })` leaves the real answers (onboarding.spec.ts).
  */
 export const test = base.extend<Fixtures, WorkerFixtures>({
   baseURL: async ({}, use) => use(setupValue("E2E_BASE_URL")),
@@ -31,7 +34,8 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     const n = ++clientCounter;
     await use({ [CLIENT_IP_HEADER]: `10.${testInfo.workerIndex % 250}.${(n >> 8) % 250}.${(n % 250) + 1}` });
   },
-  context: async ({ context, browserAuthScript, baseURL }, use, testInfo) => {
+  discovery: [false, { option: true }],
+  context: async ({ context, browserAuthScript, baseURL, discovery }, use, testInfo) => {
     // No Internet: anything but the stack's own origin is aborted, and a test that tried fails.
     const origin = new URL(baseURL ?? setupValue("E2E_BASE_URL")).origin;
     const outside: string[] = [];
@@ -43,6 +47,19 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
       },
     );
     await context.addInitScript({ content: browserAuthScript });
+    if (!discovery) {
+      await context.route(
+        (url) => url.origin === origin && url.pathname === "/api/me/preferences",
+        async (route) => {
+          if (route.request().method() !== "GET") return route.continue();
+          const response = await route.fetch();
+          const seen = { seenTips: [] as string[], onboardedAt: "2026-01-01T00:00:00.000Z" };
+          if (response.status() === 401) return route.fulfill({ status: 200, json: seen });
+          const body = (await response.json()) as { seenTips: string[]; onboardedAt: string | null };
+          return route.fulfill({ response, json: { ...body, onboardedAt: body.onboardedAt ?? seen.onboardedAt } });
+        },
+      );
+    }
     const violations = await collectCspViolations(context);
     await use(context);
     expect(outside, "requests outside the test stack").toEqual([]);

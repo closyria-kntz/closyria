@@ -663,3 +663,51 @@ describe("anonymous -> account merge on sign-in", () => {
     ).toHaveLength(0);
   });
 });
+
+describe("anonymous -> account merge: her preferences (refonte Boudoir, task 7)", () => {
+  async function setPreferences(userId: string, seenTips: string[], onboardedAt: Date | null) {
+    await handle.db.update(schema.user).set({ seenTips, onboardedAt }).where(eq(schema.user.id, userId));
+  }
+  async function preferencesOf(userId: string) {
+    const [row] = await handle.db
+      .select({ seenTips: schema.user.seenTips, onboardedAt: schema.user.onboardedAt })
+      .from(schema.user)
+      .where(eq(schema.user.id, userId));
+    return row;
+  }
+  const EARLY = new Date("2026-11-01T10:00:00.000Z");
+  const LATE = new Date("2026-11-10T10:00:00.000Z");
+
+  it("into an existing account: the earliest discovery date, the union of the closed tips", async () => {
+    const email = `prefs-${randomUUID()}@example.com`;
+    const accountId = await signInWithEmail(email);
+    await setPreferences(accountId, ["home-levels", "moi-a"], LATE);
+    const guest = await signInAnonymously();
+    await setPreferences(guest.userId, ["moi-a", "moi-b"], EARLY);
+    expect(await signInWithEmail(email, guest.cookie)).toBe(accountId);
+    expect(await preferencesOf(accountId)).toEqual({ seenTips: ["home-levels", "moi-a", "moi-b"], onboardedAt: EARLY });
+  });
+
+  it("keeps whichever side saw the discovery when the other did not", async () => {
+    const first = `prefs-${randomUUID()}@example.com`;
+    const firstId = await signInWithEmail(first);
+    const guest = await signInAnonymously();
+    await setPreferences(guest.userId, [], EARLY);
+    await signInWithEmail(first, guest.cookie);
+    expect((await preferencesOf(firstId))?.onboardedAt).toEqual(EARLY);
+
+    const second = `prefs-${randomUUID()}@example.com`;
+    const secondId = await signInWithEmail(second);
+    await setPreferences(secondId, ["home-levels"], LATE);
+    const other = await signInAnonymously();
+    await signInWithEmail(second, other.cookie);
+    expect(await preferencesOf(secondId)).toEqual({ seenTips: ["home-levels"], onboardedAt: LATE });
+  });
+
+  it("gives a brand new account the guest's discovery and tips", async () => {
+    const guest = await signInAnonymously();
+    await setPreferences(guest.userId, ["home-levels"], EARLY);
+    const accountId = await signInWithEmail(`prefs-${randomUUID()}@example.com`, guest.cookie);
+    expect(await preferencesOf(accountId)).toEqual({ seenTips: ["home-levels"], onboardedAt: EARLY });
+  });
+});

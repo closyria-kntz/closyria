@@ -15,6 +15,15 @@ export type DbTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0
 export type OwnedTableReassign = (fromUserId: string, toUserId: string, tx: DbTransaction) => Promise<void>;
 
 const ownedTables = new Map<PgTable, { column: PgColumn; reassign?: OwnedTableReassign }>();
+const accountMerges = new Set<OwnedTableReassign>();
+
+/**
+ * Declares data kept on the `user` row itself (not in a table of its own), merged from the anonymous user into the
+ * account after the registered tables (`user` rows cannot be moved: the anonymous one is deleted afterwards).
+ */
+export function registerAccountMerge(merge: OwnedTableReassign): void {
+  accountMerges.add(merge);
+}
 
 /**
  * Declares a table holding a user's data, through its user id column.
@@ -43,6 +52,7 @@ export async function reassignUserData(fromUserId: string, toUserId: string, tx:
       sql`update ${table} set ${sql.identifier(column.name)} = ${toUserId} where ${column} = ${fromUserId}`,
     );
   }
+  for (const merge of accountMerges) await merge(fromUserId, toUserId, tx);
 }
 
 /** The registered `{ table, column }` names, for checks against the database. */

@@ -1,9 +1,10 @@
-import { registerOwnedTable } from "@closyria/auth";
+import { registerAccountMerge, registerOwnedTable } from "@closyria/auth";
 import { schema } from "@closyria/db";
 import { registerEntitlementsOwnedTables } from "@closyria/entitlements";
 import {
   mergeItems,
   mergeLoveLevels,
+  mergePreferences,
   mergeProfiles,
   mergeRecentProducts,
   mergeTags,
@@ -33,4 +34,6 @@ export function registerOwnedTables(): void {
   registerOwnedTable(schema.loveLevels, schema.loveLevels.userId, mergeLoveLevels);
   // After profiles and lists: a budget follows its profile or list (one folded into the account's goes with it).
   registerOwnedTable(schema.budgets, schema.budgets.userId);
+  // On the user row itself: the discovery seen and the closed tips (task 7).
+  registerAccountMerge(mergePreferences);
 }

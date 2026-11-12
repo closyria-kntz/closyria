@@ -1,5 +1,6 @@
 import type { DbTransaction } from "@closyria/auth";
 import { and, asc, eq, inArray, isNotNull, isNull, schema, sql } from "@closyria/db";
+import { MAX_SEEN_TIPS } from "@closyria/shared";
 import { lockProductOfUser } from "./items";
 import { mergeItemInto } from "./merge-items";
 import { lockProfilesOf, PROFILE_ORDER } from "./profiles";
@@ -171,4 +172,20 @@ export async function mergeRecentProducts(fromUserId: string, toUserId: string, 
     on conflict (user_id, product_id)
     do update set visited_at = greatest(${schema.recentProducts.visitedAt}, excluded.visited_at)`);
   await tx.delete(schema.recentProducts).where(eq(schema.recentProducts.userId, fromUserId));
+}
+
+/**
+ * Her preferences (refonte Boudoir, task 7), kept on the `user` row: the discovery counts as seen from the earliest of
+ * the two dates (LEAST skips a null), the closed tips are the union, the account's first, MAX_SEEN_TIPS at most.
+ */
+export async function mergePreferences(fromUserId: string, toUserId: string, tx: DbTransaction): Promise<void> {
+  await tx.execute(sql`
+    update ${schema.user} as target
+       set onboarded_at = least(target.onboarded_at, source.onboarded_at),
+           seen_tips = (select coalesce(array_agg(tip order by first_at), '{}'::text[]) from (
+             select tip, min(pos) as first_at
+               from unnest(target.seen_tips || source.seen_tips) with ordinality as u(tip, pos)
+              group by tip order by first_at limit ${MAX_SEEN_TIPS}) kept)
+      from ${schema.user} as source
+     where target.id = ${toUserId} and source.id = ${fromUserId}`);
 }

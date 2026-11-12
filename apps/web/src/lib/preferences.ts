@@ -1,6 +1,6 @@
 "use client";
 
-import type { PreferencesView, SummaryView } from "@closyria/shared";
+import type { PreferencesView } from "@closyria/shared";
 import { createContext, useContext } from "react";
 
 /** What the shell knows of her preferences: still reading, or read (null without a session: nothing remembered). */
@@ -12,11 +12,25 @@ export function tipShown(state: PreferencesState, id: string): boolean {
 }
 
 /**
- * The first-opening discovery is for a signed-in account (an e-mail) that has neither seen nor skipped it; the API
- * already counts an account that keeps articles as done. A guest, or anything still being read, gets none.
+ * The first-opening discovery is for any account that has neither seen nor skipped it, guests included; a visitor
+ * without a session yet (nothing remembered: null) gets it too, and skipping it opens her guest session. The API
+ * already counts an account that keeps articles as done. Nothing shows while her preferences are being read.
  */
-export function discoveryShown(account: SummaryView["account"] | null, state: PreferencesState): boolean {
-  return account?.email != null && state.status === "ready" && state.view !== null && state.view.onboardedAt === null;
+export function discoveryShown(state: PreferencesState): boolean {
+  return state.status === "ready" && (state.view === null || state.view.onboardedAt === null);
+}
+
+/**
+ * What was just read, without undoing what she did on this page meanwhile (a read that left before her save landed):
+ * a discovery done here stays done, a tip closed here stays closed.
+ */
+export function mergeRead(current: PreferencesState, read: PreferencesView | null): PreferencesView | null {
+  if (current.status !== "ready" || current.view === null) return read;
+  const base = read ?? { seenTips: [], onboardedAt: null };
+  return {
+    seenTips: [...base.seenTips, ...current.view.seenTips.filter((id) => !base.seenTips.includes(id))],
+    onboardedAt: base.onboardedAt ?? current.view.onboardedAt,
+  };
 }
 
 /** Her preferences once `id` is closed (at once on screen, before the API answers). */

@@ -21,6 +21,7 @@ import { fetchSummary } from "@/lib/catalog-client";
 import { useChangesPoller, useLiveRefresh } from "@/lib/live-changes";
 import {
   discoveryShown,
+  mergeRead,
   PreferencesContext,
   type PreferencesContextValue,
   type PreferencesState,
@@ -229,7 +230,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Her closed tips and the discovery: read with the summary (a sign-in elsewhere changes both).
   const refreshPreferences = useCallback(async () => {
     const view = await fetchPreferences().catch(() => undefined);
-    if (view !== undefined && alive.current) setPreferences({ status: "ready", view });
+    if (view !== undefined && alive.current) {
+      setPreferences((current) => ({ status: "ready", view: mergeRead(current, view) }));
+    }
   }, []);
 
   const refreshProfiles = useCallback(async () => {
@@ -253,11 +256,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         void savePreferences({ seenTips: [id] });
       },
       finishDiscovery: () => {
-        setPreferences((current) =>
-          current.status === "ready" && current.view
-            ? { status: "ready", view: { ...current.view, onboardedAt: new Date().toISOString() } }
-            : current,
-        );
+        // Done at once; a visitor without a session gets her guest one with the save.
+        setPreferences((current) => ({
+          status: "ready",
+          view: {
+            seenTips: current.status === "ready" ? (current.view?.seenTips ?? []) : [],
+            onboardedAt: new Date().toISOString(),
+          },
+        }));
         void savePreferences({ onboarded: true });
       },
     }),
@@ -349,7 +355,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Suspense>
           <UndoToast />
           <GiftWarning />
-          {discoveryShown(account, preferences) && <Onboarding onDone={preferencesValue.finishDiscovery} />}
+          {discoveryShown(preferences) && <Onboarding onDone={preferencesValue.finishDiscovery} />}
         </AddSheetContext.Provider>
       </PreferencesContext.Provider>
     </ProfilesContext.Provider>

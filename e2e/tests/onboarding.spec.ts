@@ -1,14 +1,17 @@
 import { randomInt } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
-import { signInWithEmailCode, uniqueEmail } from "../fixtures/auth";
+import { sessionsOf, signInWithEmailCode, uniqueEmail } from "../fixtures/auth";
 import { CLIENT_IP_HEADER } from "../fixtures/proxy";
 import { autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
-// Refonte Boudoir, task 7 (spec R8): the first-opening discovery in 3 screens, once per account (skipped or finished,
-// it never comes back, on any browser of the account); an account that already keeps articles never gets it; a tip
-// closed on one browser stays closed on the others.
+// Refonte Boudoir, task 7 (spec R8): the first-opening discovery in 3 screens, once per account, guests included
+// (skipped or finished, it never comes back, on any browser of the account); an account that already keeps articles
+// never gets it; a tip closed on one browser stays closed on the others. The real answers of /api/me/preferences
+// here (the other specs count the discovery as seen, see fixtures/test.ts).
+
+test.use({ discovery: true });
 
 const STEPS = [
   {
@@ -35,7 +38,7 @@ const discovery = (page: Page) => page.getByRole("dialog", { name: /Garde tes en
 /** A new account on this page: signed in with a code, the discovery not marked as seen. */
 async function newAccount(page: Page, request: Parameters<typeof signInWithEmailCode>[1], email = uniqueEmail()) {
   await page.goto("/");
-  await signInWithEmailCode(page, request, email, { discovery: true });
+  await signInWithEmailCode(page, request, email);
   return email;
 }
 
@@ -111,7 +114,7 @@ async function otherBrowser(
   await context.addInitScript({ content: script });
   const page = await context.newPage();
   await page.goto("/");
-  await signInWithEmailCode(page, request, email, { discovery: true });
+  await signInWithEmailCode(page, request, email);
   return { page, context };
 }
 
@@ -163,16 +166,44 @@ test("une astuce fermée ne revient pas, même sur un autre navigateur du même 
   await other.context.close();
 });
 
-test("pas de découverte sans compte, ni pour un compte qui a déjà des articles", async ({ page, request }) => {
-  // A guest: nothing yet.
-  await pasteAndWish(page);
+test("une visiteuse sans compte la voit à sa première ouverture, une seule fois", async ({
+  page,
+  db,
+  userAgentTag,
+}) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await expect(discovery(page)).toHaveCount(0);
-  // She signs in: her articles come with her, she already knows Closyria.
-  await signInWithEmailCode(page, request, uniqueEmail(), { discovery: true });
-  await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Tes envies du moment" })).toBeVisible();
-  await expect(discovery(page)).toHaveCount(0);
+  const dialog = discovery(page);
+  await expect(dialog.getByText("1 sur 3")).toBeVisible();
+  // Skipping opens her guest session, which keeps it.
+  await clickAndSave(page, dialog, "Passer");
+  await expect(dialog).toHaveCount(0);
+  const [session] = await sessionsOf(db, userAgentTag);
+  expect(session?.isAnonymous).toBe(true);
+  const { rows } = await db.query<{ onboarded_at: Date | null }>(`select onboarded_at from "user" where id = $1`, [
+    session?.userId,
+  ]);
+  expect(rows[0]?.onboarded_at).not.toBeNull();
+  for (const path of ["/", "/moi", "/articles"]) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(discovery(page)).toHaveCount(0);
+  }
+});
+
+test.describe("un compte qui a déjà des articles", () => {
+  // Her articles are added with the discovery counted as seen (fixtures), then the API's own answer is read.
+  test.use({ discovery: false });
+
+  test("est compté comme l’ayant vue, invitée comme après sa connexion", async ({ page, request }) => {
+    const seen = async () => {
+      const res = await page.request.get("/api/me/preferences");
+      expect(res.status()).toBe(200);
+      return ((await res.json()) as { onboardedAt: string | null }).onboardedAt;
+    };
+    await pasteAndWish(page);
+    expect(await seen()).not.toBeNull();
+    // She signs in to a new account: her articles come with her, she already knows Closyria.
+    await signInWithEmailCode(page, request, uniqueEmail());
+    expect(await seen()).not.toBeNull();
+  });
 });

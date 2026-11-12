@@ -13,6 +13,7 @@ export {
   listOwnedColumns,
   type OwnedTableReassign,
   reassignUserData,
+  registerAccountMerge,
   registerOwnedTable,
 } from "./owned-data";
 export {
