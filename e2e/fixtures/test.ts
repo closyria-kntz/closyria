@@ -61,9 +61,11 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
               response,
               json: { ...body, onboardedAt: body.onboardedAt ?? seen.onboardedAt },
             });
-          } catch {
-            // The page went on (a redirect, the next goto) while this read was on its way: nothing to answer.
-            return;
+          } catch (error) {
+            // The page went on (a redirect, the next goto) while this read was on its way: nothing to answer. Any
+            // other failure is the test's.
+            if (/disposed|closed/i.test(String(error))) return;
+            throw error;
           }
         },
       );

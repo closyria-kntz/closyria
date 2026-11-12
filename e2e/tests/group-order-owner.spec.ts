@@ -294,6 +294,9 @@ test("sa commande groupée, de l'ouverture au paiement", async ({
   const paid = leaBlock.getByRole("checkbox", { name: /^Payé/ });
   await paid.check();
   await expect(paid).toBeChecked();
+  // Paid: her tag no longer says what she owes.
+  await expect(leaBlock.getByTestId("paid-tag")).toHaveText(euros("Payé 22,75 € ✓"));
+  await expect(leaBlock).not.toContainText("Doit");
   const paidAt = async () =>
     (
       await db.query<{ paid_at: Date | null }>(
@@ -306,6 +309,7 @@ test("sa commande groupée, de l'ouverture au paiement", async ({
   await capture(page, "ordered", (name) => testInfo.outputPath(name));
   await paid.uncheck();
   await expect(paid).not.toBeChecked();
+  await expect(leaBlock).toContainText(euros("Doit 22,75 €"));
   await expect.poll(paidAt).toBeNull();
 
   // « Commandes groupées passées » on the list.
@@ -550,6 +554,7 @@ test("son lien, la livraison de la boutique, les messages à copier", async ({
   await capture(page, "reminder", (name) => testInfo.outputPath(name));
   await leaBlock.getByRole("checkbox", { name: /^Payé/ }).check();
   await expect(leaBlock.getByRole("button", { name: /^Copier un rappel/ })).toHaveCount(0);
+  await expect(leaBlock.getByTestId("paid-tag")).toHaveText(euros("Payé 25,45 € ✓"));
 
   // « Haut de page » on the order's page and on the list's page; the new item is in the list.
   await backToTop(page, "back-to-top-order");

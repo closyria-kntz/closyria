@@ -516,7 +516,18 @@ function Ready({
  * A person's tile (mockup .tile), named by its heading (« Toi », a friend's name): her initial, her name and what she
  * owes on a price tag, then her lines.
  */
-function Block({ title, tag, children }: { title: string; tag: string | null; children: ReactNode }) {
+function Block({
+  title,
+  tag,
+  settled = false,
+  children,
+}: {
+  title: string;
+  tag: string | null;
+  /** Paid: the tag goes quiet (muted, no hole). */
+  settled?: boolean;
+  children: ReactNode;
+}) {
   const id = useId();
   return (
     <section aria-labelledby={id} className="flex flex-col gap-space-2-5 rounded-card bg-surface-raised p-space-3-5">
@@ -527,7 +538,17 @@ function Block({ title, tag, children }: { title: string; tag: string | null; ch
         <h2 id={id} className="min-w-space-0 flex-1 text-chip font-bold break-words">
           {title}
         </h2>
-        {tag && <span className="price-tag shrink-0 tabular-nums">{tag}</span>}
+        {tag &&
+          (settled ? (
+            <span
+              data-testid="paid-tag"
+              className="shrink-0 rounded-pill bg-surface-sunken px-space-2-5 py-space-0-75 text-chip font-bold text-ink-muted tabular-nums"
+            >
+              {tag}
+            </span>
+          ) : (
+            <span className="price-tag shrink-0 tabular-nums">{tag}</span>
+          ))}
       </div>
       {children}
     </section>
@@ -879,7 +900,11 @@ function FriendBlock({
   }
 
   return (
-    <Block title={person.name} tag={owes === null ? null : t("owes", { amount: money(owes) })}>
+    <Block
+      title={person.name}
+      tag={owes === null ? null : t(paid && person.payment ? "paidTag" : "owes", { amount: money(owes) })}
+      settled={paid && Boolean(person.payment)}
+    >
       <ul className="flex flex-col gap-space-3">
         {person.lines.map((line) => {
           const removed = line.removedAt !== null;

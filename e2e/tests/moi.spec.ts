@@ -123,3 +123,16 @@ test("Moi mène toujours à toutes ses pages d’avant, et à l’apparence", as
   await expect(mine).toContainText("Ton dressing est vide");
   await axeLightAndDark(page);
 });
+
+test("Moi, quand son budget ne se lit pas : un tiret, pas « Aucun · Ajouter un budget »", async ({ page }) => {
+  await pasteAndWish(page);
+  await page.route(/\/api\/me\/profiles\/[^/]+\/budget$/, (route) =>
+    route.request().method() === "GET" ? route.fulfill({ status: 500, json: { error: "failed" } }) : route.continue(),
+  );
+  await page.goto("/moi");
+  await expect(page.getByText("Ton aperçu ne s’affiche pas. Réessaie dans un instant.")).toBeVisible();
+  const budget = page.getByTestId("tile-budget");
+  await expect(budget).toContainText("–");
+  await expect(budget).not.toContainText("Aucun");
+  await expect(budget).not.toContainText("Ajouter un budget");
+});

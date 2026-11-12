@@ -1991,6 +1991,7 @@
     },
     "owes": "Doit {amount}",
     "paid": "Payé",
+    "paidTag": "Payé {amount} ✓",
     "paidFor": "pour {name}",
     "toast": {
       "removed": "Ligne de {name} retirée"

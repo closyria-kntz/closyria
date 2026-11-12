@@ -50,6 +50,8 @@ export function StageBoard({
       const { stage: _, ...columnFilters } = filters;
       fetchItemsPage(toItemQuery(view, columnFilters, profileId), null, undefined, controller.signal).then(
         (page) =>
+          // Left (filters or profile changed, or the board closed): an answer of before is dropped, like an error.
+          !controller.signal.aborted &&
           setColumns((previous) => ({
             ...previous,
             [step]: { status: "ready", items: page.items, more: page.nextCursor !== null },
