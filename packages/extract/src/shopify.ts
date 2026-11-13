@@ -137,6 +137,7 @@ export function extractShopify(json: string, pageUrl: string): Candidate | null 
 const COLOR_OPTION = /^(couleur|couleurs|color|colour|colors|colours)$/i;
 const HANDLE = /^[^/?#\\\s]+$/;
 const catalogPageSchema = z.object({ products: z.array(z.unknown()) });
+const listedIdSchema = z.object({ id: z.union([z.number().int().nonnegative(), z.string().min(1).max(40)]) });
 const catalogProductSchema = z.object({
   id: z.union([z.number(), z.string()]),
   title: z.string(),
@@ -169,6 +170,8 @@ const catalogProductSchema = z.object({
 export type ShopifyCatalogPage = {
   /** Products listed on the page, valid or not: fewer than the page size means the last page. */
   count: number;
+  /** Shopify id of every listed product, valid or not: a product skipped here is still on sale. */
+  listedIds: string[];
   products: { url: string; product: ExtractedProduct }[];
 };
 
@@ -186,11 +189,14 @@ export function extractShopifyCatalogPage(json: string, origin: string): Shopify
   const page = catalogPageSchema.safeParse(raw);
   if (!page.success) return null;
   const products: ShopifyCatalogPage["products"] = [];
+  const listedIds: string[] = [];
   for (const item of page.data.products) {
+    const id = listedIdSchema.safeParse(item);
+    if (id.success) listedIds.push(String(id.data.id));
     const mapped = catalogProduct(item, origin);
     if (mapped) products.push(mapped);
   }
-  return { count: page.data.products.length, products };
+  return { count: page.data.products.length, listedIds, products };
 }
 
 function catalogProduct(item: unknown, origin: string): ShopifyCatalogPage["products"][number] | null {

@@ -1,5 +1,5 @@
 import type dns from "node:dns";
-import { and, asc, type Database, eq, inArray, isNotNull, isNull, or, schema } from "@closyria/db";
+import { and, asc, count, type Database, eq, inArray, isNotNull, isNull, or, schema } from "@closyria/db";
 import { extractShopifyCatalogPage, type ShopifyCatalogPage } from "@closyria/extract";
 import { canonicalizeUrl, shopDomain } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
@@ -38,10 +38,16 @@ const PAGE_TIMEOUT_MS = 30_000;
 /** Codes worth one more try after a pause; a refusal (robots, 401/403/429, challenge) stops at once. */
 const RETRIED = new Set(["http_error", "timeout"]);
 const REMOVE_CHUNK = 1000;
+/** Below this share of the products on sale at the last import, the listing is not trusted to remove anything. */
+const SHRINK_RATIO = 0.5;
 
 const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Shops being imported by this process: a shop never has two imports at once (the queue also forbids it). */
+/**
+ * Shops being imported by this process: a shop never has two imports at once (the queue also forbids it). The lock
+ * lives as long as the import itself, not the pg-boss job: if a very long import outlives the job's expiry (6 h), a
+ * new job for the same shop in this process finds the lock and stops with `already_running`. One worker process only.
+ */
 const running = new Set<string>();
 
 class ImportStop extends Error {
@@ -77,15 +83,24 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult): Prom
   if (!shop) return { ...result, error: "shop_not_found" };
   if (shop.platform !== "shopify") return { ...result, error: "not_shopify" };
   const origin = await shopOrigin(db, shop);
-  if (!origin) return { ...result, error: "no_address" };
+  if (!origin) {
+    await db
+      .update(schema.shops)
+      .set({ lastImportError: "no_address", updatedAt: now() })
+      .where(eq(schema.shops.id, shopId));
+    return { ...result, error: "no_address" };
+  }
 
   const reference = await loadReferenceSet(db);
+  const activeBefore = await activeImported(db, shopId);
   const seen = new Set<string>();
+  const listedIds = new Set<string>();
   try {
     for (let page = 1; ; page++) {
       if (page > MAX_PAGES) throw new ImportStop("too_many_pages");
       if (page > 1) await sleep(IMPORT_PAUSE_MS);
       const listing = await fetchPage(deps, origin, page, sleep);
+      for (const id of listing.listedIds) listedIds.add(id);
       for (const item of listing.products) {
         await writeImported(deps, shop, item, reference, seen, result, now());
       }
@@ -102,7 +117,16 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult): Prom
     return result;
   }
 
-  result.removed = await markRemoved(db, shopId, seen, now());
+  // An empty or much shorter listing is more likely a broken shop than a closing-down sale: remove nothing.
+  if (listedIds.size === 0 || listedIds.size < activeBefore * SHRINK_RATIO) {
+    result.error = "suspicious_shrink";
+    await db
+      .update(schema.shops)
+      .set({ lastImportError: result.error, updatedAt: now() })
+      .where(eq(schema.shops.id, shopId));
+    return result;
+  }
+  result.removed = await markRemoved(db, shopId, seen, listedIds, now());
   const at = now();
   await db
     .update(schema.shops)
@@ -247,18 +271,32 @@ async function writeImported(
   }
 }
 
+const importedOnSale = (shopId: string) =>
+  and(eq(schema.products.shopId, shopId), isNull(schema.products.removedAt), isNotNull(schema.products.externalId));
+
+/** Products of the shop known by a Shopify id and not removed. */
+async function activeImported(db: Database, shopId: string): Promise<number> {
+  const [row] = await db.select({ n: count() }).from(schema.products).where(importedOnSale(shopId));
+  return row?.n ?? 0;
+}
+
 /**
- * Products of the shop known by a Shopify id that the complete listing no longer has. Products without an id (a
- * page that is not a product, a manual entry) are not the import's to judge.
+ * Products of the shop known by a Shopify id that the complete listing no longer has: neither written by this import
+ * nor listed under their id (a listed product the parser rejected is still on sale). Products without an id (a page
+ * that is not a product, a manual entry) are not the import's to judge.
  */
-async function markRemoved(db: Database, shopId: string, seen: Set<string>, at: Date): Promise<number> {
+async function markRemoved(
+  db: Database,
+  shopId: string,
+  seen: Set<string>,
+  listedIds: Set<string>,
+  at: Date,
+): Promise<number> {
   const listed = await db
-    .select({ id: schema.products.id })
+    .select({ id: schema.products.id, externalId: schema.products.externalId })
     .from(schema.products)
-    .where(
-      and(eq(schema.products.shopId, shopId), isNull(schema.products.removedAt), isNotNull(schema.products.externalId)),
-    );
-  const gone = listed.map((p) => p.id).filter((id) => !seen.has(id));
+    .where(importedOnSale(shopId));
+  const gone = listed.filter((p) => !seen.has(p.id) && !listedIds.has(p.externalId ?? "")).map((p) => p.id);
   for (let i = 0; i < gone.length; i += REMOVE_CHUNK) {
     await db
       .update(schema.products)

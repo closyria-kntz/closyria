@@ -334,6 +334,50 @@ describe("importShopifyCatalog", () => {
     expect(await byExternalId(s.id, "1")).toMatchObject({ categoryId: pulls, colorId: noir, categorySource: "admin" });
   });
 
+  it("does not mark removed a product the shop still lists but the parser rejects", async () => {
+    const s = await newShop();
+    servePages([
+      [
+        { id: 1, title: "Robe" },
+        { id: 2, title: "Jupe" },
+      ],
+    ]);
+    await importShopifyCatalog(deps, s.id);
+    const broken = { ...shopifyProduct({ id: 2, title: "Jupe" }), variants: [] };
+    routes[pagePath(1)] = {
+      headers: JSON_TYPE,
+      body: JSON.stringify({ products: [shopifyProduct({ id: 1, title: "Robe" }), broken] }),
+    };
+
+    const result = await importShopifyCatalog(deps, s.id);
+
+    expect(result).toEqual({ created: 0, updated: 1, removed: 0, error: null });
+    expect((await byExternalId(s.id, "2"))?.removedAt).toBeNull();
+  });
+
+  it("removes nothing when the listing comes back empty or under half, and records suspicious_shrink", async () => {
+    const s = await newShop();
+    servePages([
+      [
+        { id: 1, title: "Robe" },
+        { id: 2, title: "Jupe" },
+        { id: 3, title: "Chemise" },
+        { id: 4, title: "Pull" },
+      ],
+    ]);
+    await importShopifyCatalog(deps, s.id);
+
+    for (const listing of [[], [{ id: 1, title: "Robe" }]]) {
+      servePages([listing]);
+      const result = await importShopifyCatalog(deps, s.id);
+      expect(result.error).toBe("suspicious_shrink");
+      expect(result.removed).toBe(0);
+      const rows = await productsOf(s.id);
+      expect(rows.filter((p) => p.removedAt !== null)).toEqual([]);
+      expect((await shopRow(s.id))?.lastImportError).toBe("suspicious_shrink");
+    }
+  });
+
   it("stops at a 429, records the error and removes nothing", async () => {
     const s = await newShop();
     servePages([
@@ -416,6 +460,7 @@ describe("importShopifyCatalog", () => {
     expect((await importShopifyCatalog(deps, other.id)).error).toBe("not_shopify");
     const noAddress = await newShop({ testUrl: null });
     expect((await importShopifyCatalog(deps, noAddress.id)).error).toBe("no_address");
+    expect((await shopRow(noAddress.id))?.lastImportError).toBe("no_address");
     expect(shop.hits).toEqual([]);
   });
 });

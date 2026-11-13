@@ -29,6 +29,7 @@ describe("extractShopifyCatalogPage", () => {
     const result = extractShopifyCatalogPage(page([product()]), ORIGIN);
     if (!result) throw new Error("null");
     expect(result.count).toBe(1);
+    expect(result.listedIds).toEqual(["101"]);
     expect(result.products).toHaveLength(1);
     const [first] = result.products;
     expect(first?.url).toBe("https://shop.example.com/products/robe-carreaux");
@@ -110,6 +111,8 @@ describe("extractShopifyCatalogPage", () => {
       ORIGIN,
     );
     expect(result?.count).toBe(6);
+    // Every listed id counts, even for a product that does not validate (it is still on sale).
+    expect(result?.listedIds).toEqual(["101", "101", "101", "101", "101"]);
     expect(result?.products).toHaveLength(1);
     expect(result?.products[0]?.product.sizes).toEqual([]);
   });
@@ -117,6 +120,6 @@ describe("extractShopifyCatalogPage", () => {
   it("returns null for a body that is not a products page", () => {
     expect(extractShopifyCatalogPage("not json", ORIGIN)).toBeNull();
     expect(extractShopifyCatalogPage(JSON.stringify({ product: {} }), ORIGIN)).toBeNull();
-    expect(extractShopifyCatalogPage(page([]), ORIGIN)).toEqual({ count: 0, products: [] });
+    expect(extractShopifyCatalogPage(page([]), ORIGIN)).toEqual({ count: 0, listedIds: [], products: [] });
   });
 });
