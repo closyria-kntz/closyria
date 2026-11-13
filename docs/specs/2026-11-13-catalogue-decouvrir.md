@@ -105,6 +105,7 @@ Prises pendant le chantier, en plus des décisions validées du §2 :
 - **« Proche » = ses propres pièces** : « Tu as déjà quelque chose de proche » ne regarde que son dressing, jamais celui d'une autre.
 - **Recherche plein texte maison**, accents repliés (chercher « ecru » trouve « écru »), sans moteur externe.
 - **« Mes tailles »** : listes proposées en choix (hauts XS…XXL puis 32…48 de 2 en 2 ; bas 24…34 puis 36…48 de 2 en 2 ; chaussures 35…42) et « Une autre taille… » en texte libre (10 caractères au plus) ; vider un champ envoie `null`.
+- Un article dont la page a disparu chez la boutique (erreur 404/410 à la capture) sort du catalogue ; il revient si la page répond de nouveau.
 
 ## 9. Hors de ce chantier
 

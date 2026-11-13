@@ -463,4 +463,28 @@ describe("importShopifyCatalog", () => {
     expect((await shopRow(noAddress.id))?.lastImportError).toBe("no_address");
     expect(shop.hits).toEqual([]);
   });
+
+  it("stops before any request or write for a merged or refused shop, and still imports a pending or draft one", async () => {
+    servePages([[{ id: 1, title: "Robe" }]]);
+    const target = await newShop();
+    const merged = await newShop({ mergedIntoId: target.id });
+    const refused = await newShop({ status: "refused" });
+    for (const [s, reason] of [
+      [merged, "merged"],
+      [refused, "refused"],
+    ] as const) {
+      expect((await importShopifyCatalog(deps, s.id)).error).toBe(reason);
+      expect(await productsOf(s.id)).toEqual([]);
+      expect(await shopRow(s.id)).toEqual(s);
+    }
+    expect(shop.hits).toEqual([]);
+
+    for (const [i, status] of (["pending", "draft"] as const).entries()) {
+      // One fake shop serves both: distinct products, or they would share their address.
+      servePages([[{ id: 10 + i, title: "Robe" }]]);
+      const preview = await newShop({ status });
+      expect((await importShopifyCatalog(deps, preview.id)).error).toBeNull();
+      expect(await productsOf(preview.id)).toHaveLength(1);
+    }
+  });
 });

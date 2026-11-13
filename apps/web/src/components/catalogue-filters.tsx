@@ -111,7 +111,7 @@ export function CatalogueFiltersMenu({
   const categories = useCategoryOptions(reference);
   const noSizes = hasSizes === false;
   // The search is not in the panel: it does not count on its button.
-  const count = activeCatalogueFilterCount(filters) - (filters.q ? 1 : 0);
+  const count = activeCatalogueFilterCount(filters, hasSizes) - (filters.q ? 1 : 0);
 
   const toggle = (flag: Flag) =>
     onChange((current) => (current[flag] ? withoutFilter(current, { key: flag }) : { ...current, [flag]: true }));
@@ -241,16 +241,19 @@ export function ActiveFilterChips({
   onChange,
   shops,
   reference,
+  hasSizes,
 }: {
   filters: CatalogueFilters;
   onChange: (change: FiltersChange) => void;
   shops: readonly { id: string; name: string }[];
   reference: ReferenceView | null;
+  /** Whether her profile has any size; without any, « Ma taille en stock » filters nothing and gets no chip. */
+  hasSizes: boolean | null;
 }) {
   const t = useTranslations("Discover.filters");
   const chips: { ref: FilterRef; label: string }[] = [];
   if (filters.q) chips.push({ ref: { key: "q" }, label: t("search", { q: filters.q }) });
-  if (filters.mySize) chips.push({ ref: { key: "mySize" }, label: t("mySize") });
+  if (filters.mySize && hasSizes !== false) chips.push({ ref: { key: "mySize" }, label: t("mySize") });
   if (filters.onSale) chips.push({ ref: { key: "onSale" }, label: t("onSale") });
   if (filters.isNew) chips.push({ ref: { key: "isNew" }, label: t("isNew") });
   for (const value of filters.values ?? []) {

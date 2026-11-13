@@ -1,5 +1,6 @@
 import { type Database, sql } from "@closyria/db";
 import type { ShopCard, ShopDirectory } from "@closyria/shared";
+import { inCatalogue } from "./catalogue";
 import { catalogImageUrl } from "./product-view";
 
 type Row = {
@@ -25,15 +26,15 @@ export async function featuredShopId(db: Database): Promise<string | null> {
 
 /**
  * The shops of « Découvrir »: published and not merged, with a domain to open. Only shop facts leave this function
- * (name, main domain, how many products Closyria knows, one photo of the newest product that has one), never who
+ * (name, main domain, how many of its articles « Découvrir » shows, one photo of the newest of them), never who
  * pasted them. The featured one is the shop whose `featured_at` is the most recent; it is left out of `shops`.
  */
 export async function loadShopDirectory(db: Database): Promise<ShopDirectory> {
   const { rows } = await db.execute<Row>(sql`
     select s.id, s.name, d.domain,
-      (select count(*)::int from products p where p.shop_id = s.id) as item_count,
+      (select count(*)::int from products p where p.shop_id = s.id and ${inCatalogue}) as item_count,
       (select pi.id from products p join product_images pi on pi.product_id = p.id
-        where p.shop_id = s.id
+        where p.shop_id = s.id and ${inCatalogue}
         order by p.created_at desc, p.id, pi.position, pi.id limit 1) as image_id
     from shops s
     join lateral (

@@ -5,14 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { useSheetHref } from "@/app/(app)/decouvrir/catalogue-card";
-import {
-  ActiveFilterChips,
-  CatalogueFiltersMenu,
-  CatalogueSearch,
-  type FiltersChange,
-} from "@/app/(app)/decouvrir/catalogue-filters";
-import { CatalogueSection } from "@/app/(app)/decouvrir/catalogue-grid";
 import {
   activeCatalogueFilterCount,
   type CatalogueFilters,
@@ -25,6 +17,9 @@ import {
 import { useCurrentProfile, useProfilesReady } from "@/lib/profile-context";
 import { fetchReference, fetchShopDirectory } from "@/lib/wardrobe-client";
 import { paramsText } from "@/lib/wardrobe-view";
+import { useSheetHref } from "./catalogue-card";
+import { ActiveFilterChips, CatalogueFiltersMenu, CatalogueSearch, type FiltersChange } from "./catalogue-filters";
+import { CatalogueSection } from "./catalogue-grid";
 import { FilterChips } from "./filters-bar";
 import { focusRing, primaryButtonClass } from "./ui";
 
@@ -190,7 +185,7 @@ export function DiscoverScreen() {
   const filters = useMemo(() => catalogueFiltersFromParams(new URLSearchParams(searchText)), [searchText]);
   const query = useMemo(() => toCatalogueQuery(filters, current.id), [filters, current.id]);
   const key = snapshotKey(new URLSearchParams(searchText));
-  const count = activeCatalogueFilterCount(filters);
+  const count = activeCatalogueFilterCount(filters, hasSizes);
   const filtered = count > 0;
 
   useEffect(() => {
@@ -279,7 +274,13 @@ export function DiscoverScreen() {
           hasSizes={hasSizes}
         />
       </div>
-      <ActiveFilterChips filters={filters} onChange={change} shops={shopsOfFilter} reference={reference} />
+      <ActiveFilterChips
+        filters={filters}
+        onChange={change}
+        shops={shopsOfFilter}
+        reference={reference}
+        hasSizes={hasSizes}
+      />
       <FilterChips activeCount={count} onClearAll={clear} />
     </div>
   );

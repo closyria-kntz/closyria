@@ -1,10 +1,11 @@
 "use client";
 
-import { type CatalogDetail, type ReportReason, reportReasonSchema, sizeMatches } from "@closyria/shared";
+import { type CatalogDetail, isHttpUrl, type ReportReason, reportReasonSchema, sizeMatches } from "@closyria/shared";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useState } from "react";
 import { AddToListDialog } from "@/components/add-to-list-dialog";
+import { CatalogueCard, HeartIcon, useWant } from "@/components/catalogue-card";
 import { Dialog } from "@/components/dialog";
 import { sectionTitleClass } from "@/components/home-news";
 import { GRID_CLASS } from "@/components/item-grid";
@@ -24,7 +25,6 @@ import { profileHref, useCurrentProfile, useProfilesReady } from "@/lib/profile-
 import { actionClass, LOOK } from "../../produits/[id]/product-actions";
 import { ProductGallery } from "../../produits/[id]/product-gallery";
 import { TWO_COLUMNS } from "../../produits/[id]/product-view";
-import { CatalogueCard, HeartIcon, useWant } from "../catalogue-card";
 
 type Load =
   | { status: "loading" }
@@ -210,9 +210,12 @@ export function CatalogueSheet({ productId }: { productId: string }) {
             {t("want")}
           </button>
         )}
-        <a href={sheet.url} target="_blank" rel="noopener noreferrer" className={`${actionClass} ${LOOK.outline}`}>
-          {tProduct("viewAt", { shop })}
-        </a>
+        {/* Never a `javascript:` or other address as a link (the schema also requires http(s)). */}
+        {isHttpUrl(sheet.url) ? (
+          <a href={sheet.url} target="_blank" rel="noopener noreferrer" className={`${actionClass} ${LOOK.outline}`}>
+            {tProduct("viewAt", { shop })}
+          </a>
+        ) : null}
         <button
           type="button"
           disabled={busy}
@@ -221,9 +224,11 @@ export function CatalogueSheet({ productId }: { productId: string }) {
         >
           {t("addToList")}
         </button>
-        <button type="button" onClick={() => setSharing(true)} className={`${actionClass} ${LOOK.soft}`}>
-          {tProduct("share")}
-        </button>
+        {isHttpUrl(sheet.url) ? (
+          <button type="button" onClick={() => setSharing(true)} className={`${actionClass} ${LOOK.soft}`}>
+            {tProduct("share")}
+          </button>
+        ) : null}
       </div>
     </section>
   );

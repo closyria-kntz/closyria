@@ -18,6 +18,11 @@ export default async function AdminReportsPage() {
     <>
       <h1 className="font-display text-title font-strong">{t("title")}</h1>
       <p className="text-ink-muted">{t("intro")}</p>
+      <p>
+        <Link href="/admin/fiches?catalogue=hidden" className="underline">
+          {t("showHidden")}
+        </Link>
+      </p>
       {reports.length === 0 ? (
         <p className="rounded-card border border-card-border bg-card-bg p-space-4">{t("empty")}</p>
       ) : (

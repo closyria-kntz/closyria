@@ -8,6 +8,7 @@ import {
   fetchCatalogueDetail,
   fetchCataloguePage,
   PRICE_RANGES,
+  readLastDiscoverHref,
   readSnapshot,
   reportArticle,
   SNAPSHOT_MAX_AGE_MS,
@@ -107,6 +108,13 @@ describe("catalogue filters in the address", () => {
     expect(activeCatalogueFilterCount({})).toBe(0);
     expect(activeCatalogueFilterCount({ sort: "popular" })).toBe(0);
     expect(activeCatalogueFilterCount({ q: "robe", values: ["eco", "second_hand"], onSale: true })).toBe(4);
+  });
+
+  it("does not count « Ma taille en stock » once the page said she has no sizes", () => {
+    expect(activeCatalogueFilterCount({ mySize: true, onSale: true })).toBe(2);
+    expect(activeCatalogueFilterCount({ mySize: true, onSale: true }, null)).toBe(2);
+    expect(activeCatalogueFilterCount({ mySize: true, onSale: true }, true)).toBe(2);
+    expect(activeCatalogueFilterCount({ mySize: true, onSale: true }, false)).toBe(1);
   });
 
   it("takes one filter off (one value of the shop's values)", () => {
@@ -236,8 +244,7 @@ describe("catalogue calls", () => {
 });
 
 describe("« ← Découvrir » from a sheet", () => {
-  it("goes back to the last « Découvrir » she saw, with its filters", async () => {
-    const { readLastDiscoverHref } = await import("./catalogue-client");
+  it("goes back to the last « Découvrir » she saw, with its filters", () => {
     const storage = memoryStorage();
     expect(readLastDiscoverHref(storage)).toBe("/decouvrir");
     writeSnapshot(storage, {

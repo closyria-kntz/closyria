@@ -1,6 +1,6 @@
 "use client";
 
-import { type ItemStage, type ItemView, MAX_ITEM_PHOTOS } from "@closyria/shared";
+import { type ItemStage, type ItemView, isHttpUrl, MAX_ITEM_PHOTOS } from "@closyria/shared";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Dialog } from "@/components/dialog";
@@ -21,8 +21,6 @@ export const LOOK = {
   outline: "border-ink bg-transparent text-ink hover:bg-surface-sunken",
   soft: "border-transparent bg-surface-sunken text-ink hover:bg-surface-strong",
 } as const;
-
-const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
 
 type Action =
   | { key: string; label: string; href: string }

@@ -81,6 +81,12 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult): Prom
 
   const [shop] = await db.select().from(schema.shops).where(eq(schema.shops.id, shopId));
   if (!shop) return { ...result, error: "shop_not_found" };
+  // A merged shop lives on in the one it was merged into; a refused one stays out of the catalogue. Nothing is written.
+  const stop = shop.mergedIntoId ? "merged" : shop.status === "refused" ? "refused" : null;
+  if (stop) {
+    console.info(`catalogue import ${shopId} skipped: ${stop}`);
+    return { ...result, error: stop };
+  }
   if (shop.platform !== "shopify") return { ...result, error: "not_shopify" };
   const origin = await shopOrigin(db, shop);
   if (!origin) {

@@ -14,6 +14,8 @@ export type CatalogErrorKey =
   | "hasChildren"
   | "notPublished"
   | "notShopify"
+  | "shopMerged"
+  | "shopRefused"
   | "generic";
 
 /** The message (under `Admin.shops.errors`) for a refusal of the admin catalog API. */
@@ -25,6 +27,8 @@ export function catalogErrorKey(status: number, body: unknown): CatalogErrorKey 
   if (status === 409 && error === "kept") return "kept";
   if (status === 409 && error === "not_published") return "notPublished";
   if (status === 409 && error === "not_shopify") return "notShopify";
+  if (status === 409 && error === "merged") return "shopMerged";
+  if (status === 409 && error === "refused") return "shopRefused";
   if (status === 400 && error === "invalid_merge") return "invalidMerge";
   if (status === 400 && error === "invalid_url") return "invalidUrl";
   return "generic";
@@ -86,6 +90,7 @@ const IMPORT_ERROR_KEYS = {
   timeout: "timeout",
   http_error: "httpError",
   invalid_data: "invalidData",
+  too_many_pages: "tooManyPages",
 } as const;
 export type ImportErrorKey = (typeof IMPORT_ERROR_KEYS)[keyof typeof IMPORT_ERROR_KEYS];
 

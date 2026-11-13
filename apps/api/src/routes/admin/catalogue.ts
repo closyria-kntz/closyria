@@ -13,6 +13,7 @@ import {
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { defineAccess } from "../../access";
 import { type AdminEnv, noteAudit } from "../../admin-audit";
+import { completeWithImage } from "../../catalog/catalogue";
 import type { CatalogDeps } from "../../catalog/deps";
 import { catalogImageUrl } from "../../catalog/product-view";
 import { pgCode } from "../../pg-code";
@@ -92,6 +93,21 @@ const resolveRoute = (action: "hide" | "keep", summary: string) =>
 const hideRoute = resolveRoute("hide", "« Masquer du catalogue »: the article leaves the catalogue");
 const keepRoute = resolveRoute("keep", "« Garder »: the article stays in the catalogue");
 
+const unhideRoute = defineAccess(
+  createRoute({
+    method: "post",
+    path: "/admin/products/{id}/unhide",
+    summary: "« Remettre dans le catalogue »: a hidden article comes back to « Découvrir »",
+    description: "Undoes « Masquer du catalogue ». Closed reports stay closed; nobody's wishes are touched.",
+    request: { params: idParam },
+    responses: {
+      204: { description: "Back in the catalogue (or was not hidden)" },
+      404: errorContent("Unknown article"),
+    },
+  }),
+  "admin",
+);
+
 type UnclassifiedRow = {
   id: string;
   name: string;
@@ -166,8 +182,8 @@ export function adminCatalogueRoutes(deps: CatalogDeps) {
         from products p
         join shops s on s.id = p.shop_id
         left join categories cat on cat.id = p.category_id
-        where s.merged_into_id is null and (s.status = 'published' or s.import_enabled)
-          and p.removed_at is null and p.hidden_at is null and p.name is not null
+        where s.merged_into_id is null and s.status <> 'refused' and (s.status = 'published' or s.import_enabled)
+          and p.removed_at is null and p.hidden_at is null and ${completeWithImage}
           and (p.category_id is null or cat.slug = ${OTHERS_SLUG} or p.color_id is null)
         order by s.name, s.id, p.shop_data->>'category' nulls last, p.created_at desc, p.id
         limit ${ADMIN_UNCLASSIFIED_LIMIT}`);
@@ -209,7 +225,8 @@ export function adminCatalogueRoutes(deps: CatalogDeps) {
           const filing = { categoryId, colorId, categorySource: "admin", updatedAt: at };
           await tx.update(schema.products).set(filing).where(eq(schema.products.id, id));
           if (!applyToShopType || !target.productType) return 1;
-          // Same shop, same product type as read from the shop; an admin's own filing is never overwritten.
+          // Same shop, same product type as read from the shop; an admin's own filing (catalogue or full correction) is
+          // never overwritten.
           const others = await tx
             .update(schema.products)
             .set(filing)
@@ -218,6 +235,7 @@ export function adminCatalogueRoutes(deps: CatalogDeps) {
                 eq(schema.products.shopId, target.shopId),
                 sql`${schema.products.shopData}->>'category' = ${target.productType}`,
                 ne(schema.products.categorySource, "admin"),
+                ne(schema.products.classifiedBy, "admin"),
                 ne(schema.products.id, id),
               ),
             )
@@ -280,5 +298,19 @@ export function adminCatalogueRoutes(deps: CatalogDeps) {
       if (resolved === null) return c.json(notFound, 404);
       noteAudit(c, { action: "product.keep", target: `product:${id}`, details: { resolved } });
       return c.json({ resolved }, 200);
+    })
+    .openapi(unhideRoute, async (c) => {
+      const { id } = c.req.valid("param");
+      noteAudit(c, { action: "product.unhide", target: `product:${id}` });
+      const at = now();
+      const [product] = await db
+        .select({ hiddenAt: schema.products.hiddenAt })
+        .from(schema.products)
+        .where(eq(schema.products.id, id));
+      if (!product) return c.json(notFound, 404);
+      if (product.hiddenAt) {
+        await db.update(schema.products).set({ hiddenAt: null, updatedAt: at }).where(eq(schema.products.id, id));
+      }
+      return c.body(null, 204);
     });
 }

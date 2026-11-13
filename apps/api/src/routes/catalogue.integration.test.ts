@@ -18,6 +18,7 @@ const ago = (ms: number) => new Date(NOW.getTime() - ms);
 let ref: {
   dresses: string;
   shortDress: string;
+  wrapDress: string;
   shoes: string;
   bags: string;
   red: string;
@@ -50,6 +51,8 @@ beforeAll(async () => {
   ref = {
     dresses,
     shortDress: await cat("robe-courte", "Robe courte", dresses),
+    // A sub-category the size table does not name: it inherits « Robes ».
+    wrapDress: await cat("robe-portefeuille", "Robe portefeuille", dresses),
     shoes: await cat("chaussures", "Chaussures"),
     bags: await cat("sacs", "Sacs"),
     red: await color("rouge", "Rouge", ["rouge", "bordeaux"]),
@@ -343,6 +346,19 @@ describe("GET /api/catalog — filters", () => {
     );
   });
 
+  it("« Ma taille en stock » gives a sub-category its parent's kind of size, on the list and the sheet", async () => {
+    const shop = await newShop();
+    const inSize = await newProduct(shop.id, { categoryId: ref.wrapDress, sizes: [["M", true]] });
+    const soldOut = await newProduct(shop.id, { categoryId: ref.wrapDress, sizes: [["M", false]] });
+    await newProfile(me.userId, { sizeTop: "M" });
+
+    const inStock = new Map((await page()).items.map((i) => [i.productId, i.sizeInStock]));
+    expect(inStock.get(inSize.id)).toBe(true);
+    expect(inStock.get(soldOut.id)).toBe(false);
+    expect(ids((await page("?mySize=true")).items)).toEqual([inSize.id]);
+    expect((await detail(inSize.id)).body.mySize).toBe("M");
+  });
+
   it("« Ma taille en stock » filters nothing when she has no sizes", async () => {
     const shop = await newShop();
     await newProduct(shop.id, { categoryId: ref.shortDress, sizes: [["M", true]] });
@@ -385,15 +401,17 @@ describe("GET /api/catalog — sorts and pages", () => {
     const a = await newProduct(shop.id, { createdAt: ago(1 * DAY), priceCents: 3000 });
     const b = await newProduct(shop.id, { createdAt: ago(2 * DAY), priceCents: 1000 });
     const c = await newProduct(shop.id, { createdAt: ago(3 * DAY), priceCents: 2000 });
-    await newItem(me.userId, c.id);
-    await newItem(other.userId, c.id);
+    const third = await t.signIn();
+    for (const userId of [me.userId, other.userId, third.userId]) await newItem(userId, c.id);
+    // Two people: counted as none, so the order does not tell (b stays after the newer a).
+    await newItem(me.userId, b.id);
     await newItem(other.userId, b.id);
 
     expect(ids((await page()).items)).toEqual([a.id, b.id, c.id]);
     expect(ids((await page("?sort=new")).items)).toEqual([a.id, b.id, c.id]);
     expect(ids((await page("?sort=price_asc")).items)).toEqual([b.id, c.id, a.id]);
     expect(ids((await page("?sort=price_desc")).items)).toEqual([a.id, c.id, b.id]);
-    expect(ids((await page("?sort=popular")).items)).toEqual([c.id, b.id, a.id]);
+    expect(ids((await page("?sort=popular")).items)).toEqual([c.id, a.id, b.id]);
   });
 
   for (const sort of ["new", "price_asc", "price_desc", "popular"] as const) {

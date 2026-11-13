@@ -62,11 +62,25 @@ async function newShop(values: Partial<typeof schema.shops.$inferInsert> = {}, d
   return shop;
 }
 
-async function newProduct(shopId: string, createdAt: Date, image = false) {
+/** A complete article (name, price); with `image` it is one « Découvrir » shows. */
+async function newProduct(
+  shopId: string,
+  createdAt: Date,
+  image = true,
+  values: Partial<typeof schema.products.$inferInsert> = {},
+) {
   const n = ++counter;
   const [p] = await t.db
     .insert(schema.products)
-    .values({ shopId, canonicalUrl: `https://p.test/${n}`, createdAt })
+    .values({
+      shopId,
+      canonicalUrl: `https://p.test/${n}`,
+      createdAt,
+      name: `Article ${n}`,
+      priceCents: 3000,
+      currency: "EUR",
+      ...values,
+    })
     .returning();
   if (!p) throw new Error("no product");
   if (!image) return { product: p, imageId: null };
@@ -114,7 +128,7 @@ describe("GET /api/shops", () => {
     const shop = await newShop({ name: "Les Cœurs" }, ["www-les-coeurs.test", "lescoeurs.test"]);
     await newProduct(shop.id, ago(3 * DAY), true);
     const recent = await newProduct(shop.id, ago(DAY), true);
-    await newProduct(shop.id, ago(0)); // newest, no photo
+    await newProduct(shop.id, ago(0), false); // newest, no photo: not in « Découvrir »
     const bare = await newShop({ name: "Sans photo" });
 
     const { body } = await directory();
@@ -123,10 +137,31 @@ describe("GET /api/shops", () => {
       id: shop.id,
       name: "Les Cœurs",
       domain: "lescoeurs.test",
-      itemCount: 3,
+      itemCount: 2,
       imageUrl: `/api/catalog-images/${recent.imageId}`,
     });
     expect(body.shops.find((s) => s.id === bare.id)?.imageUrl).toBeNull();
+  });
+
+  it("counts and pictures only what « Découvrir » shows: never a hidden, removed or incomplete article", async () => {
+    const shop = await newShop({ name: "Les Cœurs", featuredAt: ago(DAY) });
+    const other = await newShop({ name: "Atelier" });
+    const shown = await newProduct(shop.id, ago(3 * DAY));
+    await newProduct(shop.id, ago(0), true, { hiddenAt: ago(0) }); // newest, hidden by the admin
+    await newProduct(shop.id, ago(DAY), true, { removedAt: ago(0) }); // gone from the shop
+    await newProduct(shop.id, ago(2 * DAY), true, { priceCents: null }); // no price
+    const otherShown = await newProduct(other.id, ago(3 * DAY));
+    await newProduct(other.id, ago(0), true, { removedAt: ago(0) });
+
+    const { body } = await directory();
+    expect(body.featured).toMatchObject({
+      id: shop.id,
+      itemCount: 1,
+      imageUrl: `/api/catalog-images/${shown.imageId}`,
+    });
+    expect(body.shops).toEqual([
+      expect.objectContaining({ id: other.id, itemCount: 1, imageUrl: `/api/catalog-images/${otherShown.imageId}` }),
+    ]);
   });
 
   it("puts forward one shop only: the published one featured most recently, out of the list", async () => {

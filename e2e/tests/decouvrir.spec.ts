@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import type pg from "pg";
 import { signInAsAdmin } from "../fixtures/auth";
+import { setupValue } from "../fixtures/paths";
 import { expect, test } from "../fixtures/test";
 
 // Refonte Boudoir, task 6: « Découvrir » shows the published shops Closyria knows (photo, name, domain, how many
@@ -31,7 +34,9 @@ async function axeLightAndDark(page: Page) {
   await page.emulateMedia({ colorScheme: "light" });
 }
 
-/** A shop of its own (unique name and domain) with `products` products. */
+const TINY_WEBP = Buffer.from("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA", "base64");
+
+/** A shop of its own (unique name and domain) with `products` products « Découvrir » shows (name, price, photo). */
 async function seedShop(db: pg.Pool, name: string, status: "published" | "draft", products: number) {
   const tag = randomUUID().slice(0, 8);
   const domain = `${name
@@ -46,10 +51,19 @@ async function seedShop(db: pg.Pool, name: string, status: "published" | "draft"
   const id = rows[0]?.id ?? "";
   await db.query("insert into shop_domains (domain, shop_id) values ($1, $2)", [domain, id]);
   for (let i = 0; i < products; i++) {
-    await db.query("insert into products (shop_id, canonical_url) values ($1, $2)", [
-      id,
-      `https://${domain}/products/${i}`,
-    ]);
+    const product = await db.query<{ id: string }>(
+      `insert into products (shop_id, canonical_url, name, price_cents, currency)
+       values ($1, $2, $3, 4900, 'EUR') returning id`,
+      [id, `https://${domain}/products/${i}`, `Article ${i} ${tag}`],
+    );
+    const productId = product.rows[0]?.id ?? "";
+    const key = `products/${productId}/0.webp`;
+    await mkdir(dirname(join(setupValue("E2E_STORAGE_DIR"), key)), { recursive: true });
+    await writeFile(join(setupValue("E2E_STORAGE_DIR"), key), TINY_WEBP);
+    await db.query(
+      "insert into product_images (product_id, position, key, width, height, source_hash) values ($1, 0, $2, 1, 1, $3)",
+      [productId, key, `h-${productId}`],
+    );
   }
   return { id, name: `${name} ${tag}`, domain, tag };
 }

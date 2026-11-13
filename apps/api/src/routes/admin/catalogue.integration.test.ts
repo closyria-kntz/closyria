@@ -55,6 +55,7 @@ beforeEach(async () => {
   await t.db.delete(schema.profiles);
   await t.db.delete(schema.products);
   await t.db.delete(schema.shopDomains);
+  await t.db.update(schema.shops).set({ mergedIntoId: null });
   await t.db.delete(schema.shops);
   await t.db.delete(schema.adminAuditLog);
   t.calls.length = 0;
@@ -150,6 +151,7 @@ describe("access", () => {
       ["GET", "/admin/catalogue/reports"],
       ["POST", `/admin/products/${id}/hide`],
       ["POST", `/admin/products/${id}/keep`],
+      ["POST", `/admin/products/${id}/unhide`],
     ];
     for (const [method, path, body] of routes) {
       expect((await call(method, path, body, user.cookie)).status, `${method} ${path}`).toBe(403);
@@ -222,7 +224,12 @@ describe("values and import of a shop", () => {
     });
     await newProduct(shop.id);
     await newProduct(shop.id);
+    // Out of « Découvrir »: not counted.
     await newProduct(shop.id, { removedAt: NOW });
+    await newProduct(shop.id, { hiddenAt: NOW });
+    await newProduct(shop.id, { priceCents: null });
+    const bare = await newProduct(shop.id);
+    await t.db.delete(schema.productImages).where(eq(schema.productImages.productId, bare.id));
 
     const res = await call("PATCH", `/admin/shops/${shop.id}`, {
       values: ["made_in_france", "eco", "eco"],
@@ -266,6 +273,26 @@ describe("values and import of a shop", () => {
     expect((await call("POST", "/admin/shops/00000000-0000-4000-8000-000000000000/import")).status).toBe(404);
     expect(t.calls).toHaveLength(1);
   });
+
+  it("refuses with 409 the import of a merged or refused shop; a pending or draft one may be imported", async () => {
+    const target = await newShop({ platform: "shopify" });
+    const merged = await newShop({ platform: "shopify", mergedIntoId: target.id });
+    const refused = await newShop({ platform: "shopify", status: "refused" });
+    for (const [shop, error] of [
+      [merged, "merged"],
+      [refused, "refused"],
+    ] as const) {
+      const res = await call("POST", `/admin/shops/${shop.id}/import`);
+      expect(res.status).toBe(409);
+      expect(await json(res)).toEqual({ error });
+    }
+    expect(t.calls).toEqual([]);
+    for (const status of ["pending", "draft"] as const) {
+      const preview = await newShop({ platform: "shopify", status });
+      expect((await call("POST", `/admin/shops/${preview.id}/import`)).status).toBe(202);
+    }
+    expect(t.calls).toHaveLength(2);
+  });
 });
 
 describe("« À classer »", () => {
@@ -280,6 +307,11 @@ describe("« À classer »", () => {
     await newProduct(shop.id, { categoryId: null, removedAt: NOW });
     await newProduct(shop.id, { categoryId: null, hiddenAt: NOW });
     await newProduct(pending.id, { categoryId: null }); // not in the catalogue
+    const refused = await newShop({ status: "refused", importEnabled: true });
+    await newProduct(refused.id, { categoryId: null }); // refused: never in the catalogue
+    await newProduct(shop.id, { categoryId: null, priceCents: null }); // incomplete: no price
+    const bare = await newProduct(shop.id, { categoryId: null }); // incomplete: no photo
+    await t.db.delete(schema.productImages).where(eq(schema.productImages.productId, bare.id));
 
     const res = await call("GET", "/admin/catalogue/unclassified");
     expect(res.status).toBe(200);
@@ -319,7 +351,7 @@ describe("« À classer »", () => {
     );
   });
 
-  it("« Appliquer aux articles du même type » files the shop's articles of that type, never an admin's filing", async () => {
+  it("« Appliquer aux articles du même type » files the shop's articles of that type, never an admin's filing or correction", async () => {
     const shop = await newShop();
     const other = await newShop();
     const product = await newProduct(shop.id, { categoryId: null, colorId: null, productType: "Robe" });
@@ -329,6 +361,12 @@ describe("« À classer »", () => {
       categoryId: ref.shoes,
       colorId: ref.red,
       categorySource: "admin",
+      productType: "Robe",
+    });
+    const correctedByAdmin = await newProduct(shop.id, {
+      categoryId: ref.shoes,
+      colorId: ref.red,
+      classifiedBy: "admin",
       productType: "Robe",
     });
     const otherType = await newProduct(shop.id, { categoryId: null, productType: "Sac" });
@@ -349,6 +387,7 @@ describe("« À classer »", () => {
       });
     }
     expect(await productRow(byAdmin.id)).toMatchObject({ categoryId: ref.shoes, colorId: ref.red });
+    expect(await productRow(correctedByAdmin.id)).toMatchObject({ categoryId: ref.shoes, colorId: ref.red });
     expect((await productRow(otherType.id)).categoryId).toBeNull();
     expect((await productRow(otherShop.id)).categoryId).toBeNull();
   });
@@ -458,6 +497,33 @@ describe("« Signalements »", () => {
     expect(await audit()).toContainEqual(
       expect.objectContaining({ action: "product.hide", target: `product:${product.id}` }),
     );
+  });
+
+  it("« Remettre dans le catalogue » brings a hidden article back, journaled; the hidden ones are listed", async () => {
+    const shop = await newShop();
+    const product = await newProduct(shop.id);
+    const shown = await newProduct(shop.id);
+    await report(product.id, reporter.userId, "shocking", new Date("2026-11-12T10:00:00Z"));
+    await call("POST", `/admin/products/${product.id}/hide`);
+
+    const hidden = await json(await call("GET", "/admin/products?catalogue=hidden"));
+    expect(hidden.products.map((p: { id: string }) => p.id)).toEqual([product.id]);
+    expect(await json(await call("GET", `/admin/products/${product.id}`))).toMatchObject({
+      hiddenAt: NOW.toISOString(),
+    });
+    expect((await json(await call("GET", `/admin/products/${shown.id}`))).hiddenAt).toBeNull();
+
+    const res = await call("POST", `/admin/products/${product.id}/unhide`);
+    expect(res.status).toBe(204);
+    expect((await productRow(product.id)).hiddenAt).toBeNull();
+    expect(await catalogueIds()).toContain(product.id);
+    // Its report stays closed.
+    expect((await json(await call("GET", "/admin/catalogue/reports"))).reports).toEqual([]);
+    expect(await audit()).toContainEqual(
+      expect.objectContaining({ action: "product.unhide", target: `product:${product.id}` }),
+    );
+    expect((await call("POST", `/admin/products/${shown.id}/unhide`)).status).toBe(204);
+    expect((await call("POST", "/admin/products/00000000-0000-4000-8000-000000000000/unhide")).status).toBe(404);
   });
 
   it("« Garder » closes the reports and leaves the article in the catalogue", async () => {

@@ -482,7 +482,9 @@
         "invalidEntry": "Vérifie le nom, la teinte et les mots-clés.",
         "invalidProduct": "Vérifie le nom, la marque, le prix et les choix.",
         "notPublished": "Seules les boutiques publiées peuvent faire la une.",
-        "notShopify": "Seul le catalogue d’une boutique Shopify peut être importé."
+        "notShopify": "Seul le catalogue d’une boutique Shopify peut être importé.",
+        "shopMerged": "Cette boutique a été fusionnée : importe plutôt celle qui la remplace.",
+        "shopRefused": "Cette boutique est refusée : son catalogue n’est jamais importé."
       }
     },
     "shops": {
@@ -619,7 +621,7 @@
         "saved": "Catalogue enregistré.",
         "lastImport": "Dernier import",
         "never": "Jamais",
-        "products": "Articles en vente",
+        "products": "Articles dans Découvrir",
         "lastError": "Dernière erreur",
         "noError": "Aucune",
         "importNow": "Importer maintenant",
@@ -633,7 +635,8 @@
           "noAddress": "Adresse de la boutique introuvable",
           "timeout": "La boutique a mis trop de temps à répondre",
           "httpError": "La boutique a répondu par une erreur{status, select, none {} other { (HTTP {status})}}",
-          "invalidData": "La réponse de la boutique est illisible"
+          "invalidData": "La réponse de la boutique est illisible",
+          "tooManyPages": "Catalogue trop grand : import arrêté"
         }
       }
     },
@@ -691,6 +694,10 @@
         "rule": "Rangée par règle",
         "admin": "Corrigée",
         "none": "Sans type"
+      },
+      "filterCatalogue": "Catalogue",
+      "catalogueFilter": {
+        "hidden": "Masqués de « Découvrir »"
       },
       "corrected": "Corrigée",
       "byRule": "Par règle",
@@ -766,7 +773,11 @@
         "brand": "La marque ne doit pas dépasser 120 caractères.",
         "price": "Le prix n’est pas valide.",
         "nothing": "Rien n’a changé."
-      }
+      },
+      "hiddenLine": "Masqué de « Découvrir » le {date}",
+      "unhide": "Remettre dans le catalogue",
+      "unhiding": "Remise…",
+      "unhidden": "Article remis dans le catalogue."
     },
     "reference": {
       "title": "Listes de référence",
@@ -851,7 +862,7 @@
     },
     "reports": {
       "title": "Signalements",
-      "intro": "Les articles du catalogue signalés par les utilisatrices, les plus signalés d’abord. Qui a signalé n’est jamais affiché.",
+      "intro": "Les articles signalés dans « Découvrir », les plus signalés d’abord. Qui a signalé n’est jamais affiché.",
       "empty": "Aucun signalement en attente.",
       "count": "{count, plural, one {# signalement} other {# signalements}}",
       "latest": "Dernier le {date}",
@@ -863,10 +874,14 @@
       "reasonLine": "{reason} ({count})",
       "hide": "Masquer du catalogue",
       "keep": "Garder",
+      "hideConfirm": "Masquer cet article de « Découvrir » ? Il reste chez celles qui l’ont déjà gardé, et tu pourras le remettre depuis sa fiche.",
+      "cancel": "Annuler",
+      "hiding": "Masquage…",
       "hidden": "Article masqué du catalogue.",
       "kept": "Article gardé dans le catalogue.",
       "unnamed": "Article sans nom",
-      "noPhoto": "Pas de photo"
+      "noPhoto": "Pas de photo",
+      "showHidden": "Voir les articles masqués"
     }
   },
   "Capture": {

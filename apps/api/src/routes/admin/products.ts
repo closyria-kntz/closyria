@@ -181,6 +181,7 @@ async function loadDetail(db: Database, id: string): Promise<AdminProductDetail 
     publishedAt: p.publishedAt?.toISOString() ?? null,
     lastCapturedAt: p.lastCapturedAt?.toISOString() ?? null,
     updatedAt: p.updatedAt.toISOString(),
+    hiddenAt: p.hiddenAt?.toISOString() ?? null,
     images: images.map((i) => ({ id: i.id, url: catalogImageUrl(i.id), width: i.width, height: i.height })),
     sizes: sizes.map((s) => ({ label: s.label, available: s.available, priceCents: s.priceCents })),
   };
@@ -196,7 +197,7 @@ export function adminProductsRoutes(deps: CatalogDeps) {
 
   return app
     .openapi(listRoute, async (c) => {
-      const { q, shopId, captureStatus, classified, cursor } = c.req.valid("query");
+      const { q, shopId, captureStatus, classified, catalogue, cursor } = c.req.valid("query");
       const after = cursor === undefined ? null : decodeCursor(cursor);
       if (cursor !== undefined && !after) return c.json(invalidRequest, 400);
       const escaped = q?.replace(/[\\%_]/g, (ch) => `\\${ch}`);
@@ -216,6 +217,7 @@ export function adminProductsRoutes(deps: CatalogDeps) {
             captureStatus ? eq(p.captureStatus, captureStatus) : undefined,
             classified === "none" ? sql`${p.categoryId} is null` : undefined,
             classified === "rule" || classified === "admin" ? eq(p.classifiedBy, classified) : undefined,
+            catalogue === "hidden" ? sql`${p.hiddenAt} is not null` : undefined,
             after
               ? sql`(${p.createdAt}, ${p.id}) < (${after.createdAt.toISOString()}::timestamptz, ${after.id}::uuid)`
               : undefined,

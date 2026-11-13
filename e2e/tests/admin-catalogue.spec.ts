@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import type pg from "pg";
 import { sessionsOf, signInAsAdmin } from "../fixtures/auth";
+import { setupValue } from "../fixtures/paths";
 import { expect, test } from "../fixtures/test";
 
 // Catalogue « Découvrir », task 4: the admin validates a shop, ticks its values and runs its import (queued only: the
@@ -34,6 +37,9 @@ async function seedShop(db: pg.Pool, status: "pending" | "published") {
   return { id: rows[0]?.id ?? "", name: `Boutique e2e ${tag}`, tag };
 }
 
+const TINY_WEBP = Buffer.from("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA", "base64");
+
+/** A complete article (name, price, photo), as « Découvrir » and « À classer » need it. */
 async function seedProduct(db: pg.Pool, shopId: string, name: string, productType?: string) {
   const { rows } = await db.query<{ id: string }>(
     `insert into products (shop_id, canonical_url, name, price_cents, currency, shop_data)
@@ -45,7 +51,15 @@ async function seedProduct(db: pg.Pool, shopId: string, name: string, productTyp
       JSON.stringify(productType ? { category: productType } : {}),
     ],
   );
-  return rows[0]?.id ?? "";
+  const id = rows[0]?.id ?? "";
+  const key = `products/${id}/0.webp`;
+  await mkdir(dirname(join(setupValue("E2E_STORAGE_DIR"), key)), { recursive: true });
+  await writeFile(join(setupValue("E2E_STORAGE_DIR"), key), TINY_WEBP);
+  await db.query(
+    "insert into product_images (product_id, position, key, width, height, source_hash) values ($1, 0, $2, 1, 1, $3)",
+    [id, key, `h-${id}`],
+  );
+  return id;
 }
 
 test("une admin valide une boutique, coche ses valeurs et lance l’import de son catalogue", async ({
@@ -162,6 +176,13 @@ test("une admin masque du catalogue un article signalé", async ({ page, request
   await axeLightAndDark(page);
 
   await line.getByRole("button", { name: "Masquer du catalogue" }).click();
+  // It asks first; nothing is hidden before the confirmation.
+  const confirm = line.getByRole("alertdialog");
+  await expect(confirm).toContainText("Masquer cet article de « Découvrir » ?");
+  await confirm.getByRole("button", { name: "Annuler" }).click();
+  await expect(confirm).toHaveCount(0);
+  await line.getByRole("button", { name: "Masquer du catalogue" }).click();
+  await line.getByRole("alertdialog").getByRole("button", { name: "Masquer du catalogue" }).click();
   await expect(line).toHaveCount(0);
   const hidden = await db.query<{ hidden: boolean }>(
     "select hidden_at is not null as hidden from products where id = $1",
@@ -170,4 +191,19 @@ test("une admin masque du catalogue un article signalé", async ({ page, request
   expect(hidden.rows).toEqual([{ hidden: true }]);
   const reports = await db.query("select resolution from product_reports where product_id = $1", [product]);
   expect(reports.rows).toEqual([{ resolution: "hidden" }]);
+
+  // « Remettre dans le catalogue », from the hidden sheets.
+  await page.getByRole("link", { name: "Voir les articles masqués" }).click();
+  await expect(page).toHaveURL(/\/admin\/fiches\?catalogue=hidden/);
+  await page.getByRole("link", { name }).click();
+  await expect(page.getByText("Masqué de « Découvrir » le")).toBeVisible();
+  await axeLightAndDark(page);
+  await page.getByRole("button", { name: "Remettre dans le catalogue" }).click();
+  await expect(page.getByText("Article remis dans le catalogue.")).toBeVisible();
+  await expect(page.getByText("Masqué de « Découvrir » le")).toHaveCount(0);
+  const back = await db.query<{ hidden: boolean }>(
+    "select hidden_at is not null as hidden from products where id = $1",
+    [product],
+  );
+  expect(back.rows).toEqual([{ hidden: false }]);
 });

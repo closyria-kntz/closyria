@@ -1,4 +1,4 @@
-import { adminClassifiedFilterSchema, productCaptureStatusSchema } from "@closyria/shared";
+import { adminCatalogueFilterSchema, adminClassifiedFilterSchema, productCaptureStatusSchema } from "@closyria/shared";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
@@ -27,6 +27,7 @@ export default async function AdminProductsPage({ searchParams }: Props) {
     shopId: typeof query.shopId === "string" && UUID.test(query.shopId) ? query.shopId : undefined,
     captureStatus: known(productCaptureStatusSchema.options, query.captureStatus),
     classified: known(adminClassifiedFilterSchema.options, query.classified),
+    catalogue: known(adminCatalogueFilterSchema.options, query.catalogue),
   };
   const cursor = clean(query.cursor, 200);
   const withFilters = (nextCursor: string | null) => {
@@ -96,6 +97,12 @@ export default async function AdminProductsPage({ searchParams }: Props) {
           t("filterClassified"),
           filters.classified,
           adminClassifiedFilterSchema.options.map((value) => [value, t(`classifiedFilter.${value}`)]),
+        )}
+        {select(
+          "catalogue",
+          t("filterCatalogue"),
+          filters.catalogue,
+          adminCatalogueFilterSchema.options.map((value) => [value, t(`catalogueFilter.${value}`)]),
         )}
         <button type="submit" className={primaryButtonClass}>
           {t("apply")}

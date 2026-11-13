@@ -11,6 +11,7 @@ import { CorrectedPill } from "../corrected-pill";
 import { CorrectForm } from "./correct-form";
 import { DeleteButton } from "./delete-button";
 import { RecaptureButton } from "./recapture-button";
+import { UnhideButton } from "./unhide-button";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -73,6 +74,10 @@ export default async function AdminProductPage({ params }: Props) {
         <span>{t("keptByLine", { count: product.keptBy })}</span>
         <span className="text-ink-muted">{product.shopName}</span>
       </p>
+      <UnhideButton
+        productId={product.id}
+        hiddenLine={product.hiddenAt ? t("hiddenLine", { date: when(product.hiddenAt) }) : null}
+      />
 
       <section aria-labelledby="photos-title" className={section}>
         <h2 id="photos-title" className="font-display text-lead font-strong">

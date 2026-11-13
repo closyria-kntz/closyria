@@ -152,6 +152,16 @@ async function load(captureId: string, productId: string) {
   return { capture, product, sizes, history, images };
 }
 
+async function newUser(): Promise<string> {
+  const n = ++counter;
+  const [user] = await handle.db
+    .insert(schema.user)
+    .values({ id: `capture-user-${n}`, name: `User ${n}`, email: `capture-${n}@example.test` })
+    .returning();
+  if (!user) throw new Error("no user");
+  return user.id;
+}
+
 const imageHits = () => shop.hits.filter((hit) => hit.startsWith("/img/"));
 
 describe("runCapture", () => {
@@ -381,6 +391,75 @@ describe("runCapture", () => {
     expect(r.capture?.status).toBe("failed");
     expect(r.capture?.errorCode).toBe("blocked");
     expect(r.capture?.httpStatus).toBe(403);
+  });
+
+  it("takes a product out of the catalogue on a 404, then puts it back when the page answers again", async () => {
+    routes["/gone"] = { status: 404, headers: { "content-type": "text/html" }, body: "introuvable" };
+    const t = await setup("/gone");
+    const [profile] = await handle.db
+      .insert(schema.profiles)
+      .values({ userId: await newUser(), name: "Moi", audience: "women", color: "rose" })
+      .returning();
+    if (!profile) throw new Error("no profile");
+    const [item] = await handle.db
+      .insert(schema.items)
+      .values({ userId: profile.userId, profileId: profile.id, productId: t.product.id })
+      .returning();
+
+    await runCapture(t.capture.id, deps);
+
+    const gone = await load(t.capture.id, t.product.id);
+    expect(gone.capture?.status).toBe("failed");
+    expect(gone.capture?.httpStatus).toBe(404);
+    expect(gone.product?.removedAt).toBeInstanceOf(Date);
+    // Her item still points at the product, untouched.
+    const [kept] = await handle.db
+      .select()
+      .from(schema.items)
+      .where(eq(schema.items.id, item?.id ?? ""));
+    expect(kept).toEqual(item);
+
+    servePage("/gone", "real/zalando.html");
+    const again = await newCapture(t.shop.id, t.product.id, t.url, "user");
+    await runCapture(again.id, deps);
+
+    const back = await load(again.id, t.product.id);
+    expect(back.capture?.status).toBe("succeeded");
+    expect(back.product?.removedAt).toBeNull();
+  });
+
+  it("takes a product out on a 410 seen by the monitor at its test address, and back on success", async () => {
+    routes["/test-page"] = { status: 410, headers: { "content-type": "text/html" }, body: "parti" };
+    const t = await setup("/test-page");
+    await handle.db.update(schema.products).set({ canonicalUrl: t.url }).where(eq(schema.products.id, t.product.id));
+    const monitor = await newCapture(t.shop.id, null, t.url, "monitor");
+
+    await runCapture(monitor.id, deps);
+    expect((await load(monitor.id, t.product.id)).product?.removedAt).toBeInstanceOf(Date);
+
+    servePage("/test-page", "real/zalando.html");
+    const again = await newCapture(t.shop.id, null, t.url, "monitor");
+    await runCapture(again.id, deps);
+    const back = await load(again.id, t.product.id);
+    expect(back.capture?.status).toBe("succeeded");
+    expect(back.product?.removedAt).toBeNull();
+  });
+
+  it("never takes a product out on an answer that is not definitive (429, 503, 403, robots)", async () => {
+    routes["/robots.txt"] = { headers: { "content-type": "text/plain" }, body: "User-agent: *\nDisallow: /robots-no" };
+    for (const [path, status] of [
+      ["/busy", 429],
+      ["/down", 503],
+      ["/forbidden", 403],
+      ["/robots-no", 200],
+    ] as const) {
+      routes[path] = { status, headers: { "content-type": "text/html" }, body: "non" };
+      const t = await setup(path);
+      await runCapture(t.capture.id, deps);
+      const r = await load(t.capture.id, t.product.id);
+      expect(r.capture?.status).toBe("failed");
+      expect(r.product?.removedAt).toBeNull();
+    }
   });
 
   it("maps an unexpected error to http_error", async () => {

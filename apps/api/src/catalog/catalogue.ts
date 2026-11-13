@@ -9,9 +9,8 @@ import {
   catalogSortSchema,
   type ItemStage,
   type ReportReason,
-  SIZE_KIND_BY_SLUG,
   type SizeKind,
-  sizeKindOf,
+  sizeKindsByCategory,
 } from "@closyria/shared";
 import { z } from "zod";
 import { type KeyType, privateMediaUrl, validKeyValue } from "../wardrobe/item-view";
@@ -34,11 +33,15 @@ const MAX_SEARCH_TERMS = 8;
 /** Thrown for a cursor that was not produced by `listCatalog` for the same sort. */
 export class InvalidCatalogCursorError extends Error {}
 
-/** Who is looking, and with which sizes (« Mes tailles » of the chosen profile, else of her first one). */
+/**
+ * Who is looking, and with which sizes (« Mes tailles » of the chosen profile, else of her first one); `sizeKinds`
+ * tells which of them applies to each category (`sizeKindsByCategory`: a sub-category inherits its parent's).
+ */
 export type Viewer = {
   userId: string;
   profileId: string | null;
   sizes: Record<SizeKind, string | null>;
+  sizeKinds: ReadonlyMap<string, SizeKind>;
 };
 
 /**
@@ -58,14 +61,20 @@ export async function loadViewer(db: Database, userId: string, profileId: string
         .from(schema.profiles)
         .where(sql`${schema.profiles.id} = ${profileId} and ${schema.profiles.userId} = ${userId}`)
     : [];
-  const [profile] = own.length
-    ? own
-    : await db
-        .select(columns)
-        .from(schema.profiles)
-        .where(sql`${schema.profiles.userId} = ${userId}`)
-        .orderBy(...PROFILE_ORDER)
-        .limit(1);
+  const [[profile], categories] = await Promise.all([
+    own.length
+      ? own
+      : db
+          .select(columns)
+          .from(schema.profiles)
+          .where(sql`${schema.profiles.userId} = ${userId}`)
+          .orderBy(...PROFILE_ORDER)
+          .limit(1),
+    // A small reference table, read once per request.
+    db
+      .select({ id: schema.categories.id, parentId: schema.categories.parentId, slug: schema.categories.slug })
+      .from(schema.categories),
+  ]);
   return {
     userId,
     profileId: profile?.id ?? null,
@@ -74,33 +83,28 @@ export async function loadViewer(db: Database, userId: string, profileId: string
       bottom: profile?.sizeBottom ?? null,
       shoes: profile?.sizeShoes ?? null,
     },
+    sizeKinds: sizeKindsByCategory(categories),
   };
 }
 
-// --- SQL building blocks. The product is `p`, its shop `s`, its category `c`, its first photo `img`. ---
+// --- SQL building blocks. The product is `p`, its shop `s`, its first photo `img`. ---
 
 /** Size labels compared without case or spaces (as `sizeMatches`). */
 const squash = (expr: SQL) => sql`nullif(lower(regexp_replace(${expr}, '\\s', '', 'g')), '')`;
-
-const SLUGS_BY_KIND = Object.entries(SIZE_KIND_BY_SLUG).reduce<Record<SizeKind, string[]>>(
-  (acc, [slug, kind]) => {
-    acc[kind].push(slug);
-    return acc;
-  },
-  { top: [], bottom: [], shoes: [] },
-);
 
 /**
  * Her size for the product's kind of article, squashed; null when the kind has none (accessories, unfiled) or she
  * gave none for it.
  */
 function sizeOfKind(viewer: Viewer): SQL {
-  const branches = (Object.keys(SLUGS_BY_KIND) as SizeKind[])
-    .filter((kind) => viewer.sizes[kind] !== null)
+  const idsByKind: Record<SizeKind, string[]> = { top: [], bottom: [], shoes: [] };
+  for (const [categoryId, kind] of viewer.sizeKinds) idsByKind[kind].push(categoryId);
+  const branches = (Object.keys(idsByKind) as SizeKind[])
+    .filter((kind) => viewer.sizes[kind] !== null && idsByKind[kind].length > 0)
     .map(
       (kind) =>
-        sql`when c.slug in (${sql.join(
-          SLUGS_BY_KIND[kind].map((slug) => sql`${slug}`),
+        sql`when p.category_id in (${sql.join(
+          idsByKind[kind].map((id) => sql`${id}::uuid`),
           sql`, `,
         )}) then ${squash(sql`${viewer.sizes[kind]}::text`)}`,
     );
@@ -128,6 +132,18 @@ const visible = sql`s.status = 'published' and s.merged_into_id is null
 
 /** A card needs a name, a price and its currency (and a photo: the inner `img` join). */
 const complete = sql`p.name is not null and p.price_cents is not null and p.currency is not null`;
+
+/** The photo a card needs, where there is no `img` join. */
+const hasImage = sql`exists (select 1 from product_images pic where pic.product_id = p.id)`;
+
+/** A product an admin can file: complete and with a photo, whatever its shop's status. Product `p`. */
+export const completeWithImage = sql`${complete} and ${hasImage}`;
+
+/**
+ * A product of « Découvrir », exactly as its grid shows it: visible and complete, with a photo. Product `p`, its shop
+ * `s`. Used wherever the catalogue is counted or pictured (shop tiles, « boutique de la semaine », admin counts).
+ */
+export const inCatalogue = sql`${visible} and ${completeWithImage}`;
 
 const onSale = sql`p.compare_at_cents > p.price_cents`;
 
@@ -174,7 +190,6 @@ async function selectCards(
       ${options.extra ? sql`, ${options.extra}` : sql``}
     from products p
     join shops s on s.id = p.shop_id
-    left join categories c on c.id = p.category_id
     join lateral (
       select pi.id from product_images pi where pi.product_id = p.id order by pi.position, pi.id limit 1
     ) img on true
@@ -196,8 +211,18 @@ const SORTS: Record<CatalogSort, { keys: SortKey[]; desc: boolean }> = {
   new: { keys: [createdKey, idKey], desc: true },
   price_asc: { keys: [priceKey, idKey], desc: false },
   price_desc: { keys: [priceKey, idKey], desc: true },
-  /** The most liked first, then the newest. */
-  popular: { keys: [{ expr: likesOf, type: "integer" }, createdKey, idKey], desc: true },
+  /**
+   * The most liked first, then the newest. Under 3 people counts as none, so the order never tells that one or two
+   * people have an article (the counter is shown from 3 too).
+   */
+  popular: {
+    keys: [
+      { expr: sql`(case when ${likesOf} >= ${LIKES_THRESHOLD} then ${likesOf} else 0 end)`, type: "integer" },
+      createdKey,
+      idKey,
+    ],
+    desc: true,
+  },
 };
 
 const cursorSchema = z.object({ s: catalogSortSchema, k: z.array(z.string()).min(2).max(3) });
@@ -370,8 +395,7 @@ export async function loadCatalogDetail(
     where: [sql`p.id = ${productId}`],
     orderBy: sql`p.id`,
     limit: 1,
-    extra: sql`p.category_id, p.color_id, p.shop_id as own_shop_id, ${likesOf} as likes, p.canonical_url,
-      (select cs.slug from categories cs where cs.id = p.category_id) as category_slug`,
+    extra: sql`p.category_id, p.color_id, p.shop_id as own_shop_id, ${likesOf} as likes, p.canonical_url`,
   });
   if (!row) return null;
   const categoryId = row.category_id as string | null;
@@ -421,7 +445,7 @@ export async function loadCatalogDetail(
 
   const likes = Number(row.likes);
   const own = mine[0];
-  const kind = sizeKindOf(row.category_slug as string | null);
+  const kind = categoryId ? viewer.sizeKinds.get(categoryId) : undefined;
   const mySize = kind ? viewer.sizes[kind] : null;
   return {
     ...toCard(row),
@@ -502,8 +526,7 @@ export async function reportProduct(
 ): Promise<boolean> {
   const { rows } = await db.execute<{ id: string }>(sql`
     select p.id from products p join shops s on s.id = p.shop_id
-    where p.id = ${productId} and ${visible}
-      and exists (select 1 from product_images pi where pi.product_id = p.id) and ${complete}`);
+    where p.id = ${productId} and ${inCatalogue}`);
   if (rows.length === 0) return false;
   await db
     .insert(schema.productReports)

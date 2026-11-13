@@ -26,6 +26,7 @@ import {
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { defineAccess } from "../../access";
 import { type AdminEnv, noteAudit } from "../../admin-audit";
+import { inCatalogue } from "../../catalog/catalogue";
 import type { CatalogDeps } from "../../catalog/deps";
 import { featuredShopId } from "../../catalog/directory";
 import { enqueueCapture } from "../../catalog/enqueue";
@@ -197,8 +198,10 @@ const importRoute = defineAccess(
     request: { params: idParam },
     responses: {
       202: { description: "Queued", content: { "application/json": { schema: adminImportQueuedSchema } } },
-      404: errorContent("Unknown or merged shop"),
-      409: errorContent("not_shopify: only a Shopify shop's catalogue can be imported"),
+      404: errorContent("Unknown shop"),
+      409: errorContent(
+        "not_shopify: only a Shopify shop's catalogue can be imported; merged or refused: the shop is out of the catalogue",
+      ),
     },
   }),
   "admin",
@@ -377,10 +380,10 @@ export function adminShopsRoutes(deps: CatalogDeps) {
           .orderBy(sql`${schema.captures.finishedAt} desc nulls last`, desc(schema.captures.createdAt))
           .limit(1),
         featuredShopId(db),
-        db
-          .select({ n: count() })
-          .from(schema.products)
-          .where(and(eq(schema.products.shopId, id), isNull(schema.products.removedAt))),
+        // « Articles dans Découvrir »: what the shop's grid shows, nothing hidden, removed or incomplete.
+        db.execute<{ n: number }>(sql`
+          select count(*)::int as n from products p join shops s on s.id = p.shop_id
+          where p.shop_id = ${id} and ${inCatalogue}`),
       ]);
       const s = stats.get(id);
       const [lastMonitor] = monitors;
@@ -397,7 +400,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
             createdAt: e.createdAt.toISOString(),
           })),
           featured: featured === id,
-          catalogueProducts: onSale[0]?.n ?? 0,
+          catalogueProducts: onSale.rows[0]?.n ?? 0,
         },
         200,
       );
@@ -534,8 +537,11 @@ export function adminShopsRoutes(deps: CatalogDeps) {
     .openapi(importRoute, async (c) => {
       const { id } = c.req.valid("param");
       noteAudit(c, { action: "shop.import", target: `shop:${id}` });
-      const shop = await activeShop(db, id);
+      const [shop] = await db.select().from(schema.shops).where(eq(schema.shops.id, id));
       if (!shop) return c.json(notFound, 404);
+      // A pending or draft shop may be imported (preview); a merged or refused one never.
+      if (shop.mergedIntoId) return c.json({ error: "merged" } as const, 409);
+      if (shop.status === "refused") return c.json({ error: "refused" } as const, 409);
       if (shop.platform !== "shopify") return c.json({ error: "not_shopify" } as const, 409);
       const queued = await queue.importCatalogue(id);
       noteAudit(c, { action: "shop.import", target: `shop:${id}`, details: { queued } });

@@ -91,6 +91,8 @@ export const adminCatalogErrorSchema = z.object({
     "has_children",
     "not_published",
     "not_shopify",
+    "merged",
+    "refused",
   ]),
   /** With `domain_taken` on shop creation: the shop that owns the domain. */
   shopId: z.uuid().optional(),
@@ -231,12 +233,15 @@ export const ADMIN_FAILURES_LIMIT = 100;
 /** Number of products per page of `GET /api/admin/products`. */
 export const ADMIN_PRODUCTS_PAGE_SIZE = 50;
 export const adminClassifiedFilterSchema = z.enum(["rule", "admin", "none"]);
+/** « Masqués »: the sheets an admin hid from « Découvrir » (to put them back). */
+export const adminCatalogueFilterSchema = z.enum(["hidden"]);
 
 export const adminProductsQuerySchema = z.object({
   q: z.string().trim().min(1).max(200).optional(),
   shopId: z.uuid().optional(),
   captureStatus: productCaptureStatusSchema.optional(),
   classified: adminClassifiedFilterSchema.optional(),
+  catalogue: adminCatalogueFilterSchema.optional(),
   cursor: z.string().min(1).max(200).optional(),
 });
 
@@ -281,6 +286,8 @@ export const adminProductDetailSchema = adminProductBase.extend({
   publishedAt: isoDate.nullable(),
   lastCapturedAt: isoDate.nullable(),
   updatedAt: isoDate,
+  /** When an admin hid it from « Découvrir » (« Masquer du catalogue »); null when it is not hidden. */
+  hiddenAt: isoDate.nullable(),
   images: z.array(z.object({ id: z.uuid(), url: z.string(), width: z.number().int(), height: z.number().int() })),
   sizes: z.array(z.object({ label: z.string(), available: z.boolean(), priceCents: z.number().int().nullable() })),
 });

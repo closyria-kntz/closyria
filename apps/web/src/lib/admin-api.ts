@@ -109,6 +109,7 @@ export type ProductFilters = {
   shopId?: string | undefined;
   captureStatus?: string | undefined;
   classified?: string | undefined;
+  catalogue?: string | undefined;
   cursor?: string | undefined;
 };
 

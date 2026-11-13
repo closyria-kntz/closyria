@@ -67,10 +67,20 @@ export const catalogClosePieceSchema = z.object({
 });
 export type CatalogClosePiece = z.infer<typeof catalogClosePieceSchema>;
 
+/** Whether `value` is an absolute http(s) address (never `javascript:`, `data:`…): safe for a link out. */
+export function isHttpUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export const catalogDetailSchema = catalogCardSchema.extend({
   images: z.array(z.string()),
-  /** The article's page at the shop (« Voir chez {boutique} », « Partager »). */
-  url: z.string(),
+  /** The article's page at the shop (« Voir chez {boutique} », « Partager »): http(s) only. */
+  url: z.string().refine(isHttpUrl),
   sizes: z.array(z.object({ label: z.string(), available: z.boolean() })),
   /** Her size (« Mes tailles ») for this kind of article, as she typed it; null when none applies. */
   mySize: z.string().nullable(),
@@ -146,6 +156,32 @@ export const SIZE_KIND_BY_SLUG: Readonly<Record<string, SizeKind>> = {
 /** Which of her sizes applies to a category (by slug); accessories and bags have none. */
 export function sizeKindOf(categorySlug: string | null): SizeKind | null {
   return categorySlug ? (SIZE_KIND_BY_SLUG[categorySlug] ?? null) : null;
+}
+
+/**
+ * Which of her sizes applies to each category of the tree: its own slug's kind, else the nearest ancestor's, so a
+ * sub-category added by an admin (« Jupe crayon » under « Jupes ») inherits it. Categories without any (accessories,
+ * bags) are left out. A cycle in the tree (never written by the admin) stops the walk.
+ */
+export function sizeKindsByCategory(
+  categories: readonly { id: string; parentId: string | null; slug: string }[],
+): Map<string, SizeKind> {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const kinds = new Map<string, SizeKind>();
+  for (const category of categories) {
+    const seen = new Set<string>();
+    let current: (typeof categories)[number] | undefined = category;
+    while (current && !seen.has(current.id)) {
+      seen.add(current.id);
+      const kind = sizeKindOf(current.slug);
+      if (kind) {
+        kinds.set(category.id, kind);
+        break;
+      }
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+  }
+  return kinds;
 }
 
 /** pg-boss queue of the Shopify catalogue imports (nightly, or « Importer tout le catalogue » in the admin). */

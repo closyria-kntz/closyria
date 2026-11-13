@@ -116,10 +116,16 @@ export function catalogueFiltersToParams(filters: CatalogueFilters, into?: URLSe
   return params;
 }
 
-/** How many filters are on: each of the shop's values counts, the sort never does. */
-export function activeCatalogueFilterCount(filters: CatalogueFilters): number {
+/**
+ * How many filters are on: each of the shop's values counts, the sort never does, nor « Ma taille en stock » once the
+ * page said she has no sizes (`hasSizes` false: it filters nothing and its chip is not shown).
+ */
+export function activeCatalogueFilterCount(filters: CatalogueFilters, hasSizes: boolean | null = null): number {
   return Object.entries(filters).reduce(
-    (count, [key, value]) => (key === "sort" ? count : count + (Array.isArray(value) ? value.length : 1)),
+    (count, [key, value]) =>
+      key === "sort" || (key === "mySize" && hasSizes === false)
+        ? count
+        : count + (Array.isArray(value) ? value.length : 1),
     0,
   );
 }

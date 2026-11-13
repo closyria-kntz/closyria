@@ -1,5 +1,5 @@
 import type dns from "node:dns";
-import { and, type Database, eq, ne, schema } from "@closyria/db";
+import { and, type Database, eq, isNotNull, isNull, ne, schema } from "@closyria/db";
 import { extract, isShopifyPage, shopifyJsUrl } from "@closyria/extract";
 import { type CaptureErrorCode, type CaptureMethod, type ExtractedProduct, shopDomain } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
@@ -26,6 +26,34 @@ export type CaptureDeps = {
 };
 
 type Outcome = { method: CaptureMethod; product: ExtractedProduct; httpStatus: number };
+
+/** HTTP answers that say the product page is gone for good (not a block, a timeout or a server hiccup). */
+const GONE_STATUSES = new Set([404, 410]);
+
+/** Whether a capture failure is a definitive « the shop removed this page ». */
+function isGone(error: unknown): boolean {
+  return (
+    error instanceof CaptureError &&
+    error.code === "http_error" &&
+    error.httpStatus !== undefined &&
+    GONE_STATUSES.has(error.httpStatus)
+  );
+}
+
+/**
+ * The product a capture speaks for: the user's product, or for a monitor the product known at its test address
+ * (`canonical_url` is unique). An admin test speaks for none.
+ */
+async function productOf(db: Database, capture: typeof schema.captures.$inferSelect): Promise<string | null> {
+  if (capture.trigger === "user") return capture.productId;
+  if (capture.trigger !== "monitor") return null;
+  if (capture.productId) return capture.productId;
+  const [product] = await db
+    .select({ id: schema.products.id })
+    .from(schema.products)
+    .where(eq(schema.products.canonicalUrl, capture.url));
+  return product?.id ?? null;
+}
 
 /** `extract` wants an HTML document; with a Shopify `.js` alone there is no page, so it gets an empty one. */
 const EMPTY_PAGE = "<html></html>";
@@ -77,6 +105,8 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
           reference,
           at,
           history: "always",
+          // The page answers again: a product marked gone comes back to the catalogue.
+          extra: { removedAt: null },
         });
         await tx.update(schema.captures).set({ dataReady: true }).where(eq(schema.captures.id, captureId));
       });
@@ -90,6 +120,16 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
       } catch (error) {
         // The data is committed: a photo-step failure must not fail the capture.
         console.error(`capture ${captureId}: photo step failed`, error);
+      }
+    }
+
+    if (capture.trigger === "monitor") {
+      const productId = await productOf(db, capture);
+      if (productId) {
+        await db
+          .update(schema.products)
+          .set({ removedAt: null, updatedAt: now() })
+          .where(and(eq(schema.products.id, productId), isNotNull(schema.products.removedAt)));
       }
     }
 
@@ -132,6 +172,7 @@ async function recordFailure(
   if (!(error instanceof CaptureError)) console.error(`capture ${capture.id} failed`, error);
   const finishedAt = now();
   try {
+    const goneProductId = isGone(error) ? await productOf(deps.db, capture) : null;
     await deps.db.transaction(async (tx) => {
       await tx
         .update(schema.captures)
@@ -155,6 +196,13 @@ async function recordFailure(
               ne(schema.products.captureStatus, "manual"),
             ),
           );
+      }
+      // The shop says the page is gone (404/410): the product leaves « Découvrir ». Her items and wishlists keep it.
+      if (goneProductId) {
+        await tx
+          .update(schema.products)
+          .set({ removedAt: finishedAt, updatedAt: finishedAt })
+          .where(and(eq(schema.products.id, goneProductId), isNull(schema.products.removedAt)));
       }
     });
   } catch (writeError) {

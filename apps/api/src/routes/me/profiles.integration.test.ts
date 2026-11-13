@@ -286,6 +286,28 @@ describe("isolation", () => {
     const [row] = await t.db.select().from(schema.profiles).where(eq(schema.profiles.id, lea.id));
     expect(row?.name).toBe("Léa");
   });
+
+  it("never lets another user change « Mes tailles » of a profile", async () => {
+    const owner = await t.signIn();
+    const other = await t.signIn();
+    const lea = (await (
+      await call("POST", "/api/me/profiles", owner.cookie, { name: "Léa", audience: "women", color: "rose" })
+    ).json()) as ProfileJson;
+    await call("PATCH", `/api/me/profiles/${lea.id}`, owner.cookie, {
+      sizeTop: "M",
+      sizeBottom: "38",
+      sizeShoes: null,
+    });
+
+    const patch = await call("PATCH", `/api/me/profiles/${lea.id}`, other.cookie, {
+      sizeTop: "XL",
+      sizeBottom: null,
+      sizeShoes: "42",
+    });
+    expect(patch.status).toBe(404);
+    const [row] = await t.db.select().from(schema.profiles).where(eq(schema.profiles.id, lea.id));
+    expect([row?.sizeTop, row?.sizeBottom, row?.sizeShoes]).toEqual(["M", "38", null]);
+  });
 });
 
 describe("GET /api/me/summary", () => {
