@@ -1,5 +1,6 @@
 import { createAuth, memoryMailer } from "@closyria/auth";
 import { createDb, schema } from "@closyria/db";
+import { CATALOGUE_IMPORT_QUEUE } from "@closyria/shared";
 import { memoryStore, type ObjectStore } from "@closyria/storage";
 import { createTestDatabase } from "@closyria/testing/vitest";
 import { expect } from "vitest";
@@ -9,12 +10,16 @@ import type { CatalogDeps } from "./deps";
 
 export const BASE_URL = "http://localhost:3001";
 
-/** A queue that only records what was enqueued. */
+/** A queue that only records what was enqueued (a catalogue import as `{ queue: "catalogue-import", id: shopId }`). */
 export function recordingQueue() {
   const calls: { queue: string; id: string }[] = [];
   const queue: CaptureQueue = {
     async enqueue(name, id) {
       calls.push({ queue: name, id });
+    },
+    async importCatalogue(shopId) {
+      calls.push({ queue: CATALOGUE_IMPORT_QUEUE, id: shopId });
+      return true;
     },
   };
   return { queue, calls };

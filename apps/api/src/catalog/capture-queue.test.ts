@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { pgBossQueue } from "./capture-queue";
 
-function fakeBoss(failStart = 0) {
+function fakeBoss(failStart = 0, taken = new Set<string>()) {
   const log: string[] = [];
   let failures = failStart;
   return {
@@ -12,10 +12,11 @@ function fakeBoss(failStart = 0) {
         if (failures-- > 0) throw new Error("down");
         return undefined as never;
       },
-      createQueue: async (name: string) => void log.push(`create ${name}`),
-      send: async (name: string, data?: object | null) => {
-        log.push(`send ${name} ${JSON.stringify(data)}`);
-        return "job";
+      createQueue: async (name: string, options?: object) =>
+        void log.push(`create ${name}${options ? ` ${JSON.stringify(options)}` : ""}`),
+      send: async (name: string, data?: object | null, options?: { singletonKey: string }) => {
+        log.push(`send ${name} ${JSON.stringify(data)}${options ? ` ${JSON.stringify(options)}` : ""}`);
+        return taken.has(options?.singletonKey ?? "") ? null : "job";
       },
     },
   };
@@ -33,9 +34,21 @@ describe("pgBossQueue", () => {
       "create capture-user",
       "create capture-admin",
       "create photo-import",
+      'create catalogue-import {"policy":"exclusive","retryLimit":0,"expireInSeconds":21600}',
       'send capture-user {"captureId":"c1"}',
       'send capture-admin {"captureId":"c2"}',
       'send photo-import {"importId":"i1"}',
+    ]);
+  });
+
+  it("queues a shop's catalogue import with the shop as singleton key; false when one is already queued", async () => {
+    const { boss, log } = fakeBoss(0, new Set(["busy"]));
+    const queue = pgBossQueue(boss);
+    expect(await queue.importCatalogue("s1")).toBe(true);
+    expect(await queue.importCatalogue("busy")).toBe(false);
+    expect(log.slice(-2)).toEqual([
+      'send catalogue-import {"shopId":"s1"} {"singletonKey":"s1"}',
+      'send catalogue-import {"shopId":"busy"} {"singletonKey":"busy"}',
     ]);
   });
 

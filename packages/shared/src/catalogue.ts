@@ -83,6 +83,9 @@ export const reportReasonSchema = z.enum(["not_fashion", "shocking", "other"]);
 export type ReportReason = z.infer<typeof reportReasonSchema>;
 export const reportInputSchema = z.object({ reason: reportReasonSchema });
 export type ReportInput = z.infer<typeof reportInputSchema>;
+/** How the admin closed a report: the article was hidden from the catalogue, or kept in it. */
+export const reportResolutionSchema = z.enum(["hidden", "kept"]);
+export type ReportResolution = z.infer<typeof reportResolutionSchema>;
 
 export const MAX_PROFILE_SIZE = 10;
 const sizeField = z.string().trim().min(1).max(MAX_PROFILE_SIZE).nullable();

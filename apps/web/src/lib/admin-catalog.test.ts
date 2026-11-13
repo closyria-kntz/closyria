@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   adminRequest,
   catalogErrorKey,
+  importErrorMessage,
   productErrorKey,
   readCaptureResult,
   referenceErrorKey,
@@ -14,6 +15,7 @@ describe("catalogErrorKey", () => {
     expect(catalogErrorKey(409, { error: "domain_taken" })).toBe("domainTaken");
     expect(catalogErrorKey(409, { error: "capture_active" })).toBe("captureActive");
     expect(catalogErrorKey(409, { error: "not_published" })).toBe("notPublished");
+    expect(catalogErrorKey(409, { error: "not_shopify" })).toBe("notShopify");
     expect(catalogErrorKey(400, { error: "invalid_merge" })).toBe("invalidMerge");
     expect(catalogErrorKey(400, { error: "invalid_url" })).toBe("invalidUrl");
   });
@@ -22,6 +24,23 @@ describe("catalogErrorKey", () => {
     expect(catalogErrorKey(500, null)).toBe("generic");
     expect(catalogErrorKey(400, { error: "invalid_request" })).toBe("generic");
     expect(catalogErrorKey(409, "nope")).toBe("generic");
+  });
+});
+
+describe("importErrorMessage", () => {
+  it("names the import failures the worker records, with the HTTP status when there is one", () => {
+    expect(importErrorMessage("blocked (HTTP 429)")).toEqual({ key: "blocked", status: 429 });
+    expect(importErrorMessage("blocked")).toEqual({ key: "blocked", status: null });
+    expect(importErrorMessage("robots_disallowed")).toEqual({ key: "robots", status: null });
+    expect(importErrorMessage("suspicious_shrink")).toEqual({ key: "shrink", status: null });
+    expect(importErrorMessage("no_address")).toEqual({ key: "noAddress", status: null });
+    expect(importErrorMessage("timeout")).toEqual({ key: "timeout", status: null });
+    expect(importErrorMessage("http_error (HTTP 503)")).toEqual({ key: "httpError", status: 503 });
+  });
+
+  it("gives an unknown code back as it is", () => {
+    expect(importErrorMessage("too_many_pages")).toEqual({ raw: "too_many_pages" });
+    expect(importErrorMessage("blocked (HTTP abc)")).toEqual({ raw: "blocked (HTTP abc)" });
   });
 });
 

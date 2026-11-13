@@ -12,6 +12,7 @@ import {
   productCaptureStatusSchema,
   productSourceSchema,
   reportReasonSchema,
+  reportResolutionSchema,
   seasonSchema,
   shopStatusSchema,
   shopValueSchema,
@@ -293,9 +294,18 @@ export const productReports = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     reason: text("reason").notNull(),
     createdAt: createdAt(),
+    /** When the admin closed it (« Masquer du catalogue » or « Garder »); open while null. */
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolution: text("resolution"),
   },
   (t) => [
     unique("product_reports_product_user_unique").on(t.productId, t.userId),
     check("product_reports_reason_check", oneOf(t.reason, reportReasonSchema.options)),
+    check(
+      "product_reports_resolution_check",
+      sql`(${t.resolvedAt} IS NULL AND ${t.resolution} IS NULL) OR (${t.resolvedAt} IS NOT NULL AND ${oneOf(t.resolution, reportResolutionSchema.options)})`,
+    ),
+    // « Signalements » reads the open reports only.
+    index("product_reports_open_idx").on(t.productId).where(sql`${t.resolvedAt} IS NULL`),
   ],
 );

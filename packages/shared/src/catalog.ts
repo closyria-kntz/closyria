@@ -3,7 +3,8 @@ import { z } from "zod";
 export const audienceSchema = z.enum(["women", "men", "child", "mixed"]);
 export const childDetailSchema = z.enum(["girl", "boy", "baby"]);
 export const seasonSchema = z.enum(["summer", "winter", "mid", "all"]);
-export const shopStatusSchema = z.enum(["pending", "draft", "published"]);
+/** `pending` (« À valider »): a shop found through a link; `refused`: never in the catalogue, its products kept. */
+export const shopStatusSchema = z.enum(["pending", "draft", "published", "refused"]);
 export const captureModeSchema = z.enum(["auto", "manual"]);
 export const listingKindSchema = z.enum(["catalog", "secondhand"]);
 export const platformSchema = z.enum(["shopify", "other", "unknown"]);

@@ -11,6 +11,7 @@ import {
   shopStatusSchema,
 } from "./catalog";
 import { canonicalizeUrl } from "./catalog-url";
+import { reportReasonSchema, shopValueSchema } from "./catalogue";
 import { audienceSchema, childDetailSchema, classifiedBySchema, seasonSchema } from "./wardrobe";
 
 const count = z.number().int().nonnegative();
@@ -89,6 +90,7 @@ export const adminCatalogErrorSchema = z.object({
     "cycle",
     "has_children",
     "not_published",
+    "not_shopify",
   ]),
   /** With `domain_taken` on shop creation: the shop that owns the domain. */
   shopId: z.uuid().optional(),
@@ -115,6 +117,13 @@ export const adminShopSchema = z.object({
   testUrl: z.string().nullable(),
   domains: z.array(z.string()),
   health: shopHealthSchema,
+  /** Ticked by the admin: filters of « Découvrir ». */
+  values: z.array(shopValueSchema),
+  /** « Importer tout le catalogue » (Shopify): the nightly import is on. */
+  importEnabled: z.boolean(),
+  lastImportAt: isoDate.nullable(),
+  /** Code of the last import's failure (`blocked (HTTP 429)`, `robots_disallowed`…); null after a full import. */
+  lastImportError: z.string().nullable(),
   createdAt: isoDate,
 });
 export type AdminShop = z.infer<typeof adminShopSchema>;
@@ -141,7 +150,10 @@ export const adminShopDetailSchema = adminShopSchema.extend({
   recentErrors: z.array(adminShopErrorSchema),
   /** It is the « boutique de la semaine » of « Découvrir » right now (the published shop featured most recently). */
   featured: z.boolean(),
+  /** Products of the shop still on sale (not removed by the last import). */
+  catalogueProducts: count,
 });
+export type AdminShopDetail = z.infer<typeof adminShopDetailSchema>;
 
 const slugSchema = z
   .string()
@@ -162,6 +174,12 @@ export const adminShopPatchSchema = z
       .refine((v) => canonicalizeUrl(v) !== null)
       .nullable(),
     domains: z.array(z.string().trim().min(1).max(253)).min(1).max(50),
+    /** Replaces the whole set; duplicates are dropped. */
+    values: z
+      .array(shopValueSchema)
+      .max(10)
+      .transform((list) => [...new Set(list)]),
+    importEnabled: z.boolean(),
   })
   .partial();
 
@@ -169,6 +187,9 @@ export const adminShopCreateSchema = z.object({ url: z.string().max(2048) });
 export const adminShopCreatedSchema = z.object({ shopId: z.uuid(), captureId: z.uuid() });
 export const adminMergeSchema = z.object({ targetId: z.uuid() });
 export const adminMergedSchema = z.object({ targetId: z.uuid() });
+
+/** Answer of `POST /api/admin/shops/{id}/import`: false when an import of the shop is already queued or running. */
+export const adminImportQueuedSchema = z.object({ queued: z.boolean() });
 
 export const adminCaptureTestSchema = z.object({ url: z.string().max(2048) });
 export const adminCaptureAcceptedSchema = z.object({ captureId: z.uuid(), shopId: z.uuid() });
@@ -363,3 +384,52 @@ export const referenceEntrySchema = z.object({
 export type ReferenceEntry = z.infer<typeof referenceEntrySchema>;
 export const referenceListSchema = z.object({ entries: z.array(referenceEntrySchema) });
 export const referenceDeletedSchema = z.object({ deleted: z.literal(true) });
+
+// ---- Catalogue « Découvrir » (admin): « À classer » and « Signalements » ----
+
+/** At most this many articles in « À classer » (the oldest wait for the next visit). */
+export const ADMIN_UNCLASSIFIED_LIMIT = 100;
+
+export const adminUnclassifiedProductSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  shopId: z.uuid(),
+  shopName: z.string(),
+  imageUrl: z.string().nullable(),
+  /** The shop's product type (Shopify `product_type`), as read; what « même type » compares. */
+  productType: z.string().nullable(),
+  categoryId: z.uuid().nullable(),
+  colorId: z.uuid().nullable(),
+  createdAt: isoDate,
+});
+export type AdminUnclassifiedProduct = z.infer<typeof adminUnclassifiedProductSchema>;
+export const adminUnclassifiedListSchema = z.object({
+  products: z.array(adminUnclassifiedProductSchema),
+  /** Every article to file, the listed ones included. */
+  total: count,
+});
+export type AdminUnclassifiedList = z.infer<typeof adminUnclassifiedListSchema>;
+
+export const adminClassificationSchema = z.object({
+  categoryId: z.uuid(),
+  colorId: z.uuid(),
+  /** Also file the shop's articles of the same product type, except those an admin already filed. */
+  applyToShopType: z.boolean().optional(),
+});
+export type AdminClassification = z.infer<typeof adminClassificationSchema>;
+export const adminClassifiedSchema = z.object({ updated: count });
+
+export const adminReportSchema = z.object({
+  productId: z.uuid(),
+  name: z.string().nullable(),
+  shopId: z.uuid(),
+  shopName: z.string(),
+  imageUrl: z.string().nullable(),
+  /** Open reports of the article; who reported is never returned. */
+  count,
+  reasons: z.array(z.object({ reason: reportReasonSchema, count })),
+  latestAt: isoDate,
+});
+export type AdminReport = z.infer<typeof adminReportSchema>;
+export const adminReportListSchema = z.object({ reports: z.array(adminReportSchema) });
+export const adminReportsResolvedSchema = z.object({ resolved: count });

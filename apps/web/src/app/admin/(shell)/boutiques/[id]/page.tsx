@@ -10,12 +10,14 @@ import { MergeDialog } from "../merge-dialog";
 import { ShopSettingsForm } from "../shop-settings-form";
 import { FeatureShop } from "./feature-shop";
 import { ShippingOptions } from "./shipping-options";
+import { ShopCatalogue } from "./shop-catalogue";
+import { ShopReview } from "./shop-review";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Props = { params: Promise<{ id: string }> };
 
-/** One shop: settings, « boutique de la semaine », delivery, health, link tester and merge. */
+/** One shop: validation, settings, catalogue (values, import), « boutique de la semaine », delivery, health, link tester and merge. */
 export default async function AdminShopPage({ params }: Props) {
   await requireAdminPage();
   const { id } = await params;
@@ -41,6 +43,10 @@ export default async function AdminShopPage({ params }: Props) {
         </Link>
       </div>
 
+      <div className="rounded-card border border-card-border bg-card-bg p-space-4">
+        <ShopReview shopId={shop.id} status={shop.status} />
+      </div>
+
       <section
         aria-labelledby="settings-title"
         className="flex flex-col gap-space-3 rounded-card border border-card-border bg-card-bg p-space-4"
@@ -50,6 +56,10 @@ export default async function AdminShopPage({ params }: Props) {
         </h2>
         <ShopSettingsForm shop={shop} />
       </section>
+
+      <div className="rounded-card border border-card-border bg-card-bg p-space-4">
+        <ShopCatalogue shop={shop} />
+      </div>
 
       <div className="rounded-card border border-card-border bg-card-bg p-space-4">
         <FeatureShop shopId={shop.id} status={shop.status} featured={shop.featured} />

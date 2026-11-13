@@ -13,6 +13,7 @@ export type CatalogErrorKey =
   | "cycle"
   | "hasChildren"
   | "notPublished"
+  | "notShopify"
   | "generic";
 
 /** The message (under `Admin.shops.errors`) for a refusal of the admin catalog API. */
@@ -23,6 +24,7 @@ export function catalogErrorKey(status: number, body: unknown): CatalogErrorKey 
   if (status === 409 && error === "capture_active") return "captureActive";
   if (status === 409 && error === "kept") return "kept";
   if (status === 409 && error === "not_published") return "notPublished";
+  if (status === 409 && error === "not_shopify") return "notShopify";
   if (status === 400 && error === "invalid_merge") return "invalidMerge";
   if (status === 400 && error === "invalid_url") return "invalidUrl";
   return "generic";
@@ -74,4 +76,29 @@ export function referenceErrorKey(status: number, body: unknown): CatalogErrorKe
 export function productErrorKey(status: number, body: unknown): CatalogErrorKey {
   const key = catalogErrorKey(status, body);
   return status === 400 && key === "generic" ? "invalidProduct" : key;
+}
+
+const IMPORT_ERROR_KEYS = {
+  blocked: "blocked",
+  robots_disallowed: "robots",
+  suspicious_shrink: "shrink",
+  no_address: "noAddress",
+  timeout: "timeout",
+  http_error: "httpError",
+  invalid_data: "invalidData",
+} as const;
+export type ImportErrorKey = (typeof IMPORT_ERROR_KEYS)[keyof typeof IMPORT_ERROR_KEYS];
+
+/**
+ * The message (under `Admin.shops.catalogue.importErrors`) for a shop's `last_import_error`, written by the worker as
+ * a code optionally followed by ` (HTTP <status>)`; an unknown code is given back raw.
+ */
+export function importErrorMessage(code: string): { key: ImportErrorKey; status: number | null } | { raw: string } {
+  const match = /^([a-z_]+)(?: \(HTTP (\d{3})\))?$/.exec(code);
+  const name = match?.[1];
+  if (!name || !Object.hasOwn(IMPORT_ERROR_KEYS, name)) return { raw: code };
+  return {
+    key: IMPORT_ERROR_KEYS[name as keyof typeof IMPORT_ERROR_KEYS],
+    status: match[2] ? Number(match[2]) : null,
+  };
 }

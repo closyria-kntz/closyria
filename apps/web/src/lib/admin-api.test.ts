@@ -160,6 +160,10 @@ const shop = {
   testUrl: null,
   domains: ["mango.com"],
   health: "ok",
+  values: ["eco"],
+  importEnabled: false,
+  lastImportAt: null,
+  lastImportError: null,
   createdAt: "2026-11-01T10:00:00.000Z",
 };
 
@@ -197,6 +201,7 @@ describe("shop and capture reads", () => {
       lastMonitor: null,
       recentErrors: [],
       featured: false,
+      catalogueProducts: 12,
     };
     const ok = fakeFetch(200, detail);
     const found = await fetchAdminShop(api(ok.fetch), shopId);

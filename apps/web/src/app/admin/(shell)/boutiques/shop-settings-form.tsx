@@ -1,13 +1,13 @@
 "use client";
 
-import { type AdminShop, canonicalizeUrl } from "@closyria/shared";
+import { type AdminShop, canonicalizeUrl, shopStatusSchema } from "@closyria/shared";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { adminRequest, shopPatchErrorKey } from "@/lib/admin-catalog";
 import { inputClass, primaryButtonClass } from "../../ui";
 
-const STATUSES = ["pending", "draft", "published"] as const;
+const STATUSES = shopStatusSchema.options;
 const MODES = ["auto", "manual"] as const;
 const KINDS = ["catalog", "secondhand"] as const;
 
@@ -25,6 +25,9 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
   const [domains, setDomains] = useState(shop.domains.join("\n"));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; failed: boolean; shopId?: string } | null>(null);
+
+  // « Valider » / « Refuser » change the status outside this form: follow it, so a later save does not undo it.
+  useEffect(() => setStatus(shop.status), [shop.status]);
 
   // After a save the page is refreshed: show what the server kept (domains come back normalised).
   const resync = useRef(false);

@@ -276,7 +276,9 @@
       "captures": "Captures",
       "audit": "Journal d’audit",
       "products": "Fiches",
-      "reference": "Listes de référence"
+      "reference": "Listes de référence",
+      "unclassified": "À classer",
+      "reports": "Signalements"
     },
     "palette": {
       "open": "Commandes",
@@ -385,7 +387,8 @@
         "hasChildren": "Supprime ou déplace d’abord ses sous-catégories.",
         "invalidEntry": "Vérifie le nom, la teinte et les mots-clés.",
         "invalidProduct": "Vérifie le nom, la marque, le prix et les choix.",
-        "notPublished": "Seules les boutiques publiées peuvent faire la une."
+        "notPublished": "Seules les boutiques publiées peuvent faire la une.",
+        "notShopify": "Seul le catalogue d’une boutique Shopify peut être importé."
       }
     },
     "shops": {
@@ -410,7 +413,8 @@
       "statuses": {
         "pending": "À valider",
         "draft": "Brouillon",
-        "published": "Publiée"
+        "published": "Publiée",
+        "refused": "Refusée"
       },
       "modes": {
         "auto": "Automatique",
@@ -493,6 +497,50 @@
         "add": "Mettre en boutique de la semaine",
         "remove": "Retirer de la une",
         "draft": "Publie d’abord la boutique : seules les boutiques publiées vont en une."
+      },
+      "review": {
+        "title": "Validation",
+        "pending": "Cette boutique est arrivée par un lien collé. Valide-la pour que ses articles apparaissent dans « Découvrir ».",
+        "draft": "Cette boutique est en brouillon : ses articles n’apparaissent pas dans « Découvrir ».",
+        "published": "Boutique publiée : ses articles complets apparaissent dans « Découvrir ».",
+        "refused": "Boutique refusée : ses articles n’apparaissent jamais dans « Découvrir ». Les envies qui y pointent restent intactes.",
+        "publish": "Valider",
+        "refuse": "Refuser",
+        "publishedDone": "Boutique validée.",
+        "refusedDone": "Boutique refusée."
+      },
+      "catalogue": {
+        "title": "Catalogue",
+        "values": "Valeurs de la boutique",
+        "valuesHint": "Elles servent de filtres dans « Découvrir ».",
+        "valueLabels": {
+          "made_in_france": "Made in France",
+          "second_hand": "Seconde main",
+          "eco": "Éco-responsable",
+          "free_returns": "Retours gratuits"
+        },
+        "importEnabled": "Importer tout le catalogue",
+        "importEnabledHint": "Chaque nuit, tous les articles de la boutique sont lus depuis Shopify.",
+        "save": "Enregistrer",
+        "saved": "Catalogue enregistré.",
+        "lastImport": "Dernier import",
+        "never": "Jamais",
+        "products": "Articles en vente",
+        "lastError": "Dernière erreur",
+        "noError": "Aucune",
+        "importNow": "Importer maintenant",
+        "importQueued": "Import lancé : il tourne en arrière-plan, recharge la page dans quelques minutes.",
+        "importAlready": "Un import de cette boutique est déjà en cours.",
+        "notShopify": "L’import du catalogue n’existe que pour les boutiques Shopify.",
+        "importErrors": {
+          "blocked": "La boutique bloque l’import{status, select, none {} other { (HTTP {status})}}",
+          "robots": "Le fichier robots.txt de la boutique interdit l’import",
+          "shrink": "Import suspendu : la boutique semble avoir retiré plus de la moitié de ses articles d’un coup",
+          "noAddress": "Adresse de la boutique introuvable",
+          "timeout": "La boutique a mis trop de temps à répondre",
+          "httpError": "La boutique a répondu par une erreur{status, select, none {} other { (HTTP {status})}}",
+          "invalidData": "La réponse de la boutique est illisible"
+        }
       }
     },
     "captures": {
@@ -689,6 +737,42 @@
       "removed": "Option supprimée.",
       "invalidAmount": "Saisis un montant en euros, par exemple 6,90.",
       "invalidThreshold": "Le seuil doit être supérieur à 0, ou vide."
+    },
+    "unclassified": {
+      "title": "À classer",
+      "intro": "Les articles du catalogue classés « Autres », sans type ou sans couleur. Choisis le type et la couleur, puis « Classer » : l’import ne les changera plus.",
+      "count": "{total, plural, =0 {Rien à classer.} one {# article à classer.} other {# articles à classer.}}",
+      "more": "Les {shown} premiers sont affichés ; les suivants apparaîtront une fois ceux-ci classés.",
+      "empty": "Tout est classé.",
+      "productType": "Type chez la boutique : {type}",
+      "noType": "Pas de type chez la boutique",
+      "category": "Type",
+      "color": "Couleur",
+      "choose": "Choisir…",
+      "applyToType": "Appliquer aux articles du même type de cette boutique",
+      "submit": "Classer",
+      "done": "{updated, plural, one {Article classé.} other {# articles classés.}}",
+      "missing": "Choisis un type et une couleur.",
+      "noPhoto": "Pas de photo"
+    },
+    "reports": {
+      "title": "Signalements",
+      "intro": "Les articles du catalogue signalés par les utilisatrices, les plus signalés d’abord. Qui a signalé n’est jamais affiché.",
+      "empty": "Aucun signalement en attente.",
+      "count": "{count, plural, one {# signalement} other {# signalements}}",
+      "latest": "Dernier le {date}",
+      "reasons": {
+        "not_fashion": "Pas de la mode",
+        "shocking": "Choquant",
+        "other": "Autre"
+      },
+      "reasonLine": "{reason} ({count})",
+      "hide": "Masquer du catalogue",
+      "keep": "Garder",
+      "hidden": "Article masqué du catalogue.",
+      "kept": "Article gardé dans le catalogue.",
+      "unnamed": "Article sans nom",
+      "noPhoto": "Pas de photo"
     }
   },
   "Capture": {

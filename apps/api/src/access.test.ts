@@ -122,7 +122,11 @@ describe("route coverage", () => {
       auth: { handler: async () => new Response(), getSession: async () => null },
       media: { db: {} as Database, store: memoryStore() }, // never reached: coverage reads the routes only
       events: { db: {} as Database },
-      catalog: { db: {} as Database, store: memoryStore(), queue: { enqueue: async () => {} } },
+      catalog: {
+        db: {} as Database,
+        store: memoryStore(),
+        queue: { enqueue: async () => {}, importCatalogue: async () => true },
+      },
       admin: { db: {} as Database },
       wardrobe: { db: {} as Database, shareLinkKey: Buffer.alloc(32) },
     });
@@ -155,7 +159,11 @@ describe("route coverage", () => {
       auth: { handler: async () => new Response(), getSession: async () => null },
       media: { db: {} as Database, store: memoryStore() },
       events: { db: {} as Database },
-      catalog: { db: {} as Database, store: memoryStore(), queue: { enqueue: async () => {} } },
+      catalog: {
+        db: {} as Database,
+        store: memoryStore(),
+        queue: { enqueue: async () => {}, importCatalogue: async () => true },
+      },
       admin: { db: {} as Database },
       wardrobe: { db: {} as Database, shareLinkKey: Buffer.alloc(32) },
       testMail: { messages: [] },

@@ -64,7 +64,11 @@ beforeAll(async () => {
     auth,
     media: { db: handle.db, store: memoryStore() },
     events: { db: handle.db },
-    catalog: { db: handle.db, store: memoryStore(), queue: { enqueue: async () => {} } },
+    catalog: {
+      db: handle.db,
+      store: memoryStore(),
+      queue: { enqueue: async () => {}, importCatalogue: async () => true },
+    },
     admin: { db: handle.db, now: () => NOW },
     wardrobe: { db: handle.db, shareLinkKey: Buffer.alloc(32) },
   });

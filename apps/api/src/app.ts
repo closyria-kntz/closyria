@@ -7,6 +7,7 @@ import type { CatalogDeps } from "./catalog/deps";
 import { catalogLimiter } from "./catalog/limiter";
 import { auditRoutes } from "./routes/admin/audit";
 import { adminCapturesRoutes } from "./routes/admin/captures";
+import { adminCatalogueRoutes } from "./routes/admin/catalogue";
 import { type AdminDeps, overviewRoutes } from "./routes/admin/overview";
 import { adminProductsRoutes } from "./routes/admin/products";
 import { adminReferenceRoutes } from "./routes/admin/reference";
@@ -162,7 +163,8 @@ export function createApp(deps: AppDeps) {
     .route("/", adminShippingOptionsRoutes(deps.catalog))
     .route("/", adminCapturesRoutes(deps.catalog))
     .route("/", adminProductsRoutes(deps.catalog))
-    .route("/", adminReferenceRoutes(deps.catalog));
+    .route("/", adminReferenceRoutes(deps.catalog))
+    .route("/", adminCatalogueRoutes(deps.catalog));
 
   // Not part of AppType: no client calls it, and it is absent from every real environment.
   if (deps.testMail) app.route("/", testMailRoutes(deps.testMail));

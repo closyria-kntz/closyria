@@ -27,6 +27,11 @@ describe("isActive", () => {
     expect(entry("reference")?.href).toBe("/admin/references");
   });
 
+  it("lists « À classer » and « Signalements » of the catalogue", () => {
+    expect(entry("unclassified")?.href).toBe("/admin/catalogue/a-classer");
+    expect(entry("reports")?.href).toBe("/admin/catalogue/signalements");
+  });
+
   it("keeps the shops entry active on a shop page", () => {
     const shops = entry("shops");
     expect(shops && isActive(shops, "/admin/boutiques/abc")).toBe(true);

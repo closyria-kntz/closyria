@@ -99,7 +99,11 @@ beforeAll(async () => {
     auth,
     media: { db: handle.db, store },
     events: { db: handle.db },
-    catalog: { db: handle.db, store: memoryStore(), queue: { enqueue: async () => {} } },
+    catalog: {
+      db: handle.db,
+      store: memoryStore(),
+      queue: { enqueue: async () => {}, importCatalogue: async () => true },
+    },
     admin: { db: handle.db },
     wardrobe: { db: handle.db, shareLinkKey: Buffer.alloc(32) },
   });
@@ -189,7 +193,11 @@ describe("upload limits", () => {
       auth,
       media: { db: handle.db, store, ...media },
       events: { db: handle.db },
-      catalog: { db: handle.db, store: memoryStore(), queue: { enqueue: async () => {} } },
+      catalog: {
+        db: handle.db,
+        store: memoryStore(),
+        queue: { enqueue: async () => {}, importCatalogue: async () => true },
+      },
       admin: { db: handle.db },
       wardrobe: { db: handle.db, shareLinkKey: Buffer.alloc(32) },
     });

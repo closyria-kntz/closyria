@@ -169,6 +169,13 @@
       "when": 1794570755879,
       "tag": "0023_catalogue_fold_wider",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794571229033,
+      "tag": "0024_catalogue_admin",
+      "breakpoints": true
     }
   ]
 }

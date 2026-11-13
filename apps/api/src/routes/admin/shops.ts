@@ -1,6 +1,7 @@
 import { and, asc, count, type Database, desc, eq, gte, inArray, isNull, ne, schema, sql } from "@closyria/db";
 import {
   adminCatalogErrorSchema,
+  adminImportQueuedSchema,
   adminMergedSchema,
   adminMergeSchema,
   adminShopCreatedSchema,
@@ -18,6 +19,7 @@ import {
   type ListingKind,
   type Platform,
   type ShopStatus,
+  type ShopValue,
   shopHealthSchema,
   shopStatusSchema,
 } from "@closyria/shared";
@@ -156,6 +158,52 @@ const unfeatureRoute = defineAccess(
   "admin",
 );
 
+const publishRoute = defineAccess(
+  createRoute({
+    method: "post",
+    path: "/admin/shops/{id}/publish",
+    summary: "« Valider »: publish a shop (pending, draft or refused); its complete articles enter the catalogue",
+    request: { params: idParam },
+    responses: {
+      204: { description: "Published" },
+      404: errorContent("Unknown or merged shop"),
+    },
+  }),
+  "admin",
+);
+
+const refuseRoute = defineAccess(
+  createRoute({
+    method: "post",
+    path: "/admin/shops/{id}/refuse",
+    summary: "« Refuser »: the shop never shows in the catalogue; its products stay (wishes point at them)",
+    description: "A new link to a refused shop finds it as it is: the status is never set back to pending.",
+    request: { params: idParam },
+    responses: {
+      204: { description: "Refused" },
+      404: errorContent("Unknown or merged shop"),
+    },
+  }),
+  "admin",
+);
+
+const importRoute = defineAccess(
+  createRoute({
+    method: "post",
+    path: "/admin/shops/{id}/import",
+    summary: "« Importer maintenant »: queue the import of a Shopify shop's catalogue",
+    description:
+      "Queued like the nightly import (one job per shop at a time): `queued` is false when one is already queued or running.",
+    request: { params: idParam },
+    responses: {
+      202: { description: "Queued", content: { "application/json": { schema: adminImportQueuedSchema } } },
+      404: errorContent("Unknown or merged shop"),
+      409: errorContent("not_shopify: only a Shopify shop's catalogue can be imported"),
+    },
+  }),
+  "admin",
+);
+
 /** Hostname as `shopDomain` writes it, or null when it is not a plain hostname. */
 function normaliseDomain(raw: string): string | null {
   const domain = raw
@@ -184,6 +232,10 @@ function shape(shop: Shop, domains: string[], stats: ShopStats | undefined) {
     listingKind: shop.listingKind as ListingKind,
     testUrl: shop.testUrl,
     domains: [...domains].sort(),
+    values: shop.values as ShopValue[],
+    importEnabled: shop.importEnabled,
+    lastImportAt: shop.lastImportAt?.toISOString() ?? null,
+    lastImportError: shop.lastImportError,
     health: shopHealth({
       status: shop.status as ShopStatus,
       captureMode: shop.captureMode as CaptureMode,
@@ -225,6 +277,15 @@ export function adminShopsRoutes(deps: CatalogDeps) {
   const app = new OpenAPIHono<AdminEnv>({
     defaultHook: (result, c) => (result.success ? undefined : c.json(invalidRequest, 400)),
   });
+  /** False for an unknown or merged shop. */
+  const setStatus = async (id: string, status: ShopStatus) => {
+    const updated = await db
+      .update(schema.shops)
+      .set({ status, updatedAt: now() })
+      .where(and(eq(schema.shops.id, id), isNull(schema.shops.mergedIntoId)))
+      .returning({ id: schema.shops.id });
+    return updated.length > 0;
+  };
 
   return app
     .openapi(listRoute, async (c) => {
@@ -294,7 +355,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       const { id } = c.req.valid("param");
       const shop = await activeShop(db, id);
       if (!shop) return c.json(notFound, 404);
-      const [domains, stats, errors, monitors, featured] = await Promise.all([
+      const [domains, stats, errors, monitors, featured, onSale] = await Promise.all([
         domainsOf(db, [id]),
         loadShopStats(db, now(), [id]),
         db
@@ -316,6 +377,10 @@ export function adminShopsRoutes(deps: CatalogDeps) {
           .orderBy(sql`${schema.captures.finishedAt} desc nulls last`, desc(schema.captures.createdAt))
           .limit(1),
         featuredShopId(db),
+        db
+          .select({ n: count() })
+          .from(schema.products)
+          .where(and(eq(schema.products.shopId, id), isNull(schema.products.removedAt))),
       ]);
       const s = stats.get(id);
       const [lastMonitor] = monitors;
@@ -332,6 +397,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
             createdAt: e.createdAt.toISOString(),
           })),
           featured: featured === id,
+          catalogueProducts: onSale[0]?.n ?? 0,
         },
         200,
       );
@@ -454,6 +520,26 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       if (shop.status !== "published") return c.json({ error: "not_published" } as const, 409);
       await db.update(schema.shops).set({ featuredAt: now() }).where(eq(schema.shops.id, id));
       return c.body(null, 204);
+    })
+    .openapi(publishRoute, async (c) => {
+      const { id } = c.req.valid("param");
+      noteAudit(c, { action: "shop.publish", target: `shop:${id}` });
+      return (await setStatus(id, "published")) ? c.body(null, 204) : c.json(notFound, 404);
+    })
+    .openapi(refuseRoute, async (c) => {
+      const { id } = c.req.valid("param");
+      noteAudit(c, { action: "shop.refuse", target: `shop:${id}` });
+      return (await setStatus(id, "refused")) ? c.body(null, 204) : c.json(notFound, 404);
+    })
+    .openapi(importRoute, async (c) => {
+      const { id } = c.req.valid("param");
+      noteAudit(c, { action: "shop.import", target: `shop:${id}` });
+      const shop = await activeShop(db, id);
+      if (!shop) return c.json(notFound, 404);
+      if (shop.platform !== "shopify") return c.json({ error: "not_shopify" } as const, 409);
+      const queued = await queue.importCatalogue(id);
+      noteAudit(c, { action: "shop.import", target: `shop:${id}`, details: { queued } });
+      return c.json({ queued }, 202);
     })
     .openapi(unfeatureRoute, async (c) => {
       const { id } = c.req.valid("param");
