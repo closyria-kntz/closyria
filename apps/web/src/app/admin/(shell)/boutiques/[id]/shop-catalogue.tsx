@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { adminRequest, catalogErrorKey, importErrorMessage, parisClock } from "@/lib/admin-catalog";
-import { readImportStatus, startImportPolling } from "@/lib/import-progress";
+import { readImportStatus, startImportPolling, statusAfterImportRequest } from "@/lib/import-progress";
 import { buttonClass, primaryButtonClass } from "../../../ui";
 
 /**
@@ -84,14 +84,10 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
     if (!res.ok) return setImportMessage({ text: errors(catalogErrorKey(res.status, res.body)), failed: true });
     const queued = (res.body as { queued?: unknown } | null)?.queued === true;
     setImportMessage({ text: t(queued ? "importQueued" : "importAlready"), failed: false });
-    // « En attente » at once, then the progress (read by the polling above, no page reload).
-    setStatus((current) => ({
-      ...current,
-      importState: "queued",
-      importStartedAt: new Date().toISOString(),
-      importPages: 0,
-      importSeen: 0,
-    }));
+    // « En attente » at once when queued; otherwise the current state stays until one read answers. The polling
+    // above then follows it (no page reload).
+    const next = await statusAfterImportRequest({ queued, current: status, read: () => readImportStatus(shop.id) });
+    setStatus(next);
   };
 
   const lastError = (() => {

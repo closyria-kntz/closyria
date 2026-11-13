@@ -4,6 +4,9 @@ import { adminRequest } from "./admin-catalog";
 /** While an import is queued or running, the shop page reads its progress this often. */
 export const IMPORT_POLL_MS = 3000;
 
+/** A read that has not answered by then is given up (a hung request must not block the next ticks). */
+export const IMPORT_READ_TIMEOUT_MS = 10_000;
+
 /**
  * One light read of a shop's import fields. Null on any failure (network, 4xx, 5xx, bad JSON): the caller keeps what
  * it knew and tries again, it never leaves the page.
@@ -11,11 +14,32 @@ export const IMPORT_POLL_MS = 3000;
 export async function readImportStatus(
   shopId: string,
   fetchImpl: typeof globalThis.fetch = fetch,
+  timeoutMs: number = IMPORT_READ_TIMEOUT_MS,
 ): Promise<AdminShopImportStatus | null> {
-  const res = await adminRequest("GET", `/api/admin/shops/${shopId}/import-status`, undefined, fetchImpl);
+  const res = await adminRequest("GET", `/api/admin/shops/${shopId}/import-status`, undefined, fetchImpl, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
   if (!res.ok) return null;
   const parsed = adminShopImportStatusSchema.safeParse(res.body);
   return parsed.success ? parsed.data : null;
+}
+
+/**
+ * The state to show once « Importer maintenant » has answered: « En attente » at once when it queued the import;
+ * otherwise (one is already under way) the current state stays until one read answers.
+ */
+export async function statusAfterImportRequest(options: {
+  queued: boolean;
+  current: AdminShopImportStatus;
+  read: () => Promise<AdminShopImportStatus | null>;
+  now?: Date;
+}): Promise<AdminShopImportStatus> {
+  const { queued, current, read, now = new Date() } = options;
+  if (queued) {
+    return { ...current, importState: "queued", importStartedAt: now.toISOString(), importPages: 0, importSeen: 0 };
+  }
+  return (await read().catch(() => null)) ?? current;
 }
 
 type PollDocument = Pick<Document, "visibilityState" | "addEventListener" | "removeEventListener">;

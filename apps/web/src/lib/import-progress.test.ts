@@ -1,6 +1,6 @@
 import type { AdminShopImportStatus } from "@closyria/shared";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { IMPORT_POLL_MS, readImportStatus, startImportPolling } from "./import-progress";
+import { IMPORT_POLL_MS, readImportStatus, startImportPolling, statusAfterImportRequest } from "./import-progress";
 
 const status = (over: Partial<AdminShopImportStatus> = {}): AdminShopImportStatus => ({
   importState: "running",
@@ -93,4 +93,39 @@ it("readImportStatus returns null on a network error, a 5xx, a 404 or a bad body
   expect(await readImportStatus("s", reply({ importState: "nope" }))).toBeNull();
   expect(await readImportStatus("s", (async () => new Response("<html>", { status: 200 })) as never)).toBeNull();
   expect(await readImportStatus("s", reply(status()))).toEqual(status());
+});
+
+it("gives up a hung read after the timeout, sends no-store, and the next tick still reads", async () => {
+  let init: RequestInit | undefined;
+  const hung = ((_: string, i?: RequestInit) => {
+    init = i;
+    return new Promise((_resolve, reject) => i?.signal?.addEventListener("abort", () => reject(new Error("aborted"))));
+  }) as never;
+  // AbortSignal.timeout runs on the real clock.
+  vi.useRealTimers();
+  expect(await readImportStatus("s", hung, 20)).toBeNull();
+  expect(init?.cache).toBe("no-store");
+
+  const doc = fakeDoc();
+  let calls = 0;
+  const read = () => (++calls === 1 ? readImportStatus("s", hung, 20) : Promise.resolve(status()));
+  const seen = vi.fn();
+  const stop = startImportPolling({ read, onStatus: seen, onIdle: vi.fn(), doc: doc as never, intervalMs: 10 });
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  expect(calls).toBeGreaterThan(1);
+  expect(seen).toHaveBeenCalled();
+  stop();
+});
+
+it("after « Importer maintenant »: queued at once only when queued, else the current state until a read answers", async () => {
+  const current = status({ importPages: 5, importSeen: 500 });
+  const read = vi.fn(async () => status({ importPages: 6, importSeen: 600 }));
+  const now = new Date("2026-11-13T12:00:00Z");
+  const queued = await statusAfterImportRequest({ queued: true, current, read, now });
+  expect(queued).toMatchObject({ importState: "queued", importStartedAt: now.toISOString(), importPages: 0 });
+  expect(read).not.toHaveBeenCalled();
+
+  expect(await statusAfterImportRequest({ queued: false, current, read, now })).toMatchObject({ importPages: 6 });
+  const failing = vi.fn(async () => null);
+  expect(await statusAfterImportRequest({ queued: false, current, read: failing, now })).toEqual(current);
 });

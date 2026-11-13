@@ -442,6 +442,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       const { id } = c.req.valid("param");
       const shop = await activeShop(db, id);
       if (!shop) return c.json(notFound, 404);
+      c.header("Cache-Control", "no-store");
       return c.json(importStatusShape(shop, now()), 200);
     })
     .openapi(patchRoute, async (c) => {

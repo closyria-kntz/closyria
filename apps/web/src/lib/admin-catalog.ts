@@ -48,9 +48,11 @@ export async function adminRequest(
   path: string,
   body?: unknown,
   fetchImpl: typeof globalThis.fetch = fetch,
+  init: Pick<RequestInit, "cache" | "signal"> = {},
 ): Promise<AdminRequestResult> {
   try {
     const res = await fetchImpl(path, {
+      ...init,
       method,
       headers: { "content-type": "application/json" },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),

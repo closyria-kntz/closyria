@@ -338,6 +338,7 @@ describe("values and import of a shop", () => {
       .where(eq(schema.shops.id, shop.id));
     const res = await call("GET", `/admin/shops/${shop.id}/import-status`);
     expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
     expect(adminShopImportStatusSchema.parse(await json(res))).toEqual({
       importState: "running",
       importStartedAt: started.toISOString(),
