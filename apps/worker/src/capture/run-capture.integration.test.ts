@@ -240,6 +240,65 @@ describe("runCapture", () => {
     }
   });
 
+  it("records the platform read on the page: unknown or other becomes the platform found", async () => {
+    const woo = '<script src="/wp-content/plugins/woocommerce/assets/js/frontend/woocommerce.min.js"></script>';
+    for (const platform of ["unknown", "other"] as const) {
+      servePage("/produit/robe", "synthetic/jsonld-simple.html");
+      routes["/produit/robe"] = { ...routes["/produit/robe"], body: `${routes["/produit/robe"]?.body}${woo}` };
+      const t = await setup("/produit/robe", { shop: { platform } }, "admin_test");
+
+      await runCapture(t.capture.id, deps);
+
+      expect((await load(t.capture.id, t.product.id)).capture?.status).toBe("succeeded");
+      const [s] = await handle.db.select().from(schema.shops).where(eq(schema.shops.id, t.shop.id));
+      expect(s?.platform, platform).toBe("woocommerce");
+    }
+  });
+
+  it("records the platform even when the page is no product (a Wix home page)", async () => {
+    servePage("/", "synthetic/opengraph-home.html");
+    routes["/"] = {
+      ...routes["/"],
+      body: `${routes["/"]?.body}<img src="https://static.wixstatic.com/media/a.jpg">`,
+    };
+    const t = await setup("/", { shop: { platform: "unknown" } });
+
+    await runCapture(t.capture.id, deps);
+
+    expect((await load(t.capture.id, t.product.id)).capture?.errorCode).toBe("not_a_product");
+    const [s] = await handle.db.select().from(schema.shops).where(eq(schema.shops.id, t.shop.id));
+    expect(s?.platform).toBe("wix");
+  });
+
+  it("never downgrades a platform: Shopify stays Shopify, a known one never becomes other", async () => {
+    const wix = '<img src="https://static.wixstatic.com/media/a.jpg">';
+    for (const [platform, body] of [
+      ["shopify", wix],
+      ["prestashop", wix],
+      ["woocommerce", ""],
+    ] as const) {
+      servePage("/produit/robe", "synthetic/jsonld-simple.html");
+      routes["/produit/robe"] = { ...routes["/produit/robe"], body: `${routes["/produit/robe"]?.body}${body}` };
+      const t = await setup("/produit/robe", { shop: { platform } }, "admin_test");
+
+      await runCapture(t.capture.id, deps);
+
+      expect((await load(t.capture.id, t.product.id)).capture?.status).toBe("succeeded");
+      const [s] = await handle.db.select().from(schema.shops).where(eq(schema.shops.id, t.shop.id));
+      expect(s?.platform, platform).toBe(platform);
+    }
+  });
+
+  it("an unknown shop whose page shows no platform becomes other, as before", async () => {
+    servePage("/produit/robe", "synthetic/jsonld-simple.html");
+    const t = await setup("/produit/robe", { shop: { platform: "unknown" } }, "admin_test");
+
+    await runCapture(t.capture.id, deps);
+
+    const [s] = await handle.db.select().from(schema.shops).where(eq(schema.shops.id, t.shop.id));
+    expect(s?.platform).toBe("other");
+  });
+
   it("files a rule-classified product and stores the raw shop fields", async () => {
     await seedReference(handle.db);
     serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");

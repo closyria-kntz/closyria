@@ -123,7 +123,7 @@ describe("recoverInterruptedImports (worker startup)", () => {
     expect(await states(boss, c.id)).toEqual(["created"]);
   });
 
-  it("resumes a shop with the nightly import off only when the admin launched that import by hand", async () => {
+  it("resumes a shop with the nightly import off (or a « grande enseigne ») only when the admin launched it by hand", async () => {
     const hourAgo = new Date(Date.now() - 3_600_000);
     const off = { importEnabled: false };
     // F: « Importer maintenant » on a shop without the nightly import, killed mid-import.
@@ -134,6 +134,8 @@ describe("recoverInterruptedImports (worker startup)", () => {
     const h = await newShop({ ...off, lastImportError: "interrupted" });
     // I: left running, but a job of it already waits: nothing new is queued, it stays « En attente ».
     const i = await newShop({ importState: "running", importStartedAt: hourAgo });
+    // J: a « grande enseigne » with the nightly import on, cut cleanly: the planner never imports it, nor this.
+    const j = await newShop({ isMajorBrand: true, lastImportError: "interrupted" });
 
     const dead = await newBoss();
     // Only this test's jobs: each fetch below takes the job just sent.
@@ -145,6 +147,7 @@ describe("recoverInterruptedImports (worker startup)", () => {
     };
     await settled(g.id, false);
     await settled(h.id, true);
+    await settled(j.id, false);
     await dead.send(CATALOGUE_IMPORT_QUEUE, { shopId: f.id, manual: true }, { singletonKey: f.id });
     await dead.fetch(CATALOGUE_IMPORT_QUEUE);
     await dead.send(CATALOGUE_IMPORT_QUEUE, { shopId: i.id }, { singletonKey: i.id });
@@ -164,6 +167,8 @@ describe("recoverInterruptedImports (worker startup)", () => {
     expect(await created(g.id)).toEqual([]);
     expect(await shopRow(g.id)).toMatchObject({ importState: null });
     expect(await created(i.id)).toEqual([{ shopId: i.id }]);
+    expect(await created(j.id)).toEqual([]);
+    expect(await shopRow(j.id)).toMatchObject({ importState: null });
     expect(await shopRow(i.id)).toMatchObject({ importState: "queued" });
   });
 });

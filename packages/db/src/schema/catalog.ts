@@ -57,6 +57,11 @@ export const shops = pgTable(
     featuredAt: timestamp("featured_at", { withTimezone: true }),
     /** Ticked by the admin (made in France, second hand…): filters of « Découvrir ». */
     values: text("values").array().notNull().default(sql`'{}'::text[]`),
+    /**
+     * « Grande enseigne » (Zara, Vinted…), set by the admin or the seed: its products stay usable (items, wishlists,
+     * links) but never show in « Découvrir », and its catalogue is never imported by the planner.
+     */
+    isMajorBrand: boolean("is_major_brand").notNull().default(false),
     /** The nightly import of the shop catalogue is on. */
     importEnabled: boolean("import_enabled").notNull().default(false),
     lastImportAt: timestamp("last_import_at", { withTimezone: true }),

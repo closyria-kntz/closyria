@@ -153,9 +153,14 @@ const wanted = (viewer: Viewer) =>
 /** Everyone's items on the product, out of the trash: one per person at most (unique index). */
 const likesOf = sql`(select count(*)::int from items li where li.product_id = p.id and li.deleted_at is null)`;
 
+/**
+ * A shop of « Découvrir »: published, not merged into another, not a « grande enseigne » (its articles stay usable in
+ * wishes, lists and links, never shown here). Shop `s`. Shared by the articles and the shop directory.
+ */
+export const shopInCatalogue = sql`s.status = 'published' and s.merged_into_id is null and not s.is_major_brand`;
+
 /** Visibility of a catalogue article (plan, global constraints); the photo comes from the `img` join. */
-const visible = sql`s.status = 'published' and s.merged_into_id is null
-  and p.hidden_at is null and p.removed_at is null`;
+const visible = sql`${shopInCatalogue} and p.hidden_at is null and p.removed_at is null`;
 
 /** A card needs a name, a price and its currency (and a photo: the inner `img` join). */
 const complete = sql`p.name is not null and p.price_cents is not null and p.currency is not null`;

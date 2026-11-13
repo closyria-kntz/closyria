@@ -30,6 +30,7 @@ export async function seedStartingShops(db: Database): Promise<number> {
           captureMode: shop.captureMode,
           listingKind: shop.listingKind,
           testUrl: shop.testUrl,
+          isMajorBrand: shop.isMajorBrand,
         })
         .onConflictDoNothing({ target: schema.shops.slug })
         .returning({ id: schema.shops.id });

@@ -479,6 +479,8 @@ describe("« À classer »", () => {
     await newProduct(pending.id, { categoryId: null }); // not in the catalogue
     const refused = await newShop({ status: "refused", importEnabled: true });
     await newProduct(refused.id, { categoryId: null }); // refused: never in the catalogue
+    const major = await newShop({ status: "published", importEnabled: true, isMajorBrand: true });
+    await newProduct(major.id, { categoryId: null }); // « grande enseigne »: never in « Découvrir »
     await newProduct(shop.id, { categoryId: null, priceCents: null }); // incomplete: no price
     const bare = await newProduct(shop.id, { categoryId: null }); // incomplete: no photo
     await t.db.delete(schema.productImages).where(eq(schema.productImages.productId, bare.id));

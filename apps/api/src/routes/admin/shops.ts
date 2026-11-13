@@ -34,6 +34,7 @@ import {
   type ListingKind,
   liveImportState,
   type Platform,
+  platformSchema,
   type ShopStatus,
   type ShopValue,
   shopHealthSchema,
@@ -75,6 +76,7 @@ const listRoute = defineAccess(
         status: shopStatusSchema.optional(),
         mode: captureModeSchema.optional(),
         health: shopHealthSchema.optional(),
+        platform: platformSchema.optional(),
       }),
     },
     responses: {
@@ -285,6 +287,7 @@ function shape(shop: Shop, domains: string[], stats: ShopStats | undefined, now:
     testUrl: shop.testUrl,
     domains: [...domains].sort(),
     values: shop.values as ShopValue[],
+    isMajorBrand: shop.isMajorBrand,
     importEnabled: shop.importEnabled,
     ...importStatusShape(shop, now),
     health: shopHealth({
@@ -340,7 +343,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
 
   return app
     .openapi(listRoute, async (c) => {
-      const { status, mode, health } = c.req.valid("query");
+      const { status, mode, health, platform } = c.req.valid("query");
       const at = now();
       const rows = await db
         .select()
@@ -350,6 +353,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
             isNull(schema.shops.mergedIntoId),
             status ? eq(schema.shops.status, status) : undefined,
             mode ? eq(schema.shops.captureMode, mode) : undefined,
+            platform ? eq(schema.shops.platform, platform) : undefined,
           ),
         );
       const ids = rows.map((s) => s.id);

@@ -204,6 +204,13 @@
       "when": 1794606420961,
       "tag": "0028_catalogue_stocks_frais",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794607879109,
+      "tag": "0029_catalogue_enseignes_plateformes",
+      "breakpoints": true
     }
   ]
 }

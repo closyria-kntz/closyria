@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { canonicalizeUrl } from "@closyria/shared";
 import { describe, expect, it } from "vitest";
 import { STARTING_SHOPS } from "./starting-shops";
@@ -22,4 +24,37 @@ describe("STARTING_SHOPS", () => {
       "vestiaire-collective",
     ]);
   });
+  it("marks the 12 big brands « grande enseigne », never the 6 small shops", () => {
+    expect(
+      STARTING_SHOPS.filter((s) => s.isMajorBrand)
+        .map((s) => s.slug)
+        .sort(),
+    ).toEqual(MAJOR_SLUGS);
+    expect(STARTING_SHOPS.slice(0, 6).some((s) => s.isMajorBrand)).toBe(false);
+  });
+  it("is the list the migration marks on existing shops", () => {
+    const dir = fileURLToPath(new URL("../../../../packages/db/migrations/", import.meta.url));
+    const file = readdirSync(dir).find((f) => f.includes("enseignes"));
+    if (!file) throw new Error("migration not found");
+    const update = readFileSync(`${dir}${file}`, "utf8")
+      .split("\n")
+      .find((line) => line.startsWith('UPDATE "shops" SET "is_major_brand" = true'));
+    const slugs = [...(update?.match(/\bIN \(([^)]*)\)/)?.[1] ?? "").matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    expect(slugs.sort()).toEqual(MAJOR_SLUGS);
+  });
 });
+
+const MAJOR_SLUGS = [
+  "etam",
+  "hm",
+  "kiabi",
+  "la-redoute",
+  "mango",
+  "promod",
+  "sezane",
+  "shein",
+  "vestiaire-collective",
+  "vinted",
+  "zalando",
+  "zara",
+];

@@ -102,7 +102,14 @@ describe("planCatalogueImports — intervals", () => {
     await shop({ mergedIntoId: on.id });
     await shop({ importEnabled: false });
     await shop({ platform: "other" });
+    await shop({ platform: "woocommerce" });
     expect(await plan()).toEqual([on.id]);
+  });
+
+  it("never queues a « grande enseigne », even with its import on", async () => {
+    const small = await shop();
+    await shop({ isMajorBrand: true });
+    expect(await plan()).toEqual([small.id]);
   });
 
   it("a shop just queued is not queued again on the next tick", async () => {

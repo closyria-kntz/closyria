@@ -60,6 +60,7 @@ export async function recoverInterruptedImports(
       status: schema.shops.status,
       mergedIntoId: schema.shops.mergedIntoId,
       importEnabled: schema.shops.importEnabled,
+      isMajorBrand: schema.shops.isMajorBrand,
     })
     .from(schema.shops)
     .where(
@@ -79,7 +80,8 @@ export async function recoverInterruptedImports(
       shop.platform === "shopify" &&
       shop.status !== "refused" &&
       shop.mergedIntoId === null &&
-      (shop.importEnabled || manual);
+      // A « grande enseigne » is never imported by the planner: only an import the admin asked for resumes.
+      ((shop.importEnabled && !shop.isMajorBrand) || manual);
     // A state left by the dead process. « En attente » only when its job was the one failed above (taken, not yet
     // started); otherwise a job is still waiting in the queue to run it.
     const leftBehind = and(

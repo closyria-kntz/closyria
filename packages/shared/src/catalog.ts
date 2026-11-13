@@ -7,7 +7,20 @@ export const seasonSchema = z.enum(["summer", "winter", "mid", "all"]);
 export const shopStatusSchema = z.enum(["pending", "draft", "published", "refused"]);
 export const captureModeSchema = z.enum(["auto", "manual"]);
 export const listingKindSchema = z.enum(["catalog", "secondhand"]);
-export const platformSchema = z.enum(["shopify", "other", "unknown"]);
+/**
+ * The shop's e-commerce platform, read from its pages (`detectPlatform`, packages/extract). `other`: a page was read
+ * and no known platform recognised; `unknown`: nothing read yet. Only `shopify` changes how a shop is read.
+ */
+export const platformSchema = z.enum([
+  "shopify",
+  "woocommerce",
+  "prestashop",
+  "wix",
+  "squarespace",
+  "magento",
+  "other",
+  "unknown",
+]);
 /** `refresh`: the live check of a catalogue sheet (« stocks frais »), asked by nobody in particular. */
 export const captureTriggerSchema = z.enum(["user", "admin_test", "monitor", "refresh"]);
 export const captureStatusSchema = z.enum(["queued", "running", "succeeded", "failed", "skipped_manual"]);

@@ -128,6 +128,8 @@ export const adminShopSchema = z.object({
   health: shopHealthSchema,
   /** Ticked by the admin: filters of « Découvrir ». */
   values: z.array(shopValueSchema),
+  /** « Grande enseigne »: its articles stay usable (wishes, lists, links) but are never in « Découvrir ». */
+  isMajorBrand: z.boolean(),
   /** « Importer tout le catalogue » (Shopify): the nightly import is on. */
   importEnabled: z.boolean(),
   lastImportAt: isoDate.nullable(),
@@ -219,6 +221,7 @@ export const adminShopPatchSchema = z
       .max(10)
       .transform((list) => [...new Set(list)]),
     importEnabled: z.boolean(),
+    isMajorBrand: z.boolean(),
   })
   .partial();
 

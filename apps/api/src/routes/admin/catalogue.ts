@@ -182,7 +182,8 @@ export function adminCatalogueRoutes(deps: CatalogDeps) {
         from products p
         join shops s on s.id = p.shop_id
         left join categories cat on cat.id = p.category_id
-        where s.merged_into_id is null and s.status <> 'refused' and (s.status = 'published' or s.import_enabled)
+        where s.merged_into_id is null and s.status <> 'refused' and not s.is_major_brand
+          and (s.status = 'published' or s.import_enabled)
           and p.removed_at is null and p.hidden_at is null and ${completeWithImage}
           and (p.category_id is null or cat.slug = ${OTHERS_SLUG} or p.color_id is null)
         order by s.name, s.id, p.shop_data->>'category' nulls last, p.created_at desc, p.id

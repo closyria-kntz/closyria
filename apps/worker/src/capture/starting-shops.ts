@@ -8,6 +8,8 @@ export type StartingShop = {
   listingKind: ListingKind;
   platform: Platform;
   testUrl: string | null;
+  /** « Grande enseigne »: its articles stay usable (wishes, lists, links) but never show in « Découvrir ». */
+  isMajorBrand: boolean;
 };
 
 const canonical = (url: string): string => {
@@ -24,6 +26,7 @@ const auto = (slug: string, name: string, domain: string, platform: Platform, te
   listingKind: "catalog",
   platform,
   testUrl: canonical(testUrl),
+  isMajorBrand: false,
 });
 
 const manual = (slug: string, name: string, domain: string, listingKind: ListingKind = "catalog"): StartingShop => ({
@@ -34,9 +37,13 @@ const manual = (slug: string, name: string, domain: string, listingKind: Listing
   listingKind,
   platform: "other",
   testUrl: null,
+  isMajorBrand: false,
 });
 
-/** The shops that exist from the first deploy; all published. */
+/** A big brand (« grande enseigne »): out of « Découvrir », never imported by the planner. */
+const major = (shop: StartingShop): StartingShop => ({ ...shop, isMajorBrand: true });
+
+/** The shops that exist from the first deploy; all published. The big brands are marked (migration 0029 too). */
 export const STARTING_SHOPS: readonly StartingShop[] = [
   auto("mcb-paris", "MCB Paris", "mcb-paris.fr", "shopify", "https://www.mcb-paris.fr/products/produit-3679"),
   auto(
@@ -62,28 +69,32 @@ export const STARTING_SHOPS: readonly StartingShop[] = [
     "shopify",
     "https://intemporel.shop/products/jean-mahaut-a-pois",
   ),
-  auto(
-    "promod",
-    "Promod",
-    "promod.fr",
-    "other",
-    "https://www.promod.fr/fr-fr/bonnet-chaud-avec-de-la-laine-chocolat--p255230/",
+  major(
+    auto(
+      "promod",
+      "Promod",
+      "promod.fr",
+      "other",
+      "https://www.promod.fr/fr-fr/bonnet-chaud-avec-de-la-laine-chocolat--p255230/",
+    ),
   ),
-  auto(
-    "zalando",
-    "Zalando",
-    "zalando.fr",
-    "other",
-    "https://www.zalando.fr/adidas-sportswear-essentials-3-stripes-leggings-leggings-blackwhite-adq41e03i-q12.html",
+  major(
+    auto(
+      "zalando",
+      "Zalando",
+      "zalando.fr",
+      "other",
+      "https://www.zalando.fr/adidas-sportswear-essentials-3-stripes-leggings-leggings-blackwhite-adq41e03i-q12.html",
+    ),
   ),
-  manual("zara", "Zara", "zara.com"),
-  manual("mango", "Mango", "mango.com"),
-  manual("hm", "H&M", "hm.com"),
-  manual("sezane", "Sézane", "sezane.com"),
-  manual("kiabi", "Kiabi", "kiabi.com"),
-  manual("etam", "Etam", "etam.com"),
-  manual("la-redoute", "La Redoute", "laredoute.fr"),
-  manual("shein", "Shein", "shein.com"),
-  manual("vinted", "Vinted", "vinted.fr", "secondhand"),
-  manual("vestiaire-collective", "Vestiaire Collective", "vestiairecollective.com", "secondhand"),
+  major(manual("zara", "Zara", "zara.com")),
+  major(manual("mango", "Mango", "mango.com")),
+  major(manual("hm", "H&M", "hm.com")),
+  major(manual("sezane", "Sézane", "sezane.com")),
+  major(manual("kiabi", "Kiabi", "kiabi.com")),
+  major(manual("etam", "Etam", "etam.com")),
+  major(manual("la-redoute", "La Redoute", "laredoute.fr")),
+  major(manual("shein", "Shein", "shein.com")),
+  major(manual("vinted", "Vinted", "vinted.fr", "secondhand")),
+  major(manual("vestiaire-collective", "Vestiaire Collective", "vestiairecollective.com", "secondhand")),
 ];

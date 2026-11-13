@@ -163,6 +163,7 @@ const shop = {
   domains: ["mango.com"],
   health: "ok",
   values: ["eco"],
+  isMajorBrand: true,
   importEnabled: false,
   lastImportAt: null,
   lastImportError: null,
@@ -185,6 +186,7 @@ describe("shop and capture reads", () => {
     expect(adminShopsPath({ status: "pending", mode: "", health: "down" })).toBe(
       "/api/admin/shops?status=pending&health=down",
     );
+    expect(adminShopsPath({ platform: "woocommerce" })).toBe("/api/admin/shops?platform=woocommerce");
     expect(adminFailuresPath({ shopId, errorCode: "blocked" })).toBe(
       `/api/admin/captures/failures?shopId=${shopId}&errorCode=blocked`,
     );

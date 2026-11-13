@@ -96,7 +96,12 @@ function withQuery(path: string, filters: Record<string, string | undefined>): s
   return text ? `${path}?${text}` : path;
 }
 
-export type ShopFilters = { status?: string | undefined; mode?: string | undefined; health?: string | undefined };
+export type ShopFilters = {
+  status?: string | undefined;
+  mode?: string | undefined;
+  health?: string | undefined;
+  platform?: string | undefined;
+};
 export type FailureFilters = { shopId?: string | undefined; errorCode?: string | undefined };
 
 export const adminShopsPath = (filters: ShopFilters) => withQuery("/api/admin/shops", filters);

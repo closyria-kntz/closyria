@@ -158,6 +158,24 @@ describe("GET /api/admin/shops", () => {
     expect(filtered.shops.map((s: { id: string }) => s.id)).toEqual([down.id]);
     expect((await call("GET", "/shops?health=nope")).status).toBe(400);
   });
+  it("gives the platform and « grande enseigne », and filters on the platform", async () => {
+    const woo = await newShop({ name: "Woo shop", platform: "woocommerce" });
+    const wix = await newShop({ name: "Wix shop", platform: "wix", isMajorBrand: true });
+    const all = await json(await call("GET", "/shops"));
+    const row = (id: string) => all.shops.find((s: { id: string }) => s.id === id);
+    expect(row(woo.id)).toMatchObject({ platform: "woocommerce", isMajorBrand: false });
+    expect(row(wix.id)).toMatchObject({ platform: "wix", isMajorBrand: true });
+    const filtered = await json(await call("GET", "/shops?platform=woocommerce"));
+    expect(filtered.shops.map((s: { id: string }) => s.id)).toEqual([woo.id]);
+    for (const platform of ["shopify", "prestashop", "squarespace", "magento", "other", "unknown"]) {
+      const res = await json(await call("GET", `/shops?platform=${platform}`));
+      expect(
+        res.shops.every((s: { platform: string }) => s.platform === platform),
+        platform,
+      ).toBe(true);
+    }
+    expect((await call("GET", "/shops?platform=joomla")).status).toBe(400);
+  });
 });
 
 describe("GET /api/admin/shops/:id", () => {
@@ -257,6 +275,41 @@ describe("PATCH /api/admin/shops/:id", () => {
     expect((await call("PATCH", `/shops/${b.id}`, { slug: "Bad Slug" })).status).toBe(400);
     expect((await call("PATCH", `/shops/${b.id}`, { domains: [] })).status).toBe(400);
     expect((await call("PATCH", `/shops/00000000-0000-4000-8000-000000000000`, { name: "x" })).status).toBe(404);
+  });
+  it("« Grande enseigne »: ticked and unticked, journalled; its articles leave « Articles dans Découvrir »", async () => {
+    await t.db.delete(schema.adminAuditLog);
+    const shop = await newShop({ status: "published" });
+    const [p] = await t.db
+      .insert(schema.products)
+      .values({
+        shopId: shop.id,
+        canonicalUrl: `https://p.test/major-${shop.id}`,
+        name: "Robe",
+        priceCents: 1000,
+        currency: "EUR",
+      })
+      .returning();
+    if (!p) throw new Error("no product");
+    await t.db
+      .insert(schema.productImages)
+      .values({ productId: p.id, position: 0, key: `x/${p.id}.webp`, width: 1, height: 1, sourceHash: p.id });
+    const detail = async () => adminShopDetailSchema.parse(await json(await call("GET", `/shops/${shop.id}`)));
+    expect(await detail()).toMatchObject({ isMajorBrand: false, catalogueProducts: 1 });
+
+    const res = await call("PATCH", `/shops/${shop.id}`, { isMajorBrand: true });
+    expect(res.status).toBe(200);
+    expect(await json(res)).toMatchObject({ isMajorBrand: true });
+    expect(await detail()).toMatchObject({ isMajorBrand: true, catalogueProducts: 0 });
+    expect((await call("PATCH", `/shops/${shop.id}`, { isMajorBrand: "yes" })).status).toBe(400);
+    expect((await call("PATCH", `/shops/${shop.id}`, { isMajorBrand: false })).status).toBe(200);
+    expect(await detail()).toMatchObject({ isMajorBrand: false, catalogueProducts: 1 });
+
+    const audit = await t.db.select().from(schema.adminAuditLog);
+    const updates = audit.filter((r) => r.action === "shop.update");
+    expect(updates).toHaveLength(2);
+    for (const row of updates) {
+      expect(row).toMatchObject({ target: `shop:${shop.id}`, details: { fields: "isMajorBrand", status: 200 } });
+    }
   });
 });
 
@@ -554,6 +607,8 @@ describe("stocks frais: the dashboard's figures", () => {
     await newShop({ ...late, importStartedAt: ago(7 * HOUR), lastImportSeen: 9000 }); // late
     await newShop({ ...late, importStartedAt: ago(9 * HOUR), importState: "running", importHeartbeatAt: ago(60_000) });
     await newShop({ ...late, status: "pending", importStartedAt: ago(9 * HOUR) });
+    // A « grande enseigne » is never planned, so never late.
+    await newShop({ ...late, isMajorBrand: true, importStartedAt: ago(9 * HOUR) });
     expect(await overview()).toBe(2);
     // Doubled: 4 h and 12 h.
     await recordShopifyRejection(t.db, ago(HOUR));

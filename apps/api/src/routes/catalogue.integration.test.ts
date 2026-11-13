@@ -229,6 +229,24 @@ describe("GET /api/catalog — visibility", () => {
     }
     expect((await call("GET", "/catalog/not-a-uuid", me.cookie)).status).toBe(400);
   });
+  it("never shows a « grande enseigne »: not in the grid, its sheet 404, not in same shop or same style", async () => {
+    const big = await newShop({ isMajorBrand: true });
+    const bigProduct = await newProduct(big.id, { categoryId: ref.shortDress, colorId: ref.red });
+    await newProduct(big.id, { categoryId: ref.shortDress, colorId: ref.red });
+    const small = await newShop();
+    const shown = await newProduct(small.id, { categoryId: ref.shortDress, colorId: ref.red });
+    // Her own item on it stays hers (« proche » reads her pieces whatever the shop).
+    await newItem(me.userId, bigProduct.id, { stage: "owned" });
+
+    expect(ids((await page()).items)).toEqual([shown.id]);
+    expect(ids((await page(`?shop=${big.id}`)).items)).toEqual([]);
+    expect((await call("GET", `/catalog/${bigProduct.id}`, me.cookie)).status).toBe(404);
+    const { body } = await detail(shown.id);
+    expect(body.sameShop).toEqual([]);
+    expect(body.sameStyle).toEqual([]);
+    expect(body.close.map((c) => c.productId)).toEqual([bigProduct.id]);
+    expect((await call("POST", `/catalog/${bigProduct.id}/report`, me.cookie, { reason: "other" })).status).toBe(404);
+  });
 });
 
 describe("GET /api/catalog — filters", () => {
@@ -825,6 +843,8 @@ describe("GET /api/catalog/{productId} — live check (« stocks frais »)", () 
     const hanging = { ...t.queue, refreshProduct: () => new Promise<boolean>(() => {}) };
     const outcome = await requestSheetRefresh(t.db, hanging, p.id, ago(20 * MIN), NOW);
     expect(outcome.refreshing).toBe(true);
+    // Its capture row is written in the background: let it land before the next test empties the tables.
+    await vi.waitFor(async () => expect(await refreshesOf(p.id)).toHaveLength(1));
   });
 
   it("asks one for an article never read, but not again within the window after a failed one", async () => {

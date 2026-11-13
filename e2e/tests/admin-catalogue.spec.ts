@@ -474,3 +474,71 @@ test("la barre et le menu de l’admin restent visibles quand la page défile", 
   await nav.getByRole("link", { name: "Boutiques" }).click();
   await expect(page).toHaveURL(/\/admin\/boutiques$/);
 });
+
+test("une admin voit la plateforme des boutiques, filtre dessus et marque une « Grande enseigne »", async ({
+  page,
+  request,
+  db,
+  userAgentTag,
+}) => {
+  const shop = await seedShop(db, "published");
+  await db.query("update shops set platform = 'prestashop' where id = $1", [shop.id]);
+  // The settings form asks for at least one domain.
+  await db.query("insert into shop_domains (domain, shop_id) values ($1, $2)", [
+    `enseigne-${shop.tag}.e2e.test`,
+    shop.id,
+  ]);
+  const productId = await seedProduct(db, shop.id, `Robe enseigne ${shop.tag}`);
+  await signInAsAdmin(page, request, db, userAgentTag);
+  // Its article is in « Découvrir » until the shop is a « grande enseigne ».
+  expect((await page.request.get(`/api/catalog/${productId}`)).status()).toBe(200);
+
+  await page.goto("/admin/boutiques");
+  await expect(page.getByRole("columnheader", { name: "Plateforme" })).toBeVisible();
+  const filters = page.getByRole("form", { name: "Filtres" });
+  await filters.getByRole("combobox", { name: "Plateforme" }).selectOption({ label: "PrestaShop" });
+  await filters.getByRole("button", { name: "Filtrer" }).click();
+  await expect(page).toHaveURL(/[?&]platform=prestashop(&|$)/);
+  const rows = page.getByRole("row").filter({ has: page.getByRole("link", { name: shop.name }) });
+  await expect(rows).toHaveCount(1);
+  await expect(rows.getByRole("cell", { name: "PrestaShop", exact: true })).toBeVisible();
+  // Every row of the filtered list is on PrestaShop.
+  const platforms = await page.getByRole("table").locator("tbody tr td:nth-child(4)").allTextContents();
+  expect(new Set(platforms)).toEqual(new Set(["PrestaShop"]));
+  await expect(rows.getByTestId("major-brand-tag")).toHaveCount(0);
+  await axeLightAndDark(page);
+
+  await rows.getByRole("link", { name: shop.name }).click();
+  await expect(page.getByRole("heading", { level: 1, name: shop.name })).toBeVisible();
+  const settings = page.getByRole("region", { name: "Réglages" });
+  await expect(settings.getByText("PrestaShop", { exact: true })).toBeVisible();
+  const major = settings.getByRole("checkbox", { name: "Grande enseigne" });
+  await expect(major).toHaveAccessibleDescription(
+    "Ses articles restent utilisables (envies, listes, liens) mais n’apparaissent pas dans « Découvrir ».",
+  );
+  await major.check();
+  await settings.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(settings.getByText("Réglages enregistrés.")).toBeVisible();
+  await expect(major).toBeChecked();
+  const saved = await db.query("select is_major_brand from shops where id = $1", [shop.id]);
+  expect(saved.rows).toEqual([{ is_major_brand: true }]);
+  // « Articles dans Découvrir » (shown for a Shopify shop only) drops to 0.
+  const detail = await page.request.get(`/api/admin/shops/${shop.id}`);
+  expect(((await detail.json()) as { catalogueProducts: number }).catalogueProducts).toBe(0);
+  await axeLightAndDark(page);
+
+  // Out of « Découvrir »: its sheet answers 404; the list shows the tag.
+  expect((await page.request.get(`/api/catalog/${productId}`)).status()).toBe(404);
+  await page.goto("/admin/boutiques?platform=prestashop");
+  await expect(
+    page
+      .getByRole("row")
+      .filter({ has: page.getByRole("link", { name: shop.name }) })
+      .getByTestId("major-brand-tag"),
+  ).toHaveText("Grande enseigne");
+  const audit = await db.query<{ action: string; details: unknown }>(
+    "select action, details from admin_audit_log where target = $1 order by created_at",
+    [`shop:${shop.id}`],
+  );
+  expect(audit.rows.map((r) => r.action)).toEqual(["shop.update"]);
+});

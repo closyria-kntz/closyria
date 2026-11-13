@@ -175,6 +175,17 @@ describe("GET /api/shops", () => {
     expect(body.shops.map((s) => s.name)).toEqual(["Older"]);
   });
 
+  it("never lists nor features a « grande enseigne »", async () => {
+    const big = await newShop({ name: "Zara", isMajorBrand: true, featuredAt: ago(0) });
+    await newProduct(big.id, ago(DAY));
+    const small = await newShop({ name: "Atelier", featuredAt: ago(DAY) });
+    const other = await newShop({ name: "Bohème" });
+
+    const { body } = await directory();
+    expect(body.featured?.id).toBe(small.id);
+    expect(body.shops.map((s) => s.id)).toEqual([other.id]);
+  });
+
   it("never says who pasted the articles", async () => {
     const shop = await newShop({ name: "Les Cœurs" });
     const { product } = await newProduct(shop.id, ago(DAY), true);

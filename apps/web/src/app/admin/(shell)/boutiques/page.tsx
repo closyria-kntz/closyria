@@ -1,4 +1,10 @@
-import { adminShopListSchema, captureModeSchema, shopHealthSchema, shopStatusSchema } from "@closyria/shared";
+import {
+  adminShopListSchema,
+  captureModeSchema,
+  platformSchema,
+  shopHealthSchema,
+  shopStatusSchema,
+} from "@closyria/shared";
 import Link from "next/link";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { adminShopsPath, type ShopFilters } from "@/lib/admin-api";
@@ -22,6 +28,7 @@ export default async function AdminShopsPage({ searchParams }: Props) {
     status: known(shopStatusSchema, query.status),
     mode: known(captureModeSchema, query.mode),
     health: known(shopHealthSchema, query.health),
+    platform: known(platformSchema, query.platform),
   };
   const t = await getTranslations("Admin.shops");
   const common = await getTranslations("Admin.common");
@@ -72,6 +79,12 @@ export default async function AdminShopsPage({ searchParams }: Props) {
           filters.health,
           shopHealthSchema.options.map((v) => [v, common(`health.${v}`)]),
         )}
+        {select(
+          "platform",
+          t("filterPlatform"),
+          filters.platform,
+          platformSchema.options.map((v) => [v, t(`platforms.${v}`)]),
+        )}
         <button type="submit" className={primaryButtonClass}>
           {t("apply")}
         </button>
@@ -88,7 +101,17 @@ export default async function AdminShopsPage({ searchParams }: Props) {
             <thead className="bg-surface-sunken text-ink-muted">
               <tr>
                 {(
-                  ["name", "domains", "status", "mode", "kind", "health", "recentProducts", "lastCapture"] as const
+                  [
+                    "name",
+                    "domains",
+                    "status",
+                    "platform",
+                    "mode",
+                    "kind",
+                    "health",
+                    "recentProducts",
+                    "lastCapture",
+                  ] as const
                 ).map((key) => (
                   <th key={key} scope="col" className={cell}>
                     {t(key)}
@@ -104,6 +127,14 @@ export default async function AdminShopsPage({ searchParams }: Props) {
                       <Link href={`/admin/boutiques/${shop.id}`} className="underline">
                         {shop.name}
                       </Link>
+                      {shop.isMajorBrand && (
+                        <span
+                          data-testid="major-brand-tag"
+                          className="inline-flex items-center rounded-button bg-surface-sunken px-space-2 py-space-0-5 text-caption font-strong whitespace-nowrap text-ink-muted"
+                        >
+                          {t("majorBrand")}
+                        </span>
+                      )}
                       {shop.importState !== null && (
                         <span
                           data-testid="importing-tag"
@@ -116,6 +147,7 @@ export default async function AdminShopsPage({ searchParams }: Props) {
                   </td>
                   <td className={`${cell} break-all`}>{shop.domains.join(", ")}</td>
                   <td className={cell}>{t(`statuses.${shop.status}`)}</td>
+                  <td className={`${cell} whitespace-nowrap`}>{t(`platforms.${shop.platform}`)}</td>
                   <td className={cell}>{t(`modes.${shop.captureMode}`)}</td>
                   <td className={cell}>{t(`kinds.${shop.listingKind}`)}</td>
                   <td className={cell}>

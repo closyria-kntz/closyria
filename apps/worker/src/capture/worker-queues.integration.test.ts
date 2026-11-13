@@ -32,6 +32,16 @@ describe("seedStartingShops", () => {
     expect(await seedStartingShops(db)).toBe(0);
     expect(await db.select().from(schema.shops)).toHaveLength(18);
     expect(await db.select().from(schema.shopDomains)).toHaveLength(18);
+    const majors = await db
+      .select({ slug: schema.shops.slug })
+      .from(schema.shops)
+      .where(eq(schema.shops.isMajorBrand, true));
+    expect(majors.map((s) => s.slug).sort()).toEqual(
+      STARTING_SHOPS.filter((s) => s.isMajorBrand)
+        .map((s) => s.slug)
+        .sort(),
+    );
+    expect(majors).toHaveLength(12);
 
     await db.update(schema.shops).set({ name: "Renamed", status: "draft" }).where(eq(schema.shops.slug, "zara"));
     expect(await seedStartingShops(db)).toBe(0);

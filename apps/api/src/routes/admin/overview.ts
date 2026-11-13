@@ -58,6 +58,8 @@ async function countRereadLate(db: Database, at: Date, level: "doubled" | "night
         eq(schema.shops.importEnabled, true),
         eq(schema.shops.status, "published"),
         eq(schema.shops.platform, "shopify"),
+        // A « grande enseigne » is never imported by the planner.
+        eq(schema.shops.isMajorBrand, false),
         isNull(schema.shops.mergedIntoId),
         importNotUnderWay(at),
         sql`coalesce(${schema.shops.importStartedAt}, ${schema.shops.createdAt}) < case

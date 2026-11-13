@@ -23,6 +23,7 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
   const [listingKind, setListingKind] = useState(shop.listingKind);
   const [testUrl, setTestUrl] = useState(shop.testUrl ?? "");
   const [domains, setDomains] = useState(shop.domains.join("\n"));
+  const [isMajorBrand, setIsMajorBrand] = useState(shop.isMajorBrand);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; failed: boolean; shopId?: string } | null>(null);
 
@@ -41,6 +42,7 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
     setListingKind(shop.listingKind);
     setTestUrl(shop.testUrl ?? "");
     setDomains(shop.domains.join("\n"));
+    setIsMajorBrand(shop.isMajorBrand);
   }, [shop]);
 
   const submit = async (event: React.FormEvent) => {
@@ -61,6 +63,7 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
         .split("\n")
         .map((d) => d.trim())
         .filter((d) => d !== ""),
+      isMajorBrand,
     });
     setBusy(false);
     if (res.ok) {
@@ -160,6 +163,21 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
           onChange={(e) => setDomains(e.target.value)}
           className={`${inputClass} font-mono`}
         />
+      </label>
+      <label className="flex min-h-touch-target items-start gap-space-2 text-sm sm:col-span-2">
+        <input
+          type="checkbox"
+          checked={isMajorBrand}
+          onChange={(e) => setIsMajorBrand(e.target.checked)}
+          aria-describedby="major-brand-hint"
+          className="mt-space-0-5 size-space-5 accent-accent"
+        />
+        <span className="flex flex-col gap-space-1">
+          {t("majorBrand")}
+          <span id="major-brand-hint" className="text-ink-muted">
+            {t("majorBrandHint")}
+          </span>
+        </span>
       </label>
       <div className="flex flex-col gap-space-2 sm:col-span-2">
         <div>

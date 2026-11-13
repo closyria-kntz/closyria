@@ -44,7 +44,8 @@ export function lastNightlyStart(now: Date): Date {
 export const importIntervals = catalogueImportIntervals;
 
 /**
- * « Stocks frais »: queues every published Shopify shop with the import on (not merged into another) whose last import
+ * « Stocks frais »: queues every published Shopify shop with the import on (not merged into another, not a « grande
+ * enseigne ») whose last import
  * started longer ago than its interval (`importIntervals`, within 5 min) or never did, and with no import under way.
  * While Shopify asks for the nightly rhythm, a shop is due once after each 03:00 (Paris). The shop id is the job's
  * singleton key, so a shop already queued or being imported is not queued twice. The longest waiting go first (never
@@ -71,6 +72,8 @@ export async function planCatalogueImports(db: Database, queue: ImportQueue, now
         eq(schema.shops.importEnabled, true),
         eq(schema.shops.status, "published"),
         eq(schema.shops.platform, "shopify"),
+        // A « grande enseigne » is never imported by the planner.
+        eq(schema.shops.isMajorBrand, false),
         isNull(schema.shops.mergedIntoId),
         sql`(${startedAt} is null or ${startedAt} < ${startedBefore})`,
         importNotUnderWay(now),

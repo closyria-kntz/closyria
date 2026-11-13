@@ -1,6 +1,6 @@
 import type dns from "node:dns";
-import { and, type Database, eq, isNotNull, isNull, ne, recordShopifyRejection, schema } from "@closyria/db";
-import { extract, isShopifyPage, shopifyJsUrl } from "@closyria/extract";
+import { and, type Database, eq, inArray, isNotNull, isNull, ne, recordShopifyRejection, schema } from "@closyria/db";
+import { type DetectedPlatform, detectPlatform, extract, isShopifyPage, shopifyJsUrl } from "@closyria/extract";
 import {
   CATALOGUE_SHEET_REFRESH_MAX_WAIT_MS,
   type CaptureErrorCode,
@@ -73,6 +73,9 @@ const LINE_PRIORITY: Record<CaptureTrigger, LinePriority> = {
   monitor: "low",
 };
 
+/** Platforms a page read may make more precise (`detectPlatform`). */
+const VAGUE_PLATFORMS: string[] = ["unknown", "other"];
+
 /** `extract` wants an HTML document; with a Shopify `.js` alone there is no page, so it gets an empty one. */
 const EMPTY_PAGE = "<html></html>";
 
@@ -127,12 +130,22 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
         .set({ platform: "shopify", updatedAt: now() })
         .where(and(eq(schema.shops.id, shopId), eq(schema.shops.platform, "unknown")));
     };
+    // The platform its page shows (« Plateforme » in the admin): only a shop still `unknown` or `other` takes it, so a
+    // known one is never downgraded (Shopify above all).
+    const foundPlatform = async (detected: DetectedPlatform) => {
+      if (detected === shop.platform || !VAGUE_PLATFORMS.includes(shop.platform)) return;
+      await db
+        .update(schema.shops)
+        .set({ platform: detected, updatedAt: now() })
+        .where(and(eq(schema.shops.id, shopId), inArray(schema.shops.platform, VAGUE_PLATFORMS)));
+    };
     const outcome = await fetchAndExtract(
       capture.url,
       shop.platform,
       LINE_PRIORITY[capture.trigger as CaptureTrigger],
       deps,
       foundShopify,
+      foundPlatform,
     );
     const { product } = outcome;
 
@@ -280,6 +293,7 @@ async function fetchAndExtract(
   priority: LinePriority,
   deps: CaptureDeps,
   foundShopify: () => Promise<void>,
+  foundPlatform: (platform: DetectedPlatform) => Promise<void>,
 ): Promise<Outcome> {
   const policy = deps.policy ?? strictPolicy;
   const domain = shopDomain(url);
@@ -334,6 +348,9 @@ async function fetchAndExtract(
     throw error;
   }
   const html = decodeBody(page.body, page.contentType);
+  // Read whether or not the page turns out to be a product.
+  const detected = detectPlatform(html);
+  if (detected) await foundPlatform(detected);
   const pageInfo = { finalUrl: page.finalUrl, contentType: page.contentType, html };
   let result = extract({ url: page.finalUrl, contentType: page.contentType, body: html });
   let status = page.status;
