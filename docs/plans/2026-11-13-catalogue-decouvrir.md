@@ -49,8 +49,8 @@
 
 **Interfaces — Produces :** `importShopifyCatalog(deps, shopId): Promise<{ created: number; updated: number; removed: number; error: string|null }>` ; écrit produits, tailles, images comme la capture ; produits absents de l'import complet → `removed_at = now` (remis à nul s'ils reviennent) ; ne touche jamais aux `items`.
 
-- [ ] Tests d'intégration d'abord (serveur Shopify factice) : 2 pages → produits créés, classés ; second import avec un produit de moins → `removed_at` posé, envie existante intacte ; prix changé → mis à jour ; 429 / robots.txt interdit → `last_import_error`, rien supprimé, 1 seule requête par boutique à la fois, pause entre pages respectée (horloge injectée).
-- [ ] Implémenter, relancer, commit « feat(catalogue): import Shopify ».
+- [x] Tests d'intégration d'abord (serveur Shopify factice) : 2 pages → produits créés, classés ; second import avec un produit de moins → `removed_at` posé, envie existante intacte ; prix changé → mis à jour ; 429 / robots.txt interdit → `last_import_error`, rien supprimé, 1 seule requête par boutique à la fois, pause entre pages respectée (horloge injectée).
+- [x] Implémenter, relancer, commit « feat(catalogue): import Shopify ».
 
 ### Task 3: API du catalogue
 

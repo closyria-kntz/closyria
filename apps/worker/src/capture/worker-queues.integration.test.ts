@@ -3,8 +3,9 @@ import { memoryStore } from "@closyria/storage";
 import { createTestDatabase } from "@closyria/testing/vitest";
 import type { PgBoss } from "pg-boss";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { planCatalogueImports } from "../catalogue/plan-imports";
 import { scheduleMonitors } from "./monitor";
-import { captureHandler, monitorHandler, registerCaptureQueues } from "./queues";
+import { captureHandler, catalogueImportHandler, monitorHandler, registerCaptureQueues } from "./queues";
 import { createRobotsCache } from "./robots";
 import { seedStartingShops } from "./seed-shops";
 import { STARTING_SHOPS } from "./starting-shops";
@@ -214,7 +215,102 @@ describe("job handlers", () => {
   });
 });
 
+describe("catalogue imports", () => {
+  async function importShop(slug: string, values: Partial<typeof schema.shops.$inferInsert>) {
+    const [shop] = await handle.db
+      .insert(schema.shops)
+      .values({
+        name: slug,
+        slug,
+        platform: "shopify",
+        status: "published",
+        importEnabled: true,
+        testUrl: `https://${slug}.test/products/x`,
+        ...values,
+      })
+      .returning();
+    if (!shop) throw new Error("no shop");
+    return shop;
+  }
+
+  it("plans one job per published Shopify shop with the import on, keyed by the shop", async () => {
+    const on = await importShop("plan-on", {});
+    await importShop("plan-off", { importEnabled: false });
+    await importShop("plan-draft", { status: "draft" });
+    await importShop("plan-other", { platform: "other" });
+    await importShop("plan-merged", { mergedIntoId: on.id });
+    const sent: { queue: string; data: object; options: { singletonKey: string } }[] = [];
+    const planned = await planCatalogueImports(handle.db, {
+      send: async (queue, data, options) => {
+        sent.push({ queue, data, options });
+      },
+    });
+    expect(planned).toBe(1);
+    expect(sent).toEqual([{ queue: "catalogue-import", data: { shopId: on.id }, options: { singletonKey: on.id } }]);
+  });
+
+  it("the handler plans on no data, imports a shop on { shopId } and fails anything else", async () => {
+    const shop = await importShop("handler-shop", {});
+    const deps = {
+      db: handle.db,
+      store: memoryStore(),
+      // robots.txt forbids everything: the import stops before any network.
+      robots: { allows: async () => false },
+      throttle: createThrottle(0),
+    };
+    const sent: object[] = [];
+    const queue = {
+      send: async (_q: string, d: object) => {
+        sent.push(d);
+      },
+    };
+    const info = vi.spyOn(console, "log").mockImplementation(() => {});
+    await catalogueImportHandler(deps, queue)([{ data: null }, { data: {} }]);
+    expect(sent).toContainEqual({ shopId: shop.id });
+
+    await catalogueImportHandler(deps, queue)([{ data: { shopId: shop.id } }]);
+    const [row] = await handle.db.select().from(schema.shops).where(eq(schema.shops.id, shop.id));
+    expect(row?.lastImportError).toBe("robots_disallowed");
+    info.mockRestore();
+
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const data of [{ shopId: "nope" }, { other: 1 }, [], "x", 5]) {
+      await expect(catalogueImportHandler(deps, queue)([{ data }])).rejects.toThrow("catalogue-import");
+    }
+    log.mockRestore();
+  });
+});
+
 describe("registerCaptureQueues", () => {
+  it("creates the catalogue import queue (one job per shop) and schedules it at 03:00 Paris time", async () => {
+    const created: { name: string; options?: object }[] = [];
+    const scheduled: { name: string; cron: string; options?: object }[] = [];
+    const worked: { name: string; options: object }[] = [];
+    const boss = {
+      createQueue: async (name: string, options?: object) => {
+        created.push({ name, ...(options ? { options } : {}) });
+      },
+      schedule: async (name: string, cron: string, _data: unknown, options?: object) => {
+        scheduled.push({ name, cron, ...(options ? { options } : {}) });
+      },
+      work: async (name: string, options: object) => {
+        worked.push({ name, options });
+        return name;
+      },
+    } as unknown as PgBoss;
+    await registerCaptureQueues(boss, { db: handle.db, store: memoryStore() });
+    expect(created).toContainEqual({
+      name: "catalogue-import",
+      options: { policy: "exclusive", retryLimit: 0, expireInSeconds: 21_600 },
+    });
+    expect(worked).toContainEqual({ name: "catalogue-import", options: { localConcurrency: 1 } });
+    expect(scheduled).toContainEqual({
+      name: "catalogue-import",
+      cron: "0 3 * * *",
+      options: { key: "nightly-import", tz: "Europe/Paris" },
+    });
+  });
+
   it("hands an injected DNS lookup and throttle to the captures (browser tests: loopback names, no spacing)", async () => {
     const { db } = handle;
     await seedStartingShops(db);

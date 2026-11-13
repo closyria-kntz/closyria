@@ -1,13 +1,7 @@
 import type dns from "node:dns";
 import { and, type Database, eq, ne, schema } from "@closyria/db";
 import { extract, isShopifyPage, shopifyJsUrl } from "@closyria/extract";
-import {
-  type CaptureErrorCode,
-  type CaptureMethod,
-  classify,
-  type ExtractedProduct,
-  shopDomain,
-} from "@closyria/shared";
+import { type CaptureErrorCode, type CaptureMethod, type ExtractedProduct, shopDomain } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import { type AddressPolicy, strictPolicy } from "./address-policy";
 import { CaptureError } from "./capture-error";
@@ -17,6 +11,7 @@ import type { RobotsCache } from "./robots";
 import { type SafeFetchAccept, safeFetch } from "./safe-fetch";
 import { loadReferenceSet } from "./seed-reference";
 import type { Throttle } from "./throttle";
+import { writeProduct } from "./write-product";
 
 export type CaptureDeps = {
   db: Database;
@@ -74,75 +69,14 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
         .where(eq(schema.products.id, productId));
       const reference = before?.classifiedBy === "admin" ? undefined : await loadReferenceSet(db);
       await db.transaction(async (tx) => {
-        const [current] = await tx
-          .select({
-            classifiedBy: schema.products.classifiedBy,
-            audience: schema.products.audience,
-            childDetail: schema.products.childDetail,
-            categoryId: schema.products.categoryId,
-            colorId: schema.products.colorId,
-            materialId: schema.products.materialId,
-            patternId: schema.products.patternId,
-            season: schema.products.season,
-          })
-          .from(schema.products)
-          .where(eq(schema.products.id, productId))
-          .for("update");
-        // Rule classification only; an admin-corrected product (also if it became one meanwhile) keeps its own.
-        const found =
-          current && current.classifiedBy !== "admin" && reference
-            ? classify({ name: product.name, url: capture.url, shopData: product.shopData ?? {} }, reference)
-            : undefined;
-        await tx
-          .update(schema.products)
-          .set({
-            // Admin corrections to the name and brand survive a re-capture; prices, sizes and photos always come from the shop.
-            ...(current?.classifiedBy === "admin" ? {} : { name: product.name, brand: product.brand ?? null }),
-            description: product.description ?? null,
-            currency: product.currency,
-            priceCents: product.priceCents,
-            compareAtCents: product.compareAtCents ?? null,
-            externalId: product.externalId ?? null,
-            publishedAt: product.publishedAt ? new Date(product.publishedAt) : null,
-            gtin: product.gtin ?? null,
-            sku: product.sku ?? null,
-            shopData: product.shopData ?? {},
-            // A field with no new match keeps its previous value; a new match overwrites it.
-            ...(found && current
-              ? {
-                  audience: found.audience ?? current.audience,
-                  childDetail: found.childDetail ?? current.childDetail,
-                  categoryId: found.categoryId ?? current.categoryId,
-                  colorId: found.colorId ?? current.colorId,
-                  materialId: found.materialId ?? current.materialId,
-                  patternId: found.patternId ?? current.patternId,
-                  season: found.season ?? current.season,
-                }
-              : {}),
-            source: "captured",
-            captureStatus: "ok",
-            lastCapturedAt: at,
-            updatedAt: at,
-          })
-          .where(eq(schema.products.id, productId));
-        const sizes = shop.listingKind === "secondhand" ? [] : uniqueSizes(product.sizes);
-        await tx.delete(schema.productSizes).where(eq(schema.productSizes.productId, productId));
-        if (sizes.length > 0) {
-          await tx.insert(schema.productSizes).values(
-            sizes.map((size, position) => ({
-              productId,
-              label: size.label,
-              position,
-              available: size.available,
-              priceCents: size.priceCents ?? null,
-            })),
-          );
-        }
-        await tx.insert(schema.productHistory).values({
+        await writeProduct(tx, {
           productId,
-          seenAt: at,
-          priceCents: product.priceCents,
-          sizes: Object.fromEntries(sizes.map((size) => [size.label, size.available])),
+          product,
+          url: capture.url,
+          listingKind: shop.listingKind,
+          reference,
+          at,
+          history: "always",
         });
         await tx.update(schema.captures).set({ dataReady: true }).where(eq(schema.captures.id, captureId));
       });
@@ -184,12 +118,6 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
   } catch (error) {
     await recordFailure(capture, error, startedAt, deps);
   }
-}
-
-function uniqueSizes(sizes: ExtractedProduct["sizes"]): ExtractedProduct["sizes"] {
-  const byLabel = new Map<string, ExtractedProduct["sizes"][number]>();
-  for (const size of sizes) if (!byLabel.has(size.label)) byLabel.set(size.label, size);
-  return [...byLabel.values()];
 }
 
 async function recordFailure(

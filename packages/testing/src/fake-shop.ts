@@ -16,7 +16,13 @@ export type FakeRoute = {
   redirect?: string;
 };
 
-export type FakeShop = { origin: string; hits: string[]; close(): Promise<void> };
+export type FakeShop = {
+  origin: string;
+  hits: string[];
+  /** Most requests ever answered at the same time. */
+  readonly maxInFlight: number;
+  close(): Promise<void>;
+};
 
 function fixturePath(file: string): string {
   const full = resolve(FIXTURES_DIR, file);
@@ -46,11 +52,19 @@ function closeServer(server: Server): Promise<void> {
 
 export async function startFakeShop(routes: Record<string, FakeRoute>): Promise<FakeShop> {
   const hits: string[] = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
   const timers = new Set<NodeJS.Timeout>();
   const server = createServer((req, res) => {
     const url = req.url ?? "/";
     hits.push(url);
-    const route = routes[url.split("?")[0] ?? "/"];
+    inFlight += 1;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    res.once("close", () => {
+      inFlight -= 1;
+    });
+    // A route keyed by the full address (with its query) wins over the one keyed by the path alone.
+    const route = routes[url] ?? routes[url.split("?")[0] ?? "/"];
     const respond = async () => {
       if (!route) {
         res.writeHead(404, { "content-type": "text/plain" }).end("not found");
@@ -85,6 +99,9 @@ export async function startFakeShop(routes: Record<string, FakeRoute>): Promise<
   return {
     origin: `http://127.0.0.1:${port}`,
     hits,
+    get maxInFlight() {
+      return maxInFlight;
+    },
     close: () => {
       for (const timer of timers) clearTimeout(timer);
       timers.clear();

@@ -119,3 +119,18 @@ const SIZE_KIND_BY_SLUG: Record<string, SizeKind> = {
 export function sizeKindOf(categorySlug: string | null): SizeKind | null {
   return categorySlug ? (SIZE_KIND_BY_SLUG[categorySlug] ?? null) : null;
 }
+
+/** pg-boss queue of the Shopify catalogue imports (nightly, or « Importer tout le catalogue » in the admin). */
+export const CATALOGUE_IMPORT_QUEUE = "catalogue-import";
+/** One import job: one shop. A job without data plans the night's imports. */
+export const catalogueImportJobSchema = z.object({ shopId: z.uuid() });
+export type CatalogueImportJob = z.infer<typeof catalogueImportJobSchema>;
+/**
+ * Options of that queue, the same wherever it is created (the first `createQueue` wins): at most one job queued or
+ * running per shop (`singletonKey` = shop id), no retry (a refusal waits for the next night), up to 6 h per import.
+ */
+export const CATALOGUE_IMPORT_QUEUE_OPTIONS = {
+  policy: "exclusive",
+  retryLimit: 0,
+  expireInSeconds: 6 * 60 * 60,
+} as const;

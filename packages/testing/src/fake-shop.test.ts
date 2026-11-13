@@ -25,6 +25,22 @@ describe("startFakeShop", () => {
     }
   });
 
+  it("prefers a route keyed by the full address and counts requests answered at the same time", async () => {
+    const shop = await startFakeShop({
+      "/list": { body: "any page", delayMs: 50 },
+      "/list?page=2": { body: "page 2", delayMs: 50 },
+    });
+    try {
+      expect(await (await fetch(`${shop.origin}/list?page=2`)).text()).toBe("page 2");
+      expect(await (await fetch(`${shop.origin}/list?page=3`)).text()).toBe("any page");
+      expect(shop.maxInFlight).toBe(1);
+      await Promise.all([fetch(`${shop.origin}/list`), fetch(`${shop.origin}/list`)]);
+      expect(shop.maxInFlight).toBe(2);
+    } finally {
+      await shop.close();
+    }
+  });
+
   it("redirects with 302 by default, honours 3xx status, absolute and relative targets", async () => {
     const shop = await startFakeShop({
       "/a": { redirect: "/b" },

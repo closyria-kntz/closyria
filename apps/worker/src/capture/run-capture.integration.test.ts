@@ -295,6 +295,42 @@ describe("runCapture", () => {
     expect(r.product?.audience).toBe("women");
   });
 
+  it("files the category from the product type first (catalogue classification) and the colour option", async () => {
+    await seedReference(handle.db);
+    routes["/products/fluide.js"] = {
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: 9, title: "Pantalon fluide bordeaux", type: "Robe", price: 4990, images: [] }),
+    };
+    const t = await setup("/products/fluide", { shop: { platform: "shopify" } });
+
+    await runCapture(t.capture.id, deps);
+
+    const r = await load(t.capture.id, t.product.id);
+    const [robes] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "robes"));
+    const [bordeaux] = await handle.db.select().from(schema.colors).where(eq(schema.colors.slug, "bordeaux"));
+    expect(r.product?.categoryId).toBe(robes?.id);
+    expect(r.product?.colorId).toBe(bordeaux?.id);
+  });
+
+  it("keeps the category and colour the admin filed in the catalogue (category_source admin)", async () => {
+    await seedReference(handle.db);
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const [sacs] = await handle.db.select().from(schema.categories).where(eq(schema.categories.slug, "sacs"));
+    const [noir] = await handle.db.select().from(schema.colors).where(eq(schema.colors.slug, "noir"));
+    const t = await setup("/products/produit-3679", {
+      shop: { platform: "shopify" },
+      product: { categoryId: sacs?.id ?? null, colorId: noir?.id ?? null, categorySource: "admin" },
+    });
+
+    await runCapture(t.capture.id, deps);
+
+    const r = await load(t.capture.id, t.product.id);
+    expect(r.product?.categoryId).toBe(sacs?.id);
+    expect(r.product?.colorId).toBe(noir?.id);
+    expect(r.product?.categorySource).toBe("admin");
+    expect(r.product?.name).toBe("PANTALON LEONIE");
+  });
+
   it("falls back to the HTML page when the .js fails", async () => {
     servePage("/products/produit-3679", "real/mcb-paris.html");
     const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
