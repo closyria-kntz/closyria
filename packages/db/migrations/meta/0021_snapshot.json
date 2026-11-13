@@ -1904,7 +1904,7 @@
         },
         "shops_values_check": {
           "name": "shops_values_check",
-          "value": "\"shops\".\"values\" <@ ARRAY['made_in_france', 'second_hand', 'eco_responsible', 'free_returns']::text[]"
+          "value": "\"shops\".\"values\" <@ ARRAY['made_in_france', 'second_hand', 'eco', 'free_returns']::text[]"
         }
       },
       "isRLSEnabled": false

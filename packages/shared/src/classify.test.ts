@@ -160,6 +160,16 @@ describe("classifyCatalogue", () => {
       colorId: null,
     });
   });
+  it("takes the category from tags when the type is empty", () => {
+    expect(classifyCatalogue({ ...empty, tags: ["Pull"], name: "Douceur" }, reference).categoryId).toBe("pulls");
+  });
+  it("prefers the deepest category (child over parent)", () => {
+    expect(classifyCatalogue({ ...empty, productType: "Haut t-shirt" }, reference).categoryId).toBe("tshirts");
+  });
+  it("reads the French « Couleur » option", () => {
+    const r = classifyCatalogue({ ...empty, options: [{ name: "Couleur", values: ["Noir"] }] }, reference);
+    expect(r.colorId).toBe("noir");
+  });
   it("returns nulls with nothing to go on", () => {
     expect(classifyCatalogue(empty, reference)).toEqual({ categoryId: null, colorId: null });
   });

@@ -24,7 +24,9 @@ describe("migration 0021 (catalogue de Découvrir)", () => {
         await expect(client.query(`update shops set values = '{bio}' where id = $1`, [shopId])).rejects.toThrow(
           /shops_values_check/,
         );
-        await client.query(`update shops set values = '{made_in_france,second_hand}' where id = $1`, [shopId]);
+        await client.query(`update shops set values = '{made_in_france,second_hand,eco,free_returns}' where id = $1`, [
+          shopId,
+        ]);
 
         const product = await client.query<{ id: string; category_source: string; hidden_at: Date | null }>(
           `insert into products (shop_id, canonical_url) values ($1, 'https://s.test/p') returning id, category_source, hidden_at, removed_at`,

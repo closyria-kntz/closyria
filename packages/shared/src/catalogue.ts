@@ -2,7 +2,7 @@ import { z } from "zod";
 import { itemStageSchema } from "./wardrobe";
 
 /** What a shop can claim, ticked by the admin: used as filters of « Découvrir ». */
-export const shopValueSchema = z.enum(["made_in_france", "second_hand", "eco_responsible", "free_returns"]);
+export const shopValueSchema = z.enum(["made_in_france", "second_hand", "eco", "free_returns"]);
 export type ShopValue = z.infer<typeof shopValueSchema>;
 
 export const catalogSortSchema = z.enum(["new", "price_asc", "price_desc", "popular"]);

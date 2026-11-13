@@ -156,8 +156,8 @@ const COLOR_OPTION = /^(couleur|couleurs|color|colour|colors|colours)$/;
 
 /**
  * Files an imported Shopify product into category and colour by reference keywords (whole words, no accents, no case).
- * Category: product type, then tags, then name; the deepest matching category wins inside one source, the longest
- * keyword on ties. Colour: « Couleur/Color » option, then tags, then name. Pure: the caller passes the lists.
+ * Category: product type, then tags, then name; the deepest matching category wins inside one source; at equal depth the
+ * longest keyword wins, and if still equal the first category of the reference list (strict > keeps the earlier). Colour: « Couleur/Color » option, then tags, then name. Pure: the caller passes the lists.
  */
 export function classifyCatalogue(
   input: CatalogueClassifyInput,
