@@ -44,7 +44,7 @@ export type AdminRequestResult = { ok: boolean; status: number; body: unknown };
 
 /** A same-origin call to the admin API from the browser (the cookie goes along). Never throws: status 0 is a network failure. */
 export async function adminRequest(
-  method: "POST" | "PATCH" | "DELETE",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
   fetchImpl: typeof globalThis.fetch = fetch,

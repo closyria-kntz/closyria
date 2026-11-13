@@ -59,10 +59,20 @@ const request = (api: InternalApi, path: string) => {
   });
 };
 
+/** The session check got an answer that is not a success. Carries the HTTP status only (nothing personal). */
+export class SessionCheckError extends Error {
+  readonly status: number;
+  constructor(status: number) {
+    super(`get-session answered ${status}`);
+    this.name = "SessionCheckError";
+    this.status = status;
+  }
+}
+
 /** The caller's session as Better Auth sees it, reduced to role and sign-in method; null without one. */
 export async function fetchAdminSession(api: InternalApi): Promise<AdminSession> {
   const res = await request(api, "/api/auth/get-session");
-  if (!res.ok) throw new Error(`get-session answered ${res.status}`);
+  if (!res.ok) throw new SessionCheckError(res.status);
   return adminSessionSchema.parse(await res.json());
 }
 

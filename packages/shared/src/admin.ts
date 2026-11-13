@@ -168,6 +168,20 @@ export const adminShopDetailSchema = adminShopSchema.extend({
 });
 export type AdminShopDetail = z.infer<typeof adminShopDetailSchema>;
 
+/** Only the import fields of the shop page's panel: read every 3 s while an import runs (same definitions as the detail). */
+export const adminShopImportStatusSchema = adminShopSchema.pick({
+  importState: true,
+  importStartedAt: true,
+  importPages: true,
+  importSeen: true,
+  lastImportAt: true,
+  lastImportError: true,
+  lastImportSeen: true,
+  lastImportCreated: true,
+  lastImportRemoved: true,
+});
+export type AdminShopImportStatus = z.infer<typeof adminShopImportStatusSchema>;
+
 const slugSchema = z
   .string()
   .min(1)

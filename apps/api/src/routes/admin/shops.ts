@@ -7,6 +7,7 @@ import {
   adminShopCreatedSchema,
   adminShopCreateSchema,
   adminShopDetailSchema,
+  adminShopImportStatusSchema,
   adminShopListSchema,
   adminShopPatchSchema,
   adminShopSchema,
@@ -78,6 +79,23 @@ const detailRoute = defineAccess(
     request: { params: idParam },
     responses: {
       200: { description: "The shop", content: { "application/json": { schema: adminShopDetailSchema } } },
+      404: errorContent("Unknown or merged shop"),
+    },
+  }),
+  "admin",
+);
+
+const importStatusRoute = defineAccess(
+  createRoute({
+    method: "get",
+    path: "/admin/shops/{id}/import-status",
+    summary: "The import fields of a shop, nothing else (polled by the shop page while an import runs)",
+    request: { params: idParam },
+    responses: {
+      200: {
+        description: "The import state and the figures of the last import",
+        content: { "application/json": { schema: adminShopImportStatusSchema } },
+      },
       404: errorContent("Unknown or merged shop"),
     },
   }),
@@ -226,6 +244,20 @@ function pgCode(error: unknown): string | undefined {
 
 type Outcome = { shop: Shop } | { error: "domain_taken" | "slug_taken" | "not_found" };
 
+function importStatusShape(shop: Shop, now: Date) {
+  return {
+    importState: liveImportState(shop.importState, shop.importStartedAt, now),
+    importStartedAt: shop.importStartedAt?.toISOString() ?? null,
+    importPages: shop.importPages,
+    importSeen: shop.importSeen,
+    lastImportAt: shop.lastImportAt?.toISOString() ?? null,
+    lastImportError: shop.lastImportError,
+    lastImportSeen: shop.lastImportSeen,
+    lastImportCreated: shop.lastImportCreated,
+    lastImportRemoved: shop.lastImportRemoved,
+  };
+}
+
 function shape(shop: Shop, domains: string[], stats: ShopStats | undefined, now: Date) {
   return {
     id: shop.id,
@@ -239,15 +271,7 @@ function shape(shop: Shop, domains: string[], stats: ShopStats | undefined, now:
     domains: [...domains].sort(),
     values: shop.values as ShopValue[],
     importEnabled: shop.importEnabled,
-    lastImportAt: shop.lastImportAt?.toISOString() ?? null,
-    lastImportError: shop.lastImportError,
-    importState: liveImportState(shop.importState, shop.importStartedAt, now),
-    importStartedAt: shop.importStartedAt?.toISOString() ?? null,
-    importPages: shop.importPages,
-    importSeen: shop.importSeen,
-    lastImportSeen: shop.lastImportSeen,
-    lastImportCreated: shop.lastImportCreated,
-    lastImportRemoved: shop.lastImportRemoved,
+    ...importStatusShape(shop, now),
     health: shopHealth({
       status: shop.status as ShopStatus,
       captureMode: shop.captureMode as CaptureMode,
@@ -413,6 +437,12 @@ export function adminShopsRoutes(deps: CatalogDeps) {
         },
         200,
       );
+    })
+    .openapi(importStatusRoute, async (c) => {
+      const { id } = c.req.valid("param");
+      const shop = await activeShop(db, id);
+      if (!shop) return c.json(notFound, 404);
+      return c.json(importStatusShape(shop, now()), 200);
     })
     .openapi(patchRoute, async (c) => {
       const { id } = c.req.valid("param");

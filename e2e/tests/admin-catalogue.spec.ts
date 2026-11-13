@@ -249,6 +249,14 @@ test("l’avancement d’un import se lit tout seul dans la fiche boutique, et l
   const listed = page.getByRole("row").filter({ has: page.getByRole("link", { name: shop.name }) });
   await expect(listed.getByTestId("importing-tag")).toHaveText("Import en cours");
 
+  // The page is not rendered again while the import runs: the progress comes from the light status route.
+  const pageReads: string[] = [];
+  const statusReads: string[] = [];
+  page.on("request", (req) => {
+    const url = req.url();
+    if (url.includes("/import-status")) statusReads.push(url);
+    else if (url.includes("_rsc=") && url.includes(`/admin/boutiques/${shop.id}`)) pageReads.push(url);
+  });
   await page.goto(`/admin/boutiques/${shop.id}`);
   const catalogue = page.getByRole("region", { name: "Catalogue" });
   const state = catalogue.getByTestId("import-state");
@@ -257,8 +265,11 @@ test("l’avancement d’un import se lit tout seul dans la fiche boutique, et l
   await axeLightAndDark(page);
 
   // The worker reads the next page: the status follows without a reload.
+  const pageReadsAtStart = pageReads.length;
   await db.query("update shops set import_pages = 4, import_seen = 962 where id = $1", [shop.id]);
   await expect(state).toHaveText("Import en cours : page 4, 962 articles lus", { timeout: 15_000 });
+  expect(statusReads.length).toBeGreaterThan(0);
+  expect(pageReads).toHaveLength(pageReadsAtStart);
   // It ends (13:05 UTC is 14 h 05 in Paris in November).
   await db.query(
     `update shops set import_state = null, last_import_at = '2026-11-13T13:05:00Z', last_import_error = null,
@@ -278,6 +289,40 @@ test("l’avancement d’un import se lit tout seul dans la fiche boutique, et l
   await page.goto(`/admin/boutiques?status=published`);
   await expect(listed).toBeVisible();
   await expect(listed.getByTestId("importing-tag")).toHaveCount(0);
+});
+
+test("un échec ponctuel du suivi d’import ne fait pas disparaître la fiche boutique", async ({
+  page,
+  request,
+  db,
+  userAgentTag,
+}) => {
+  const shop = await seedShop(db, "published");
+  await db.query(
+    "update shops set import_state = 'running', import_started_at = now(), import_pages = 1, import_seen = 100 where id = $1",
+    [shop.id],
+  );
+  await signInAsAdmin(page, request, db, userAgentTag);
+  let failed = false;
+  await page.route("**/api/admin/shops/*/import-status", async (route) => {
+    if (failed) return route.continue();
+    failed = true;
+    await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "down" }) });
+  });
+  await page.goto(`/admin/boutiques/${shop.id}`);
+  const catalogue = page.getByRole("region", { name: "Catalogue" });
+  const state = catalogue.getByTestId("import-state");
+  await expect(state).toHaveText("Import en cours : page 1, 100 articles lus");
+  await expect.poll(() => failed, { timeout: 15_000 }).toBe(true);
+  // The failed read changed nothing: the panel is still there, with the last state.
+  await expect(state).toHaveText("Import en cours : page 1, 100 articles lus");
+  await expect(page.getByRole("heading", { name: "Catalogue" })).toBeVisible();
+  await db.query(
+    `update shops set import_state = null, last_import_at = '2026-11-13T13:05:00Z', last_import_error = null,
+       last_import_seen = 100, last_import_created = 5, last_import_removed = 0 where id = $1`,
+    [shop.id],
+  );
+  await expect(state).toHaveText(/^Terminé à 14 h 05/, { timeout: 15_000 });
 });
 
 test("la barre et le menu de l’admin restent visibles quand la page défile", async ({

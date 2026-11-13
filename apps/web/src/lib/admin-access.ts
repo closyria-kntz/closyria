@@ -1,4 +1,17 @@
 import type { AdminSession } from "@closyria/shared";
+import { SessionCheckError } from "./admin-api";
+
+/** A failed session check is tried once more after this long (a slow or busy API recovers in a moment). */
+export const SESSION_RETRY_MS = 300;
+
+/** Worth a second try: a 5xx, a network error or a timeout. Never a 401/403 or any other answer, nor a bad body. */
+function isTransient(error: unknown): boolean {
+  if (error instanceof SessionCheckError) return error.status >= 500;
+  return (
+    error instanceof Error &&
+    (error.name === "TimeoutError" || error.name === "AbortError" || error instanceof TypeError)
+  );
+}
 
 export type AdminAccess = "ok" | "not-found" | "passkey-required";
 
@@ -14,15 +27,30 @@ export function adminAccess(session: AdminSession): AdminAccess {
 
 /**
  * The access decision from a session loader. If the session cannot be checked (API down, timeout, bad
- * answer), the area does not exist for this request: 404, never a 500 that would reveal it. Only the
- * error class is logged, never its message (it could carry personal data).
+ * answer), the area does not exist for this request: 404, never a 500 that would reveal it. Once more after a 5xx, a network error or a timeout. Only the
+ * error class (and the HTTP status of a refusal) is logged, never its message (it could carry personal data).
  */
-export async function loadAdminAccess(load: () => Promise<AdminSession>): Promise<AdminAccess> {
+export async function loadAdminAccess(
+  load: () => Promise<AdminSession>,
+  retryMs: number = SESSION_RETRY_MS,
+): Promise<AdminAccess> {
   try {
-    return adminAccess(await load());
+    try {
+      return adminAccess(await load());
+    } catch (error) {
+      if (!isTransient(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, retryMs));
+      return adminAccess(await load());
+    }
   } catch (error) {
     const kind = error instanceof Error ? error.name : typeof error;
-    console.error(JSON.stringify({ event: "admin.session_check_failed", error: kind }));
+    console.error(
+      JSON.stringify({
+        event: "admin.session_check_failed",
+        error: kind,
+        ...(error instanceof SessionCheckError ? { status: error.status } : {}),
+      }),
+    );
     return "not-found";
   }
 }

@@ -1,5 +1,5 @@
 import { and, eq, isNull, schema } from "@closyria/db";
-import { catalogPageSchema } from "@closyria/shared";
+import { adminShopImportStatusSchema, catalogPageSchema } from "@closyria/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { findOrCreateShop } from "../../catalog/shops";
 import { BASE_URL, createCatalogHarness } from "../../catalog/test-app";
@@ -146,6 +146,7 @@ describe("access", () => {
       ["POST", `/admin/shops/${id}/publish`],
       ["POST", `/admin/shops/${id}/refuse`],
       ["POST", `/admin/shops/${id}/import`],
+      ["GET", `/admin/shops/${id}/import-status`],
       ["GET", "/admin/catalogue/unclassified"],
       ["PATCH", `/admin/products/${id}/classification`, { categoryId: id, colorId: id }],
       ["GET", "/admin/catalogue/reports"],
@@ -326,6 +327,40 @@ describe("values and import of a shop", () => {
       lastImportCreated: 12,
       lastImportRemoved: 3,
     });
+  });
+
+  it("reads only the import fields, with the 6 h rule applied; 404 for an unknown shop", async () => {
+    const shop = await newShop({ platform: "shopify" });
+    const started = new Date(NOW.getTime() - 60_000);
+    await t.db
+      .update(schema.shops)
+      .set({ importState: "running", importStartedAt: started, importPages: 3, importSeen: 712, lastImportSeen: 900 })
+      .where(eq(schema.shops.id, shop.id));
+    const res = await call("GET", `/admin/shops/${shop.id}/import-status`);
+    expect(res.status).toBe(200);
+    expect(adminShopImportStatusSchema.parse(await json(res))).toEqual({
+      importState: "running",
+      importStartedAt: started.toISOString(),
+      importPages: 3,
+      importSeen: 712,
+      lastImportAt: null,
+      lastImportError: null,
+      lastImportSeen: 900,
+      lastImportCreated: null,
+      lastImportRemoved: null,
+    });
+    expect(Object.keys(await json(await call("GET", `/admin/shops/${shop.id}/import-status`)))).toHaveLength(9);
+
+    await t.db
+      .update(schema.shops)
+      .set({ importStartedAt: new Date(NOW.getTime() - 7 * 3_600_000) })
+      .where(eq(schema.shops.id, shop.id));
+    expect((await json(await call("GET", `/admin/shops/${shop.id}/import-status`))).importState).toBeNull();
+
+    const id = "00000000-0000-4000-8000-000000000000";
+    expect((await call("GET", `/admin/shops/${id}/import-status`)).status).toBe(404);
+    expect((await call("GET", `/admin/shops/${shop.id}/import-status`, undefined, user.cookie)).status).toBe(403);
+    expect((await call("GET", `/admin/shops/${shop.id}/import-status`, undefined, "")).status).toBe(401);
   });
 
   it("leaves no « En attente » behind when the queue cannot take the import", async () => {
