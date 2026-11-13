@@ -349,6 +349,12 @@ describe("GET /api/catalog — filters", () => {
     await newProduct(shop.id, { categoryId: ref.shoes, sizes: [["38", false]] });
     expect((await page("?mySize=true")).items).toHaveLength(2);
     expect((await page()).items.map((i) => i.sizeInStock)).toEqual([null, null]);
+    // The page says so, for « Ajoute tes tailles ».
+    expect((await page()).hasSizes).toBe(false);
+    const profile = await newProfile(me.userId, { sizeShoes: " " });
+    expect((await page()).hasSizes).toBe(false);
+    await t.db.update(schema.profiles).set({ sizeShoes: "38" }).where(eq(schema.profiles.id, profile.id));
+    expect((await page()).hasSizes).toBe(true);
   });
 
   it("marks what she already wants, never what another person wants", async () => {
@@ -448,6 +454,11 @@ describe("GET /api/catalog/{productId}", () => {
       { label: "M", available: true },
     ]);
     expect(before).toMatchObject({ sizeInStock: true, previousPriceCents: 6000, wanted: false, myItem: null });
+    // Her size for this kind of article, to put forward among the sizes; the shop's page for « Voir chez ».
+    expect(before.mySize).toBe("m");
+    expect(before.url).toBe(p.canonicalUrl);
+    const bag = await newProduct(shop.id, { categoryId: ref.bags });
+    expect((await detail(bag.id)).body.mySize).toBeNull();
 
     const itemId = await newItem(me.userId, p.id, { stage: "ordered" });
     const after = (await detail(p.id)).body;
@@ -497,6 +508,12 @@ describe("GET /api/catalog/{productId}", () => {
 
     const { body } = await detail(p.id);
     expect(body.close.map((c) => c.itemId)).toEqual(mine.slice(0, 3));
+    // Her own sheet of each piece is at its product.
+    const { rows: owned } = await t.db.execute<{ id: string; product_id: string }>(
+      sql`select id, product_id from items where id = any(${`{${mine.join(",")}}`}::uuid[])`,
+    );
+    const productOf = new Map(owned.map((r) => [r.id, r.product_id]));
+    expect(body.close.map((c) => c.productId)).toEqual(mine.slice(0, 3).map((id) => productOf.get(id)));
     // Her correction of the color wins over the product's.
     await t.db
       .update(schema.items)
@@ -558,10 +575,18 @@ describe("GET /api/catalog/{productId}", () => {
 
     const { body } = await detail(p.id);
     expect(body.close).toEqual([
-      { itemId: bare, name: "Robe en attente", imageUrl: null, stage: "owned" },
-      { itemId: withCover, name: "Ma robe rouge", imageUrl: `/api/me/media/${cover?.id}`, stage: "owned" },
+      { itemId: bare, productId: unpublished.id, name: "Robe en attente", imageUrl: null, stage: "owned" },
+      {
+        itemId: withCover,
+        productId: hidden.id,
+        name: "Ma robe rouge",
+        imageUrl: `/api/me/media/${cover?.id}`,
+        stage: "owned",
+      },
     ]);
-    for (const piece of body.close) expect(Object.keys(piece).sort()).toEqual(["imageUrl", "itemId", "name", "stage"]);
+    for (const piece of body.close) {
+      expect(Object.keys(piece).sort()).toEqual(["imageUrl", "itemId", "name", "productId", "stage"]);
+    }
     // Without her cover: the shop's photo.
     await t.db.update(schema.items).set({ coverMediaId: null }).where(eq(schema.items.id, withCover));
     const [shopPhoto] = await t.db
@@ -594,6 +619,8 @@ describe("GET /api/catalog/{productId}", () => {
     });
     const sameColor = await newProduct(elsewhere.id, { categoryId: ref.shoes, colorId: ref.red, priceCents: 90000 });
     const nearPrice = await newProduct(elsewhere.id, { categoryId: ref.bags, colorId: ref.black, priceCents: 5500 });
+    // Unfiled, at a near price (and newer): after the others, never first.
+    const unfiled = await newProduct(elsewhere.id, { priceCents: 5200, createdAt: ago(0) });
     await newProduct(elsewhere.id, { categoryId: ref.bags, colorId: ref.black, priceCents: 90000 });
     await newProduct(elsewhere.id, { categoryId: ref.shortDress, colorId: ref.red, removedAt: ago(DAY) });
 
@@ -601,7 +628,7 @@ describe("GET /api/catalog/{productId}", () => {
     expect(body.sameShop).toHaveLength(8);
     expect(ids(body.sameShop)).not.toContain(p.id);
     expect(body.sameShop.every((c) => c.shop.id === shop.id)).toBe(true);
-    expect(ids(body.sameStyle)).toEqual([sameBoth.id, sameColor.id, nearPrice.id]);
+    expect(ids(body.sameStyle)).toEqual([sameBoth.id, sameColor.id, unfiled.id, nearPrice.id]);
   });
 });
 

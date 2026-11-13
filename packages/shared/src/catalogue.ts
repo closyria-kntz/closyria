@@ -50,12 +50,16 @@ export type CatalogCard = z.infer<typeof catalogCardSchema>;
 export const catalogPageSchema = z.object({
   items: z.array(catalogCardSchema),
   nextCursor: z.string().nullable(),
+  /** Whether her profile has any of « Mes tailles »: without one, « Ma taille en stock » cannot filter. */
+  hasSizes: z.boolean(),
 });
 export type CatalogPage = z.infer<typeof catalogPageSchema>;
 
 /** « Tu as déjà quelque chose de proche »: one of her own pieces (« Reçu » / « Dans mon dressing »), never anyone else's. */
 export const catalogClosePieceSchema = z.object({
   itemId: z.uuid(),
+  /** Her item's sheet is the one of its product (`/produits/{productId}`); null for a piece without a product. */
+  productId: z.uuid().nullable(),
   name: z.string(),
   /** Her cover, else the shop's first photo, else her first own photo (the item card's rule); null without any. */
   imageUrl: z.string().nullable(),
@@ -65,7 +69,11 @@ export type CatalogClosePiece = z.infer<typeof catalogClosePieceSchema>;
 
 export const catalogDetailSchema = catalogCardSchema.extend({
   images: z.array(z.string()),
+  /** The article's page at the shop (« Voir chez {boutique} », « Partager »). */
+  url: z.string(),
   sizes: z.array(z.object({ label: z.string(), available: z.boolean() })),
+  /** Her size (« Mes tailles ») for this kind of article, as she typed it; null when none applies. */
+  mySize: z.string().nullable(),
   /** Null under 3 people: the counter is shown from 3. */
   likes: z.number().int().nonnegative().nullable(),
   myItem: z.object({ itemId: z.uuid(), stage: itemStageSchema }).nullable(),

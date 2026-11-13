@@ -35,7 +35,8 @@ const FAILURE_KEYS = {
 } as const;
 
 /** One column on a phone and in portrait (the gallery, then the blocks); side by side from 48rem in landscape and on desktop. */
-const TWO_COLUMNS = "grid grid-cols-1 md:landscape:grid-cols-2 md:landscape:gap-space-6 lg:grid-cols-2 lg:gap-space-7";
+export const TWO_COLUMNS =
+  "grid grid-cols-1 md:landscape:grid-cols-2 md:landscape:gap-space-6 lg:grid-cols-2 lg:gap-space-7";
 
 function Skeleton({ className }: { className: string }) {
   return <div aria-hidden="true" className={`skeleton rounded-card ${className}`} />;

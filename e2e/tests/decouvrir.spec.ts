@@ -6,8 +6,8 @@ import { signInAsAdmin } from "../fixtures/auth";
 import { expect, test } from "../fixtures/test";
 
 // Refonte Boudoir, task 6: « Découvrir » shows the published shops Closyria knows (photo, name, domain, how many
-// articles), each opening its site in a new tab, a search on their name or domain, and the « boutique de la semaine »
-// an admin puts forward. The directory is shared by the whole suite: every test finds its own shops by a unique name.
+// articles), each opening its site in a new tab, a search on their name or domain (it searches the catalogue too,
+// catalogue.spec.ts), and the « boutique de la semaine » an admin puts forward. The directory is shared by the whole suite: every test finds its own shops by a unique name.
 
 const axe = async (page: Page) => {
   await page.evaluate(() =>
@@ -78,7 +78,7 @@ test("la grille montre les boutiques publiées avec leur site, et la recherche l
   await expect(page.getByRole("link", { name: new RegExp(draft.name) })).toHaveCount(0);
   await axeLightAndDark(page);
 
-  const search = page.getByRole("searchbox", { name: "Rechercher une boutique" });
+  const search = page.getByRole("searchbox", { name: "Rechercher un article ou une boutique" });
   await search.fill(shop.tag);
   await expect(grid.getByRole("link")).toHaveCount(1);
   await expect(grid.getByRole("link", { name: new RegExp(shop.name) })).toBeVisible();
@@ -98,6 +98,10 @@ test("la grille montre les boutiques publiées avec leur site, et la recherche l
 test("sans aucune boutique, l’écran explique comment en faire apparaître", async ({ page }) => {
   // The suite's database always has shops: the answer of an empty directory is played to this page only.
   await page.route("**/api/shops", (route) => route.fulfill({ json: { featured: null, shops: [] } }));
+  // Nor any article: no shop, no catalogue.
+  await page.route("**/api/catalog?*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null, hasSizes: false } }),
+  );
   await page.goto("/decouvrir");
   await expect(
     page.getByRole("heading", { level: 1, name: "Les petites boutiques, d’un seul coup d’œil" }),
@@ -106,7 +110,7 @@ test("sans aucune boutique, l’écran explique comment en faire apparaître", a
     page.getByText("Aucune boutique pour l’instant. Colle le lien d’un article : sa boutique apparaîtra ici."),
   ).toBeVisible();
   await expect(page.getByRole("region", { name: "Toutes les boutiques" })).toHaveCount(0);
-  await expect(page.getByRole("searchbox", { name: "Rechercher une boutique" })).toHaveCount(0);
+  await expect(page.getByText("Aucun article dans le catalogue pour l’instant.", { exact: false })).toBeVisible();
   await axeLightAndDark(page);
 });
 
@@ -144,7 +148,7 @@ test("une admin met une boutique en boutique de la semaine : elle fait la une de
   await page.setViewportSize({ width: 1280, height: 720 });
 
   // A search shows the matching shops, the one of the week among them.
-  await page.getByRole("searchbox", { name: "Rechercher une boutique" }).fill(shop.tag);
+  await page.getByRole("searchbox", { name: "Rechercher un article ou une boutique" }).fill(shop.tag);
   await expect(page.getByRole("article", { name: shop.name })).toHaveCount(0);
   await expect(
     page.getByRole("region", { name: "Toutes les boutiques" }).getByRole("link", { name: new RegExp(shop.name) }),

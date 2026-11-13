@@ -189,18 +189,112 @@
     "loadError": "Les boutiques n’ont pas pu être chargées. Réessaie dans un moment.",
     "empty": "Aucune boutique pour l’instant. Colle le lien d’un article : sa boutique apparaîtra ici.",
     "search": {
-      "label": "Rechercher une boutique",
-      "placeholder": "Rechercher une boutique…"
+      "label": "Rechercher un article ou une boutique",
+      "placeholder": "Robe rouge, nom d’une boutique…"
     },
     "results": "{count, plural, =0 {Aucune boutique} one {# boutique} other {# boutiques}}",
     "noMatch": "Aucune boutique ne correspond à « {query} ».",
     "une": {
       "kicker": "La boutique de la semaine",
-      "open": "Voir la boutique"
+      "open": "Voir la boutique",
+      "newKicker": "Nouveautés de la semaine",
+      "newTitle": "Les derniers arrivés",
+      "newBody": "Les articles entrés cette semaine dans le catalogue.",
+      "newOpen": "Voir les nouveautés"
     },
     "all": "Toutes les boutiques",
     "count": "{count, plural, =0 {Aucun article pour l’instant} one {# article} other {# articles}}",
-    "newTab": "(s’ouvre dans un nouvel onglet)"
+    "newTab": "(s’ouvre dans un nouvel onglet)",
+    "catalogue": {
+      "title": "Les articles",
+      "loading": "Chargement des articles…",
+      "loadError": "Les articles ne s’affichent pas. Réessaie dans un instant.",
+      "retry": "Réessayer",
+      "more": "Voir plus d’articles",
+      "loadingMore": "Chargement de la suite…",
+      "count": "{count, plural, one {# article affiché} other {# articles affichés}}",
+      "empty": "Aucun article avec ces filtres.",
+      "emptyBody": "Essaie avec moins de filtres, ou une autre recherche.",
+      "clear": "Effacer les filtres",
+      "none": "Aucun article dans le catalogue pour l’instant. Les articles des boutiques validées arrivent ici."
+    },
+    "card": {
+      "mySize": "Ta taille en stock",
+      "want": "Je le veux",
+      "wantOf": "Je le veux : {name}",
+      "wanted": "Dans tes envies",
+      "wantFailed": "Ça n’a pas marché. Réessaie dans un instant.",
+      "previousPrice": "Prix avant réduction"
+    },
+    "filters": {
+      "menu": "{count, plural, =0 {Filtres et tri} other {Filtres et tri (#)}}",
+      "menuTitle": "Filtres et tri",
+      "sort": "Trier par",
+      "sortOptions": {
+        "new": "Les plus récents",
+        "price_asc": "Prix croissant",
+        "price_desc": "Prix décroissant",
+        "popular": "Les plus aimés"
+      },
+      "category": "Type",
+      "color": "Couleur",
+      "price": "Prix",
+      "priceOptions": {
+        "0-30": "Moins de 30 €",
+        "30-60": "De 30 à 60 €",
+        "60-100": "De 60 à 100 €",
+        "100-": "Plus de 100 €"
+      },
+      "shop": "Boutique",
+      "any": "Tous",
+      "anyF": "Toutes",
+      "mySize": "Ma taille en stock",
+      "noSizes": "Pour filtrer par ta taille :",
+      "addSizes": "Ajoute tes tailles",
+      "onSale": "En baisse",
+      "isNew": "Nouveautés",
+      "values": "La boutique est…",
+      "valueOptions": {
+        "made_in_france": "Made in France",
+        "second_hand": "Seconde main",
+        "eco": "Éco-responsable",
+        "free_returns": "Retours gratuits"
+      },
+      "active": "Filtres actifs",
+      "remove": "Retirer le filtre {label}",
+      "search": "Recherche « {q} »"
+    },
+    "sheet": {
+      "metadata": "Article · Découvrir",
+      "back": "← Découvrir",
+      "loading": "Chargement de l’article…",
+      "notFound": "Cet article n’est plus dans le catalogue.",
+      "loadError": "L’article ne s’affiche pas. Réessaie dans un instant.",
+      "retry": "Réessayer",
+      "shopLink": "Voir les articles de {shop}",
+      "likes": "Aimé par {count} personnes",
+      "actions": "Que veux-tu faire ?",
+      "want": "Je le veux",
+      "wanted": "Dans tes envies",
+      "stage": "Dans tes articles : {stage}",
+      "mine": "Voir ma fiche",
+      "close": "Tu as déjà quelque chose de proche",
+      "sameShop": "De la même boutique",
+      "sameStyle": "Dans le même style",
+      "report": "Signaler",
+      "reportTitle": "Signaler cet article",
+      "reportReason": "Pourquoi ?",
+      "reasons": {
+        "not_fashion": "Pas de la mode",
+        "shocking": "Contenu choquant",
+        "other": "Autre"
+      },
+      "reportSend": "Envoyer",
+      "reportCancel": "Fermer",
+      "reportDone": "Merci, on regarde.",
+      "reportFailed": "Le signalement n’est pas parti. Réessaie dans un instant.",
+      "addToList": "Ajouter à une liste"
+    }
   },
   "Auth": {
     "email": {

@@ -52,7 +52,8 @@ const listRoute = defineAccess(
       "aside) in the name, brand, shop, category or color. `priceMin`/`priceMax` in cents; `values` keeps the shops " +
       `that claim all of them; \`onSale\`: a crossed price above the price; \`isNew\`: first seen less than ${NEW_DAYS} ` +
       "days ago; `mySize`: leaves out the articles not available in her size (sizes of `profile`, else of her first " +
-      "profile; articles with no kind of size are kept). `wanted` and `sizeInStock` are hers only.",
+      "profile; articles with no kind of size are kept). `wanted` and `sizeInStock` are hers only; " +
+      "`hasSizes`: whether that profile has any size at all.",
     request: { query: catalogQuerySchema },
     responses: {
       200: json("A page", catalogPageSchema),
@@ -71,7 +72,8 @@ const detailRoute = defineAccess(
       "Photos, sizes, her own item on it, and `likes`: how many people keep it, null under " +
       `${LIKES_THRESHOLD} (never who). \`close\`: up to ${CATALOG_DETAIL_LIMITS.close} of her own owned pieces ` +
       "(« Reçu », « Dans mon dressing ») of `profile` (else her first) with the same category and color, as " +
-      "`{ itemId, name, imageUrl, stage }` whatever their catalogue visibility; " +
+      "`{ itemId, productId, name, imageUrl, stage }` whatever their catalogue visibility; `mySize`: her size for its " +
+      "kind of article; `url`: its page at the shop; " +
       `\`sameShop\` up to ${CATALOG_DETAIL_LIMITS.sameShop}, \`sameStyle\` up to ` +
       `${CATALOG_DETAIL_LIMITS.sameStyle} from other shops (same category, color or a price within 20 %).`,
     request: { params: productParams, query: catalogDetailQuerySchema },

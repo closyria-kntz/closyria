@@ -11,6 +11,7 @@ import {
   type ReportReason,
   SIZE_KIND_BY_SLUG,
   type SizeKind,
+  sizeKindOf,
 } from "@closyria/shared";
 import { z } from "zod";
 import { type KeyType, privateMediaUrl, validKeyValue } from "../wardrobe/item-view";
@@ -346,6 +347,7 @@ export async function listCatalog(db: Database, viewer: Viewer, query: CatalogQu
   const last = page.at(-1);
   return {
     items: page.map(toCard),
+    hasSizes: Object.values(viewer.sizes).some((size) => size !== null && size.trim() !== ""),
     nextCursor:
       rows.length > CATALOG_PAGE_SIZE && last
         ? encodeCursor(
@@ -368,7 +370,8 @@ export async function loadCatalogDetail(
     where: [sql`p.id = ${productId}`],
     orderBy: sql`p.id`,
     limit: 1,
-    extra: sql`p.category_id, p.color_id, p.shop_id as own_shop_id, ${likesOf} as likes`,
+    extra: sql`p.category_id, p.color_id, p.shop_id as own_shop_id, ${likesOf} as likes, p.canonical_url,
+      (select cs.slug from categories cs where cs.id = p.category_id) as category_slug`,
   });
   if (!row) return null;
   const categoryId = row.category_id as string | null;
@@ -402,8 +405,9 @@ export async function loadCatalogDetail(
     }),
     // Other shops: same category (weighs most), same color, or a price within 20 %.
     (() => {
-      const sameCategory = categoryId ? sql`(p.category_id = ${categoryId})` : sql`false`;
-      const sameColor = colorId ? sql`(p.color_id = ${colorId})` : sql`false`;
+      // Never null (an unfiled article): a null score would sort first.
+      const sameCategory = categoryId ? sql`coalesce(p.category_id = ${categoryId}, false)` : sql`false`;
+      const sameColor = colorId ? sql`coalesce(p.color_id = ${colorId}, false)` : sql`false`;
       const nearPrice = sql`(p.price_cents between ${Math.floor(price * (1 - NEAR_PRICE_RATIO))} and ${Math.ceil(
         price * (1 + NEAR_PRICE_RATIO),
       )})`;
@@ -417,10 +421,14 @@ export async function loadCatalogDetail(
 
   const likes = Number(row.likes);
   const own = mine[0];
+  const kind = sizeKindOf(row.category_slug as string | null);
+  const mySize = kind ? viewer.sizes[kind] : null;
   return {
     ...toCard(row),
     images: images.map((i) => catalogImageUrl(i.id)),
+    url: row.canonical_url as string,
     sizes,
+    mySize: mySize?.trim() ? mySize : null,
     likes: likes >= LIKES_THRESHOLD ? likes : null,
     myItem: own ? { itemId: own.id, stage: own.stage as ItemStage } : null,
     close,
@@ -431,6 +439,7 @@ export async function loadCatalogDetail(
 
 type CloseRow = {
   id: string;
+  product_id: string | null;
   name: string;
   stage: ItemStage;
   cover_media_id: string | null;
@@ -452,7 +461,7 @@ async function loadClosePieces(
 ): Promise<CatalogClosePiece[]> {
   if (!viewer.profileId) return [];
   const { rows } = await db.execute<CloseRow>(sql`
-    select i.id, coalesce(i.name_override, ip.name, '') as name, i.stage, i.cover_media_id,
+    select i.id, i.product_id, coalesce(i.name_override, ip.name, '') as name, i.stage, i.cover_media_id,
       (select pi.id from product_images pi where pi.product_id = i.product_id
         order by pi.position, pi.id limit 1) as product_image_id,
       (select im.media_id from item_media im where im.item_id = i.id
@@ -468,6 +477,7 @@ async function loadClosePieces(
     limit ${CATALOG_DETAIL_LIMITS.close}`);
   return rows.map((r) => ({
     itemId: r.id,
+    productId: r.product_id,
     name: r.name,
     // The item card's cover rule (`coverUrl` in item-view.ts).
     imageUrl: r.cover_media_id

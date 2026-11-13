@@ -14,9 +14,9 @@ import { patchItem, receiveAsGift, undoWith } from "@/lib/wardrobe-client";
 import { StageDialog } from "./stage-dialog";
 
 /** A written button of « Que veux-tu faire ? » (mockup .acts .btn): a pill, a finger tall, 13.5 px bold. */
-const actionClass = `inline-flex min-h-touch-target items-center justify-center gap-space-1-5 rounded-pill border-2 px-space-4 py-space-1-5 text-center text-menu font-bold leading-tight disabled:opacity-60 ${focusRing}`;
+export const actionClass = `inline-flex min-h-touch-target items-center justify-center gap-space-1-5 rounded-pill border-2 px-space-4 py-space-1-5 text-center text-menu font-bold leading-tight disabled:opacity-60 ${focusRing}`;
 /** The main one (.btn.pri), the shop's link (.btn, outlined in ink), the others (.btn.soft). */
-const LOOK = {
+export const LOOK = {
   primary: "border-button-bg bg-button-bg text-button-ink",
   outline: "border-ink bg-transparent text-ink hover:bg-surface-sunken",
   soft: "border-transparent bg-surface-sunken text-ink hover:bg-surface-strong",

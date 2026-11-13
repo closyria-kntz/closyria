@@ -10,11 +10,11 @@ import { focusRing, inputClass } from "./ui";
 
 const field = `${inputClass} min-h-touch-target`;
 /** Full, soft chips (the mockup's relief: 40 px, 34 on a phone, a finger wide all the same); chosen = the hint fill. */
-const chipClass = `hit-area relative inline-flex h-control-2xs items-center gap-space-1-5 rounded-full bg-surface-strong px-space-3 text-caption font-strong text-ink transition-colors duration-base hover:bg-hint sm:h-control-md sm:px-space-4 sm:text-sm aria-pressed:bg-hint ${focusRing}`;
+export const chipClass = `hit-area relative inline-flex h-control-2xs items-center gap-space-1-5 rounded-full bg-surface-strong px-space-3 text-caption font-strong text-ink transition-colors duration-base hover:bg-hint sm:h-control-md sm:px-space-4 sm:text-sm aria-pressed:bg-hint ${focusRing}`;
 /** A round tool of the bar (search, filters): soft fill, a finger wide (drawn 38 px on a phone). */
 export const toolClass = `hit-area relative inline-flex size-control-sm shrink-0 items-center justify-center rounded-full bg-surface-strong text-ink hover:bg-hint sm:size-touch-target aria-expanded:bg-hint ${focusRing}`;
 /** The drawn check of an active chip (decorative: `aria-pressed` carries the state). */
-function ChipCheck() {
+export function ChipCheck() {
   return (
     <svg
       viewBox="0 0 16 16"
@@ -33,7 +33,7 @@ function ChipCheck() {
 /** Highest first, as in the menu of a card: En feu, Mims, J'aime, Bof. */
 const CHIP_LEVELS: readonly LoveLevel[] = [4, 3, 2, 1];
 
-function Select({
+export function Select({
   label,
   value,
   onChange,
@@ -262,29 +262,24 @@ function MagnifierIcon() {
 }
 
 /**
- * The filters and sort menu of the bar: a round button that opens a panel with the sort, then the other filters
- * (shop, type, colour, audience, tag, stage). State lives in the address; Escape or a click outside closes it.
- * The panel is placed against the nearest positioned ancestor (the page's header row).
+ * The « Filtres et tri » button of a bar and its panel: a round button (the count of filters on beside it) that opens
+ * the panel; Escape or a click outside closes it. The panel is placed against the nearest positioned ancestor (the
+ * page's header row). « Mes articles » and « Découvrir » fill it with their own filters.
  */
-export function FiltersMenu({
-  filters,
-  onChange,
-  shops,
-  tags,
-  reference,
-  activeCount,
-  sortable = true,
+export function FiltersPanel({
+  label,
+  title,
+  count,
+  children,
 }: {
-  filters: ViewFilters;
-  onChange: (filters: ViewFilters) => void;
-  shops: readonly { id: string; name: string }[];
-  tags: readonly TagView[];
-  reference: ReferenceView | null;
-  activeCount: number;
-  /** False on a list tab: the list keeps its own order, so there is no sort to offer. */
-  sortable?: boolean;
+  /** The button's name, with the count (« Filtres et tri (2) »). */
+  label: string;
+  /** The panel's heading. */
+  title: string;
+  /** Filters on in the panel (shown on the button). */
+  count: number;
+  children: React.ReactNode;
 }) {
-  const t = useTranslations("Views.filters");
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const titleId = useId();
@@ -315,30 +310,6 @@ export function FiltersMenu({
     };
   }, [open]);
 
-  const categories = useMemo(() => {
-    if (!reference) return [];
-    const byId = new Map(reference.categories.map((c) => [c.id, c]));
-    const label = (id: string): string => {
-      const c = byId.get(id);
-      if (!c) return "";
-      return c.parentId && byId.has(c.parentId) ? `${label(c.parentId)} › ${c.name}` : c.name;
-    };
-    return reference.categories
-      .map((c) => ({ id: c.id, label: label(c.id) }))
-      .sort((a, b) => a.label.localeCompare(b.label, "fr"));
-  }, [reference]);
-
-  const set = (patch: Partial<Record<keyof ViewFilters, string>>) => {
-    const next: Record<string, unknown> = { ...filters };
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === "") delete next[key];
-      else next[key] = value;
-    }
-    onChange(next as ViewFilters);
-  };
-  // The search is not in the panel: it does not count on its button.
-  const panelCount = activeCount - (filters.q ? 1 : 0);
-
   return (
     <>
       {/* The count sits beside the button, not in it: its name already says it (« Filtres et tri (2) »). */}
@@ -346,7 +317,7 @@ export function FiltersMenu({
         <button
           ref={button}
           type="button"
-          aria-label={t("menu", { count: panelCount })}
+          aria-label={label}
           aria-expanded={open}
           aria-controls={panelId}
           onClick={() => setOpen((value) => !value)}
@@ -364,12 +335,12 @@ export function FiltersMenu({
             <path d="M2 4.5h12M4.5 8h7M7 11.5h2" />
           </svg>
         </button>
-        {panelCount > 0 && (
+        {count > 0 && (
           <span
             aria-hidden="true"
             className="pointer-events-none absolute -top-space-1 -right-space-1 flex size-space-5 items-center justify-center rounded-full bg-accent text-caption font-strong text-accent-ink tabular-nums"
           >
-            {panelCount}
+            {count}
           </span>
         )}
       </span>
@@ -381,70 +352,126 @@ export function FiltersMenu({
           className="absolute border border-line bg-surface-raised inset-x-space-0 top-full z-20 mt-space-2 flex flex-col gap-space-3 rounded-card p-space-4 text-left text-ink shadow-lifted sm:left-auto sm:w-narrow"
         >
           <h2 id={titleId} className="font-display text-lead">
-            {t("menuTitle")}
+            {title}
           </h2>
-          <LevelChips filters={filters} onChange={onChange} />
-          <div className="grid grid-cols-1 gap-space-3 sm:grid-cols-2">
-            {sortable && (
-              <Select label={t("sort")} value={filters.sort ?? "recent"} onChange={(value) => set({ sort: value })}>
-                {itemSortSchema.options.map((sort) => (
-                  <option key={sort} value={sort}>
-                    {t(`sortOptions.${sort}`)}
-                  </option>
-                ))}
-              </Select>
-            )}
-            <Select label={t("shop")} value={filters.shop ?? ""} onChange={(value) => set({ shop: value })}>
-              <option value="">{t("anyF")}</option>
-              {shops.map((shop) => (
-                <option key={shop.id} value={shop.id}>
-                  {shop.name}
-                </option>
-              ))}
-            </Select>
-            <Select label={t("category")} value={filters.category ?? ""} onChange={(value) => set({ category: value })}>
-              <option value="">{t("any")}</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.label}
-                </option>
-              ))}
-            </Select>
-            <Select label={t("color")} value={filters.color ?? ""} onChange={(value) => set({ color: value })}>
-              <option value="">{t("anyF")}</option>
-              {reference?.colors.map((color) => (
-                <option key={color.id} value={color.id}>
-                  {color.name}
-                </option>
-              ))}
-            </Select>
-            <Select label={t("audience")} value={filters.audience ?? ""} onChange={(value) => set({ audience: value })}>
-              <option value="">{t("any")}</option>
-              {audienceSchema.options.map((audience) => (
-                <option key={audience} value={audience}>
-                  {t(`audienceOptions.${audience}`)}
-                </option>
-              ))}
-            </Select>
-            <Select label={t("tag")} value={filters.tag ?? ""} onChange={(value) => set({ tag: value })}>
-              <option value="">{t("anyF")}</option>
-              {tags.map((tag) => (
-                <option key={tag.id} value={tag.id}>
-                  {tag.name}
-                </option>
-              ))}
-            </Select>
-            <Select label={t("stage")} value={filters.stage ?? ""} onChange={(value) => set({ stage: value })}>
-              <option value="">{t("stageView")}</option>
-              {STAGE_FILTER_OPTIONS.map((stage) => (
-                <option key={stage} value={stage}>
-                  {t(`stageOptions.${stage}`)}
-                </option>
-              ))}
-            </Select>
-          </div>
+          {children}
         </section>
       )}
     </>
   );
+}
+
+/** « Mes articles »' filters and sort (shop, type, colour, audience, tag, stage), in the « Filtres et tri » panel. */
+export function FiltersMenu({
+  filters,
+  onChange,
+  shops,
+  tags,
+  reference,
+  activeCount,
+  sortable = true,
+}: {
+  filters: ViewFilters;
+  onChange: (filters: ViewFilters) => void;
+  shops: readonly { id: string; name: string }[];
+  tags: readonly TagView[];
+  reference: ReferenceView | null;
+  activeCount: number;
+  /** False on a list tab: the list keeps its own order, so there is no sort to offer. */
+  sortable?: boolean;
+}) {
+  const t = useTranslations("Views.filters");
+  const categories = useCategoryOptions(reference);
+
+  const set = (patch: Partial<Record<keyof ViewFilters, string>>) => {
+    const next: Record<string, unknown> = { ...filters };
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === "") delete next[key];
+      else next[key] = value;
+    }
+    onChange(next as ViewFilters);
+  };
+  // The search is not in the panel: it does not count on its button.
+  const panelCount = activeCount - (filters.q ? 1 : 0);
+
+  return (
+    <FiltersPanel label={t("menu", { count: panelCount })} title={t("menuTitle")} count={panelCount}>
+      <LevelChips filters={filters} onChange={onChange} />
+      <div className="grid grid-cols-1 gap-space-3 sm:grid-cols-2">
+        {sortable && (
+          <Select label={t("sort")} value={filters.sort ?? "recent"} onChange={(value) => set({ sort: value })}>
+            {itemSortSchema.options.map((sort) => (
+              <option key={sort} value={sort}>
+                {t(`sortOptions.${sort}`)}
+              </option>
+            ))}
+          </Select>
+        )}
+        <Select label={t("shop")} value={filters.shop ?? ""} onChange={(value) => set({ shop: value })}>
+          <option value="">{t("anyF")}</option>
+          {shops.map((shop) => (
+            <option key={shop.id} value={shop.id}>
+              {shop.name}
+            </option>
+          ))}
+        </Select>
+        <Select label={t("category")} value={filters.category ?? ""} onChange={(value) => set({ category: value })}>
+          <option value="">{t("any")}</option>
+          {categories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.label}
+            </option>
+          ))}
+        </Select>
+        <Select label={t("color")} value={filters.color ?? ""} onChange={(value) => set({ color: value })}>
+          <option value="">{t("anyF")}</option>
+          {reference?.colors.map((color) => (
+            <option key={color.id} value={color.id}>
+              {color.name}
+            </option>
+          ))}
+        </Select>
+        <Select label={t("audience")} value={filters.audience ?? ""} onChange={(value) => set({ audience: value })}>
+          <option value="">{t("any")}</option>
+          {audienceSchema.options.map((audience) => (
+            <option key={audience} value={audience}>
+              {t(`audienceOptions.${audience}`)}
+            </option>
+          ))}
+        </Select>
+        <Select label={t("tag")} value={filters.tag ?? ""} onChange={(value) => set({ tag: value })}>
+          <option value="">{t("anyF")}</option>
+          {tags.map((tag) => (
+            <option key={tag.id} value={tag.id}>
+              {tag.name}
+            </option>
+          ))}
+        </Select>
+        <Select label={t("stage")} value={filters.stage ?? ""} onChange={(value) => set({ stage: value })}>
+          <option value="">{t("stageView")}</option>
+          {STAGE_FILTER_OPTIONS.map((stage) => (
+            <option key={stage} value={stage}>
+              {t(`stageOptions.${stage}`)}
+            </option>
+          ))}
+        </Select>
+      </div>
+    </FiltersPanel>
+  );
+}
+
+/** Her categories as « Parent › Enfant », in alphabetical order (the filters' « Type »). */
+export function useCategoryOptions(reference: ReferenceView | null): { id: string; label: string }[] {
+  return useMemo(() => {
+    if (!reference) return [];
+    const byId = new Map(reference.categories.map((c) => [c.id, c]));
+    const label = (id: string): string => {
+      const c = byId.get(id);
+      if (!c) return "";
+      return c.parentId && byId.has(c.parentId) ? `${label(c.parentId)} › ${c.name}` : c.name;
+    };
+    return reference.categories
+      .map((c) => ({ id: c.id, label: label(c.id) }))
+      .sort((a, b) => a.label.localeCompare(b.label, "fr"));
+  }, [reference]);
 }

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { focusRing } from "./ui";
 
 /** The nearest ancestor that scrolls (the app's content area), else the window's own scrolling element. */
-function scrollerOf(element: HTMLElement | null): HTMLElement {
+export function scrollerOf(element: HTMLElement | null): HTMLElement {
   for (let node = element?.parentElement ?? null; node; node = node.parentElement) {
     const { overflowY } = getComputedStyle(node);
     if ((overflowY === "auto" || overflowY === "scroll") && node !== document.body) return node;
