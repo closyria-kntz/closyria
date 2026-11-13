@@ -112,19 +112,20 @@ const ONE_SIZE = ["tu", "tailleunique", "onesize", "os", "unique", "u"] as const
 
 /**
  * Whether a shop's size label means « taille unique » (TU, T.U., Taille unique, One size, OS, Unique, U), whatever
- * the case, spaces and dots. Mirrored by the SQL function `catalog_is_one_size` (migration 0025).
+ * the case, spaces and dots; digits count (« U 2 » is not one). Mirrored by the SQL `catalog_is_one_size` (0025).
  */
 export function isOneSize(label: string): boolean {
-  return (ONE_SIZE as readonly string[]).includes(label.toLowerCase().replace(/[^a-z]/g, ""));
+  return (ONE_SIZE as readonly string[]).includes(label.toLowerCase().replace(/[^a-z0-9]/g, ""));
 }
 
 /**
  * The sizes a label names, in one comparable form, so that « Ma taille en stock » finds 38 in « 38 FR », « FR 38 »,
- * « EU 38 », « T38 », « Taille 38 », « M (38) », « M - 38 », « 36-38 » or « 36/38 », S and M in « S/M », W28 in
- * « W28 L32 ». Lowercase, without spaces; « 38,5 », « 38.5 » and « 38 1/2 » are « 38.5 »; « XXL » is « 2xl » like
- * « 2XL ». The whole label without spaces is one more token (a size written in a way no rule knows still matches
- * itself). Sorted, without repeats. Mirrored by the SQL function `catalog_size_tokens` (migration 0025): keep both
- * in step (`size-tokens.integration.test.ts` compares them).
+ * « EU 38 », « EU38 », « T38 », « T.38 », « Taille 38 », « M (38) », « M - 38 », « 36-38 » or « 36/38 », S and M in
+ * « S/M », W28 in « W28 L32 », « W28L32 » or « W 28 L 32 ». Lowercase, without spaces; « 38,5 », « 38.5 » and
+ * « 38 1/2 » are « 38.5 »; « XXL » is « 2xl » like « 2XL »; « 1XL » is « XL ». The whole label without spaces is one
+ * more token (a size written in a way no rule knows still matches itself). Sorted, without repeats. Mirrored by the
+ * SQL function `catalog_size_tokens` (migration 0025): keep both in step (a test of
+ * apps/api/src/routes/catalogue.integration.test.ts compares them).
  */
 export function sizeTokens(label: string): string[] {
   const text = label
@@ -132,18 +133,29 @@ export function sizeTokens(label: string): string[] {
     .toLowerCase()
     .replace(/(\d)\s*,\s*(\d)/g, "$1.$2")
     .replace(/(\d+)(?:\s+1\/2|\s*½)(?!\d)/g, "$1.5")
-    .replace(/\b([wt])\s+(?=\d)/g, "$1");
+    .replace(/\b([wlt])\s+(?=\d)/g, "$1");
   const tokens = new Set<string>();
   const whole = text.replace(/\s+/g, "");
   if (whole) tokens.add(whole);
   for (const raw of text.split(/[\s/()|,;+-]+/)) {
     const word = raw.replace(/^\.+|\.+$/g, "");
     if (!word || SIZE_NOISE.has(word)) continue;
-    const number = /^(?:t|taille)?(\d+(?:\.\d+)?)(?:fr|eu)?$/.exec(word);
-    const xs = /^(x{2,})([sl])$/.exec(word);
-    tokens.add(number?.[1] ?? (xs?.[1] && xs[2] ? `${xs[1].length}x${xs[2]}` : word));
+    for (const token of wordTokens(word)) tokens.add(token);
   }
   return [...tokens].sort();
+}
+
+/** One word of a label as tokens (`sizeTokens`; the same cases as `catalog_size_tokens`). */
+function wordTokens(word: string): string[] {
+  const number = /^(?:t\.?|taille|eu|fr)?(\d+(?:\.\d+)?)(?:fr|eu)?$/.exec(word);
+  if (number?.[1]) return [number[1]];
+  const waist = /^(w\d+)(l\d+)$/.exec(word);
+  if (waist?.[1] && waist[2]) return [waist[1], waist[2]];
+  const xs = /^(x{2,})([sl])$/.exec(word);
+  if (xs?.[1] && xs[2]) return [`${xs[1].length}x${xs[2]}`];
+  const one = /^1x([sl])$/.exec(word);
+  if (one?.[1]) return [`x${one[1]}`];
+  return [word];
 }
 
 /** Every token of her sizes (`sizeTokens`), sorted, without repeats: what the SQL compares with `&&`. */

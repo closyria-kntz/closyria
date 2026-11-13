@@ -168,6 +168,7 @@ const shop = {
   importStartedAt: null,
   importPages: 0,
   importSeen: 0,
+  lastImportSeen: null,
   lastImportCreated: null,
   lastImportRemoved: null,
   createdAt: "2026-11-01T10:00:00.000Z",

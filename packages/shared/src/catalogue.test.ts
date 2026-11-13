@@ -40,6 +40,14 @@ describe("sizeTokens", () => {
   finds("W28 L32", "W28");
   finds(" m ", "M");
   finds("x l", "XL");
+  finds("EU38", "38");
+  finds("FR38", "38");
+  finds("T.38", "38");
+  finds("W28L32", "W28");
+  finds("W28 L 32", "W28");
+  finds("W 28 L 32", "W28");
+  finds("1XL", "XL");
+  finds("XL", "1XL");
 
   it("keeps sizes apart that only look alike", () => {
     expect(sizeMatches(["S"], ["XS", "XXS"])).toBe(false);
@@ -48,6 +56,9 @@ describe("sizeTokens", () => {
     expect(sizeMatches(["38,5"], ["38"])).toBe(false);
     expect(sizeMatches(["W28"], ["28", "W29 L28"])).toBe(false);
     expect(sizeMatches(["M"], ["Taille unique"])).toBe(false);
+    // The leg length of « W28 L 32 » is not a size 32 nor an L.
+    expect(sizeMatches(["32"], ["W28 L 32", "W 28 L 32", "W28L32"])).toBe(false);
+    expect(sizeMatches(["L"], ["W28 L 32", "W 28 L 32", "W28L32"])).toBe(false);
   });
 
   it("gives one sorted form per size, without repeats", () => {
@@ -90,8 +101,9 @@ describe("isOneSize", () => {
     }
   });
   it("is false for real sizes", () => {
-    for (const label of ["M", "38", "XS", "S/M", "XXL", "Taille 38", "W28"])
+    for (const label of ["M", "38", "XS", "S/M", "XXL", "Taille 38", "W28", "U 2", "TU 38"]) {
       expect(isOneSize(label), label).toBe(false);
+    }
   });
 });
 

@@ -1,5 +1,5 @@
 {
-  "id": "06a7eba5-1712-46a7-99aa-84b8159a1aab",
+  "id": "a838828d-3e26-4238-8dee-11619d41f7f4",
   "prevId": "98e42c9f-e34f-4e44-a893-b313041a092f",
   "version": "7",
   "dialect": "postgresql",
@@ -1916,6 +1916,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "last_import_seen": {
+          "name": "last_import_seen",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         },
         "last_import_created": {
           "name": "last_import_created",

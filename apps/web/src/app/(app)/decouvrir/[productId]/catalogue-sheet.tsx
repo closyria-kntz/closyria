@@ -170,6 +170,11 @@ export function CatalogueSheet({ productId }: { productId: string }) {
     if (item) setSheet({ wanted: true, myItem: { itemId: item.id, stage: item.stage } });
   }
 
+  // What makes « Ta taille en stock » true for an article in « taille unique » only (`sizeInStock` in the API).
+  const availableLabels = sheet.sizes.filter((s) => s.available).map((s) => s.label);
+  const oneSizeOnly =
+    sheet.sizeInStock === true && availableLabels.length > 0 && availableLabels.every((label) => isOneSize(label));
+
   const sizesBlock =
     sheet.sizes.length > 0 ? (
       <section aria-labelledby="sizes-title" className="flex flex-col gap-space-2">
@@ -178,10 +183,10 @@ export function CatalogueSheet({ productId }: { productId: string }) {
         </h2>
         <ul className="flex flex-wrap gap-space-2">
           {sheet.sizes.map((size) => {
-            // Every one of her sizes, and « taille unique » when that is what makes it hers (the card's rule).
+            // Every one of her sizes; « taille unique » only when every available size is (the card's rule).
             const isMine =
               sizeMatches(sheet.mySizes, [size.label]) === true ||
-              (sheet.sizeInStock === true && size.available && isOneSize(size.label));
+              (oneSizeOnly && size.available && isOneSize(size.label));
             return (
               <li
                 key={size.label}

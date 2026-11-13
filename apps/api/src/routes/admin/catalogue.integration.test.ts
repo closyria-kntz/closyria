@@ -282,6 +282,7 @@ describe("values and import of a shop", () => {
       importStartedAt: null,
       importPages: 0,
       importSeen: 0,
+      lastImportSeen: null,
       lastImportCreated: null,
       lastImportRemoved: null,
     });
@@ -309,16 +310,21 @@ describe("values and import of a shop", () => {
       importSeen: 712,
     });
 
-    // Started over 6 h ago: the job died, nothing is under way any more, and a new import replaces it.
+    // Started over 6 h ago: the job died, nothing is under way any more, and a new import replaces it. The figures
+    // of the last complete import (« Terminé à … ») are never touched by queueing; the worker resets the live ones.
     const dead = new Date(NOW.getTime() - 6 * 3_600_000 - 1000);
-    await t.db.update(schema.shops).set({ importStartedAt: dead }).where(eq(schema.shops.id, shop.id));
+    await t.db
+      .update(schema.shops)
+      .set({ importStartedAt: dead, lastImportSeen: 900, lastImportCreated: 12, lastImportRemoved: 3 })
+      .where(eq(schema.shops.id, shop.id));
     expect((await json(await call("GET", `/admin/shops/${shop.id}`))).importState).toBeNull();
     await call("POST", `/admin/shops/${shop.id}/import`);
     expect(await json(await call("GET", `/admin/shops/${shop.id}`))).toMatchObject({
       importState: "queued",
       importStartedAt: NOW.toISOString(),
-      importPages: 0,
-      importSeen: 0,
+      lastImportSeen: 900,
+      lastImportCreated: 12,
+      lastImportRemoved: 3,
     });
   });
 

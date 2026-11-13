@@ -262,7 +262,7 @@ test("l’avancement d’un import se lit tout seul dans la fiche boutique, et l
   // It ends (13:05 UTC is 14 h 05 in Paris in November).
   await db.query(
     `update shops set import_state = null, last_import_at = '2026-11-13T13:05:00Z', last_import_error = null,
-       last_import_created = 12, last_import_removed = 3, import_seen = 962 where id = $1`,
+       last_import_seen = 962, last_import_created = 12, last_import_removed = 3 where id = $1`,
     [shop.id],
   );
   await expect(state).toHaveText("Terminé à 14 h 05 : 962 articles (12 nouveaux, 3 retirés)", { timeout: 15_000 });
@@ -287,8 +287,17 @@ test("la barre et le menu de l’admin restent visibles quand la page défile", 
   userAgentTag,
 }) => {
   await signInAsAdmin(page, request, db, userAgentTag);
-  await page.goto("/admin/catalogue/signalements");
-  await expect(page.getByRole("heading", { level: 1, name: "Signalements" })).toBeVisible();
+  await page.goto("/admin/catalogue/a-classer");
+  await expect(page.getByRole("heading", { level: 1, name: "À classer" })).toBeVisible();
+  const nav = page.getByRole("navigation", { name: "Navigation de l’administration" });
+  // The current page's link is in view, even far along the phone's row; a fade shows that the row scrolls.
+  await expect(nav.getByRole("link", { name: "À classer" })).toBeInViewport();
+  if ((page.viewportSize()?.width ?? 0) < 768) {
+    await expect(nav.getByTestId("nav-more-start").or(nav.getByTestId("nav-more-end")).first()).toBeAttached();
+  } else {
+    await expect(nav.getByTestId("nav-more-start")).toHaveCount(0);
+    await expect(nav.getByTestId("nav-more-end")).toHaveCount(0);
+  }
   // A page much taller than the window.
   await page.evaluate(() => {
     const filler = document.createElement("div");
@@ -300,8 +309,7 @@ test("la barre et le menu de l’admin restent visibles quand la page défile", 
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(2000);
 
   const header = page.locator("header").first();
-  const nav = page.getByRole("navigation", { name: "Navigation de l’administration" });
-  const link = nav.getByRole("link").first();
+  const link = nav.getByRole("link", { name: "À classer" });
   await expect(link).toBeInViewport();
   const linkBox = await link.boundingBox();
   expect(linkBox?.height ?? 0).toBeGreaterThanOrEqual(44);
@@ -316,6 +324,6 @@ test("la barre et le menu de l’admin restent visibles quand la page défile", 
     // Phone: the menu row is pinned at the top of the window.
     expect(Math.round((await nav.boundingBox())?.y ?? -1)).toBe(0);
   }
-  await link.click();
-  await expect(page).toHaveURL(/\/admin$/);
+  await nav.getByRole("link", { name: "Boutiques" }).click();
+  await expect(page).toHaveURL(/\/admin\/boutiques$/);
 });

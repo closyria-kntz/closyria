@@ -29,7 +29,7 @@ export async function planCatalogueImports(db: Database, queue: ImportQueue, now
     // under way keeps its state, a dead one is replaced.
     await db
       .update(schema.shops)
-      .set({ importState: "queued", importStartedAt: now, importPages: 0, importSeen: 0 })
+      .set({ importState: "queued", importStartedAt: now })
       .where(
         and(
           eq(schema.shops.id, shop.id),

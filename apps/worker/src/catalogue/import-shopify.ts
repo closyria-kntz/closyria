@@ -154,6 +154,7 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult): Prom
     .set({
       lastImportAt: at,
       lastImportError: null,
+      lastImportSeen: read,
       lastImportCreated: result.created,
       lastImportRemoved: result.removed,
       updatedAt: at,

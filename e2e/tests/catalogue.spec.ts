@@ -556,13 +556,18 @@ test("« Mes tailles » : depuis Compte, par profil, puis « Ma taille en stock 
   });
   const shoes = await sharedCategory(db, "chaussures", "Chaussures");
   await seedProduct(db, shop.id, { name: `Sandale tailles ${tag}`, categoryId: shoes, sizes: [["EU 38,5", true]] });
-  // « Taille unique » fits whatever its kind; an unfiled article with sizes never does.
-  const scarf = await seedProduct(db, shop.id, { name: `Foulard tailles ${tag}`, sizes: [["Taille unique", true]] });
+  // « Taille unique » fits a sized kind (a top); an unfiled article never does, not even in « taille unique ».
+  const poncho = await seedProduct(db, shop.id, {
+    name: `Poncho tailles ${tag}`,
+    categoryId: tops,
+    sizes: [["Taille unique", true]],
+  });
+  await seedProduct(db, shop.id, { name: `Foulard tailles ${tag}`, sizes: [["Taille unique", true]] });
   await seedProduct(db, shop.id, { name: `Inconnu tailles ${tag}`, sizes: [["M", true]] });
 
   // Without sizes the filter is greyed; « Ajoute tes tailles » leads to the page, and so does Compte.
   await page.goto(`/decouvrir?recherche=${tag}`);
-  await expect(cards(page)).toHaveCount(4);
+  await expect(cards(page)).toHaveCount(5);
   let filters = await openFilters(page);
   await expect(filters.getByRole("button", { name: "Ma taille en stock" })).toBeDisabled();
   await page.goto("/compte");
@@ -638,16 +643,17 @@ test("« Mes tailles » : depuis Compte, par profil, puis « Ma taille en stock 
   await page.goto(`/decouvrir?recherche=${tag}`);
   await expect(card(page, `Blouse tailles ${tag}`).getByTestId("card-size")).toHaveText("Ta taille en stock");
   await expect(card(page, `Sandale tailles ${tag}`).getByTestId("card-size")).toHaveText("Ta taille en stock");
-  await expect(card(page, `Foulard tailles ${tag}`).getByTestId("card-size")).toHaveText("Ta taille en stock");
+  await expect(card(page, `Poncho tailles ${tag}`).getByTestId("card-size")).toHaveText("Ta taille en stock");
+  await expect(card(page, `Foulard tailles ${tag}`).getByTestId("card-size")).toHaveCount(0);
   await expect(card(page, `Inconnu tailles ${tag}`).getByTestId("card-size")).toHaveCount(0);
   filters = await openFilters(page);
   await expect(filters.getByRole("link", { name: "Ajoute tes tailles" })).toHaveCount(0);
   await filters.getByRole("button", { name: "Ma taille en stock" }).click();
   await expect(page).toHaveURL(/ma-taille=1/);
-  // Strict: her sizes or « taille unique », never the unfiled article.
+  // Strict: her sizes, or « taille unique » of a sized kind; never the unfiled articles (even the TU scarf).
   await expect
     .poll(async () => (await names(page)).sort())
-    .toEqual([`Blouse tailles ${tag}`, `Foulard tailles ${tag}`, `Sandale tailles ${tag}`].sort());
+    .toEqual([`Blouse tailles ${tag}`, `Poncho tailles ${tag}`, `Sandale tailles ${tag}`].sort());
   await page.goto(`/decouvrir/${id}`);
   await expect(page.getByTestId("product-info")).toContainText("Ta taille en stock");
   // Every one of her sizes is put forward (« T38 » is her 38).
@@ -657,7 +663,7 @@ test("« Mes tailles » : depuis Compte, par profil, puis « Ma taille en stock 
     "T38 (ta taille)",
     "L (indisponible)",
   ]);
-  await page.goto(`/decouvrir/${scarf}`);
+  await page.goto(`/decouvrir/${poncho}`);
   await expect(page.getByTestId("product-info")).toContainText("Ta taille en stock");
   await expect(page.getByRole("region", { name: "Ta taille" }).getByRole("listitem")).toHaveText([
     "Taille unique (ta taille)",

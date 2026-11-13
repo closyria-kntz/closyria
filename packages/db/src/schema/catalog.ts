@@ -67,10 +67,11 @@ export const shops = pgTable(
     importState: text("import_state"),
     /** When the state above was set (queued, then started). */
     importStartedAt: timestamp("import_started_at", { withTimezone: true }),
-    /** Pages and products read by the import under way, or by the last one once it is over. */
+    /** Pages and products read by the import under way (reset when the worker starts it). */
     importPages: integer("import_pages").notNull().default(0),
     importSeen: integer("import_seen").notNull().default(0),
-    /** New and removed products of the last complete import. */
+    /** Products read, new and removed of the last complete import (« Terminé à … »): never touched while queued. */
+    lastImportSeen: integer("last_import_seen"),
     lastImportCreated: integer("last_import_created"),
     lastImportRemoved: integer("last_import_removed"),
     createdAt: createdAt(),

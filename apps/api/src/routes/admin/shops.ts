@@ -245,6 +245,7 @@ function shape(shop: Shop, domains: string[], stats: ShopStats | undefined, now:
     importStartedAt: shop.importStartedAt?.toISOString() ?? null,
     importPages: shop.importPages,
     importSeen: shop.importSeen,
+    lastImportSeen: shop.lastImportSeen,
     lastImportCreated: shop.lastImportCreated,
     lastImportRemoved: shop.lastImportRemoved,
     health: shopHealth({
@@ -556,7 +557,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       const at = now();
       await db
         .update(schema.shops)
-        .set({ importState: "queued", importStartedAt: at, importPages: 0, importSeen: 0 })
+        .set({ importState: "queued", importStartedAt: at })
         .where(
           and(
             eq(schema.shops.id, id),

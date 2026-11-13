@@ -253,6 +253,7 @@ describe("importShopifyCatalog", () => {
       importState: null,
       importPages: 2,
       importSeen: 251,
+      lastImportSeen: 251,
       lastImportCreated: 251,
       lastImportRemoved: 0,
       lastImportError: null,
@@ -265,15 +266,28 @@ describe("importShopifyCatalog", () => {
   });
 
   it("clears « Import en cours » when the import stops on an error, and keeps the last counts", async () => {
-    const s = await newShop({ lastImportCreated: 4, lastImportRemoved: 1 });
+    const s = await newShop({ lastImportSeen: 40, lastImportCreated: 4, lastImportRemoved: 1 });
     routes[pagePath(1)] = { status: 429, headers: JSON_TYPE, body: "{}" };
     await importShopifyCatalog(deps, s.id);
     expect(await shopRow(s.id)).toMatchObject({
       importState: null,
       lastImportError: "blocked (HTTP 429)",
+      lastImportSeen: 40,
       lastImportCreated: 4,
       lastImportRemoved: 1,
     });
+  });
+
+  it("clears « En attente » of a merged, refused or non-Shopify shop it stops at, keeping the last import's figures", async () => {
+    const target = await newShop();
+    const last = { lastImportSeen: 40, lastImportCreated: 4, lastImportRemoved: 1, importPages: 2, importSeen: 40 };
+    const queued = { importState: "queued", importStartedAt: new Date() };
+    for (const values of [{ mergedIntoId: target.id }, { status: "refused" }, { platform: "other" }]) {
+      const s = await newShop({ ...values, ...queued, ...last });
+      expect((await importShopifyCatalog(deps, s.id)).error).not.toBeNull();
+      expect(await shopRow(s.id)).toMatchObject({ importState: null, ...last });
+    }
+    expect(shop.hits).toEqual([]);
   });
 
   it("dates each product by the shop's put-online date, else its creation date at the shop", async () => {

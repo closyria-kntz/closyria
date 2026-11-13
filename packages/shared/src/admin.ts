@@ -130,10 +130,11 @@ export const adminShopSchema = z.object({
   importState: importStateSchema.nullable(),
   /** When it was queued, then started. */
   importStartedAt: isoDate.nullable(),
-  /** Pages and articles read by the import under way, or by the last one. */
+  /** Pages and articles read by the import under way (reset when the worker starts it). */
   importPages: count,
   importSeen: count,
-  /** New and removed articles of the last complete import; null before the first one. */
+  /** Articles read, new and removed by the last complete import (« Terminé à … »); null before the first one. */
+  lastImportSeen: count.nullable(),
   lastImportCreated: count.nullable(),
   lastImportRemoved: count.nullable(),
   createdAt: isoDate,

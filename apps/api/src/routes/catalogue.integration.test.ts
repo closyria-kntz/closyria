@@ -327,10 +327,13 @@ describe("GET /api/catalog — filters", () => {
     const bag = await newProduct(shop.id, { categoryId: ref.bags, sizes: [["M", true]] });
     const unfiled = await newProduct(shop.id, { sizes: [["M", true]] });
     const sizeless = await newProduct(shop.id, { categoryId: ref.shortDress });
-    const oneSize = await newProduct(shop.id, { categoryId: ref.bags, sizes: [["Taille unique", true]] });
+    // « Taille unique » fits a sized kind (even shoes, where she gave none for Léa); never a bag or an unfiled one.
+    const oneSize = await newProduct(shop.id, { categoryId: ref.shoes, sizes: [["Taille unique", true]] });
+    const oneSizeBag = await newProduct(shop.id, { categoryId: ref.bags, sizes: [["TU", true]] });
     const oneSizeUnfiled = await newProduct(shop.id, { sizes: [["T.U.", true]] });
-    const oneSizeSoldOut = await newProduct(shop.id, { sizes: [["TU", false]] });
+    const oneSizeSoldOut = await newProduct(shop.id, { categoryId: ref.dresses, sizes: [["TU", false]] });
     const oneSizeAndMore = await newProduct(shop.id, {
+      categoryId: ref.dresses,
       sizes: [
         ["TU", true],
         ["XL", true],
@@ -350,22 +353,23 @@ describe("GET /api/catalog — filters", () => {
     expect(inStock.get(unfiled.id)).toBeNull();
     expect(inStock.get(sizeless.id)).toBe(false);
     expect(inStock.get(oneSize.id)).toBe(true);
-    expect(inStock.get(oneSizeUnfiled.id)).toBe(true);
-    expect(inStock.get(oneSizeSoldOut.id)).toBeNull();
-    expect(inStock.get(oneSizeAndMore.id)).toBeNull();
+    expect(inStock.get(oneSizeBag.id)).toBeNull();
+    expect(inStock.get(oneSizeUnfiled.id)).toBeNull();
+    expect(inStock.get(oneSizeSoldOut.id)).toBe(false);
+    expect(inStock.get(oneSizeAndMore.id)).toBe(false);
 
-    // Accessories, unfiled and sizeless articles are left out; « taille unique » is kept whatever its kind.
+    // Accessories, unfiled and sizeless articles are left out, even in « taille unique »; a sized kind in it is kept.
     expect(new Set(ids((await page("?mySize=true")).items))).toEqual(
-      new Set([dressM.id, dress38.id, shoes38.id, oneSize.id, oneSizeUnfiled.id]),
+      new Set([dressM.id, dress38.id, shoes38.id, oneSize.id]),
     );
-    // The sizes of the chosen profile: a kind she left empty (shoes for Léa) shows nothing of that kind.
+    // The sizes of the chosen profile: a kind she left empty (shoes for Léa) shows only its « taille unique ».
     expect(new Set(ids((await page(`?mySize=true&profile=${kid.id}`)).items))).toEqual(
-      new Set([dressSoldOut.id, oneSize.id, oneSizeUnfiled.id]),
+      new Set([dressSoldOut.id, oneSize.id]),
     );
     // Another person's profile is never read: her first profile is used.
     const stranger = await newProfile(other.userId, { sizesTop: ["L"] });
     expect(new Set(ids((await page(`?mySize=true&profile=${stranger.id}`)).items))).toEqual(
-      new Set([dressM.id, dress38.id, shoes38.id, oneSize.id, oneSizeUnfiled.id]),
+      new Set([dressM.id, dress38.id, shoes38.id, oneSize.id]),
     );
   });
 
@@ -443,6 +447,19 @@ describe("GET /api/catalog — filters", () => {
       "W28/L32",
       "Taille 36 ½",
       "S+M",
+      "W28 L 32",
+      "W 28 L 32",
+      "W28L32",
+      "EU38",
+      "FR38",
+      "T.38",
+      "1XL",
+      "1xs",
+      "U 2",
+      "TU 38",
+      "L 40",
+      "taille38",
+      "XXS",
     ];
     const { rows } = await t.db.execute<{ label: string; tokens: string[]; one: boolean }>(sql`
       select label, catalog_size_tokens(label) as tokens, catalog_is_one_size(label) as one

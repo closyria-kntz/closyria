@@ -94,15 +94,22 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
     if (lastError !== null) return lastError;
     if (!shop.lastImportAt) return t("state.none");
     const clock = parisClock(shop.lastImportAt);
-    return shop.lastImportCreated === null || shop.lastImportRemoved === null
+    return shop.lastImportSeen === null || shop.lastImportCreated === null || shop.lastImportRemoved === null
       ? t("state.doneShort", clock)
       : t("state.done", {
           ...clock,
-          total: shop.importSeen,
+          total: shop.lastImportSeen,
           created: shop.lastImportCreated,
           removed: shop.lastImportRemoved,
         });
   })();
+
+  const announcement =
+    shop.importState === "queued"
+      ? t("state.queued")
+      : shop.importState === "running"
+        ? t("state.starting")
+        : importLine;
 
   return (
     <section aria-labelledby="catalogue-title" className="flex flex-col gap-space-3">
@@ -161,11 +168,14 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
               <dt className="text-ink-muted">{t("state.label")}</dt>
               <dd>
                 <p
-                  role="status"
                   data-testid="import-state"
                   className={`tabular-nums ${!importing && lastError !== null ? "text-danger" : importing ? "font-strong" : ""}`}
                 >
                   {importLine}
+                </p>
+                {/* Read out on a change of state only (queued, started, over), never on each page read every 3 s. */}
+                <p role="status" className="sr-only">
+                  {announcement}
                 </p>
               </dd>
             </div>

@@ -123,7 +123,7 @@ function kindInStock(viewer: Viewer): SQL {
   return branches.length ? sql`(case ${sql.join(branches, sql` `)} end)` : sql`null::boolean`;
 }
 
-/** Its only available size is « taille unique » (TU, One size…): it fits her whatever its kind. */
+/** Its only available size is « taille unique » (TU, One size…). */
 const oneSizeOnly = sql`(exists (select 1 from product_sizes ps where ps.product_id = p.id and ps.available)
   and not exists (
     select 1 from product_sizes ps
@@ -132,12 +132,19 @@ const oneSizeOnly = sql`(exists (select 1 from product_sizes ps where ps.product
 
 /**
  * `sizeInStock` (« Ta taille en stock », and the strict « Ma taille en stock » filter: `is true`): null when she has
- * no size at all; true for an article in « taille unique » only; else whether one of her sizes for its kind is
- * available, null when its kind takes none of hers (accessories, unfiled, a kind she left empty).
+ * no size at all; true for an article of a sized kind (haut, bas, chaussures) in « taille unique » only; else whether
+ * one of her sizes for its kind is available, null when its kind takes none of hers (accessories and unfiled
+ * articles, even in « taille unique »; a kind she left empty).
  */
 function sizeInStock(viewer: Viewer): SQL {
   if (!hasSizes(viewer)) return sql`null::boolean`;
-  return sql`(case when ${oneSizeOnly} then true else ${kindInStock(viewer)} end)`;
+  const sized = [...viewer.sizeKinds.keys()];
+  if (sized.length === 0) return kindInStock(viewer);
+  const sizedKind = sql`p.category_id in (${sql.join(
+    sized.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  )})`;
+  return sql`(case when ${sizedKind} and ${oneSizeOnly} then true else ${kindInStock(viewer)} end)`;
 }
 
 const wanted = (viewer: Viewer) =>
@@ -357,7 +364,8 @@ function filters(query: CatalogQuery, viewer: Viewer, now: Date): SQL[] {
   }
   if (query.onSale) where.push(onSale);
   if (query.isNew) where.push(sql`${onlineSince} >= ${new Date(now.getTime() - NEW_DAYS * 86_400_000).toISOString()}`);
-  // Strict: only what is known to fit her (one of her sizes available, or « taille unique »). Without any size of
+  // Strict: only what is known to fit her (one of her sizes available, or « taille unique » for a sized kind).
+  // Without any size of
   // hers the filter is off (`hasSizes`, the web greys it out).
   if (query.mySize && hasSizes(viewer)) where.push(sql`${sizeInStock(viewer)} is true`);
   return where;

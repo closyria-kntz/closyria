@@ -265,7 +265,8 @@ describe("catalogue imports", () => {
       importState: "running",
       importStartedAt: new Date(now.getTime() - 7 * 3_600_000),
     });
-    const failing = await importShop("plan-failing", {});
+    const last = { lastImportSeen: 40, lastImportCreated: 4, lastImportRemoved: 1, importPages: 2, importSeen: 40 };
+    const failing = await importShop("plan-failing", last);
     await planCatalogueImports(
       handle.db,
       {
@@ -280,6 +281,11 @@ describe("catalogue imports", () => {
     expect(await state(running.id)).toBe("running");
     expect(await state(dead.id)).toBe("queued");
     expect(await state(failing.id)).toBeNull();
+    // Queueing never touches the figures of the last import (the worker resets the live ones when it starts).
+    for (const id of [failing.id, dead.id]) {
+      const [row] = await handle.db.select().from(schema.shops).where(eq(schema.shops.id, id));
+      expect(row).toMatchObject(id === failing.id ? last : { importPages: 0, importSeen: 0, lastImportSeen: null });
+    }
   });
 
   it("the handler plans on no data, imports a shop on { shopId } and fails anything else", async () => {
