@@ -142,7 +142,7 @@ export async function loadItemView(
 /** Thrown for a cursor that was not produced by `listItems` for the same sort. */
 export class InvalidCursorError extends Error {}
 
-type KeyType = "timestamptz" | "integer" | "text" | "uuid";
+export type KeyType = "timestamptz" | "integer" | "text" | "uuid";
 type SortKey = { expr: SQL; type: KeyType };
 
 /** Longest text key: a product name or a name override (300 characters). */
@@ -153,7 +153,7 @@ const TIMESTAMP_TEXT = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(\.\d{1,
 const uuidSchema = z.uuid();
 
 /** Whether a cursor value can be cast to its key's type: a forged cursor must answer 400, never reach Postgres. */
-function validKeyValue(type: KeyType, value: string): boolean {
+export function validKeyValue(type: KeyType, value: string): boolean {
   switch (type) {
     case "uuid":
       return uuidSchema.safeParse(value).success;

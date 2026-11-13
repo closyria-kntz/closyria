@@ -106,6 +106,18 @@ export const shopShippingOptions = pgTable(
 );
 
 /** Prices are in cents with an ISO 4217 currency. */
+/**
+ * The searchable text of a product (name and brand), lowercased and without accents by the SQL function
+ * `catalog_fold` (migration 0022, no extension needed). The catalogue query uses this exact expression (with its
+ * table alias) so that `products_search_idx` serves it.
+ */
+export const productSearchDocument = (alias?: string) => {
+  const col = (name: string) => (alias ? `${alias}."${name}"` : `"${name}"`);
+  return sql.raw(
+    `to_tsvector('simple'::regconfig, catalog_fold(coalesce(${col("name")}, '') || ' ' || coalesce(${col("brand")}, '')))`,
+  );
+};
+
 export const products = pgTable(
   "products",
   {
@@ -154,6 +166,8 @@ export const products = pgTable(
     index("products_color_id_idx").on(t.colorId),
     index("products_material_id_idx").on(t.materialId),
     index("products_pattern_id_idx").on(t.patternId),
+    // Text search of « Découvrir » on the name and brand, accents folded by `catalog_fold` (migration 0022).
+    index("products_search_idx").using("gin", productSearchDocument()),
     check("products_audience_check", sql`${t.audience} IS NULL OR ${oneOf(t.audience, audienceSchema.options)}`),
     check(
       "products_child_detail_check",

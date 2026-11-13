@@ -26,6 +26,8 @@ export const catalogQuerySchema = z.object({
   isNew: flag.optional(),
   sort: catalogSortSchema.default("new"),
   cursor: z.string().max(200).optional(),
+  /** Her profile whose sizes « Ma taille en stock » uses; her first profile when absent. */
+  profile: z.uuid().optional(),
 });
 export type CatalogQuery = z.infer<typeof catalogQuerySchema>;
 
@@ -63,6 +65,10 @@ export const catalogDetailSchema = catalogCardSchema.extend({
 });
 export type CatalogDetail = z.infer<typeof catalogDetailSchema>;
 
+/** `GET /api/catalog/{productId}` query string. */
+export const catalogDetailQuerySchema = z.object({ profile: z.uuid().optional() });
+export type CatalogDetailQuery = z.infer<typeof catalogDetailQuerySchema>;
+
 export const reportReasonSchema = z.enum(["not_fashion", "shocking", "other"]);
 export type ReportReason = z.infer<typeof reportReasonSchema>;
 export const reportInputSchema = z.object({ reason: reportReasonSchema });
@@ -89,7 +95,8 @@ export function sizeMatches(profileSize: string | null, available: string[]): bo
 
 export type SizeKind = "top" | "bottom" | "shoes";
 
-const SIZE_KIND_BY_SLUG: Record<string, SizeKind> = {
+/** Category slugs that take one of her sizes (the API filters « Ma taille en stock » in SQL from this table). */
+export const SIZE_KIND_BY_SLUG: Readonly<Record<string, SizeKind>> = {
   vetements: "top",
   robes: "top",
   "robe-courte": "top",

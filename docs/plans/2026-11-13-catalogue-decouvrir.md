@@ -58,8 +58,8 @@
 
 **Interfaces — Produces :** `GET /api/catalog` (session requise ; `catalogQuerySchema` → `catalogPageSchema`, 24 par page, curseur stable par tri) ; `GET /api/catalog/{productId}` (`catalogDetailSchema` ; 404 si non visible) ; `POST /api/catalog/{productId}/report` (`reportInputSchema`, 204, idempotent, limiteur 20/heure). `likes` = nombre d'items non supprimés sur ce produit (toutes utilisatrices), `null` si < 3. `close` = ses items Reçu/Dans mon dressing de même catégorie et couleur (≤ 3). `wanted`/`myItem` selon ses propres items. Recherche texte sur nom, boutique, catégorie, couleur (index trigramme ou tsvector, au choix, justifié dans le rapport).
 
-- [ ] Tests d'abord : visibilité (boutique non publiée, masqué, retiré, sans image → absent) ; chaque filtre et tri ; « Ma taille en stock » ; pagination sans doublon ; `likes` null à 2 et 3 à 3, aucune donnée d'une autre personne ; `close` limité à son dressing ; signalement idempotent ; 401 sans session.
-- [ ] Implémenter, relancer, commit « feat(catalogue): API ».
+- [x] Tests d'abord : visibilité (boutique non publiée, masqué, retiré, sans image → absent) ; chaque filtre et tri ; « Ma taille en stock » ; pagination sans doublon ; `likes` null à 2 et 3 à 3, aucune donnée d'une autre personne ; `close` limité à son dressing ; signalement idempotent ; 401 sans session.
+- [x] Implémenter, relancer, commit « feat(catalogue): API ».
 
 ### Task 4: Administration du catalogue
 

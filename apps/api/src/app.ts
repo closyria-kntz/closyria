@@ -13,6 +13,7 @@ import { adminReferenceRoutes } from "./routes/admin/reference";
 import { adminShippingOptionsRoutes } from "./routes/admin/shipping-options";
 import { adminShopsRoutes } from "./routes/admin/shops";
 import { capturesRoutes } from "./routes/captures";
+import { catalogueRoutes } from "./routes/catalogue";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
 import { budgetsRoutes } from "./routes/me/budgets";
 import { bulkRoutes } from "./routes/me/bulk";
@@ -128,6 +129,7 @@ export function createApp(deps: AppDeps) {
     .route("/", capturesRoutes(deps.catalog, captureLimiter))
     .route("/", productsRoutes(deps.catalog, captureLimiter))
     .route("/", shopsRoutes(deps.catalog))
+    .route("/", catalogueRoutes(deps.catalog))
     .route("/", eventsRoutes(deps.events))
     .route("/", profilesRoutes(deps.wardrobe))
     .route("/", loveLevelsRoutes(deps.wardrobe))
