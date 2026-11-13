@@ -1,5 +1,5 @@
 import { and, type Database, eq, isNull, schema, sql } from "@closyria/db";
-import { CATALOGUE_IMPORT_QUEUE, CATALOGUE_IMPORT_STALE_MS } from "@closyria/shared";
+import { CATALOGUE_IMPORT_DEAD_MS, CATALOGUE_IMPORT_QUEUE, CATALOGUE_IMPORT_STALE_MS } from "@closyria/shared";
 
 export type ImportQueue = {
   send(queue: string, data: object, options: { singletonKey: string }): Promise<unknown>;
@@ -23,20 +23,13 @@ export async function planCatalogueImports(db: Database, queue: ImportQueue, now
       ),
     );
   let planned = 0;
-  const stale = new Date(now.getTime() - CATALOGUE_IMPORT_STALE_MS).toISOString();
   for (const shop of shops) {
     // « En attente » in the admin before the job exists (the worker then writes « running »); an import already
     // under way keeps its state, a dead one is replaced.
     await db
       .update(schema.shops)
       .set({ importState: "queued", importStartedAt: now })
-      .where(
-        and(
-          eq(schema.shops.id, shop.id),
-          sql`(${schema.shops.importState} is null or ${schema.shops.importStartedAt} is null
-            or ${schema.shops.importStartedAt} < ${stale})`,
-        ),
-      );
+      .where(and(eq(schema.shops.id, shop.id), importNotUnderWay(now)));
     try {
       await queue.send(CATALOGUE_IMPORT_QUEUE, { shopId: shop.id }, { singletonKey: shop.id });
       planned += 1;
@@ -55,4 +48,17 @@ export async function planCatalogueImports(db: Database, queue: ImportQueue, now
     }
   }
   return planned;
+}
+
+/**
+ * SQL twin of `liveImportState(…) === null` (as the admin's « Importer maintenant »): no import queued or running, or
+ * a dead one (queued over 6 h, running without heartbeat for 10 min).
+ */
+export function importNotUnderWay(at: Date) {
+  const queuedSince = new Date(at.getTime() - CATALOGUE_IMPORT_STALE_MS).toISOString();
+  const aliveSince = new Date(at.getTime() - CATALOGUE_IMPORT_DEAD_MS).toISOString();
+  const { importState, importStartedAt, importHeartbeatAt } = schema.shops;
+  return sql`(${importState} is null or ${importStartedAt} is null
+    or (${importState} = 'queued' and ${importStartedAt} < ${queuedSince})
+    or (${importState} = 'running' and coalesce(${importHeartbeatAt}, ${importStartedAt}) < ${aliveSince}))`;
 }

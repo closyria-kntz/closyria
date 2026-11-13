@@ -126,7 +126,7 @@ export const adminShopSchema = z.object({
   lastImportAt: isoDate.nullable(),
   /** Code of the last import's failure (`blocked (HTTP 429)`, `robots_disallowed`…); null after a full import. */
   lastImportError: z.string().nullable(),
-  /** « En attente » / « Import en cours »; null when none is under way (or its job died: over 6 h). */
+  /** « En attente » / « Import en cours »; null when none is under way, or its job died (`liveImportState`). */
   importState: importStateSchema.nullable(),
   /** When it was queued, then started. */
   importStartedAt: isoDate.nullable(),
@@ -137,6 +137,8 @@ export const adminShopSchema = z.object({
   lastImportSeen: count.nullable(),
   lastImportCreated: count.nullable(),
   lastImportRemoved: count.nullable(),
+  /** Products the shop's sitemap listed at the start of the import under way (estimate); null when unknown. */
+  importExpected: count.nullable(),
   createdAt: isoDate,
 });
 export type AdminShop = z.infer<typeof adminShopSchema>;
@@ -179,6 +181,7 @@ export const adminShopImportStatusSchema = adminShopSchema.pick({
   lastImportSeen: true,
   lastImportCreated: true,
   lastImportRemoved: true,
+  importExpected: true,
 });
 export type AdminShopImportStatus = z.infer<typeof adminShopImportStatusSchema>;
 

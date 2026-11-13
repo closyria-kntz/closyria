@@ -14,7 +14,7 @@ export const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
 export const DEFAULT_TIMEOUT_MS = 15_000;
 export const DEFAULT_MAX_REDIRECTS = 5;
 
-export type SafeFetchAccept = "page" | "json" | "image" | "text";
+export type SafeFetchAccept = "page" | "json" | "image" | "text" | "xml";
 
 export type SafeFetchOptions = {
   /** Strict by default. Never read from the environment. */
@@ -27,6 +27,8 @@ export type SafeFetchOptions = {
   maxRedirects?: number;
   /** Injectable resolver (tests). Called with `{ all: true }`. */
   lookup?: typeof dns.lookup;
+  /** Gives up at once when aborted (a worker stopping), like the deadline: a `timeout` CaptureError. */
+  signal?: AbortSignal;
 };
 
 export type SafeResponse = { finalUrl: string; status: number; contentType: string; body: Buffer };
@@ -36,6 +38,7 @@ const ACCEPT_HEADER: Record<SafeFetchAccept, string> = {
   json: "application/json,text/javascript;q=0.9",
   image: "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8",
   text: "text/plain",
+  xml: "application/xml,text/xml;q=0.9",
 };
 
 const ACCEPTED_TYPES: Record<SafeFetchAccept, (mime: string) => boolean> = {
@@ -46,6 +49,8 @@ const ACCEPTED_TYPES: Record<SafeFetchAccept, (mime: string) => boolean> = {
   image: (mime) => /^image\/[a-z0-9][a-z0-9.+-]*$/.test(mime) && !mime.startsWith("image/svg"),
   // Plain text only (robots.txt); the charset parameter is ignored by `mimeOf`.
   text: (mime) => mime === "text/plain",
+  // Sitemaps.
+  xml: (mime) => mime === "application/xml" || mime === "text/xml",
 };
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
@@ -296,11 +301,19 @@ async function run(rawUrl: string, options: SafeFetchOptions, signal: AbortSigna
 export async function safeFetch(url: string, options: SafeFetchOptions): Promise<SafeResponse> {
   const controller = new AbortController();
   let timer: NodeJS.Timeout | undefined;
+  const external = options.signal;
+  let onAbort: (() => void) | undefined;
   const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
+    const giveUp = () => {
       reject(new CaptureError("timeout"));
       controller.abort();
-    }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    };
+    timer = setTimeout(giveUp, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    if (external?.aborted) giveUp();
+    else if (external) {
+      onAbort = giveUp;
+      external.addEventListener("abort", onAbort, { once: true });
+    }
   });
   // Whatever escapes (a synchronous throw, a resolver failure) surfaces as a CaptureError.
   const work = run(url, options, controller.signal).catch((error: unknown) => {
@@ -310,6 +323,7 @@ export async function safeFetch(url: string, options: SafeFetchOptions): Promise
     return await Promise.race([work, deadline]);
   } finally {
     clearTimeout(timer);
+    if (onAbort) external?.removeEventListener("abort", onAbort);
     controller.abort();
   }
 }

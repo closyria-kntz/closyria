@@ -11,6 +11,7 @@ import {
   adminShopListSchema,
   adminShopPatchSchema,
   adminShopSchema,
+  CATALOGUE_IMPORT_DEAD_MS,
   CATALOGUE_IMPORT_STALE_MS,
   type CaptureErrorCode,
   type CaptureMode,
@@ -244,9 +245,19 @@ function pgCode(error: unknown): string | undefined {
 
 type Outcome = { shop: Shop } | { error: "domain_taken" | "slug_taken" | "not_found" };
 
+/** SQL twin of `liveImportState(…) === null`: no import queued or running, or a dead one. */
+function importNotUnderWay(at: Date) {
+  const queuedSince = new Date(at.getTime() - CATALOGUE_IMPORT_STALE_MS).toISOString();
+  const aliveSince = new Date(at.getTime() - CATALOGUE_IMPORT_DEAD_MS).toISOString();
+  const { importState, importStartedAt, importHeartbeatAt } = schema.shops;
+  return sql`(${importState} is null or ${importStartedAt} is null
+    or (${importState} = 'queued' and ${importStartedAt} < ${queuedSince})
+    or (${importState} = 'running' and coalesce(${importHeartbeatAt}, ${importStartedAt}) < ${aliveSince}))`;
+}
+
 function importStatusShape(shop: Shop, now: Date) {
   return {
-    importState: liveImportState(shop.importState, shop.importStartedAt, now),
+    importState: liveImportState(shop.importState, shop.importStartedAt, shop.importHeartbeatAt, now),
     importStartedAt: shop.importStartedAt?.toISOString() ?? null,
     importPages: shop.importPages,
     importSeen: shop.importSeen,
@@ -255,6 +266,7 @@ function importStatusShape(shop: Shop, now: Date) {
     lastImportSeen: shop.lastImportSeen,
     lastImportCreated: shop.lastImportCreated,
     lastImportRemoved: shop.lastImportRemoved,
+    importExpected: shop.importExpected,
   };
 }
 
@@ -584,18 +596,13 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       if (shop.status === "refused") return c.json({ error: "refused" } as const, 409);
       if (shop.platform !== "shopify") return c.json({ error: "not_shopify" } as const, 409);
       // « En attente » before the job exists, so the worker's « running » is never overwritten; an import already
-      // under way keeps its state, a dead one (over 6 h) is replaced.
+      // under way keeps its state, a dead one (`liveImportState`: queued over 6 h, running without heartbeat for
+      // 10 min) is replaced.
       const at = now();
       await db
         .update(schema.shops)
         .set({ importState: "queued", importStartedAt: at })
-        .where(
-          and(
-            eq(schema.shops.id, id),
-            sql`(${schema.shops.importState} is null or ${schema.shops.importStartedAt} is null
-              or ${schema.shops.importStartedAt} < ${new Date(at.getTime() - CATALOGUE_IMPORT_STALE_MS).toISOString()})`,
-          ),
-        );
+        .where(and(eq(schema.shops.id, id), importNotUnderWay(at)));
       let queued: boolean;
       try {
         queued = await queue.importCatalogue(id);

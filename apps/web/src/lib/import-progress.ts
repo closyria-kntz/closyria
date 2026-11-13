@@ -92,8 +92,9 @@ export function startImportPolling(options: {
 
 /**
  * What the admin shop page shows while an import is queued or running: the line to write and the bar. `value` is
- * between 0 and 0.99 when the previous import's total gives a scale (never full before the end: the shop may have
- * grown), null for an indeterminate bar (« En attente », a first import). Null once the import is over (no bar).
+ * between 0 and 0.99 when the previous import's total, else the sitemap's estimate, gives a scale (never full before
+ * the end: the shop may have grown), null for an indeterminate bar (« En attente », no scale). Null once the import is
+ * over (no bar).
  */
 export type ImportProgress =
   | { line: "queued" | "starting" | "running"; value: null; seen: number; total: null }
@@ -105,7 +106,8 @@ export function importProgress(status: AdminShopImportStatus): ImportProgress | 
   if (status.importState === null) return null;
   if (status.importState === "queued") return { line: "queued", value: null, seen: 0, total: null };
   const seen = status.importSeen;
-  const total = status.lastImportSeen;
+  // The last complete import's real count, else the sitemap's estimate (first import).
+  const total = status.lastImportSeen ?? status.importExpected;
   if (total !== null && total > 0) {
     return { line: "runningTotal", value: Math.min(seen / total, IMPORT_PROGRESS_MAX), seen, total };
   }

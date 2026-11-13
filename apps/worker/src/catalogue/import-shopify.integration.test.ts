@@ -9,7 +9,7 @@ import { createRobotsCache, safeRobotsFetcher } from "../capture/robots";
 import { seedReference } from "../capture/seed-reference";
 import { loopbackForTests } from "../capture/testing";
 import { createThrottle } from "../capture/throttle";
-import { type ImportDeps, importShopifyCatalog } from "./import-shopify";
+import { abortRunningImports, type ImportDeps, importShopifyCatalog, settleRunningImports } from "./import-shopify";
 
 let database: Awaited<ReturnType<typeof createTestDatabase>>;
 let handle: ReturnType<typeof createDb>;
@@ -32,6 +32,7 @@ const PNG = Buffer.from(
   "base64",
 );
 const JSON_TYPE = { "content-type": "application/json; charset=utf-8" };
+const XML_TYPE = { "content-type": "application/xml; charset=utf-8" };
 
 const loopbackOnly: AddressPolicy = Object.assign((ip: string): boolean => ip === "127.0.0.1" && loopbackForTests(ip), {
   anyPortOnLoopback: true as const,
@@ -203,12 +204,15 @@ describe("importShopifyCatalog", () => {
     expect(result).toEqual({ created: 252, updated: 0, unchanged: 0, removed: 0, error: null });
     // Page 2 is short: no third request.
     expect(pageHits()).toEqual([pagePath(1), pagePath(2)]);
-    expect(shop.hits.filter((hit) => hit !== "/robots.txt")).toEqual([pagePath(1), pagePath(2)]);
+    // The sitemap first (none here: no estimate), then the pages.
+    expect(shop.hits.filter((hit) => hit !== "/robots.txt")).toEqual(["/sitemap.xml", pagePath(1), pagePath(2)]);
     expect(shop.maxInFlight).toBe(1);
-    // One pause of 1 s, after page 1 and before page 2.
-    expect(pauses.map((p) => p.ms)).toEqual([1000]);
-    expect(pauses[0]?.hitsBefore).toContain(pagePath(1));
-    expect(pauses[0]?.hitsBefore).not.toContain(pagePath(2));
+    // A pause of 1 s between two requests: after the sitemap, then after page 1 and before page 2.
+    expect(pauses.map((p) => p.ms)).toEqual([1000, 1000]);
+    expect(pauses[0]?.hitsBefore).toContain("/sitemap.xml");
+    expect(pauses[0]?.hitsBefore).not.toContain(pagePath(1));
+    expect(pauses[1]?.hitsBefore).toContain(pagePath(1));
+    expect(pauses[1]?.hitsBefore).not.toContain(pagePath(2));
 
     expect(await productsOf(s.id)).toHaveLength(252);
     const robe = await byExternalId(s.id, "1");
@@ -266,7 +270,10 @@ describe("importShopifyCatalog", () => {
 
     await importShopifyCatalog(deps, s.id);
 
-    expect(during).toEqual([{ state: "running", pages: 1, seen: 250 }]);
+    expect(during).toEqual([
+      { state: "running", pages: 0, seen: 0 },
+      { state: "running", pages: 1, seen: 250 },
+    ]);
     expect(await shopRow(s.id)).toMatchObject({
       importState: null,
       importPages: 2,
@@ -536,7 +543,8 @@ describe("importShopifyCatalog", () => {
 
     expect(result.error).toBe("http_error (HTTP 503)");
     expect(pageHits()).toEqual([pagePath(1), pagePath(1)]);
-    expect(pauses.map((p) => p.ms)).toEqual([1000]);
+    // After the sitemap, then before the retry.
+    expect(pauses.map((p) => p.ms)).toEqual([1000, 1000]);
   });
 
   it("clears the previous error after a successful import", async () => {
@@ -589,6 +597,193 @@ describe("importShopifyCatalog", () => {
       expect((await importShopifyCatalog(deps, preview.id)).error).toBeNull();
       expect(await productsOf(preview.id)).toHaveLength(1);
     }
+  });
+  describe("estimated total from the sitemap", () => {
+    const index = (paths: string[]) =>
+      `<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${paths
+        .map((path) => `<sitemap><loc>${shop.origin}${path.replaceAll("&", "&amp;")}</loc></sitemap>`)
+        .join("")}</sitemapindex>`;
+    const urlset = (paths: string[]) =>
+      `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${paths
+        .map((path) => `<url><loc>${shop.origin}${path}</loc></url>`)
+        .join("")}</urlset>`;
+
+    it("counts the products of every products sitemap of the index, 1 s apart, before the first page", async () => {
+      routes["/sitemap.xml"] = {
+        headers: XML_TYPE,
+        body: index(["/sitemap_products_1.xml?from=1&to=99", "/sitemap_pages_1.xml", "/sitemap_products_2.xml"]),
+      };
+      // Shopify lists the home page first in its first products sitemap: not a product.
+      routes["/sitemap_products_1.xml?from=1&to=99"] = {
+        headers: XML_TYPE,
+        body: urlset(["/", "/products/a", "/products/b", "/products/c"]),
+      };
+      routes["/sitemap_products_2.xml"] = { headers: XML_TYPE, body: urlset(["/products/d", "/products/e"]) };
+      routes["/sitemap_pages_1.xml"] = { headers: XML_TYPE, body: urlset(["/pages/contact"]) };
+      servePages([[{ id: 1, title: "Robe" }]]);
+      const s = await newShop({ importExpected: 999 });
+      const atFirstPage: unknown[] = [];
+      deps.sleep = async (ms) => {
+        pauses.push({ ms, hitsBefore: [...shop.hits] });
+        if (shop.hits.includes("/sitemap_products_2.xml")) atFirstPage.push((await shopRow(s.id))?.importExpected);
+      };
+
+      const result = await importShopifyCatalog(deps, s.id);
+
+      expect(result).toEqual({ created: 1, updated: 0, unchanged: 0, removed: 0, error: null });
+      expect(shop.hits.filter((hit) => hit !== "/robots.txt")).toEqual([
+        "/sitemap.xml",
+        "/sitemap_products_1.xml?from=1&to=99",
+        "/sitemap_products_2.xml",
+        pagePath(1),
+      ]);
+      expect(pauses.map((p) => p.ms)).toEqual([1000, 1000, 1000]);
+      expect(shop.maxInFlight).toBe(1);
+      // Written before the first page, so the bar has its scale from the start.
+      expect(atFirstPage).toEqual([5]);
+      expect(await shopRow(s.id)).toMatchObject({ importExpected: 5, lastImportError: null, lastImportSeen: 1 });
+    });
+
+    it("gives no estimate when robots.txt forbids the sitemap, and the import goes on unaffected", async () => {
+      routes["/robots.txt"] = {
+        headers: { "content-type": "text/plain" },
+        body: "User-agent: *\nDisallow: /sitemap\n",
+      };
+      routes["/sitemap.xml"] = { headers: XML_TYPE, body: index(["/sitemap_products_1.xml"]) };
+      servePages(twoPages());
+      const s = await newShop({ importExpected: 999 });
+
+      const result = await importShopifyCatalog(deps, s.id);
+
+      expect(result).toEqual({ created: 250, updated: 0, unchanged: 0, removed: 0, error: null });
+      expect(shop.hits.filter((hit) => hit.startsWith("/sitemap"))).toEqual([]);
+      // No request before page 1: no pause either.
+      expect(pauses.map((p) => p.ms)).toEqual([1000]);
+      expect(await shopRow(s.id)).toMatchObject({ importExpected: null, lastImportError: null, lastImportSeen: 250 });
+    });
+
+    it("gives no estimate for a sitemap that is not one, too big or empty of products, without an import error", async () => {
+      const cases: Record<string, FakeRoute>[] = [
+        { "/sitemap.xml": { headers: { "content-type": "text/html" }, body: "<html>Oups</html>" } },
+        { "/sitemap.xml": { headers: XML_TYPE, body: "<sitemapindex><sitemap><loc>broken" } },
+        {
+          "/sitemap.xml": { headers: XML_TYPE, body: index(["/sitemap_products_1.xml"]) },
+          "/sitemap_products_1.xml": { headers: XML_TYPE, body: urlset(["/"]) },
+        },
+        {
+          "/sitemap.xml": { headers: XML_TYPE, body: index(["/sitemap_products_1.xml"]) },
+          "/sitemap_products_1.xml": { status: 429, headers: XML_TYPE, body: "" },
+        },
+        {
+          "/sitemap.xml": { headers: XML_TYPE, body: index(["/sitemap_products_1.xml"]) },
+          "/sitemap_products_1.xml": { headers: XML_TYPE, body: urlset(["/products/a".padEnd(21 * 1024 * 1024, "a")]) },
+        },
+      ];
+      for (const [i, extra] of cases.entries()) {
+        for (const key of Object.keys(routes)) if (key.startsWith("/sitemap")) delete routes[key];
+        Object.assign(routes, extra);
+        servePages([[{ id: 20 + i, title: "Robe" }]]);
+        const s = await newShop();
+        expect((await importShopifyCatalog(deps, s.id)).error, `case ${i}`).toBeNull();
+        expect(await shopRow(s.id), `case ${i}`).toMatchObject({ importExpected: null, lastImportError: null });
+      }
+    });
+
+    it("ignores a products sitemap on another site", async () => {
+      routes["/sitemap.xml"] = {
+        headers: XML_TYPE,
+        body: `<sitemapindex><sitemap><loc>https://ailleurs.example/sitemap_products_1.xml</loc></sitemap></sitemapindex>`,
+      };
+      servePages([[{ id: 30, title: "Robe" }]]);
+      const s = await newShop();
+      await importShopifyCatalog(deps, s.id);
+      expect((await shopRow(s.id))?.importExpected).toBeNull();
+      expect(shop.hits.filter((hit) => hit.startsWith("/sitemap"))).toEqual(["/sitemap.xml"]);
+    });
+  });
+
+  describe("heartbeat and interruption", () => {
+    it("beats at its start and after each page", async () => {
+      servePages(twoPages());
+      const s = await newShop({ importHeartbeatAt: new Date(Date.now() - 86_400_000) });
+      const beats: (Date | null | undefined)[] = [];
+      deps.sleep = async () => {
+        beats.push((await shopRow(s.id))?.importHeartbeatAt);
+      };
+      const start = Date.now();
+      await importShopifyCatalog(deps, s.id);
+      // Before page 1 (after the sitemap), then after page 1.
+      expect(beats).toHaveLength(2);
+      for (const beat of beats) expect(beat?.getTime()).toBeGreaterThanOrEqual(start - 1000);
+      expect((await shopRow(s.id))?.importHeartbeatAt?.getTime()).toBeGreaterThanOrEqual(beats[1]?.getTime() ?? 0);
+    });
+
+    it("stops between pages when its signal is aborted, records the interruption, clears its state, removes nothing", async () => {
+      const s = await newShop({ lastImportSeen: 40, lastImportCreated: 4, lastImportRemoved: 1 });
+      await handle.db.insert(schema.products).values({
+        shopId: s.id,
+        canonicalUrl: `${shop.origin}/products/produit-9`,
+        name: "Ancienne",
+        externalId: "9",
+      });
+      servePages(twoPages());
+      const controller = new AbortController();
+      deps.sleep = async () => {
+        if (shop.hits.includes(pagePath(1))) controller.abort();
+      };
+
+      const result = await importShopifyCatalog(deps, s.id, { signal: controller.signal });
+
+      expect(result).toMatchObject({ created: 250, removed: 0, error: "interrupted" });
+      expect(pageHits()).toEqual([pagePath(1)]);
+      expect((await byExternalId(s.id, "9"))?.removedAt).toBeNull();
+      expect(await shopRow(s.id)).toMatchObject({
+        importState: null,
+        lastImportError: "interrupted",
+        lastImportSeen: 40,
+        lastImportCreated: 4,
+        lastImportRemoved: 1,
+      });
+    });
+
+    it("stops within a page too, before the next product", async () => {
+      servePages([Array.from({ length: 5 }, (_, i) => ({ id: 40 + i, title: `Article ${i}`, image: true }))]);
+      // Each photo takes 200 ms: the abort lands while the first product's photo is being copied.
+      for (const route of Object.values(cdnRoutes)) route.delayMs = 200;
+      const s = await newShop();
+      const controller = new AbortController();
+      const timer = setInterval(() => {
+        if (cdn.hits.length > 0) controller.abort();
+      }, 5);
+      try {
+        const result = await importShopifyCatalog(deps, s.id, { signal: controller.signal });
+        expect(result.error).toBe("interrupted");
+        expect(await productsOf(s.id)).toHaveLength(1);
+      } finally {
+        clearInterval(timer);
+      }
+    });
+
+    it("abortRunningImports stops every import of the process; settleRunningImports waits for their end", async () => {
+      servePages(twoPages(), { delayMs: 50 });
+      const s = await newShop();
+      let release: () => void = () => {};
+      const paused = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      deps.sleep = async () => {
+        if (shop.hits.includes(pagePath(1))) release();
+      };
+      const running = importShopifyCatalog(deps, s.id);
+      await paused;
+      abortRunningImports();
+      expect(await settleRunningImports(5000)).toBe(true);
+      expect((await running).error).toBe("interrupted");
+      expect((await shopRow(s.id))?.importState).toBeNull();
+      expect(pageHits()).toEqual([pagePath(1)]);
+      // Nothing left to wait for.
+      expect(await settleRunningImports(10)).toBe(true);
+    });
   });
   describe("re-import of an unchanged catalogue", () => {
     const T1 = "2026-10-02T10:00:00.000Z";

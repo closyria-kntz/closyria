@@ -62,11 +62,16 @@ export const shops = pgTable(
     lastImportError: text("last_import_error"),
     /**
      * The import under way: `queued` (« Importer maintenant » or the night's plan), then `running` (the worker). Null
-     * when none; one older than the job expiry (6 h, `importStartedAt`) is a dead job, not an import under way.
+     * when none. A `queued` one older than the job expiry (6 h, `importStartedAt`), or a `running` one whose heartbeat
+     * (`importHeartbeatAt`) is over 10 min old, is a dead job, not an import under way.
      */
     importState: text("import_state"),
     /** When the state above was set (queued, then started). */
     importStartedAt: timestamp("import_started_at", { withTimezone: true }),
+    /** Written by the running import at its start, after each page and every 30 s within one: proof it is alive. */
+    importHeartbeatAt: timestamp("import_heartbeat_at", { withTimezone: true }),
+    /** Products the shop's sitemap lists, read at the import's start: the bar's scale before any complete import. */
+    importExpected: integer("import_expected"),
     /** Pages and products read by the import under way (reset when the worker starts it). */
     importPages: integer("import_pages").notNull().default(0),
     importSeen: integer("import_seen").notNull().default(0),

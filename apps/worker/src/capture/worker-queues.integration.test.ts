@@ -265,6 +265,17 @@ describe("catalogue imports", () => {
       importState: "running",
       importStartedAt: new Date(now.getTime() - 7 * 3_600_000),
     });
+    // Alive a minute ago after 2 h: under way. Silent for 20 min: the worker died with it.
+    const alive = await importShop("plan-alive", {
+      importState: "running",
+      importStartedAt: new Date(now.getTime() - 2 * 3_600_000),
+      importHeartbeatAt: new Date(now.getTime() - 60_000),
+    });
+    const silent = await importShop("plan-silent", {
+      importState: "running",
+      importStartedAt: new Date(now.getTime() - 30 * 60_000),
+      importHeartbeatAt: new Date(now.getTime() - 20 * 60_000),
+    });
     const last = { lastImportSeen: 40, lastImportCreated: 4, lastImportRemoved: 1, importPages: 2, importSeen: 40 };
     const failing = await importShop("plan-failing", last);
     await planCatalogueImports(
@@ -280,6 +291,8 @@ describe("catalogue imports", () => {
       (await handle.db.select().from(schema.shops).where(eq(schema.shops.id, id)))[0]?.importState;
     expect(await state(running.id)).toBe("running");
     expect(await state(dead.id)).toBe("queued");
+    expect(await state(alive.id)).toBe("running");
+    expect(await state(silent.id)).toBe("queued");
     expect(await state(failing.id)).toBeNull();
     // Queueing never touches the figures of the last import (the worker resets the live ones when it starts).
     for (const id of [failing.id, dead.id]) {
@@ -326,6 +339,9 @@ describe("registerCaptureQueues", () => {
     const scheduled: { name: string; cron: string; options?: object }[] = [];
     const worked: { name: string; options: object }[] = [];
     const boss = {
+      // Startup recovery: no job left by a previous process (shops left « running » by other tests are queued again).
+      findJobs: async () => [],
+      send: async () => null,
       createQueue: async (name: string, options?: object) => {
         created.push({ name, ...(options ? { options } : {}) });
       },
@@ -364,6 +380,8 @@ describe("registerCaptureQueues", () => {
 
     const handlers = new Map<string, (jobs: { id?: string; data: unknown }[]) => Promise<void>>();
     const boss = {
+      findJobs: async () => [],
+      send: async () => null,
       createQueue: async () => {},
       schedule: async () => {},
       work: async (name: string, _options: object, handler: (jobs: { data: unknown }[]) => Promise<void>) => {

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  CATALOGUE_IMPORT_DEAD_MS,
   catalogDetailSchema,
   catalogQuerySchema,
   isHttpUrl,
   isOneSize,
+  liveImportState,
   reportInputSchema,
   SIZE_SUGGESTIONS,
   sizeKindOf,
@@ -225,5 +227,37 @@ describe("schemas", () => {
   it("trims her sizes and drops repeats, case aside", () => {
     const parsed = profileSizesSchema.parse({ sizesTop: [" M ", "m", "38"], sizesBottom: [], sizesShoes: ["38,5"] });
     expect(parsed).toEqual({ sizesTop: ["M", "38"], sizesBottom: [], sizesShoes: ["38,5"] });
+  });
+});
+
+describe("liveImportState", () => {
+  const now = new Date("2026-11-13T19:16:00Z");
+  const ago = (ms: number) => new Date(now.getTime() - ms);
+  const min = 60_000;
+
+  it("keeps a running import whose heartbeat is recent, however long ago it started", () => {
+    expect(liveImportState("running", ago(3 * 3_600_000), ago(min), now)).toBe("running");
+  });
+
+  it("drops a running import whose heartbeat is over 10 min old (worker stopped or killed)", () => {
+    expect(CATALOGUE_IMPORT_DEAD_MS).toBe(10 * min);
+    expect(liveImportState("running", ago(20 * min), ago(10 * min + 1000), now)).toBeNull();
+    expect(liveImportState("running", ago(20 * min), ago(10 * min - 1000), now)).toBe("running");
+  });
+
+  it("judges a running import without heartbeat (written before it existed) by its start", () => {
+    expect(liveImportState("running", ago(5 * min), null, now)).toBe("running");
+    expect(liveImportState("running", ago(11 * min), null, now)).toBeNull();
+  });
+
+  it("keeps a queued import up to the job expiry (6 h): it may wait behind the others", () => {
+    expect(liveImportState("queued", ago(5 * 3_600_000), null, now)).toBe("queued");
+    expect(liveImportState("queued", ago(6 * 3_600_000 + 1000), null, now)).toBeNull();
+  });
+
+  it("is null without a known state or a start", () => {
+    expect(liveImportState(null, ago(min), ago(min), now)).toBeNull();
+    expect(liveImportState("other", ago(min), ago(min), now)).toBeNull();
+    expect(liveImportState("running", null, ago(min), now)).toBeNull();
   });
 });

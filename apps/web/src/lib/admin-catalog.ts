@@ -93,6 +93,7 @@ const IMPORT_ERROR_KEYS = {
   http_error: "httpError",
   invalid_data: "invalidData",
   too_many_pages: "tooManyPages",
+  interrupted: "interrupted",
 } as const;
 export type ImportErrorKey = (typeof IMPORT_ERROR_KEYS)[keyof typeof IMPORT_ERROR_KEYS];
 

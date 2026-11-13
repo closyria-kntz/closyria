@@ -263,15 +263,33 @@ export const CATALOGUE_IMPORT_QUEUE_OPTIONS = {
   expireInSeconds: 6 * 60 * 60,
 } as const;
 
-/** An import queued or running for longer than its job may live (pg-boss expiry, 6 h) is a dead job, not under way. */
+/** An import queued for longer than its job may live (pg-boss expiry, 6 h) is a dead job, not waiting any more. */
 export const CATALOGUE_IMPORT_STALE_MS = CATALOGUE_IMPORT_QUEUE_OPTIONS.expireInSeconds * 1000;
+/** The running import writes its heartbeat at most this often (at its start, after each page, and within a page). */
+export const CATALOGUE_IMPORT_HEARTBEAT_MS = 30_000;
+/**
+ * A running import whose heartbeat (else its start) is older than this is dead: its worker was stopped or killed.
+ * Well above the heartbeat: a slow page (30 s per request, a retry, photos) still beats several times within it.
+ */
+export const CATALOGUE_IMPORT_DEAD_MS = 10 * 60_000;
 
 export const importStateSchema = z.enum(["queued", "running"]);
 export type ImportState = z.infer<typeof importStateSchema>;
 
-/** The import under way as stored on the shop, or null when none is, or when it outlived the job expiry. */
-export function liveImportState(state: string | null, startedAt: Date | null, now: Date): ImportState | null {
+/**
+ * The import under way as stored on the shop, or null when none is, or when it is dead: queued for longer than the
+ * job may live, or running without a heartbeat (else start) for 10 min.
+ */
+export function liveImportState(
+  state: string | null,
+  startedAt: Date | null,
+  heartbeatAt: Date | null,
+  now: Date,
+): ImportState | null {
   const parsed = importStateSchema.safeParse(state);
   if (!parsed.success || !startedAt) return null;
-  return now.getTime() - startedAt.getTime() < CATALOGUE_IMPORT_STALE_MS ? parsed.data : null;
+  if (parsed.data === "queued")
+    return now.getTime() - startedAt.getTime() < CATALOGUE_IMPORT_STALE_MS ? "queued" : null;
+  const alive = heartbeatAt ?? startedAt;
+  return now.getTime() - alive.getTime() < CATALOGUE_IMPORT_DEAD_MS ? "running" : null;
 }

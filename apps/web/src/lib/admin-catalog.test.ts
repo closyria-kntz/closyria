@@ -40,6 +40,7 @@ describe("importErrorMessage", () => {
     expect(importErrorMessage("timeout")).toEqual({ key: "timeout", status: null });
     expect(importErrorMessage("http_error (HTTP 503)")).toEqual({ key: "httpError", status: 503 });
     expect(importErrorMessage("too_many_pages")).toEqual({ key: "tooManyPages", status: null });
+    expect(importErrorMessage("interrupted")).toEqual({ key: "interrupted", status: null });
   });
 
   it("gives an unknown code back as it is", () => {

@@ -190,6 +190,13 @@
       "when": 1794591594444,
       "tag": "0026_catalogue_retours_2",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794594070717,
+      "tag": "0027_catalogue_import_heartbeat",
+      "breakpoints": true
     }
   ]
 }

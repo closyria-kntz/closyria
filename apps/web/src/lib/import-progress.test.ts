@@ -18,6 +18,7 @@ const status = (over: Partial<AdminShopImportStatus> = {}): AdminShopImportStatu
   lastImportSeen: null,
   lastImportCreated: null,
   lastImportRemoved: null,
+  importExpected: null,
   ...over,
 });
 
@@ -157,6 +158,24 @@ describe("importProgress", () => {
     // A previous import that read nothing is no total either.
     expect(importProgress(status({ lastImportSeen: 0 }))?.value).toBeNull();
     expect(importProgress(status({ lastImportSeen: null, importPages: 0, importSeen: 0 }))?.line).toBe("starting");
+  });
+
+  it("measures against the sitemap's estimate when there is no previous total (first import)", () => {
+    expect(importProgress(status({ importSeen: 500, lastImportSeen: null, importExpected: 2000 }))).toEqual({
+      line: "runningTotal",
+      value: 0.25,
+      seen: 500,
+      total: 2000,
+    });
+    expect(importProgress(status({ importSeen: 2500, lastImportSeen: null, importExpected: 2000 }))?.value).toBe(0.99);
+    expect(importProgress(status({ lastImportSeen: null, importExpected: null }))?.line).toBe("running");
+  });
+
+  it("prefers the previous import's real count to the estimate", () => {
+    expect(importProgress(status({ importSeen: 500, lastImportSeen: 1000, importExpected: 2000 }))).toMatchObject({
+      value: 0.5,
+      total: 1000,
+    });
   });
 
   it("measures against the previous import's total", () => {

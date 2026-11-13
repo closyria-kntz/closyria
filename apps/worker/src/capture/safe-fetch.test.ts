@@ -192,6 +192,32 @@ describe("safeFetch with the fake shop and loopbackForTests", () => {
     expect(error.code).toBe("timeout");
   });
 
+  it("gives up at once when its signal is aborted (worker stopping), already or during the request", async () => {
+    const { origin } = await serve({ "/slow": { headers: HTML, body: "tard", delayMs: 2000 } });
+    const options = { accept: "page" as const, policy: loopbackForTests, timeoutMs: 10_000 };
+    expect((await captureError(safeFetch(`${origin}/slow`, { ...options, signal: AbortSignal.abort() }))).code).toBe(
+      "timeout",
+    );
+    const controller = new AbortController();
+    const started = Date.now();
+    setTimeout(() => controller.abort(), 50);
+    const error = await captureError(safeFetch(`${origin}/slow`, { ...options, signal: controller.signal }));
+    expect(error.code).toBe("timeout");
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it("takes a sitemap as XML, and refuses HTML where XML is asked for", async () => {
+    const { origin } = await serve({
+      "/sitemap.xml": { headers: { "content-type": "application/xml; charset=utf-8" }, body: "<urlset/>" },
+      "/old.xml": { headers: { "content-type": "text/xml" }, body: "<urlset/>" },
+      "/page": { headers: HTML, body: "<html></html>" },
+    });
+    const options = { accept: "xml" as const, policy: loopbackForTests };
+    expect((await safeFetch(`${origin}/sitemap.xml`, options)).body.toString()).toBe("<urlset/>");
+    expect((await safeFetch(`${origin}/old.xml`, options)).status).toBe(200);
+    expect((await captureError(safeFetch(`${origin}/page`, options))).code).toBe("invalid_data");
+  });
+
   it("counts redirects inside the single deadline", async () => {
     const { origin } = await serve({
       "/a": { redirect: "/b", delayMs: 60 },

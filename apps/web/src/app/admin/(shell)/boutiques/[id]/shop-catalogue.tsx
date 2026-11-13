@@ -260,5 +260,6 @@ function importFieldsOf(shop: AdminShopDetail): AdminShopImportStatus {
     lastImportSeen: shop.lastImportSeen,
     lastImportCreated: shop.lastImportCreated,
     lastImportRemoved: shop.lastImportRemoved,
+    importExpected: shop.importExpected,
   };
 }

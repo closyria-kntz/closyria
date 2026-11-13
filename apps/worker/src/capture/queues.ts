@@ -11,6 +11,7 @@ import type { ObjectStore } from "@closyria/storage";
 import type { PgBoss } from "pg-boss";
 import { type ImportDeps, importShopifyCatalog } from "../catalogue/import-shopify";
 import { type ImportQueue, planCatalogueImports } from "../catalogue/plan-imports";
+import { recoverInterruptedImports } from "../catalogue/recover-imports";
 import { type AddressPolicy, strictPolicy } from "./address-policy";
 import { type MonitorQueue, scheduleMonitors } from "./monitor";
 import { createRobotsCache, safeRobotsFetcher } from "./robots";
@@ -18,7 +19,8 @@ import { type CaptureDeps, runCapture } from "./run-capture";
 import { sweepStuckCaptures } from "./sweep";
 import { createThrottle, type Throttle } from "./throttle";
 
-type JobLike = { id?: string; data: unknown };
+/** As pg-boss hands it to a handler: `signal` is aborted when pg-boss gives the job up (stop, lost claim). */
+type JobLike = { id?: string; data: unknown; signal?: AbortSignal };
 
 function parseJob(queue: string, job: JobLike) {
   const parsed = captureJobSchema.safeParse(job.data);
@@ -70,7 +72,7 @@ export function catalogueImportHandler(deps: ImportDeps, queue: ImportQueue) {
         console.error(`${CATALOGUE_IMPORT_QUEUE}: invalid job data (job ${job.id ?? "?"}), failing it`);
         throw new Error(`invalid job data on ${CATALOGUE_IMPORT_QUEUE}`);
       }
-      const result = await importShopifyCatalog(deps, parsed.data.shopId);
+      const result = await importShopifyCatalog(deps, parsed.data.shopId, job.signal ? { signal: job.signal } : {});
       // Counts and a short reason only: the details are on the shop (last_import_error).
       console.log(
         `catalogue import ${parsed.data.shopId}: ${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged, ${result.removed} removed${result.error ? `, stopped: ${result.error}` : ""}`,
@@ -94,7 +96,8 @@ export type CaptureQueueDeps = {
 /**
  * Creates the capture queues (same default options as the API, which creates them too), processes them and
  * schedules the daily monitor (04:00) and the 5-minute sweep of stuck captures. Also the Shopify catalogue imports:
- * planned every night at 03:00 (Paris), one shop at a time.
+ * planned every night at 03:00 (Paris), one shop at a time; at start, the imports a previous process left under way
+ * are queued again (one worker process only).
  */
 export async function registerCaptureQueues(boss: PgBoss, deps: CaptureQueueDeps): Promise<void> {
   const { db, store, lookup } = deps;
@@ -107,6 +110,12 @@ export async function registerCaptureQueues(boss: PgBoss, deps: CaptureQueueDeps
     await boss.createQueue(name);
   }
   await boss.createQueue(CATALOGUE_IMPORT_QUEUE, { ...CATALOGUE_IMPORT_QUEUE_OPTIONS });
+  // Before this process takes any import: what a previous process left under way is over, and queued again.
+  try {
+    await recoverInterruptedImports(db, boss);
+  } catch (error) {
+    console.error("catalogue import: cannot recover the imports of the previous process", error);
+  }
   await boss.work(CAPTURE_QUEUES.user, { localConcurrency: 4 }, captureHandler(captureDeps, CAPTURE_QUEUES.user));
   await boss.work(CAPTURE_QUEUES.admin, { localConcurrency: 1 }, captureHandler(captureDeps, CAPTURE_QUEUES.admin));
   // The schedule sends a job without data: it plans the day's monitor captures, which come back here.

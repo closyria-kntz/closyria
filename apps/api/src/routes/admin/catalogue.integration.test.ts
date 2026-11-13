@@ -349,8 +349,9 @@ describe("values and import of a shop", () => {
       lastImportSeen: 900,
       lastImportCreated: null,
       lastImportRemoved: null,
+      importExpected: null,
     });
-    expect(Object.keys(await json(await call("GET", `/admin/shops/${shop.id}/import-status`)))).toHaveLength(9);
+    expect(Object.keys(await json(await call("GET", `/admin/shops/${shop.id}/import-status`)))).toHaveLength(10);
 
     await t.db
       .update(schema.shops)
@@ -362,6 +363,45 @@ describe("values and import of a shop", () => {
     expect((await call("GET", `/admin/shops/${id}/import-status`)).status).toBe(404);
     expect((await call("GET", `/admin/shops/${shop.id}/import-status`, undefined, user.cookie)).status).toBe(403);
     expect((await call("GET", `/admin/shops/${shop.id}/import-status`, undefined, "")).status).toBe(401);
+  });
+
+  it("forgets a running import whose heartbeat is over 10 min old (worker stopped), and lets it be queued again", async () => {
+    const shop = await newShop({ platform: "shopify" });
+    const started = new Date(NOW.getTime() - 2 * 3_600_000);
+    // Started 2 h ago, alive a minute ago: under way, a new request leaves it alone.
+    await t.db
+      .update(schema.shops)
+      .set({
+        importState: "running",
+        importStartedAt: started,
+        importHeartbeatAt: new Date(NOW.getTime() - 60_000),
+        importPages: 3,
+        importSeen: 712,
+        importExpected: 2000,
+      })
+      .where(eq(schema.shops.id, shop.id));
+    expect(await json(await call("GET", `/admin/shops/${shop.id}/import-status`))).toMatchObject({
+      importState: "running",
+      importExpected: 2000,
+    });
+    await call("POST", `/admin/shops/${shop.id}/import`);
+    expect((await json(await call("GET", `/admin/shops/${shop.id}`))).importState).toBe("running");
+
+    // No heartbeat for over 10 min: the worker died with it.
+    await t.db
+      .update(schema.shops)
+      .set({ importHeartbeatAt: new Date(NOW.getTime() - 10 * 60_000 - 1000) })
+      .where(eq(schema.shops.id, shop.id));
+    expect((await json(await call("GET", `/admin/shops/${shop.id}/import-status`))).importState).toBeNull();
+    expect((await json(await call("GET", `/admin/shops/${shop.id}`))).importState).toBeNull();
+    const listed = (await json(await call("GET", "/admin/shops"))).shops.find((s: { id: string }) => s.id === shop.id);
+    expect(listed.importState).toBeNull();
+    const res = await call("POST", `/admin/shops/${shop.id}/import`);
+    expect(res.status).toBe(202);
+    expect(await json(await call("GET", `/admin/shops/${shop.id}`))).toMatchObject({
+      importState: "queued",
+      importStartedAt: NOW.toISOString(),
+    });
   });
 
   it("leaves no « En attente » behind when the queue cannot take the import", async () => {

@@ -1,15 +1,15 @@
 import { createHash } from "node:crypto";
 import type dns from "node:dns";
 import { and, asc, count, type Database, eq, inArray, isNotNull, isNull, or, schema } from "@closyria/db";
-import { extractShopifyCatalogPage, type ShopifyCatalogPage } from "@closyria/extract";
-import { canonicalizeUrl, shopDomain } from "@closyria/shared";
+import { extractShopifyCatalogPage, extractSitemap, type ShopifyCatalogPage } from "@closyria/extract";
+import { CATALOGUE_IMPORT_HEARTBEAT_MS, canonicalizeUrl, shopDomain } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import { type AddressPolicy, strictPolicy } from "../capture/address-policy";
 import { CaptureError } from "../capture/capture-error";
 import { copyImages } from "../capture/copy-images";
 import { decodeBody } from "../capture/decode";
 import type { RobotsCache } from "../capture/robots";
-import { safeFetch } from "../capture/safe-fetch";
+import { type SafeFetchAccept, safeFetch } from "../capture/safe-fetch";
 import { loadReferenceSet } from "../capture/seed-reference";
 import type { Throttle } from "../capture/throttle";
 import { type Reference, writeProduct } from "../capture/write-product";
@@ -26,6 +26,14 @@ export type ImportDeps = {
   now?: () => Date;
   /** The pause between two pages (injected in tests). */
   sleep?: (ms: number) => Promise<void>;
+};
+
+export type ImportOptions = {
+  /**
+   * Aborted when the worker stops (pg-boss's job signal, or `abortRunningImports`): the import stops before its next
+   * request or product, records `interrupted` and removes nothing.
+   */
+  signal?: AbortSignal;
 };
 
 /** `unchanged`: listed products not written again (same content, checked within 7 days). */
@@ -50,6 +58,10 @@ const REMOVE_CHUNK = 1000;
 const SHRINK_RATIO = 0.5;
 /** A product with the same content is still written in full once this old (new classification rules reach it). */
 const RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
+/** Products sitemaps read for the estimate: Shopify lists up to 5 000 products in each. */
+const MAX_PRODUCT_SITEMAPS = 50;
+/** `sitemap_products_1.xml`, possibly under a market prefix (`/en/…`), with Shopify's `?from=…&to=…`. */
+const PRODUCT_SITEMAP = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?sitemap_products_\d+\.xml$/i;
 
 const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -57,8 +69,28 @@ const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => set
  * Shops being imported by this process: a shop never has two imports at once (the queue also forbids it). The lock
  * lives as long as the import itself, not the pg-boss job: if a very long import outlives the job's expiry (6 h), a
  * new job for the same shop in this process finds the lock and stops with `already_running`. One worker process only.
+ * Each holds what stops it (`abortRunningImports`) and its end (`settleRunningImports`).
  */
-const running = new Set<string>();
+const running = new Map<string, { stop: AbortController; done: Promise<unknown> }>();
+
+/** The worker is stopping: every import of this process stops before its next request or product. */
+export function abortRunningImports(): void {
+  for (const entry of running.values()) entry.stop.abort();
+}
+
+/** Waits until the imports of this process are over (their state cleared), at most `timeoutMs`; false on timeout. */
+export async function settleRunningImports(timeoutMs: number): Promise<boolean> {
+  const all = Promise.allSettled([...running.values()].map((entry) => entry.done)).then(() => true);
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => resolve(false), timeoutMs);
+  });
+  try {
+    return await Promise.race([all, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 class ImportStop extends Error {
   constructor(readonly reason: string) {
@@ -76,27 +108,50 @@ class ImportStop extends Error {
  * checked less than 7 days ago is not written again: its check date moves (one update per page) and it counts as read
  * and listed. Shopify's `updated_at` is not trusted for this: a stock change may not move it.
  */
-export async function importShopifyCatalog(deps: ImportDeps, shopId: string): Promise<ImportResult> {
+export async function importShopifyCatalog(
+  deps: ImportDeps,
+  shopId: string,
+  options: ImportOptions = {},
+): Promise<ImportResult> {
   const result: ImportResult = { created: 0, updated: 0, unchanged: 0, removed: 0, error: null };
   if (running.has(shopId)) return { ...result, error: "already_running" };
-  running.add(shopId);
+  const stop = new AbortController();
+  const signal = options.signal ? AbortSignal.any([options.signal, stop.signal]) : stop.signal;
+  const done = (async () => {
+    try {
+      return await run(deps, shopId, result, signal);
+    } finally {
+      // Over, whatever the outcome: no « Import en cours » left behind. A killed process leaves it: its heartbeat
+      // then stops (shown as dead after 10 min), and the next worker start clears it and queues the import again.
+      await deps.db
+        .update(schema.shops)
+        .set({ importState: null })
+        .where(eq(schema.shops.id, shopId))
+        .catch((error) => console.error(`catalogue import ${shopId}: cannot clear its state`, error));
+    }
+  })();
+  running.set(shopId, { stop, done });
   try {
-    return await run(deps, shopId, result);
+    return await done;
   } finally {
     running.delete(shopId);
-    // Over, whatever the outcome: no « Import en cours » left behind (a crash leaves it, shown for 6 h at most).
-    await deps.db
-      .update(schema.shops)
-      .set({ importState: null })
-      .where(eq(schema.shops.id, shopId))
-      .catch((error) => console.error(`catalogue import ${shopId}: cannot clear its state`, error));
   }
 }
 
-async function run(deps: ImportDeps, shopId: string, result: ImportResult): Promise<ImportResult> {
+async function run(deps: ImportDeps, shopId: string, result: ImportResult, signal: AbortSignal): Promise<ImportResult> {
   const { db } = deps;
   const now = deps.now ?? (() => new Date());
   const sleep = deps.sleep ?? defaultSleep;
+  const interrupted = () => {
+    if (signal.aborted) throw new ImportStop("interrupted");
+  };
+  // One request at a time to the shop, 1 s apart (the first one goes at once).
+  let requested = false;
+  const spacing = async () => {
+    if (requested) await sleep(IMPORT_PAUSE_MS);
+    requested = true;
+    interrupted();
+  };
 
   const [shop] = await db.select().from(schema.shops).where(eq(schema.shops.id, shopId));
   if (!shop) return { ...result, error: "shop_not_found" };
@@ -117,25 +172,49 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult): Prom
   }
 
   // « Import en cours » from now on; a state left by a dead job (« En attente », a crashed run) is replaced.
+  const startedAt = now();
   await db
     .update(schema.shops)
-    .set({ importState: "running", importStartedAt: now(), importPages: 0, importSeen: 0 })
+    .set({
+      importState: "running",
+      importStartedAt: startedAt,
+      importHeartbeatAt: startedAt,
+      importPages: 0,
+      importSeen: 0,
+      importExpected: null,
+    })
     .where(eq(schema.shops.id, shopId));
+  // Proof of life for the admin, within a page too: at most every 30 s.
+  let lastBeat = startedAt.getTime();
+  const beat = async () => {
+    const at = now();
+    if (at.getTime() - lastBeat < CATALOGUE_IMPORT_HEARTBEAT_MS) return;
+    lastBeat = at.getTime();
+    await db.update(schema.shops).set({ importHeartbeatAt: at }).where(eq(schema.shops.id, shopId));
+  };
   const reference = await loadReferenceSet(db);
   const activeBefore = await activeImported(db, shopId);
   const seen = new Set<string>();
   const listedIds = new Set<string>();
   let read = 0;
   try {
+    // The bar's scale before any complete import: the products the shop's sitemap lists. Any failure: no estimate.
+    const expected = await estimateProducts(deps, origin, spacing, beat, signal);
+    if (expected !== null) {
+      await db.update(schema.shops).set({ importExpected: expected }).where(eq(schema.shops.id, shopId));
+    }
     for (let page = 1; ; page++) {
       if (page > MAX_PAGES) throw new ImportStop("too_many_pages");
-      if (page > 1) await sleep(IMPORT_PAUSE_MS);
-      const listing = await fetchPage(deps, origin, page, sleep);
+      await spacing();
+      await beat();
+      const listing = await fetchPage(deps, origin, page, sleep, signal);
       for (const id of listing.listedIds) listedIds.add(id);
       const hashes = new Map(listing.products.map((item) => [item, contentHash(item, shop.listingKind)]));
       const unchanged = await unchangedOf(db, shopId, hashes, new Date(now().getTime() - RECHECK_MS));
       const checked: string[] = [];
       for (const item of listing.products) {
+        interrupted();
+        await beat();
         const ids = unchanged.get(item);
         if (ids) {
           for (const id of ids) seen.add(id);
@@ -151,13 +230,23 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult): Prom
       }
       // « Import en cours : page n, x articles lus » in the admin, after each page.
       read += listing.count;
-      await db.update(schema.shops).set({ importPages: page, importSeen: read }).where(eq(schema.shops.id, shopId));
+      lastBeat = now().getTime();
+      await db
+        .update(schema.shops)
+        .set({ importPages: page, importSeen: read, importHeartbeatAt: new Date(lastBeat) })
+        .where(eq(schema.shops.id, shopId));
       if (listing.count < IMPORT_PAGE_SIZE) break;
     }
   } catch (error) {
-    const reason =
-      error instanceof ImportStop ? error.reason : error instanceof CaptureError ? error.message : "unexpected_error";
-    if (!(error instanceof ImportStop || error instanceof CaptureError)) {
+    // A request cut short by the worker stopping is an interruption, not the shop's failure.
+    const reason = signal.aborted
+      ? "interrupted"
+      : error instanceof ImportStop
+        ? error.reason
+        : error instanceof CaptureError
+          ? error.message
+          : "unexpected_error";
+    if (!(signal.aborted || error instanceof ImportStop || error instanceof CaptureError)) {
       console.error(`catalogue import ${shopId} failed`, error);
     }
     result.error = reason;
@@ -208,34 +297,92 @@ async function shopOrigin(db: Database, shop: typeof schema.shops.$inferSelect):
   return domain ? `https://${domain.domain}` : null;
 }
 
+/**
+ * One request to the shop through the capture's guard rails: its domain's throttle, robots.txt (a refusal throws
+ * `robots_disallowed`), the address policy, the size and time caps; cut short when `signal` is aborted.
+ */
+async function fetchShop(deps: ImportDeps, url: string, accept: SafeFetchAccept, signal: AbortSignal) {
+  await deps.throttle.wait(shopDomain(url));
+  if (!(await deps.robots.allows(url))) throw new ImportStop("robots_disallowed");
+  return safeFetch(url, {
+    accept,
+    policy: deps.policy ?? strictPolicy,
+    maxBytes: PAGE_MAX_BYTES,
+    timeoutMs: PAGE_TIMEOUT_MS,
+    signal,
+    ...(deps.lookup ? { lookup: deps.lookup } : {}),
+  });
+}
+
 async function fetchPage(
   deps: ImportDeps,
   origin: string,
   page: number,
   sleep: (ms: number) => Promise<void>,
+  signal: AbortSignal,
 ): Promise<ShopifyCatalogPage> {
   const url = `${origin}/products.json?limit=${IMPORT_PAGE_SIZE}&page=${page}`;
   for (let attempt = 1; ; attempt++) {
-    await deps.throttle.wait(shopDomain(url));
-    if (!(await deps.robots.allows(url))) throw new ImportStop("robots_disallowed");
     try {
-      const response = await safeFetch(url, {
-        accept: "json",
-        policy: deps.policy ?? strictPolicy,
-        maxBytes: PAGE_MAX_BYTES,
-        timeoutMs: PAGE_TIMEOUT_MS,
-        ...(deps.lookup ? { lookup: deps.lookup } : {}),
-      });
+      const response = await fetchShop(deps, url, "json", signal);
       const listing = extractShopifyCatalogPage(decodeBody(response.body, response.contentType), origin);
       if (!listing) throw new ImportStop("invalid_data");
       return listing;
     } catch (error) {
-      if (attempt === 1 && error instanceof CaptureError && RETRIED.has(error.code)) {
+      if (attempt === 1 && !signal.aborted && error instanceof CaptureError && RETRIED.has(error.code)) {
         await sleep(IMPORT_PAUSE_MS);
         continue;
       }
       throw error;
     }
+  }
+}
+
+/**
+ * How many products the shop's public sitemap lists: `/sitemap.xml` (an index), then each of its products sitemaps
+ * on the same site (at most 50), counting their product addresses (`/products/…`; Shopify also lists the home page).
+ * Every request goes like a page's (`spacing`: 1 s apart; same guard rails). An estimate only: any failure (missing,
+ * forbidden by robots.txt, blocked, too big, unreadable, no product) gives null and is not an import error. Only an
+ * interruption of the import goes through.
+ */
+async function estimateProducts(
+  deps: ImportDeps,
+  origin: string,
+  spacing: () => Promise<void>,
+  beat: () => Promise<void>,
+  signal: AbortSignal,
+): Promise<number | null> {
+  const read = async (url: string) => {
+    // robots.txt first: a forbidden sitemap is not requested, and costs no pause.
+    if (!(await deps.robots.allows(url))) return null;
+    await spacing();
+    await beat();
+    const response = await fetchShop(deps, url, "xml", signal);
+    return extractSitemap(decodeBody(response.body, response.contentType));
+  };
+  try {
+    const index = await read(`${origin}/sitemap.xml`);
+    if (index?.kind !== "index") return null;
+    const site = shopDomain(origin);
+    const sitemaps = index.locs
+      .filter((loc) => {
+        const url = new URL(loc);
+        return shopDomain(loc) === site && PRODUCT_SITEMAP.test(url.pathname);
+      })
+      .slice(0, MAX_PRODUCT_SITEMAPS);
+    if (sitemaps.length === 0) return null;
+    let total = 0;
+    for (const loc of sitemaps) {
+      const sitemap = await read(loc);
+      if (sitemap?.kind !== "urlset") return null;
+      total += sitemap.locs.filter((page) => new URL(page).pathname.includes("/products/")).length;
+    }
+    return total > 0 ? total : null;
+  } catch (error) {
+    if (signal.aborted || (error instanceof ImportStop && error.reason === "interrupted")) {
+      throw new ImportStop("interrupted");
+    }
+    return null;
   }
 }
 
