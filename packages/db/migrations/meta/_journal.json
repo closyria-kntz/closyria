@@ -148,6 +148,13 @@
       "when": 1794438988573,
       "tag": "0020_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794569083538,
+      "tag": "0021_catalogue",
+      "breakpoints": true
     }
   ]
 }

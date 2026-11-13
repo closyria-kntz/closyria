@@ -18,6 +18,9 @@ const NOT_OWNED: Record<string, string> = {
   // R16: the audit log outlives the admin account (ON DELETE SET NULL) and holds no user content.
   "admin_audit_log.admin_id": "R16",
   // Capture log: an operational record that outlives the user (ON DELETE SET NULL) and holds no user content.
+  // Catalogue reports: one per person and article (unique), so moving them on linking could collide; an anonymous
+  // account's reports are deleted with her (ON DELETE CASCADE), which loses nothing the admin needs.
+  "product_reports.user_id": "catalogue report: not moved on linking (unique per person and article), cascades",
   "captures.requested_by": "capture log: outlives the user (ON DELETE SET NULL), no user content",
 };
 

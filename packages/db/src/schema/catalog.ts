@@ -11,8 +11,10 @@ import {
   platformSchema,
   productCaptureStatusSchema,
   productSourceSchema,
+  reportReasonSchema,
   seasonSchema,
   shopStatusSchema,
+  shopValueSchema,
 } from "@closyria/shared";
 import { sql } from "drizzle-orm";
 import {
@@ -51,6 +53,12 @@ export const shops = pgTable(
     mergedIntoId: uuid("merged_into_id").references((): AnyPgColumn => shops.id, { onDelete: "set null" }),
     /** Set by the admin (« boutique de la semaine »): the shop featured most recently is the « une » of « Découvrir ». */
     featuredAt: timestamp("featured_at", { withTimezone: true }),
+    /** Ticked by the admin (made in France, second hand…): filters of « Découvrir ». */
+    values: text("values").array().notNull().default(sql`'{}'::text[]`),
+    /** The nightly import of the shop catalogue is on. */
+    importEnabled: boolean("import_enabled").notNull().default(false),
+    lastImportAt: timestamp("last_import_at", { withTimezone: true }),
+    lastImportError: text("last_import_error"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -59,6 +67,10 @@ export const shops = pgTable(
     check("shops_platform_check", oneOf(t.platform, platformSchema.options)),
     check("shops_capture_mode_check", oneOf(t.captureMode, captureModeSchema.options)),
     check("shops_listing_kind_check", oneOf(t.listingKind, listingKindSchema.options)),
+    check(
+      "shops_values_check",
+      sql`${t.values} <@ ARRAY[${sql.raw(shopValueSchema.options.map((v) => `'${v}'`).join(", "))}]::text[]`,
+    ),
   ],
 );
 
@@ -127,6 +139,12 @@ export const products = pgTable(
     patternId: uuid("pattern_id").references(() => patterns.id, { onDelete: "set null" }),
     season: text("season"),
     classifiedBy: text("classified_by").notNull().default("rule"),
+    /** `admin` once the admin filed it by hand: the importer no longer touches the category. */
+    categorySource: text("category_source").notNull().default("auto"),
+    /** Hidden from the catalogue by the admin (reports). */
+    hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+    /** Gone from the shop catalogue at the last import; kept for those who want it. */
+    removedAt: timestamp("removed_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -143,6 +161,7 @@ export const products = pgTable(
     ),
     check("products_season_check", sql`${t.season} IS NULL OR ${oneOf(t.season, seasonSchema.options)}`),
     check("products_classified_by_check", oneOf(t.classifiedBy, classifiedBySchema.options)),
+    check("products_category_source_check", oneOf(t.categorySource, ["auto", "admin"])),
     check("products_source_check", oneOf(t.source, productSourceSchema.options)),
     check("products_capture_status_check", oneOf(t.captureStatus, productCaptureStatusSchema.options)),
     check("products_currency_check", sql`char_length(${t.currency}) = 3`),
@@ -244,5 +263,25 @@ export const captures = pgTable(
       "captures_error_code_check",
       sql`${t.errorCode} IS NULL OR ${oneOf(t.errorCode, captureErrorCodeSchema.options)}`,
     ),
+  ],
+);
+
+/** A signed-in person flags a catalogue article; one report per person and article. */
+export const productReports = pgTable(
+  "product_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    reason: text("reason").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("product_reports_product_user_unique").on(t.productId, t.userId),
+    check("product_reports_reason_check", oneOf(t.reason, reportReasonSchema.options)),
   ],
 );

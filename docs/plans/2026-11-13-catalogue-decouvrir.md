@@ -40,8 +40,8 @@
 - `classify({ productType, tags, options, name }, reference: { categories: {id, keywords[]}[], colors: {id, keywords[]}[] }): { categoryId: string|null; colorId: string|null }` — mots-clés comparés sans accents ni casse, sur le mot entier ; priorité : type de produit > étiquettes > nom ; couleur : option « Couleur/Color » > étiquettes > nom.
 - `sizeMatches(profileSize: string|null, available: string[]): boolean|null` (null si pas de taille de profil) et `sizeKindOf(categorySlug): "top"|"bottom"|"shoes"|null`.
 
-- [ ] Tests d'abord : `classify` (« Robe à carreaux » → robe ; type « Pull » → pull ; option Color « Bordeaux » → bordeaux ; « T-shirt écru » ; rien → null/null) ; `sizeMatches` (« m » vs [« S »,« M »] → true ; « 38 » vs [« 36 »] → false ; null → null) ; migration (valeurs par défaut, contrainte de motif, unicité du signalement).
-- [ ] Implémenter, relancer, `pnpm typecheck`, commit « feat(catalogue): données et classement ».
+- [x] Tests d'abord : `classify` (« Robe à carreaux » → robe ; type « Pull » → pull ; option Color « Bordeaux » → bordeaux ; « T-shirt écru » ; rien → null/null) ; `sizeMatches` (« m » vs [« S »,« M »] → true ; « 38 » vs [« 36 »] → false ; null → null) ; migration (valeurs par défaut, contrainte de motif, unicité du signalement).
+- [x] Implémenter, relancer, `pnpm typecheck`, commit « feat(catalogue): données et classement ».
 
 ### Task 2: Import Shopify et classement à la capture
 

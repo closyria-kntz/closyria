@@ -139,3 +139,73 @@ export function classify(input: ClassifyInput, ref: ReferenceSet): Classificatio
 
   return result;
 }
+
+export type CatalogueClassifyInput = {
+  productType: string | null;
+  tags: string[];
+  /** Shopify options, e.g. `{ name: "Couleur", values: ["Bordeaux"] }`. */
+  options: { name: string; values: string[] }[];
+  name: string;
+};
+export type CatalogueReference = {
+  categories: { id: string; parentId?: string | null; keywords: string[] }[];
+  colors: { id: string; keywords: string[] }[];
+};
+
+const COLOR_OPTION = /^(couleur|couleurs|color|colour|colors|colours)$/;
+
+/**
+ * Files an imported Shopify product into category and colour by reference keywords (whole words, no accents, no case).
+ * Category: product type, then tags, then name; the deepest matching category wins inside one source, the longest
+ * keyword on ties. Colour: « Couleur/Color » option, then tags, then name. Pure: the caller passes the lists.
+ */
+export function classifyCatalogue(
+  input: CatalogueClassifyInput,
+  reference: CatalogueReference,
+): { categoryId: string | null; colorId: string | null } {
+  const parentOf = new Map(reference.categories.map((c) => [c.id, c.parentId ?? null]));
+  const depth = (id: string, seen = new Set<string>()): number => {
+    const parent = parentOf.get(id);
+    if (!parent || seen.has(id)) return 0;
+    seen.add(id);
+    return 1 + depth(parent, seen);
+  };
+
+  const categorySources = [input.productType ? [input.productType] : [], input.tags, [input.name]];
+  let categoryId: string | null = null;
+  for (const source of categorySources) {
+    const texts = source.map(normalize);
+    let best: { id: string; depth: number; length: number } | undefined;
+    for (const c of reference.categories) {
+      for (const k of c.keywords) {
+        if (!texts.some((t) => has(t, k))) continue;
+        const candidate = { id: c.id, depth: depth(c.id), length: normalize(k).length };
+        if (!best || candidate.depth > best.depth || (candidate.depth === best.depth && candidate.length > best.length))
+          best = candidate;
+      }
+    }
+    if (best) {
+      categoryId = best.id;
+      break;
+    }
+  }
+
+  const optionValues = input.options
+    .filter((o) => COLOR_OPTION.test(normalize(o.name).trim()))
+    .flatMap((o) => o.values);
+  let colorId: string | null = null;
+  for (const source of [optionValues, input.tags, [input.name]]) {
+    const texts = source.map(normalize);
+    let best: { id: string; length: number } | undefined;
+    for (const c of reference.colors)
+      for (const k of c.keywords) {
+        const length = normalize(k).length;
+        if (texts.some((t) => has(t, k)) && (!best || length > best.length)) best = { id: c.id, length };
+      }
+    if (best) {
+      colorId = best.id;
+      break;
+    }
+  }
+  return { categoryId, colorId };
+}

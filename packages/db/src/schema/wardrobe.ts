@@ -70,6 +70,10 @@ export const profiles = pgTable(
     /** Name of a palette token, never a raw colour. */
     color: text("color").notNull(),
     position: integer("position").notNull().default(0),
+    /** « Mes tailles »: free text (« M », « 38 »), at most 10 characters. */
+    sizeTop: text("size_top"),
+    sizeBottom: text("size_bottom"),
+    sizeShoes: text("size_shoes"),
     createdAt: createdAt(),
   },
   (t) => [
@@ -81,6 +85,9 @@ export const profiles = pgTable(
       sql`${t.childDetail} IS NULL OR ${oneOf(t.childDetail, childDetailSchema.options)}`,
     ),
     check("profiles_color_check", oneOf(t.color, profileColorSchema.options)),
+    check("profiles_size_top_check", sql`char_length(${t.sizeTop}) <= 10`),
+    check("profiles_size_bottom_check", sql`char_length(${t.sizeBottom}) <= 10`),
+    check("profiles_size_shoes_check", sql`char_length(${t.sizeShoes}) <= 10`),
   ],
 );
 

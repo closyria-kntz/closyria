@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classify, type ReferenceSet } from "./classify";
+import { classify, classifyCatalogue, type ReferenceSet } from "./classify";
 
 const ref: ReferenceSet = {
   categories: [
@@ -113,5 +113,54 @@ describe("classify", () => {
 
   it("returns an empty classification when nothing matches", () => {
     expect(classify({ ...base, url: "not a url", name: "Zzz" }, ref)).toEqual({});
+  });
+});
+
+describe("classifyCatalogue", () => {
+  const reference = {
+    categories: [
+      { id: "robes", parentId: null, keywords: ["robe", "robes"] },
+      { id: "pulls", parentId: null, keywords: ["pull", "pulls"] },
+      { id: "hauts", parentId: null, keywords: ["haut"] },
+      { id: "tshirts", parentId: "hauts", keywords: ["t-shirt"] },
+    ],
+    colors: [
+      { id: "bordeaux", keywords: ["bordeaux", "burgundy"] },
+      { id: "ecru", keywords: ["écru", "ecru"] },
+      { id: "noir", keywords: ["noir", "black"] },
+    ],
+  };
+  const empty = { productType: null, tags: [], options: [], name: "" };
+
+  it("finds a category and colour from the name", () => {
+    expect(classifyCatalogue({ ...empty, name: "Robe à carreaux" }, reference)).toEqual({
+      categoryId: "robes",
+      colorId: null,
+    });
+    expect(classifyCatalogue({ ...empty, name: "T-shirt écru" }, reference)).toEqual({
+      categoryId: "tshirts",
+      colorId: "ecru",
+    });
+  });
+  it("prefers the product type over the name", () => {
+    expect(classifyCatalogue({ ...empty, productType: "Pull", name: "Robe douce" }, reference).categoryId).toBe(
+      "pulls",
+    );
+  });
+  it("prefers the colour option over tags and name", () => {
+    const r = classifyCatalogue(
+      { ...empty, name: "Pull noir", tags: ["black"], options: [{ name: "Color", values: ["Bordeaux"] }] },
+      reference,
+    );
+    expect(r.colorId).toBe("bordeaux");
+  });
+  it("matches whole words only", () => {
+    expect(classifyCatalogue({ ...empty, name: "Pulling robotique" }, reference)).toEqual({
+      categoryId: null,
+      colorId: null,
+    });
+  });
+  it("returns nulls with nothing to go on", () => {
+    expect(classifyCatalogue(empty, reference)).toEqual({ categoryId: null, colorId: null });
   });
 });
