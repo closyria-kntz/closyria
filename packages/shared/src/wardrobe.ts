@@ -115,6 +115,16 @@ const centsSchema = z.number().int().nonnegative().max(100_000_000);
 const dateTimeSchema = z.iso.datetime({ offset: true });
 const nameOf = (max: number) => z.string().trim().min(1).max(max);
 
+export const MAX_PROFILE_SIZE = 10;
+const sizeField = z.string().trim().min(1).max(MAX_PROFILE_SIZE).nullable();
+/** « Mes tailles » of a profile: each one optional, null when she has none. */
+export const profileSizesSchema = z.object({
+  sizeTop: sizeField,
+  sizeBottom: sizeField,
+  sizeShoes: sizeField,
+});
+export type ProfileSizes = z.infer<typeof profileSizesSchema>;
+
 export const profileInputSchema = z.object({
   name: nameOf(MAX_PROFILE_NAME),
   audience: audienceSchema,
@@ -345,6 +355,7 @@ export const profileViewSchema = z.object({
   color: profileColorSchema,
   position: z.number().int(),
   itemCount: z.number().int().nonnegative().optional(),
+  ...profileSizesSchema.shape,
 });
 export type ProfileView = z.infer<typeof profileViewSchema>;
 
@@ -560,7 +571,7 @@ export const photoImportViewSchema = z.discriminatedUnion("status", [
 ]);
 export type PhotoImportView = z.infer<typeof photoImportViewSchema>;
 
-export const profilePatchSchema = profileInputSchema.partial();
+export const profilePatchSchema = profileInputSchema.extend(profileSizesSchema.shape).partial();
 export type ProfilePatch = z.infer<typeof profilePatchSchema>;
 
 export const profileListSchema = z.object({ profiles: z.array(profileViewSchema) });

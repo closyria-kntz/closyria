@@ -190,6 +190,9 @@ export function profilesRoutes(deps: WardrobeDeps) {
         .set({
           ...(patch.name !== undefined ? { name: patch.name } : {}),
           ...(patch.color !== undefined ? { color: patch.color } : {}),
+          ...(patch.sizeTop !== undefined ? { sizeTop: patch.sizeTop } : {}),
+          ...(patch.sizeBottom !== undefined ? { sizeBottom: patch.sizeBottom } : {}),
+          ...(patch.sizeShoes !== undefined ? { sizeShoes: patch.sizeShoes } : {}),
           audience,
           childDetail,
         })

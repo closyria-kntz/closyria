@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { catalogQuerySchema, profileSizesSchema, reportInputSchema, sizeKindOf, sizeMatches } from "./catalogue";
+import { catalogQuerySchema, reportInputSchema, SIZE_SUGGESTIONS, sizeKindOf, sizeMatches } from "./catalogue";
+import { profileSizesSchema } from "./wardrobe";
 
 describe("sizeMatches", () => {
   it("ignores case and spaces", () => {
@@ -9,6 +10,51 @@ describe("sizeMatches", () => {
   it("is false when the size is not there, null without a profile size", () => {
     expect(sizeMatches("38", ["36"])).toBe(false);
     expect(sizeMatches(null, ["36"])).toBeNull();
+  });
+});
+
+describe("SIZE_SUGGESTIONS", () => {
+  it("offers the letters and 32 to 48 for tops, 24 to 48 for bottoms, 35 to 42 for shoes", () => {
+    expect(SIZE_SUGGESTIONS.top).toEqual([
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL",
+      "32",
+      "34",
+      "36",
+      "38",
+      "40",
+      "42",
+      "44",
+      "46",
+      "48",
+    ]);
+    expect(SIZE_SUGGESTIONS.bottom.slice(0, 11)).toEqual([
+      "24",
+      "25",
+      "26",
+      "27",
+      "28",
+      "29",
+      "30",
+      "31",
+      "32",
+      "33",
+      "34",
+    ]);
+    expect(SIZE_SUGGESTIONS.bottom.slice(11)).toEqual(["36", "38", "40", "42", "44", "46", "48"]);
+    expect(SIZE_SUGGESTIONS.shoes).toEqual(["35", "36", "37", "38", "39", "40", "41", "42"]);
+  });
+  it("only holds sizes the profile accepts, without duplicates", () => {
+    for (const list of Object.values(SIZE_SUGGESTIONS)) {
+      expect(new Set(list).size).toBe(list.length);
+      for (const size of list) {
+        expect(profileSizesSchema.shape.sizeTop.safeParse(size).success).toBe(true);
+      }
+    }
   });
 });
 

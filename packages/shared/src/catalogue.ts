@@ -95,16 +95,6 @@ export type ReportInput = z.infer<typeof reportInputSchema>;
 export const reportResolutionSchema = z.enum(["hidden", "kept"]);
 export type ReportResolution = z.infer<typeof reportResolutionSchema>;
 
-export const MAX_PROFILE_SIZE = 10;
-const sizeField = z.string().trim().min(1).max(MAX_PROFILE_SIZE).nullable();
-/** « Mes tailles » of a profile. */
-export const profileSizesSchema = z.object({
-  sizeTop: sizeField,
-  sizeBottom: sizeField,
-  sizeShoes: sizeField,
-});
-export type ProfileSizes = z.infer<typeof profileSizesSchema>;
-
 const squash = (s: string) => s.replace(/\s+/g, "").toLowerCase();
 
 /** Her size against a product's available sizes, ignoring case and spaces; null without a profile size. */
@@ -115,6 +105,16 @@ export function sizeMatches(profileSize: string | null, available: string[]): bo
 }
 
 export type SizeKind = "top" | "bottom" | "shoes";
+
+const range = (from: number, to: number, step = 1) =>
+  Array.from({ length: Math.floor((to - from) / step) + 1 }, (_, i) => String(from + i * step));
+
+/** The sizes « Mes tailles » offers as choices (a free text is always possible too); spec §3.3. */
+export const SIZE_SUGGESTIONS: Readonly<Record<SizeKind, readonly string[]>> = {
+  top: ["XS", "S", "M", "L", "XL", "XXL", ...range(32, 48, 2)],
+  bottom: [...range(24, 34), ...range(36, 48, 2)],
+  shoes: range(35, 42),
+};
 
 /** Category slugs that take one of her sizes (the API filters « Ma taille en stock » in SQL from this table). */
 export const SIZE_KIND_BY_SLUG: Readonly<Record<string, SizeKind>> = {

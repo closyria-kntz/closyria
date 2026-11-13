@@ -1847,6 +1847,7 @@
       "profiles": "Profils",
       "tags": "Étiquettes",
       "levels": "Mes niveaux",
+      "sizes": "Mes tailles",
       "appearance": "Apparence",
       "trash": "Corbeille",
       "account": "Mon compte",
@@ -1866,6 +1867,20 @@
     "failed": "L’enregistrement n’a pas abouti. Réessaie.",
     "cancel": "Annuler",
     "close": "Fermer",
+    "sizes": {
+      "metadata": "Mes tailles",
+      "title": "Mes tailles",
+      "intro": "Pour voir d’un coup d’œil les articles disponibles à ta taille dans Découvrir.",
+      "forProfile": "Tailles de {name}",
+      "top": "Hauts",
+      "bottom": "Bas",
+      "shoes": "Chaussures",
+      "none": "Aucune",
+      "other": "Une autre taille…",
+      "otherLabel": "{kind} : une autre taille",
+      "save": "Enregistrer",
+      "saved": "Tes tailles sont enregistrées."
+    },
     "appearance": {
       "metadata": "Apparence",
       "title": "Apparence",

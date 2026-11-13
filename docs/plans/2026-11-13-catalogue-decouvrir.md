@@ -67,8 +67,8 @@
 
 **Interfaces — Produces :** `POST /api/admin/shops/{id}/publish|refuse` ; `PATCH /api/admin/shops/{id}` accepte `values`, `importEnabled` ; `POST /api/admin/shops/{id}/import` (lance un import maintenant) ; `GET /api/admin/catalogue/unclassified` + `PATCH /api/admin/products/{id}/classification` (`{ categoryId, colorId, applyToShopType?: boolean }`, `category_source = admin`) ; `GET /api/admin/catalogue/reports` + `POST /api/admin/products/{id}/hide|keep`. Tout est audité.
 
-- [ ] Tests d'abord (intégration + e2e admin) : valider une boutique rend ses produits visibles ; valeurs enregistrées ; import lancé ; classer un article (et « Appliquer aux articles du même type ») ; masquer un signalé le retire du catalogue sans toucher aux envies ; accès admin seulement ; audit.
-- [ ] Implémenter, relancer, commit « feat(catalogue): administration ».
+- [x] Tests d'abord (intégration + e2e admin) : valider une boutique rend ses produits visibles ; valeurs enregistrées ; import lancé ; classer un article (et « Appliquer aux articles du même type ») ; masquer un signalé le retire du catalogue sans toucher aux envies ; accès admin seulement ; audit.
+- [x] Implémenter, relancer, commit « feat(catalogue): administration ».
 
 ### Task 5: Découvrir et fiche du catalogue
 
@@ -76,12 +76,12 @@
 
 **Interfaces — Consumes :** API Task 3 ; ShareSheet ; création d'envie existante (« Je le veux » = même appel que garder un produit) ; ajout à une liste existant.
 
-- [ ] e2e d'abord (3 appareils, axe clair/sombre) : la une, la grille, la recherche, chaque filtre (dont « Ma taille en stock » sans tailles → grisé + « Ajoute tes tailles »), tri, défilement par pages, « Je le veux » (cœur plein, article dans Mes articles), fiche (tailles, « Aimé par », proche, même boutique, même style, Partager, Ajouter à une liste, Voir chez), « Signaler » + « Merci, on regarde. », retour arrière qui garde filtres et position, écran vide.
-- [ ] Implémenter (filtres dans l'adresse pour le retour arrière ; même modèle « Filtres et tri » que Mes articles), relancer, commit « feat(catalogue): Découvrir ».
+- [x] e2e d'abord (3 appareils, axe clair/sombre) : la une, la grille, la recherche, chaque filtre (dont « Ma taille en stock » sans tailles → grisé + « Ajoute tes tailles »), tri, défilement par pages, « Je le veux » (cœur plein, article dans Mes articles), fiche (tailles, « Aimé par », proche, même boutique, même style, Partager, Ajouter à une liste, Voir chez), « Signaler » + « Merci, on regarde. », retour arrière qui garde filtres et position, écran vide.
+- [x] Implémenter (filtres dans l'adresse pour le retour arrière ; même modèle « Filtres et tri » que Mes articles), relancer, commit « feat(catalogue): Découvrir ».
 
 ### Task 6: Mes tailles
 
 **Files:** API profils (`apps/api/src/routes/me/profiles.ts` + test : lecture/écriture `sizeTop/sizeBottom/sizeShoes`), page `apps/web/src/app/(app)/reglages/tailles/page.tsx` (+ ligne « Mes tailles » dans Compte), `fr.json`, e2e.
 
-- [ ] Tests d'abord : enregistrer et relire les tailles d'un profil ; un autre profil garde les siennes ; Compte → « Mes tailles » ; après saisie, « Ma taille en stock » s'active dans Découvrir et la fiche met sa taille en avant.
-- [ ] Implémenter, relancer, suite e2e complète, docs (spec § « Décisions de construction », plan coché), commit « feat(catalogue): mes tailles ».
+- [x] Tests d'abord : enregistrer et relire les tailles d'un profil ; un autre profil garde les siennes ; Compte → « Mes tailles » ; après saisie, « Ma taille en stock » s'active dans Découvrir et la fiche met sa taille en avant.
+- [x] Implémenter, relancer, suite e2e complète, docs (spec § « Décisions de construction », plan coché), commit « feat(catalogue): mes tailles ».

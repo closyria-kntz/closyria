@@ -34,6 +34,9 @@ type ProfileJson = {
   color: string;
   position: number;
   itemCount?: number;
+  sizeTop?: string | null;
+  sizeBottom?: string | null;
+  sizeShoes?: string | null;
 };
 
 async function newProduct() {
@@ -69,6 +72,9 @@ describe("GET /api/me/profiles", () => {
         childDetail: null,
         color: "plum",
         position: 0,
+        sizeTop: null,
+        sizeBottom: null,
+        sizeShoes: null,
         itemCount: 0,
       },
     ]);
@@ -136,6 +142,40 @@ describe("PATCH, DELETE and order", () => {
     const res = await call("PATCH", `/api/me/profiles/${created.id}`, cookie, { name: "Léa B.", audience: "women" });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ id: created.id, name: "Léa B.", audience: "women", childDetail: null });
+  });
+
+  it("saves « Mes tailles » per profile, reads them back, and clears one with null", async () => {
+    const { cookie } = await t.signIn();
+    const me = ((await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] })
+      .profiles[0] as ProfileJson;
+    expect([me.sizeTop, me.sizeBottom, me.sizeShoes]).toEqual([null, null, null]);
+    const lea = (await (
+      await call("POST", "/api/me/profiles", cookie, { name: "Léa", audience: "women", color: "rose" })
+    ).json()) as ProfileJson;
+
+    const saved = await call("PATCH", `/api/me/profiles/${me.id}`, cookie, {
+      sizeTop: " M ",
+      sizeBottom: "38",
+      sizeShoes: "40",
+    });
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toMatchObject({ sizeTop: "M", sizeBottom: "38", sizeShoes: "40" });
+    await call("PATCH", `/api/me/profiles/${lea.id}`, cookie, { sizeTop: "S" });
+
+    const list = (await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] };
+    expect(list.profiles.map((p) => [p.name, p.sizeTop, p.sizeBottom, p.sizeShoes])).toEqual([
+      ["Moi", "M", "38", "40"],
+      ["Léa", "S", null, null],
+    ]);
+
+    // A field left out keeps its value; null clears it; "" and a size over 10 characters are refused.
+    const cleared = await call("PATCH", `/api/me/profiles/${me.id}`, cookie, { sizeBottom: null });
+    expect(await cleared.json()).toMatchObject({ sizeTop: "M", sizeBottom: null, sizeShoes: "40" });
+    expect((await call("PATCH", `/api/me/profiles/${me.id}`, cookie, { sizeTop: "" })).status).toBe(400);
+    expect((await call("PATCH", `/api/me/profiles/${me.id}`, cookie, { sizeTop: "12345678901" })).status).toBe(400);
+    // Renaming does not touch the sizes.
+    const renamed = await call("PATCH", `/api/me/profiles/${me.id}`, cookie, { name: "Moi-même" });
+    expect(await renamed.json()).toMatchObject({ name: "Moi-même", sizeTop: "M", sizeShoes: "40" });
   });
 
   it("deletes an empty profile and refuses one that holds items", async () => {

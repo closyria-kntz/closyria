@@ -9,6 +9,9 @@ const profile = (id: string, name: string, position: number): ProfileView => ({
   childDetail: null,
   color: "plum",
   position,
+  sizeTop: null,
+  sizeBottom: null,
+  sizeShoes: null,
 });
 const moi = profile("00000000-0000-4000-8000-000000000001", "Moi", 0);
 const lea = profile("00000000-0000-4000-8000-000000000002", "Léa", 1);

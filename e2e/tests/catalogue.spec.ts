@@ -535,3 +535,120 @@ test("le retour arrière depuis une fiche garde les filtres, les pages chargées
   await expect(page.getByRole("button", { name: "Voir plus d’articles" })).toBeVisible();
   expect(await scrollTop(page)).toBe(0);
 });
+
+test("« Mes tailles » : depuis Compte, par profil, puis « Ma taille en stock » s’active et la fiche met sa taille en avant", async ({
+  page,
+  db,
+  userAgentTag,
+}) => {
+  const tag = randomUUID().slice(0, 8);
+  const tops = await sharedCategory(db, "hauts", "Hauts");
+  const shop = await seedShop(db, tag, "Tailles");
+  const id = await seedProduct(db, shop.id, {
+    name: `Blouse tailles ${tag}`,
+    categoryId: tops,
+    sizes: [
+      ["S", true],
+      ["M", true],
+      ["L", false],
+    ],
+  });
+  const shoes = await sharedCategory(db, "chaussures", "Chaussures");
+  await seedProduct(db, shop.id, { name: `Sandale tailles ${tag}`, categoryId: shoes, sizes: [["38,5", true]] });
+
+  // Without sizes the filter is greyed; « Ajoute tes tailles » leads to the page, and so does Compte.
+  await page.goto(`/decouvrir?recherche=${tag}`);
+  await expect(cards(page)).toHaveCount(2);
+  let filters = await openFilters(page);
+  await expect(filters.getByRole("button", { name: "Ma taille en stock" })).toBeDisabled();
+  await page.goto("/compte");
+  const row = page.getByRole("main").getByRole("link", { name: "Mes tailles", exact: true });
+  await expect(row).toHaveAttribute("href", "/reglages/tailles");
+  expect((await row.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await row.click();
+  await expect(page).toHaveURL(/\/reglages\/tailles$/);
+  const main = page.getByRole("main");
+  await expect(main.getByRole("heading", { level: 2, name: "Mes tailles" })).toBeVisible();
+  await expect(
+    main.getByText("Pour voir d’un coup d’œil les articles disponibles à ta taille dans Découvrir."),
+  ).toBeVisible();
+
+  const top = main.getByRole("combobox", { name: "Hauts" });
+  const bottom = main.getByRole("combobox", { name: "Bas" });
+  const foot = main.getByRole("combobox", { name: "Chaussures" });
+  for (const field of [top, bottom, foot]) {
+    await expect(field).toHaveValue("");
+    expect((await field.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
+  await expect(top.locator("option")).toHaveText([
+    "Aucune",
+    ...["XS", "S", "M", "L", "XL", "XXL", "32", "34", "36", "38", "40", "42", "44", "46", "48"],
+    "Une autre taille…",
+  ]);
+  await axeLightAndDark(page);
+
+  // A suggested value for tops, a free one for shoes (typed with spaces and a lower case).
+  await top.selectOption("M");
+  await foot.selectOption({ label: "Une autre taille…" });
+  await main.getByRole("textbox", { name: "Chaussures : une autre taille" }).fill(" 38,5 ");
+  await main.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(page.getByText("Tes tailles sont enregistrées.")).toBeVisible();
+  const { profileId } = await herProfile(page, db, userAgentTag);
+  await expect
+    .poll(
+      async () =>
+        (await db.query("select size_top, size_bottom, size_shoes from profiles where id = $1", [profileId])).rows[0],
+    )
+    .toEqual({ size_top: "M", size_bottom: null, size_shoes: "38,5" });
+  // Read back after a reload: the free size shows in its own box.
+  await page.reload();
+  await expect(top).toHaveValue("M");
+  await expect(bottom).toHaveValue("");
+  await expect(foot).toHaveValue("__other");
+  await expect(main.getByRole("textbox", { name: "Chaussures : une autre taille" })).toHaveValue("38,5");
+
+  // Another profile keeps its own sizes (none), and saving there leaves « Moi » alone.
+  const lea = await page.evaluate(() =>
+    fetch("/api/me/profiles", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Léa", audience: "women", color: "rose" }),
+    }).then((r) => r.json() as Promise<{ id: string }>),
+  );
+  await page.goto(`/reglages/tailles?profil=${lea.id}`);
+  await expect(main.getByRole("heading", { level: 2, name: "Mes tailles" })).toBeVisible();
+  await expect(top).toHaveValue("");
+  await top.selectOption("S");
+  await main.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(page.getByText("Tes tailles sont enregistrées.")).toBeVisible();
+  const sizesOf = async (profile: string) =>
+    (await db.query("select size_top from profiles where id = $1", [profile])).rows[0]?.size_top;
+  await expect.poll(() => sizesOf(lea.id)).toBe("S");
+  expect(await sizesOf(profileId)).toBe("M");
+
+  // « Ma taille en stock » is on offer now, and the sheet puts her size forward.
+  await page.goto(`/decouvrir?recherche=${tag}`);
+  await expect(card(page, `Blouse tailles ${tag}`).getByTestId("card-size")).toHaveText("Ta taille en stock");
+  await expect(card(page, `Sandale tailles ${tag}`).getByTestId("card-size")).toHaveText("Ta taille en stock");
+  filters = await openFilters(page);
+  await expect(filters.getByRole("link", { name: "Ajoute tes tailles" })).toHaveCount(0);
+  await filters.getByRole("button", { name: "Ma taille en stock" }).click();
+  await expect(page).toHaveURL(/ma-taille=1/);
+  await expect(cards(page)).toHaveCount(2);
+  await page.goto(`/decouvrir/${id}`);
+  await expect(page.getByTestId("product-info")).toContainText("Ta taille en stock");
+  await expect(page.getByRole("region", { name: "Ta taille" }).getByRole("listitem")).toHaveText([
+    "S",
+    "M (ta taille)",
+    "L (indisponible)",
+  ]);
+
+  // Emptying a field clears it (null on the wire, never an empty text).
+  await page.goto("/reglages/tailles");
+  await top.selectOption("");
+  await main.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(page.getByText("Tes tailles sont enregistrées.")).toBeVisible();
+  await expect
+    .poll(async () => (await db.query("select size_top, size_shoes from profiles where id = $1", [profileId])).rows[0])
+    .toEqual({ size_top: null, size_shoes: "38,5" });
+});

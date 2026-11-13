@@ -57,6 +57,7 @@ test("« Compte » : profil, profils, apparence, réglages, aide — et aucun ar
     [/^Prénom, e-mail et connexion/, /\/reglages\/compte$/],
     [/^Gérer les profils/, /\/reglages\/profils$/],
     ["Mes niveaux", /\/reglages\/niveaux$/],
+    ["Mes tailles", /\/reglages\/tailles$/],
     ["Étiquettes", /\/reglages\/etiquettes$/],
     ["Corbeille", /\/reglages\/corbeille$/],
     [/^Ajouter depuis ton téléphone/, /\/aide\/telephone$/],
