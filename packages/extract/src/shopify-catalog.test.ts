@@ -89,22 +89,6 @@ describe("extractShopifyCatalogPage", () => {
     expect(at({ published_at: undefined, created_at: "pas une date" })).toBeUndefined();
   });
 
-  it("keeps the shop's last change of the product: the latest of the product's and its variants' updated_at", () => {
-    const changed = (fields: Record<string, unknown>) =>
-      extractShopifyCatalogPage(page([product(fields)]), ORIGIN)?.products[0]?.sourceUpdatedAt;
-    const variant = (updated_at: unknown) => ({ id: 1, option1: "S", available: true, price: "49.90", updated_at });
-    expect(changed({ updated_at: "2026-10-02T10:00:00+02:00" })).toBe("2026-10-02T08:00:00.000Z");
-    // A stock or price change may only move the variant's date.
-    expect(
-      changed({
-        updated_at: "2026-10-02T10:00:00+02:00",
-        variants: [variant("2026-10-05T10:00:00Z"), variant("2026-10-03T10:00:00Z")],
-      }),
-    ).toBe("2026-10-05T10:00:00.000Z");
-    expect(changed({ updated_at: null, variants: [variant("pas une date")] })).toBeUndefined();
-    expect(changed({})).toBeUndefined();
-  });
-
   it("uses the first option when none is a size, merges duplicate labels, ignores a compare-at price not above", () => {
     const result = extractShopifyCatalogPage(
       page([

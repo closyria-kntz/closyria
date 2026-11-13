@@ -173,8 +173,11 @@ export const products = pgTable(
     hiddenAt: timestamp("hidden_at", { withTimezone: true }),
     /** Gone from the shop catalogue at the last import; kept for those who want it. */
     removedAt: timestamp("removed_at", { withTimezone: true }),
-    /** The shop's own last change of the product (Shopify `updated_at`) at its last full import write: same at the next import → skipped. */
-    sourceUpdatedAt: timestamp("source_updated_at", { withTimezone: true }),
+    /**
+     * Hash of the import's listing of the product (everything written from it, plus the shop's listing kind) at its last
+     * full import write: the same content, checked again within 7 days, is not written again. Null: never skipped.
+     */
+    sourceHash: text("source_hash"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

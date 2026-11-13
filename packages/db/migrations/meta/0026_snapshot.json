@@ -1,5 +1,5 @@
 {
-  "id": "d95df5a2-25eb-4d90-b71d-e28f8d03a958",
+  "id": "9489777c-f9de-40c0-b405-fb2a143db931",
   "prevId": "a838828d-3e26-4238-8dee-11619d41f7f4",
   "version": "7",
   "dialect": "postgresql",
@@ -1420,9 +1420,9 @@
           "primaryKey": false,
           "notNull": false
         },
-        "source_updated_at": {
-          "name": "source_updated_at",
-          "type": "timestamp with time zone",
+        "source_hash": {
+          "name": "source_hash",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

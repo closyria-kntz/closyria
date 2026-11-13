@@ -104,7 +104,7 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
     if (progress?.line === "starting") return t("state.starting");
     if (progress?.line === "running") return t("state.running", { pages: status.importPages, seen: progress.seen });
     if (progress?.line === "runningTotal") {
-      return t("state.runningTotal", { seen: progress.seen, total: progress.total ?? 0 });
+      return t("state.runningTotal", { seen: progress.seen, total: progress.total });
     }
     if (lastError !== null) return lastError;
     if (!status.lastImportAt) return t("state.none");

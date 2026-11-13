@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type dns from "node:dns";
 import { and, asc, count, type Database, eq, inArray, isNotNull, isNull, or, schema } from "@closyria/db";
 import { extractShopifyCatalogPage, type ShopifyCatalogPage } from "@closyria/extract";
@@ -27,7 +28,7 @@ export type ImportDeps = {
   sleep?: (ms: number) => Promise<void>;
 };
 
-/** `unchanged`: listed products skipped because the shop's last change is the one already written. */
+/** `unchanged`: listed products not written again (same content, checked within 7 days). */
 export type ImportResult = {
   created: number;
   updated: number;
@@ -47,6 +48,8 @@ const RETRIED = new Set(["http_error", "timeout"]);
 const REMOVE_CHUNK = 1000;
 /** Below this share of the products on sale at the last import, the listing is not trusted to remove anything. */
 const SHRINK_RATIO = 0.5;
+/** A product with the same content is still written in full once this old (new classification rules reach it). */
+const RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -69,8 +72,9 @@ class ImportStop extends Error {
  * written exactly like a captured link (sizes, history, photos, classification). Once every page is read, products
  * of the shop that are no longer listed get `removed_at` (cleared when they come back); the wishes (`items`) are
  * never touched. At the first refusal the import stops, records `last_import_error` and removes nothing.
- * A product whose Shopify `updated_at` is the one stored at its last write (`source_updated_at`) and that is not
- * removed is not written again: it only counts as read and listed.
+ * A product whose listing has the same content as at its last write (`source_hash`), that is not removed and was
+ * checked less than 7 days ago is not written again: its check date moves (one update per page) and it counts as read
+ * and listed. Shopify's `updated_at` is not trusted for this: a stock change may not move it.
  */
 export async function importShopifyCatalog(deps: ImportDeps, shopId: string): Promise<ImportResult> {
   const result: ImportResult = { created: 0, updated: 0, unchanged: 0, removed: 0, error: null };
@@ -128,15 +132,22 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult): Prom
       if (page > 1) await sleep(IMPORT_PAUSE_MS);
       const listing = await fetchPage(deps, origin, page, sleep);
       for (const id of listing.listedIds) listedIds.add(id);
-      const unchanged = await unchangedOf(db, shopId, listing.products);
+      const hashes = new Map(listing.products.map((item) => [item, contentHash(item, shop.listingKind)]));
+      const unchanged = await unchangedOf(db, shopId, hashes, new Date(now().getTime() - RECHECK_MS));
+      const checked: string[] = [];
       for (const item of listing.products) {
         const ids = unchanged.get(item);
         if (ids) {
           for (const id of ids) seen.add(id);
+          checked.push(...ids);
           result.unchanged += 1;
           continue;
         }
-        await writeImported(deps, shop, item, reference, seen, result, now());
+        await writeImported(deps, shop, item, hashes.get(item) ?? null, reference, seen, result, now());
+      }
+      // Checked today, unchanged: the sheet's « Mis à jour le » and the capture's freshness stay current.
+      if (checked.length > 0) {
+        await db.update(schema.products).set({ lastCapturedAt: now() }).where(inArray(schema.products.id, checked));
       }
       // « Import en cours : page n, x articles lus » in the admin, after each page.
       read += listing.count;
@@ -228,26 +239,53 @@ async function fetchPage(
   }
 }
 
+type Listed = ShopifyCatalogPage["products"][number];
+
+/**
+ * A stable hash of everything the import writes from a listed product (the parsed product: name, brand, description,
+ * prices, currency, sizes with their stock, photos in order, tags, type, colours, ids, put-online date; and its
+ * address), plus the shop's listing kind (second-hand shops keep no sizes).
+ */
+export function contentHash(item: Listed, listingKind: string): string {
+  return createHash("sha256")
+    .update(stableJson({ url: item.url, product: item.product, listingKind }))
+    .digest("hex");
+}
+
+/** JSON with object keys sorted (arrays keep their order), so the same content always gives the same text. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableJson(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
 /**
  * The products of a page that need no write, with the ids of their rows: every row of the shop under that Shopify id
- * holds the same `source_updated_at` as the listing and is not removed. One query per page.
+ * holds the same `source_hash`, is not removed and was checked since `checkedSince`. One query per page.
  */
 async function unchangedOf(
   db: Database,
   shopId: string,
-  items: ShopifyCatalogPage["products"],
-): Promise<Map<ShopifyCatalogPage["products"][number], string[]>> {
-  const out = new Map<ShopifyCatalogPage["products"][number], string[]>();
+  hashes: Map<Listed, string>,
+  checkedSince: Date,
+): Promise<Map<Listed, string[]>> {
+  const out = new Map<Listed, string[]>();
   const externalIds = [
-    ...new Set(items.filter((i) => i.sourceUpdatedAt && i.product.externalId).map((i) => i.product.externalId ?? "")),
+    ...new Set([...hashes.keys()].flatMap((i) => (i.product.externalId ? [i.product.externalId] : []))),
   ];
   if (externalIds.length === 0) return out;
   const rows = await db
     .select({
       id: schema.products.id,
       externalId: schema.products.externalId,
-      sourceUpdatedAt: schema.products.sourceUpdatedAt,
+      sourceHash: schema.products.sourceHash,
       removedAt: schema.products.removedAt,
+      lastCapturedAt: schema.products.lastCapturedAt,
     })
     .from(schema.products)
     .where(and(eq(schema.products.shopId, shopId), inArray(schema.products.externalId, externalIds)));
@@ -256,14 +294,14 @@ async function unchangedOf(
     const key = row.externalId ?? "";
     byExternalId.set(key, [...(byExternalId.get(key) ?? []), row]);
   }
-  for (const item of items) {
+  for (const [item, hash] of hashes) {
     const known = byExternalId.get(item.product.externalId ?? "");
-    const at = item.sourceUpdatedAt ? new Date(item.sourceUpdatedAt).getTime() : null;
-    if (
-      at !== null &&
-      known?.length &&
-      known.every((row) => row.removedAt === null && row.sourceUpdatedAt?.getTime() === at)
-    ) {
+    const fresh = (row: (typeof rows)[number]) =>
+      row.removedAt === null &&
+      row.sourceHash === hash &&
+      row.lastCapturedAt !== null &&
+      row.lastCapturedAt.getTime() >= checkedSince.getTime();
+    if (known?.length && known.every(fresh)) {
       out.set(
         item,
         known.map((row) => row.id),
@@ -274,13 +312,14 @@ async function unchangedOf(
 }
 
 /**
- * Creates or updates the rows of one listed product, then copies its photos. The shop's last change of the product is
- * stored with it, unless a photo could not be copied: the next import then writes it again and retries the photo.
+ * Creates or updates the rows of one listed product, then copies its photos. The hash of its content is stored with
+ * it, unless a photo could not be copied: the next import then writes it again and retries the photo.
  */
 async function writeImported(
   deps: ImportDeps,
   shop: typeof schema.shops.$inferSelect,
-  item: ShopifyCatalogPage["products"][number],
+  item: Listed,
+  sourceHash: string | null,
   reference: Reference,
   seen: Set<string>,
   result: ImportResult,
@@ -291,7 +330,6 @@ async function writeImported(
   const canonicalUrl = canonicalizeUrl(item.url);
   if (!canonicalUrl) return;
   const externalId = product.externalId;
-  const sourceUpdatedAt = item.sourceUpdatedAt ? new Date(item.sourceUpdatedAt) : null;
 
   // Same Shopify product pasted by link under another address (collection path, variant): the same rows.
   const matches = await db
@@ -318,7 +356,7 @@ async function writeImported(
         reference,
         at,
         history: "on_change",
-        extra: { removedAt: null, sourceUpdatedAt },
+        extra: { removedAt: null, sourceHash },
       });
     });
     ids.push(match.id);
@@ -340,7 +378,7 @@ async function writeImported(
         reference,
         at,
         history: "on_change",
-        extra: { sourceUpdatedAt },
+        extra: { sourceHash },
       });
       return row.id;
     });
@@ -364,8 +402,8 @@ async function writeImported(
       // The data is committed: a photo failure does not stop the import.
       console.error(`catalogue import: photo step failed for product ${id}`, error);
     }
-    if (!complete && sourceUpdatedAt) {
-      await db.update(schema.products).set({ sourceUpdatedAt: null }).where(eq(schema.products.id, id));
+    if (!complete && sourceHash) {
+      await db.update(schema.products).set({ sourceHash: null }).where(eq(schema.products.id, id));
     }
   }
 }

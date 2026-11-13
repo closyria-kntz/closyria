@@ -79,7 +79,9 @@ type FakeProduct = {
   price?: string;
   color?: string;
   image?: boolean;
-  /** Shopify's `updated_at` of the product; absent by default (never skipped). */
+  /** Whether size M is in stock (S always is). */
+  mAvailable?: boolean;
+  /** Shopify's own `updated_at`: the import does not rely on it (a stock change may not move it). */
   updatedAt?: string;
 };
 
@@ -101,7 +103,13 @@ function shopifyProduct(p: FakeProduct) {
     ],
     variants: [
       { id: p.id * 10, option1: "S", available: true, price: p.price ?? "49.90", compare_at_price: null },
-      { id: p.id * 10 + 1, option1: "M", available: false, price: p.price ?? "49.90", compare_at_price: null },
+      {
+        id: p.id * 10 + 1,
+        option1: "M",
+        available: p.mAvailable ?? false,
+        price: p.price ?? "49.90",
+        compare_at_price: null,
+      },
     ],
     images: p.image ? [{ src: `${cdn.origin}/img/${p.id}.png` }] : [],
   };
@@ -349,7 +357,8 @@ describe("importShopifyCatalog", () => {
     ]);
     const second = await importShopifyCatalog(deps, s.id);
 
-    expect(second).toEqual({ created: 0, updated: 2, unchanged: 0, removed: 1, error: null });
+    // The shirt did not change: only its check date moves.
+    expect(second).toEqual({ created: 0, updated: 1, unchanged: 1, removed: 1, error: null });
     expect((await byExternalId(s.id, "2"))?.removedAt).toBeInstanceOf(Date);
     expect((await byExternalId(s.id, "1"))?.removedAt).toBeNull();
     expect((await byExternalId(s.id, "1"))?.priceCents).toBe(3990);
@@ -377,7 +386,7 @@ describe("importShopifyCatalog", () => {
       ],
     ]);
     const third = await importShopifyCatalog(deps, s.id);
-    expect(third).toEqual({ created: 0, updated: 3, unchanged: 0, removed: 0, error: null });
+    expect(third).toEqual({ created: 0, updated: 1, unchanged: 2, removed: 0, error: null });
     expect((await byExternalId(s.id, "2"))?.removedAt).toBeNull();
     expect(await productsOf(s.id)).toHaveLength(4);
   });
@@ -444,7 +453,7 @@ describe("importShopifyCatalog", () => {
 
     const result = await importShopifyCatalog(deps, s.id);
 
-    expect(result).toEqual({ created: 0, updated: 1, unchanged: 0, removed: 0, error: null });
+    expect(result).toEqual({ created: 0, updated: 0, unchanged: 1, removed: 0, error: null });
     expect((await byExternalId(s.id, "2"))?.removedAt).toBeNull();
   });
 
@@ -583,7 +592,7 @@ describe("importShopifyCatalog", () => {
   });
   describe("re-import of an unchanged catalogue", () => {
     const T1 = "2026-10-02T10:00:00.000Z";
-    const T2 = "2026-10-03T10:00:00.000Z";
+    const DAY = 86_400_000;
     const catalogue = (over: Partial<Record<number, Partial<FakeProduct>>> = {}): FakeProduct[] =>
       [
         { id: 1, title: "Robe", type: "Robe", image: true, updatedAt: T1 },
@@ -604,20 +613,34 @@ describe("importShopifyCatalog", () => {
       const rows = await handle.db.select().from(schema.productHistory);
       return rows.filter((h) => ids.includes(h.productId)).length;
     };
+    const sizesOf = async (productId: string) =>
+      (await handle.db.select().from(schema.productSizes).where(eq(schema.productSizes.productId, productId)))
+        .map((x) => [x.label, x.available])
+        .sort();
+    /** The import runs `days` later than now (the 7-day check). */
+    const later = (days: number) => {
+      deps.now = () => new Date(Date.now() + days * DAY);
+    };
 
-    it("stores the shop's last change, then writes nothing for products that did not change", async () => {
+    it("writes nothing but the check date for products whose content did not change", async () => {
       const s = await newShop();
       servePages([catalogue()]);
       await importShopifyCatalog(deps, s.id);
-      expect((await byExternalId(s.id, "1"))?.sourceUpdatedAt?.toISOString()).toBe(T1);
+      expect((await byExternalId(s.id, "1"))?.sourceHash).toMatch(/^[0-9a-f]{64}$/);
       const before = await snapshot(s.id);
       const historyBefore = await historyCount(s.id);
       const cdnHitsBefore = cdn.hits.length;
 
+      later(1);
       const second = await importShopifyCatalog(deps, s.id);
 
       expect(second).toEqual({ created: 0, updated: 0, unchanged: 3, removed: 0, error: null });
-      expect(await snapshot(s.id)).toEqual(before);
+      const after = await snapshot(s.id);
+      for (const id of ["1", "2", "3"]) {
+        // The row itself is untouched; only the check date moves (« Mis à jour le », capture freshness).
+        expect(after[id]?.updatedAt).toBe(before[id]?.updatedAt);
+        expect(Date.parse(after[id]?.captured ?? "")).toBeGreaterThan(Date.parse(before[id]?.captured ?? ""));
+      }
       expect(await historyCount(s.id)).toBe(historyBefore);
       expect(cdn.hits.length).toBe(cdnHitsBefore);
       // Still counted as read: the « Terminé » line and the next progress bar are unchanged.
@@ -631,26 +654,93 @@ describe("importShopifyCatalog", () => {
       });
     });
 
-    it("rewrites a product whose shop date moved (new price), and only that one", async () => {
+    it("rewrites a product whose price changed, and only that one", async () => {
       const s = await newShop();
       servePages([catalogue()]);
       await importShopifyCatalog(deps, s.id);
       const before = await snapshot(s.id);
 
-      servePages([catalogue({ 2: { price: "39.90", updatedAt: T2 } })]);
+      servePages([catalogue({ 2: { price: "39.90" } })]);
       const second = await importShopifyCatalog(deps, s.id);
 
       expect(second).toEqual({ created: 0, updated: 1, unchanged: 2, removed: 0, error: null });
-      const jupe = await byExternalId(s.id, "2");
-      expect(jupe?.priceCents).toBe(3990);
-      expect(jupe?.sourceUpdatedAt?.toISOString()).toBe(T2);
+      expect((await byExternalId(s.id, "2"))?.priceCents).toBe(3990);
       const after = await snapshot(s.id);
-      expect(after["1"]).toEqual(before["1"]);
-      expect(after["3"]).toEqual(before["3"]);
-      expect(after["2"]).not.toEqual(before["2"]);
+      expect(after["1"]?.updatedAt).toEqual(before["1"]?.updatedAt);
+      expect(after["3"]?.updatedAt).toEqual(before["3"]?.updatedAt);
+      expect(after["2"]?.updatedAt).not.toEqual(before["2"]?.updatedAt);
     });
 
-    it("rewrites a removed product that comes back with the same date, clearing removed_at", async () => {
+    it("rewrites a product when one size comes back in stock, even with the same Shopify date", async () => {
+      const s = await newShop();
+      servePages([catalogue()]);
+      await importShopifyCatalog(deps, s.id);
+      const jupe = await byExternalId(s.id, "2");
+      expect(await sizesOf(jupe?.id as string)).toEqual([
+        ["M", false],
+        ["S", true],
+      ]);
+
+      servePages([catalogue({ 2: { mAvailable: true } })]);
+      const second = await importShopifyCatalog(deps, s.id);
+
+      expect(second).toEqual({ created: 0, updated: 1, unchanged: 2, removed: 0, error: null });
+      expect(await sizesOf(jupe?.id as string)).toEqual([
+        ["M", true],
+        ["S", true],
+      ]);
+    });
+
+    it("rewrites every product when the admin changes the shop's listing kind", async () => {
+      const s = await newShop();
+      servePages([catalogue()]);
+      await importShopifyCatalog(deps, s.id);
+      await handle.db.update(schema.shops).set({ listingKind: "secondhand" }).where(eq(schema.shops.id, s.id));
+
+      const second = await importShopifyCatalog(deps, s.id);
+
+      expect(second).toEqual({ created: 0, updated: 3, unchanged: 0, removed: 0, error: null });
+      // Second-hand: no sizes kept.
+      expect(await sizesOf((await byExternalId(s.id, "2"))?.id as string)).toEqual([]);
+    });
+
+    it("rewrites a product checked more than 7 days ago, even unchanged (classification rules reach it)", async () => {
+      const s = await newShop();
+      servePages([catalogue()]);
+      await importShopifyCatalog(deps, s.id);
+
+      later(6);
+      expect((await importShopifyCatalog(deps, s.id)).unchanged).toBe(3);
+      // The skip at day 6 moved the check date: 7 days after it, not after the first write.
+      later(12);
+      expect((await importShopifyCatalog(deps, s.id)).unchanged).toBe(3);
+      later(20);
+      expect(await importShopifyCatalog(deps, s.id)).toEqual({
+        created: 0,
+        updated: 3,
+        unchanged: 0,
+        removed: 0,
+        error: null,
+      });
+    });
+
+    it("rewrites a product a capture found gone (404) when the listing still has it, clearing removed_at", async () => {
+      const s = await newShop();
+      servePages([catalogue()]);
+      await importShopifyCatalog(deps, s.id);
+      const at = new Date();
+      await handle.db
+        .update(schema.products)
+        .set({ removedAt: at, updatedAt: at })
+        .where(and(eq(schema.products.shopId, s.id), eq(schema.products.externalId, "2")));
+
+      const second = await importShopifyCatalog(deps, s.id);
+
+      expect(second).toEqual({ created: 0, updated: 1, unchanged: 2, removed: 0, error: null });
+      expect((await byExternalId(s.id, "2"))?.removedAt).toBeNull();
+    });
+
+    it("rewrites a removed product that comes back with the same content, clearing removed_at", async () => {
       const s = await newShop();
       servePages([catalogue()]);
       await importShopifyCatalog(deps, s.id);
@@ -674,7 +764,7 @@ describe("importShopifyCatalog", () => {
 
     it("keeps the removal guard: skipped products count as listed, a short listing still removes nothing", async () => {
       const s = await newShop();
-      const many = Array.from({ length: 6 }, (_, i) => ({ id: 20 + i, title: `Article ${i}`, updatedAt: T1 }));
+      const many = Array.from({ length: 6 }, (_, i) => ({ id: 20 + i, title: `Article ${i}` }));
       servePages([many]);
       await importShopifyCatalog(deps, s.id);
 
@@ -690,30 +780,24 @@ describe("importShopifyCatalog", () => {
       expect((await byExternalId(s.id, "24"))?.removedAt).toBeNull();
     });
 
-    it("never skips a product the shop gives no date for, nor one whose photo could not be copied", async () => {
+    it("never skips a product whose photo could not be copied: the next import retries it", async () => {
       const s = await newShop();
-      servePages([
-        [
-          { id: 1, title: "Robe" },
-          { id: 2, title: "Jupe", image: true, updatedAt: T1 },
-        ],
-      ]);
+      servePages([[{ id: 2, title: "Jupe", image: true }]]);
       cdnRoutes["/img/2.png"] = { status: 503, headers: { "content-type": "text/plain" }, body: "down" };
       await importShopifyCatalog(deps, s.id);
-      expect((await byExternalId(s.id, "1"))?.sourceUpdatedAt).toBeNull();
-      // The photo is tried again at the next import.
-      expect((await byExternalId(s.id, "2"))?.sourceUpdatedAt).toBeNull();
+      expect((await byExternalId(s.id, "2"))?.sourceHash).toBeNull();
 
       cdnRoutes["/img/2.png"] = { headers: { "content-type": "image/png" }, body: PNG };
       const second = await importShopifyCatalog(deps, s.id);
-      expect(second).toEqual({ created: 0, updated: 2, unchanged: 0, removed: 0, error: null });
+      expect(second).toEqual({ created: 0, updated: 1, unchanged: 0, removed: 0, error: null });
       const jupe = await byExternalId(s.id, "2");
-      expect(jupe?.sourceUpdatedAt?.toISOString()).toBe(T1);
+      expect(jupe?.sourceHash).not.toBeNull();
       const images = await handle.db
         .select()
         .from(schema.productImages)
         .where(eq(schema.productImages.productId, jupe?.id as string));
       expect(images).toHaveLength(1);
+      expect((await importShopifyCatalog(deps, s.id)).unchanged).toBe(1);
     });
 
     it("leaves the admin's classification alone on a rewrite", async () => {
@@ -726,7 +810,7 @@ describe("importShopifyCatalog", () => {
         .set({ categoryId: pulls, categorySource: "admin" })
         .where(and(eq(schema.products.shopId, s.id), eq(schema.products.externalId, "1")));
 
-      servePages([catalogue({ 1: { updatedAt: T2 } })]);
+      servePages([catalogue({ 1: { price: "59.00" } })]);
       expect((await importShopifyCatalog(deps, s.id)).updated).toBe(1);
       expect(await byExternalId(s.id, "1")).toMatchObject({ categoryId: pulls, categorySource: "admin" });
     });

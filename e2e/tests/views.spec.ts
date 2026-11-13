@@ -386,6 +386,8 @@ test.describe("barre du haut sur ordinateur", () => {
     const fill = (name: string) =>
       bar.getByRole("link", { name }).evaluate((node) => getComputedStyle(node).backgroundColor);
     expect(await fill("Compte")).not.toBe(await fill("Accueil"));
+    // The URL and the pill change before the new page has rendered: wait for its title before the audit.
+    await expect(page.getByRole("heading", { level: 1, name: "Compte" })).toBeVisible();
     await axe(page);
   });
 });

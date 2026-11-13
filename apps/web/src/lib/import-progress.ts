@@ -95,12 +95,9 @@ export function startImportPolling(options: {
  * between 0 and 0.99 when the previous import's total gives a scale (never full before the end: the shop may have
  * grown), null for an indeterminate bar (« En attente », a first import). Null once the import is over (no bar).
  */
-export type ImportProgress = {
-  line: "queued" | "starting" | "running" | "runningTotal";
-  value: number | null;
-  seen: number;
-  total: number | null;
-};
+export type ImportProgress =
+  | { line: "queued" | "starting" | "running"; value: null; seen: number; total: null }
+  | { line: "runningTotal"; value: number; seen: number; total: number };
 
 export const IMPORT_PROGRESS_MAX = 0.99;
 
