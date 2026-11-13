@@ -110,7 +110,13 @@ export async function registerCaptureQueues(boss: PgBoss, deps: CaptureQueueDeps
   const throttle = deps.throttle ?? createThrottle(2000, Date.now, undefined, SHOPIFY_INTERVAL_MS);
   const captureDeps: CaptureDeps = { db, store, policy, robots, throttle, ...(lookup ? { lookup } : {}) };
 
-  for (const name of [CAPTURE_QUEUES.user, CAPTURE_QUEUES.admin, CAPTURE_QUEUES.monitor, SWEEP_QUEUE]) {
+  for (const name of [
+    CAPTURE_QUEUES.user,
+    CAPTURE_QUEUES.admin,
+    CAPTURE_QUEUES.monitor,
+    CAPTURE_QUEUES.refresh,
+    SWEEP_QUEUE,
+  ]) {
     await boss.createQueue(name);
   }
   await boss.createQueue(CATALOGUE_IMPORT_QUEUE, { ...CATALOGUE_IMPORT_QUEUE_OPTIONS });
@@ -122,6 +128,9 @@ export async function registerCaptureQueues(boss: PgBoss, deps: CaptureQueueDeps
   }
   await boss.work(CAPTURE_QUEUES.user, { localConcurrency: 4 }, captureHandler(captureDeps, CAPTURE_QUEUES.user));
   await boss.work(CAPTURE_QUEUES.admin, { localConcurrency: 1 }, captureHandler(captureDeps, CAPTURE_QUEUES.admin));
+  // Sheet refreshes: their own queue, one at a time, so they never take the 4 slots of the pasted links; a refresh
+  // that waited over 30 s is dropped by `runCapture` before any request.
+  await boss.work(CAPTURE_QUEUES.refresh, { localConcurrency: 1 }, captureHandler(captureDeps, CAPTURE_QUEUES.refresh));
   // The schedule sends a job without data: it plans the day's monitor captures, which come back here.
   await boss.work(CAPTURE_QUEUES.monitor, { localConcurrency: 1 }, monitorHandler(captureDeps, boss));
   // One job at a time: one shop imported at a time, and never two imports of the same shop.

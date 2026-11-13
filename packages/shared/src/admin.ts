@@ -37,6 +37,11 @@ export const adminOverviewSchema = z.object({
   shops: z.object({ pending: count, down: count }),
   /** « Shopify nous demande de ralentir » while it lasts; null otherwise. */
   shopifySlowdown: shopifySlowdownSchema.nullable(),
+  /**
+   * « Relecture en retard »: shops due for their catalogue re-read whose last import started more than twice their
+   * interval ago (24 h a night in `nightly`), no import under way. 0 when the planner keeps up.
+   */
+  rereadLate: count,
 });
 export type AdminOverview = z.infer<typeof adminOverviewSchema>;
 

@@ -1,7 +1,14 @@
 import type dns from "node:dns";
 import { and, type Database, eq, isNotNull, isNull, ne, recordShopifyRejection, schema } from "@closyria/db";
 import { extract, isShopifyPage, shopifyJsUrl } from "@closyria/extract";
-import { type CaptureErrorCode, type CaptureMethod, type ExtractedProduct, shopDomain } from "@closyria/shared";
+import {
+  CATALOGUE_SHEET_REFRESH_MAX_WAIT_MS,
+  type CaptureErrorCode,
+  type CaptureMethod,
+  type CaptureTrigger,
+  type ExtractedProduct,
+  shopDomain,
+} from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import { type AddressPolicy, strictPolicy } from "./address-policy";
 import { CaptureError, isShopifyRejection } from "./capture-error";
@@ -10,7 +17,7 @@ import { decodeBody } from "./decode";
 import type { RobotsCache } from "./robots";
 import { type SafeFetchAccept, safeFetch } from "./safe-fetch";
 import { loadReferenceSet } from "./seed-reference";
-import type { Throttle, ThrottleOptions } from "./throttle";
+import type { LinePriority, Throttle, ThrottleOptions } from "./throttle";
 import { writeProduct } from "./write-product";
 
 export type CaptureDeps = {
@@ -55,6 +62,17 @@ async function productOf(db: Database, capture: typeof schema.captures.$inferSel
   return product?.id ?? null;
 }
 
+/**
+ * Its place on the Shopify line: a link someone pasted (or an admin test) first, then a sheet's refresh, then the
+ * monitors (with the catalogue pages).
+ */
+const LINE_PRIORITY: Record<CaptureTrigger, LinePriority> = {
+  user: "high",
+  admin_test: "high",
+  refresh: "medium",
+  monitor: "low",
+};
+
 /** `extract` wants an HTML document; with a Shopify `.js` alone there is no page, so it gets an empty one. */
 const EMPTY_PAGE = "<html></html>";
 
@@ -80,14 +98,42 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
   }
   if (!capture) return;
 
+  // A sheet's refresh that waited too long: the person has moved on, it does not take a slot (nothing is fetched).
+  if (
+    capture.trigger === "refresh" &&
+    startedAt.getTime() - capture.createdAt.getTime() > CATALOGUE_SHEET_REFRESH_MAX_WAIT_MS
+  ) {
+    await db
+      .update(schema.captures)
+      .set({ status: "failed", errorCode: "timeout", durationMs: 0, finishedAt: startedAt })
+      .where(and(eq(schema.captures.id, captureId), eq(schema.captures.status, "running")))
+      .catch((error) => console.error(`capture ${captureId}: cannot drop a stale refresh`, error));
+    return;
+  }
+
   let platform: string | undefined;
   try {
     const [shop] = await db.select().from(schema.shops).where(eq(schema.shops.id, capture.shopId));
     if (!shop) throw new Error("shop not found");
     platform = shop.platform;
-    // Someone is waiting for it (a pasted link, an open sheet, the admin): before the catalogue pages on Shopify.
-    const priority = capture.trigger === "monitor" ? "low" : "high";
-    const outcome = await fetchAndExtract(capture.url, shop.platform, priority, deps);
+    const shopId = shop.id;
+    // A shop of unknown platform whose page turns out to be Shopify is one from now on: the Shopify line and the
+    // slow-down apply to it, this capture included.
+    const foundShopify = async () => {
+      platform = "shopify";
+      if (shop.platform !== "unknown") return;
+      await db
+        .update(schema.shops)
+        .set({ platform: "shopify", updatedAt: now() })
+        .where(and(eq(schema.shops.id, shopId), eq(schema.shops.platform, "unknown")));
+    };
+    const outcome = await fetchAndExtract(
+      capture.url,
+      shop.platform,
+      LINE_PRIORITY[capture.trigger as CaptureTrigger],
+      deps,
+      foundShopify,
+    );
     const { product } = outcome;
 
     // A sheet's refresh (« stocks frais ») writes like her capture, but the history only on a change: it may run
@@ -231,20 +277,22 @@ async function recordFailure(
 async function fetchAndExtract(
   url: string,
   platform: string,
-  priority: "high" | "low",
+  priority: LinePriority,
   deps: CaptureDeps,
+  foundShopify: () => Promise<void>,
 ): Promise<Outcome> {
   const policy = deps.policy ?? strictPolicy;
   const domain = shopDomain(url);
 
   /**
-   * Paced and robots-checked fetch: the page and its `.js` only (photos go through `copyImages`). A Shopify shop's
-   * (known, or found by its page) also takes a slot on the Shopify line.
+   * Robots-checked and paced fetch: the page and its `.js` only (photos go through `copyImages`). A Shopify shop's
+   * (known, or found by its page) also takes a slot on the Shopify line. robots.txt is checked first (cached per
+   * origin), so its own request never shares the slot of the page.
    */
   async function fetchPaced(target: string, accept: SafeFetchAccept, shopify = platform === "shopify") {
+    if (!(await deps.robots.allows(target))) throw new CaptureError("robots_disallowed");
     const options: ThrottleOptions | undefined = shopify ? { shopify: priority } : undefined;
     await deps.throttle.wait(domain, options);
-    if (!(await deps.robots.allows(target))) throw new CaptureError("robots_disallowed");
     return safeFetch(target, { accept, policy, ...(deps.lookup ? { lookup: deps.lookup } : {}) });
   }
 
@@ -290,13 +338,16 @@ async function fetchAndExtract(
   let result = extract({ url: page.finalUrl, contentType: page.contentType, body: html });
   let status = page.status;
   if (platform !== "shopify" && jsUrl && isShopifyPage(html)) {
+    await foundShopify();
     try {
       const withJs = await fromShopifyJs(jsUrl, pageInfo);
       if (withJs.result.ok) {
         result = withJs.result;
         status = withJs.status;
       }
-    } catch {
+    } catch (error) {
+      // Shopify asks us to slow down: it counts like any Shopify shop's.
+      if (isShopifyRejection(error)) throw error;
       // Keep what the page alone gives.
     }
   }

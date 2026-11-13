@@ -22,7 +22,7 @@ export function recordingQueue() {
       return true;
     },
     async refreshProduct(_productId, captureId) {
-      calls.push({ queue: "capture-user", id: captureId });
+      calls.push({ queue: "capture-refresh", id: captureId });
       return true;
     },
   };

@@ -412,7 +412,14 @@ export function adminShopsRoutes(deps: CatalogDeps) {
         db
           .select()
           .from(schema.captures)
-          .where(and(eq(schema.captures.shopId, id), eq(schema.captures.status, "failed")))
+          // A sheet's refresh is not the shop's health (« stocks frais »).
+          .where(
+            and(
+              eq(schema.captures.shopId, id),
+              eq(schema.captures.status, "failed"),
+              ne(schema.captures.trigger, "refresh"),
+            ),
+          )
           .orderBy(sql`${schema.captures.createdAt} desc`)
           .limit(RECENT_ERRORS),
         db

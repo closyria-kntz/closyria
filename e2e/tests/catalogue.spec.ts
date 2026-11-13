@@ -559,6 +559,46 @@ test("« stocks frais » : la fiche relue à l’ouverture met tailles et prix �
   await expect(card(page, name)).toBeVisible();
 });
 
+test("« stocks frais » : si la relecture trouve l’article retiré, la fiche le dit sans se fermer", async ({
+  page,
+  db,
+}) => {
+  const tag = randomUUID().slice(0, 8);
+  const shop = await seedShop(db, tag, "Retiré");
+  const name = `Robe retirée ${tag}`;
+  const id = await seedProduct(db, shop.id, { name, sizes: [["M", true]] });
+  // Gone at the shop once the sheet is open (the sheet may load twice while her profile settles).
+  let goneAtShop = false;
+  await page.route(
+    (url) => url.pathname === `/api/catalog/${id}`,
+    async (route) => {
+      if (goneAtShop) {
+        await route.fulfill({ status: 404, json: { error: "not_found" } });
+        return;
+      }
+      const response = await route.fetch();
+      const body = await response.json();
+      await route.fulfill({
+        response,
+        json: { ...body, refreshing: true, checkedAt: new Date(Date.now() - 2 * 3_600_000).toISOString() },
+      });
+    },
+  );
+
+  await page.goto(`/decouvrir/${id}`);
+  await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+  await expect(page.getByTestId("stock-checked")).toHaveText("Vérification du stock…");
+  // Every load of the opening done (the first poll comes 3 s after it).
+  await page.waitForLoadState("networkidle");
+  goneAtShop = true;
+  const gone = page.getByTestId("stock-gone");
+  await expect(gone).toHaveText("Cet article n’est plus en vente chez la boutique.", { timeout: 10_000 });
+  // Still the sheet: her way back and its photos stay.
+  await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+  await expect(page.getByTestId("stock-checked")).toHaveCount(0);
+  await axeLightAndDark(page);
+});
+
 test("le retour arrière depuis une fiche garde les filtres, les pages chargées et la position", async ({
   page,
   db,

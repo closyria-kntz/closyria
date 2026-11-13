@@ -385,9 +385,9 @@ describe("runCapture", () => {
       expect(r.capture).toMatchObject({ status: "failed", errorCode: "blocked", httpStatus: status });
       expect(shop.hits).not.toContain(path);
     }
-    // Two rejections within 6 h: once a night.
+    // Two rejections seconds apart are one burst: doubled, not nightly.
     const [state] = await handle.db.select().from(schema.crawlSlowdowns);
-    expect(state?.level).toBe("nightly");
+    expect(state?.level).toBe("doubled");
     await handle.db.delete(schema.crawlSlowdowns);
   });
 
@@ -415,7 +415,66 @@ describe("runCapture", () => {
     }
     const plain = await setup("/plain", { shop: { platform: "other" } });
     await runCapture(plain.capture.id, deps);
-    expect(waits).toEqual(["high", "high", "low", null]);
+    expect(waits).toEqual(["high", "medium", "low", null]);
+  });
+
+  it("drops a sheet's refresh that waited over 30 s, before any request", async () => {
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } }, "refresh");
+    await handle.db
+      .update(schema.captures)
+      .set({ createdAt: new Date(Date.now() - 31_000) })
+      .where(eq(schema.captures.id, t.capture.id));
+
+    await runCapture(t.capture.id, deps);
+
+    const r = await load(t.capture.id, t.product.id);
+    expect(r.capture).toMatchObject({ status: "failed", errorCode: "timeout" });
+    expect(r.product?.captureStatus).not.toBe("failed");
+    expect(shop.hits).toEqual([]);
+  });
+
+  it("an unknown shop found to be Shopify becomes one: its .js takes the line, and its 429 slows Shopify down", async () => {
+    await handle.db.delete(schema.crawlSlowdowns);
+    servePage("/products/inconnu", "real/mcb-paris.html");
+    routes["/products/inconnu"] = {
+      headers: { "content-type": "text/html; charset=utf-8" },
+      body: `${(routes["/products/inconnu"]?.body ?? "").toString()}<script>Shopify.shop = "x";</script>`,
+    };
+    routes["/products/inconnu.js"] = { status: 429, headers: { "content-type": "application/json" }, body: "{}" };
+    const waits: unknown[] = [];
+    deps.throttle = {
+      wait: async (_domain, options) => {
+        waits.push(options?.shopify ?? null);
+      },
+    };
+    const t = await setup("/products/inconnu", { shop: { platform: "unknown" } });
+
+    await runCapture(t.capture.id, deps);
+
+    const r = await load(t.capture.id, t.product.id);
+    expect(r.capture).toMatchObject({ status: "failed", errorCode: "blocked", httpStatus: 429 });
+    // The page before it was known, then its .js on the line.
+    expect(waits).toEqual([null, "high"]);
+    expect((await handle.db.select().from(schema.shops).where(eq(schema.shops.id, t.shop.id)))[0]?.platform).toBe(
+      "shopify",
+    );
+    expect((await handle.db.select().from(schema.crawlSlowdowns))[0]?.level).toBe("doubled");
+    await handle.db.delete(schema.crawlSlowdowns);
+  });
+
+  it("checks robots.txt before taking a slot: the slot goes to the page alone", async () => {
+    const events: string[] = [];
+    routes["/robots.txt"] = { headers: { "content-type": "text/plain" }, body: "User-agent: *\nAllow: /\n" };
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    deps.throttle = {
+      wait: async () => {
+        events.push(`slot after ${shop.hits.filter((h) => h === "/robots.txt").length} robots`);
+      },
+    };
+    const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
+    await runCapture(t.capture.id, deps);
+    expect(events[0]).toBe("slot after 1 robots");
   });
 
   it("extracts JSON-LD from a Zalando page", async () => {

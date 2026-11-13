@@ -37,6 +37,7 @@ describe("pgBossQueue", () => {
       "start",
       "create capture-user",
       "create capture-admin",
+      "create capture-refresh",
       "create photo-import",
       'create catalogue-import {"policy":"exclusive","retryLimit":0,"expireInSeconds":21600}',
       'send capture-user {"captureId":"c1"}',
@@ -56,14 +57,14 @@ describe("pgBossQueue", () => {
     ]);
   });
 
-  it("sends a sheet's refresh on capture-user, one per product every 15 min; false when the window has one", async () => {
+  it("sends a sheet's refresh on its own queue, one per product every 15 min; false when the window has one", async () => {
     const { boss, log } = fakeBoss(0, new Set(["busy-product"]));
     const queue = pgBossQueue(boss);
     expect(await queue.refreshProduct("p1", "c1")).toBe(true);
     expect(await queue.refreshProduct("busy-product", "c2")).toBe(false);
     expect(log.slice(-2)).toEqual([
-      'send capture-user {"captureId":"c1"} {"singletonKey":"p1","singletonSeconds":900}',
-      'send capture-user {"captureId":"c2"} {"singletonKey":"busy-product","singletonSeconds":900}',
+      'send capture-refresh {"captureId":"c1"} {"singletonKey":"p1","singletonSeconds":900}',
+      'send capture-refresh {"captureId":"c2"} {"singletonKey":"busy-product","singletonSeconds":900}',
     ]);
   });
 

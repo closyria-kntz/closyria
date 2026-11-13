@@ -44,6 +44,15 @@ export default async function AdminDashboardPage() {
     <>
       <h1 className="font-display text-title font-strong">{t("title")}</h1>
       <ShopifySlowdownAlert slowdown={overview.shopifySlowdown} />
+      {overview.rereadLate > 0 && (
+        <p
+          role="status"
+          data-testid="reread-late"
+          className="rounded-card border border-danger-edge bg-danger-soft px-space-4 py-space-3 font-strong text-danger"
+        >
+          {t("rereadLate", { count: overview.rereadLate })}
+        </p>
+      )}
       <dl className="grid grid-cols-1 gap-space-3 sm:grid-cols-2 lg:grid-cols-3">
         {figures.map((figure) => (
           <div

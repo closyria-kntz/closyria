@@ -298,7 +298,8 @@
       "checkedNow": "Vérifié à l’instant",
       "checkedMinutes": "Stock vérifié il y a {minutes} min",
       "checkedHours": "Stock vérifié il y a {hours} h",
-      "checkedOn": "Stock vérifié le {date}"
+      "checkedOn": "Stock vérifié le {date}",
+      "gone": "Cet article n’est plus en vente chez la boutique."
     }
   },
   "Auth": {
@@ -412,7 +413,8 @@
         "shopify": "Shopify",
         "jsonld": "JSON-LD",
         "opengraph": "Open Graph"
-      }
+      },
+      "rereadLate": "Relecture en retard : {count, plural, one {# boutique attend} other {# boutiques attendent}} depuis plus de deux fois leur intervalle."
     },
     "audit": {
       "title": "Journal d’audit",

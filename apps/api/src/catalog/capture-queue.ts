@@ -22,8 +22,9 @@ export type CaptureQueue = {
    */
   importCatalogue(shopId: string): Promise<boolean>;
   /**
-   * Hands a sheet's refresh (`{ captureId }` on `capture-user`) to the worker, at most one per product in each
-   * 15-minute window (`singletonKey` = product id); false when one was already sent in that window.
+   * Hands a sheet's refresh (`{ captureId }` on `capture-refresh`, its own queue: never in the way of the pasted
+   * links) to the worker, at most one per product in each 15-minute window (`singletonKey` = product id); false when
+   * one was already sent in that window.
    */
   refreshProduct(productId: string, captureId: string): Promise<boolean>;
 };
@@ -45,6 +46,7 @@ export function pgBossQueue(boss: {
       await boss.start();
       await boss.createQueue(CAPTURE_QUEUES.user);
       await boss.createQueue(CAPTURE_QUEUES.admin);
+      await boss.createQueue(CAPTURE_QUEUES.refresh);
       await boss.createQueue(PHOTO_IMPORT_QUEUE);
       // Same options as the worker's: the first `createQueue` wins.
       await boss.createQueue(CATALOGUE_IMPORT_QUEUE, { ...CATALOGUE_IMPORT_QUEUE_OPTIONS });
@@ -68,7 +70,7 @@ export function pgBossQueue(boss: {
     async refreshProduct(productId, captureId) {
       await start();
       const id = await boss.send(
-        CAPTURE_QUEUES.user,
+        CAPTURE_QUEUES.refresh,
         { captureId },
         { singletonKey: productId, singletonSeconds: CATALOGUE_SHEET_FRESH_MS / 1000 },
       );

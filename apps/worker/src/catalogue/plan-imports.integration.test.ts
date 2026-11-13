@@ -146,6 +146,43 @@ describe("Shopify slow-down", () => {
     });
   });
 
+  it("a burst stays doubled: two hits 5 s apart change nothing, a hit 15 min after the first goes nightly", async () => {
+    const db = handle.db;
+    const doubled = { level: "doubled", until: new Date(NOW.getTime() + 6 * HOUR) };
+    expect(await recordShopifyRejection(db, NOW)).toEqual(doubled);
+    // Inside the first 10 min: the same burst, the window is not moved either.
+    expect(await recordShopifyRejection(db, new Date(NOW.getTime() + 5_000))).toEqual(doubled);
+    expect(await recordShopifyRejection(db, new Date(NOW.getTime() + 9 * MIN))).toEqual(doubled);
+    const later = new Date(NOW.getTime() + 15 * MIN);
+    expect(await recordShopifyRejection(db, later)).toEqual({
+      level: "nightly",
+      until: new Date(later.getTime() + 24 * HOUR),
+    });
+  });
+
+  it("nightly is pushed back at most once an hour, however many hits", async () => {
+    const db = handle.db;
+    await recordShopifyRejection(db, NOW);
+    const nightly = new Date(NOW.getTime() + 20 * MIN);
+    const until = new Date(nightly.getTime() + 24 * HOUR);
+    expect(await recordShopifyRejection(db, nightly)).toEqual({ level: "nightly", until });
+    for (const after of [MIN, 10 * MIN, 59 * MIN]) {
+      expect(await recordShopifyRejection(db, new Date(nightly.getTime() + after))).toEqual({
+        level: "nightly",
+        until,
+      });
+    }
+    const hourLater = new Date(nightly.getTime() + HOUR);
+    expect(await recordShopifyRejection(db, hourLater)).toEqual({
+      level: "nightly",
+      until: new Date(hourLater.getTime() + 24 * HOUR),
+    });
+    // Counted from that last extension: 30 min later, nothing again.
+    expect((await recordShopifyRejection(db, new Date(hourLater.getTime() + 30 * MIN))).until).toEqual(
+      new Date(hourLater.getTime() + 24 * HOUR),
+    );
+  });
+
   it("a 429 after the 6 h are over doubles again rather than going nightly", async () => {
     await recordShopifyRejection(handle.db, NOW);
     const later = new Date(NOW.getTime() + 6 * HOUR + MIN);
@@ -194,5 +231,15 @@ describe("lastNightlyStart", () => {
     // The night summer time ends (25 October 2026: 03:00 summer → 02:00 winter), then the next one.
     expect(lastNightlyStart(new Date("2026-10-25T12:00:00Z"))).toEqual(new Date("2026-10-25T02:00:00Z"));
     expect(lastNightlyStart(new Date("2026-10-26T12:00:00Z"))).toEqual(new Date("2026-10-26T02:00:00Z"));
+  });
+});
+
+describe("planCatalogueImports — order", () => {
+  it("queues the longest waiting first: never imported, then the oldest start", async () => {
+    const recent = await shop(startedAgo(2 * HOUR));
+    const oldest = await shop(startedAgo(9 * HOUR));
+    const never = await shop();
+    const middle = await shop(startedAgo(5 * HOUR));
+    expect(await plan()).toEqual([never.id, oldest.id, middle.id, recent.id]);
   });
 });

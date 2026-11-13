@@ -133,6 +133,17 @@ describe("createThrottle — Shopify-hosted shops (one request every 2 s overall
     expect(order).toEqual(["first", "refresh", "page-1", "page-2"]);
   });
 
+  it("serves a pasted link (high) before a sheet's refresh (medium), and both before catalogue pages (low)", async () => {
+    const c = clock();
+    const throttle = createThrottle(2000, c.now, c.sleep, 2000);
+    const order: string[] = [];
+    const go = (name: string, priority: "high" | "medium" | "low") =>
+      throttle.wait(`${name}.fr`, { shopify: priority }).then(() => void order.push(name));
+    await go("first", "low");
+    await Promise.all([go("page", "low"), go("refresh-1", "medium"), go("refresh-2", "medium"), go("link", "high")]);
+    expect(order).toEqual(["first", "link", "refresh-1", "refresh-2", "page"]);
+  });
+
   it("does not wait when the last Shopify request is over 2 s old", async () => {
     const c = clock();
     const throttle = createThrottle(2000, c.now, c.sleep, 2000);

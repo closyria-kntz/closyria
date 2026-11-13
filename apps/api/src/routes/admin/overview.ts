@@ -1,5 +1,5 @@
-import { and, count, type Database, eq, gte, isNull, lt, schema, sql } from "@closyria/db";
-import { adminOverviewSchema } from "@closyria/shared";
+import { and, count, type Database, eq, gte, importNotUnderWay, isNull, lt, schema, sql } from "@closyria/db";
+import { adminOverviewSchema, CATALOGUE_IMPORT_LARGE_SHOP, catalogueImportIntervals } from "@closyria/shared";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { defineAccess } from "../../access";
 import type { AdminEnv } from "../../admin-audit";
@@ -30,14 +30,43 @@ const overviewRoute = defineAccess(
       "`eventsToday`: audience events that occurred during the current UTC day. " +
       "`signupsToday`: accounts (not anonymous) created during the current UTC day. " +
       "`captures`: rates and durations cover finished captures that were real fetch attempts (not 24 h reuses nor queue failures); `shops.down` counts published, " +
-      "automatically captured shops whose two latest monitor captures failed. `shopifySlowdown`: « Shopify nous demande de ralentir » " +
-      "(after a 429/430 from a Shopify shop: imports doubled, else nightly) until `until`; null when none.",
+      "automatically captured shops whose two latest monitor captures failed (sheet refreshes are left out of every capture figure). `shopifySlowdown`: « Shopify nous demande de ralentir » " +
+      "(after a 429/430 from a Shopify shop: imports doubled, else nightly) until `until`; null when none. `rereadLate`: " +
+      "shops due for their catalogue re-read whose last import started over twice their interval ago (« Relecture en " +
+      "retard »).",
     responses: {
       200: { description: "Figures", content: { "application/json": { schema: adminOverviewSchema } } },
     },
   }),
   "admin",
 );
+
+/**
+ * « Relecture en retard »: the shops the planner should re-read (published Shopify shops with the import on, not
+ * merged, no import under way) whose last import started (else, never imported, the shop was created) more than twice
+ * their interval ago: 2 h, 6 h above 5 000 products; doubled while Shopify asks to slow down; a day in its nightly
+ * rhythm. The planner takes the longest waiting first, so any such shop means it does not keep up.
+ */
+async function countRereadLate(db: Database, at: Date, level: "doubled" | "nightly" | null): Promise<number> {
+  const intervals = catalogueImportIntervals(level) ?? { small: DAY_MS, large: DAY_MS };
+  const before = (ms: number) => new Date(at.getTime() - 2 * ms).toISOString();
+  const [row] = await db
+    .select({ n: count() })
+    .from(schema.shops)
+    .where(
+      and(
+        eq(schema.shops.importEnabled, true),
+        eq(schema.shops.status, "published"),
+        eq(schema.shops.platform, "shopify"),
+        isNull(schema.shops.mergedIntoId),
+        importNotUnderWay(at),
+        sql`coalesce(${schema.shops.importStartedAt}, ${schema.shops.createdAt}) < case
+          when coalesce(${schema.shops.lastImportSeen}, 0) > ${CATALOGUE_IMPORT_LARGE_SHOP}
+          then ${before(intervals.large)}::timestamptz else ${before(intervals.small)}::timestamptz end`,
+      ),
+    );
+  return row?.n ?? 0;
+}
 
 export function overviewRoutes(deps: AdminDeps) {
   const now = deps.now ?? (() => new Date());
@@ -83,7 +112,8 @@ export function overviewRoutes(deps: AdminDeps) {
           (count(*) filter (where status = 'succeeded' and method = 'opengraph'))::int as opengraph,
           (percentile_cont(0.5) within group (order by duration_ms) filter (where status = 'succeeded' and ${REAL_ATTEMPT}))::float8 as median
         from captures
-        where created_at >= ${since7d}::timestamptz`),
+        -- Sheet refreshes (« stocks frais ») are not counted: automatic, many, and dropped when late.
+        where created_at >= ${since7d}::timestamptz and trigger <> 'refresh'`),
       deps.db
         .select({ pending: count() })
         .from(schema.shops)
@@ -100,6 +130,7 @@ export function overviewRoutes(deps: AdminDeps) {
         ),
       shopifySlowdownOf(deps.db, at),
     ]);
+    const rereadLate = await countRereadLate(deps.db, at, shopifySlowdown?.level ?? null);
     const stats = await loadShopStats(
       deps.db,
       at,
@@ -131,6 +162,7 @@ export function overviewRoutes(deps: AdminDeps) {
         },
         shops: { pending: pending?.pending ?? 0, down },
         shopifySlowdown,
+        rereadLate,
       },
       200,
     );

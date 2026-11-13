@@ -167,6 +167,11 @@ export const CAPTURE_QUEUES = {
   user: "capture-user",
   admin: "capture-admin",
   monitor: "capture-monitor",
+  /**
+   * Sheet refreshes (« stocks frais »), on a queue of their own taken one at a time: they never hold the slots of the
+   * links people paste (`user`).
+   */
+  refresh: "capture-refresh",
 } as const;
 
 /** Data of a capture job on the pg-boss queues. */

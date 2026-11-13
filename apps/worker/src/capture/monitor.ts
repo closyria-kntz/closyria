@@ -1,13 +1,15 @@
-import { and, type Database, eq, isNull, schema, sql } from "@closyria/db";
+import { and, type Database, eq, isNull, readShopifySlowdown, schema, sql } from "@closyria/db";
 import { CAPTURE_QUEUES } from "@closyria/shared";
 
 export type MonitorQueue = { send(queue: string, data: object): Promise<unknown> };
 
 /**
  * Daily monitoring: one `monitor` capture (no product) per published shop in `auto` mode that has a test page,
- * queued for the worker. Returns how many were queued.
+ * queued for the worker. While Shopify asks for the nightly rhythm (two 429/430), Shopify shops are not monitored: a
+ * test page is not worth another rejection. Returns how many were queued.
  */
-export async function scheduleMonitors(db: Database, queue: MonitorQueue): Promise<number> {
+export async function scheduleMonitors(db: Database, queue: MonitorQueue, now = new Date()): Promise<number> {
+  const slowdown = await readShopifySlowdown(db, now);
   const shops = await db
     .select({ id: schema.shops.id, testUrl: schema.shops.testUrl })
     .from(schema.shops)
@@ -17,6 +19,7 @@ export async function scheduleMonitors(db: Database, queue: MonitorQueue): Promi
         eq(schema.shops.captureMode, "auto"),
         sql`${schema.shops.testUrl} IS NOT NULL`,
         isNull(schema.shops.mergedIntoId),
+        slowdown?.level === "nightly" ? sql`${schema.shops.platform} <> 'shopify'` : undefined,
       ),
     );
   let queued = 0;

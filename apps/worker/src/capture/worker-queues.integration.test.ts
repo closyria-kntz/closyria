@@ -1,4 +1,4 @@
-import { createDb, eq, schema } from "@closyria/db";
+import { createDb, eq, inArray, recordShopifyRejection, schema } from "@closyria/db";
 import { memoryStore } from "@closyria/storage";
 import { createTestDatabase } from "@closyria/testing/vitest";
 import type { PgBoss } from "pg-boss";
@@ -68,6 +68,45 @@ describe("scheduleMonitors", () => {
     }
     const mcb = STARTING_SHOPS.find((s) => s.slug === "mcb-paris");
     expect(rows.some((r) => r.url === mcb?.testUrl)).toBe(true);
+  });
+
+  it("skips the Shopify shops while Shopify asks for the nightly rhythm, and only then", async () => {
+    const { db } = handle;
+    await db.insert(schema.shops).values({
+      name: "Autre surveillée",
+      slug: "monitor-other",
+      status: "published",
+      platform: "other",
+      testUrl: "https://monitor-other.test/p/1",
+    });
+    const sentFor = async (at: Date) => {
+      const ids: string[] = [];
+      await scheduleMonitors(
+        db,
+        { send: async (_q, data) => void ids.push((data as { captureId: string }).captureId) },
+        at,
+      );
+      if (ids.length === 0) return [];
+      const rows = await db
+        .select({ platform: schema.shops.platform })
+        .from(schema.captures)
+        .innerJoin(schema.shops, eq(schema.shops.id, schema.captures.shopId))
+        .where(inArray(schema.captures.id, ids));
+      return rows.map((r) => r.platform);
+    };
+    const at = new Date();
+    await db.delete(schema.crawlSlowdowns);
+    try {
+      await recordShopifyRejection(db, new Date(at.getTime() - 60 * 60_000));
+      // Doubled: monitors as usual.
+      expect(await sentFor(at)).toEqual(expect.arrayContaining(["shopify", "other"]));
+      await recordShopifyRejection(db, new Date(at.getTime() - 30 * 60_000));
+      const nightly = await sentFor(at);
+      expect(nightly).toContain("other");
+      expect(nightly).not.toContain("shopify");
+    } finally {
+      await db.delete(schema.crawlSlowdowns);
+    }
   });
 });
 
@@ -363,6 +402,10 @@ describe("registerCaptureQueues", () => {
       options: { policy: "exclusive", retryLimit: 0, expireInSeconds: 21_600 },
     });
     expect(worked).toContainEqual({ name: "catalogue-import", options: { localConcurrency: 1 } });
+    // Sheet refreshes on their own queue, one at a time: the 4 slots of the pasted links stay theirs.
+    expect(created).toContainEqual({ name: "capture-refresh" });
+    expect(worked).toContainEqual({ name: "capture-refresh", options: { localConcurrency: 1 } });
+    expect(worked).toContainEqual({ name: "capture-user", options: { localConcurrency: 4 } });
     expect(scheduled).toContainEqual({
       name: "catalogue-import",
       cron: "*/15 * * * *",

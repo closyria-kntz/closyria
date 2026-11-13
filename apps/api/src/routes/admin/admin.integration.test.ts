@@ -122,6 +122,7 @@ describe("GET /api/admin/overview", () => {
       captures: expect.any(Object),
       shops: expect.any(Object),
       shopifySlowdown: null,
+      rereadLate: expect.any(Number),
     });
   });
 

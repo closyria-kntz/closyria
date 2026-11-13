@@ -20,7 +20,7 @@ import {
   reportProduct,
 } from "../catalog/catalogue";
 import type { CatalogDeps } from "../catalog/deps";
-import { sheetRefreshing } from "../catalog/sheet-refresh";
+import { requestSheetRefresh } from "../catalog/sheet-refresh";
 import { rateLimit } from "../rate-limit";
 
 /** Reports a person may send in an hour. */
@@ -80,9 +80,10 @@ const detailRoute = defineAccess(
       `\`sameShop\` up to ${CATALOG_DETAIL_LIMITS.sameShop}, \`sameStyle\` up to ` +
       `${CATALOG_DETAIL_LIMITS.sameStyle} from other shops (same category, color or a price within 20 %). ` +
       "`checkedAt`: when the article was last read at the shop. Read more than 15 min ago (or never), the sheet asks " +
-      "the worker to read it again (once per article every 15 min, never for a shop captured by hand) without " +
-      "waiting for it: `refreshing` is then true, and the sheet read again a few seconds later has the fresh sizes " +
-      "and price.",
+      "the worker to read it again without waiting for it: `refreshing` is then true, and the sheet read again a few " +
+      "seconds later has the fresh sizes and price. Never for a shop captured by hand; once per article per window; " +
+      "at most 10 a minute in all; for a Shopify shop, a 60 min window while Shopify asks to slow down and none in " +
+      "its nightly rhythm.",
     request: { params: productParams, query: catalogDetailQuerySchema },
     responses: {
       200: json("The sheet", catalogDetailSchema),
@@ -151,7 +152,9 @@ export function catalogueRoutes(deps: CatalogDeps) {
       c.header("Cache-Control", "private, no-cache");
       if (!sheet) return c.json(notFound, 404);
       // « Stocks frais »: a stale article is read again in the background; the sheet goes out at once.
-      const refreshing = await sheetRefreshing(db, deps.queue, productId, now());
+      const checkedAt = sheet.checkedAt ? new Date(sheet.checkedAt) : null;
+      // Fresh: no query at all. Stale: one query decides; the asking goes on without the sheet (`done` not awaited).
+      const { refreshing } = await requestSheetRefresh(db, deps.queue, productId, checkedAt, now());
       return c.json({ ...sheet, refreshing }, 200);
     })
     .openapi(reportRoute(reportLimiter), async (c) => {

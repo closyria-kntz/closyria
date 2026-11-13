@@ -1,5 +1,5 @@
 {
-  "id": "5c14b64a-0cca-4e09-8b25-93849f63717d",
+  "id": "9d28eda9-f4a7-4f5b-8fd8-2b52651894d9",
   "prevId": "83e73ed7-ba93-4fe0-94f7-eed3605d4f2b",
   "version": "7",
   "dialect": "postgresql",
@@ -900,6 +900,12 @@
         "level": {
           "name": "level",
           "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "since": {
+          "name": "since",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },

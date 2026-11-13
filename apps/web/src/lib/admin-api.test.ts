@@ -40,6 +40,7 @@ const overview = {
   },
   shops: { pending: 0, down: 0 },
   shopifySlowdown: null,
+  rereadLate: 0,
 };
 
 describe("internalApiUrl", () => {

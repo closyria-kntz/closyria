@@ -316,7 +316,10 @@ export const crawlSlowdowns = pgTable(
   {
     platform: text("platform").primaryKey(),
     level: text("level").notNull(),
+    /** When the current level began (a 429/430 within 10 min of a `doubled` start does not escalate). */
+    since: timestamp("since", { withTimezone: true }).notNull(),
     until: timestamp("until", { withTimezone: true }).notNull(),
+    /** Last change of the row (a `nightly` window is extended at most once an hour). */
     updatedAt: updatedAt(),
   },
   (t) => [check("crawl_slowdowns_level_check", oneOf(t.level, shopifySlowdownLevelSchema.options))],

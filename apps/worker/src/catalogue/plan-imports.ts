@@ -1,11 +1,5 @@
 import { and, type Database, eq, importNotUnderWay, isNull, readShopifySlowdown, schema, sql } from "@closyria/db";
-import {
-  CATALOGUE_IMPORT_INTERVAL_MS,
-  CATALOGUE_IMPORT_LARGE_INTERVAL_MS,
-  CATALOGUE_IMPORT_LARGE_SHOP,
-  CATALOGUE_IMPORT_QUEUE,
-  type ShopifySlowdownLevel,
-} from "@closyria/shared";
+import { CATALOGUE_IMPORT_LARGE_SHOP, CATALOGUE_IMPORT_QUEUE, catalogueImportIntervals } from "@closyria/shared";
 
 export type ImportQueue = {
   send(queue: string, data: object, options: { singletonKey: string }): Promise<unknown>;
@@ -46,22 +40,16 @@ export function lastNightlyStart(now: Date): Date {
   return new Date(start - parisOffsetMs(new Date(start - parisOffsetMs(now))));
 }
 
-/**
- * How often a shop is read again: every hour, every 3 h above 5 000 products at its last complete import; doubled
- * while Shopify asks us to slow down (`doubled`). Null for `nightly`: once a night from 03:00.
- */
-export function importIntervals(level: ShopifySlowdownLevel | null): { small: number; large: number } | null {
-  if (level === "nightly") return null;
-  const factor = level === "doubled" ? 2 : 1;
-  return { small: CATALOGUE_IMPORT_INTERVAL_MS * factor, large: CATALOGUE_IMPORT_LARGE_INTERVAL_MS * factor };
-}
+/** How often a shop is read again (shared with the admin's « Relecture en retard »). */
+export const importIntervals = catalogueImportIntervals;
 
 /**
  * « Stocks frais »: queues every published Shopify shop with the import on (not merged into another) whose last import
  * started longer ago than its interval (`importIntervals`, within 5 min) or never did, and with no import under way.
  * While Shopify asks for the nightly rhythm, a shop is due once after each 03:00 (Paris). The shop id is the job's
- * singleton key, so a shop already queued or being imported is not queued twice. Returns how many shops were offered
- * to the queue.
+ * singleton key, so a shop already queued or being imported is not queued twice. The longest waiting go first (never
+ * imported, then the oldest start): the one worker takes them in that order. Returns how many shops were offered to
+ * the queue.
  */
 export async function planCatalogueImports(db: Database, queue: ImportQueue, now = new Date()): Promise<number> {
   const slowdown = await readShopifySlowdown(db, now);
@@ -87,7 +75,8 @@ export async function planCatalogueImports(db: Database, queue: ImportQueue, now
         sql`(${startedAt} is null or ${startedAt} < ${startedBefore})`,
         importNotUnderWay(now),
       ),
-    );
+    )
+    .orderBy(sql`${startedAt} asc nulls first`, schema.shops.id);
   let planned = 0;
   for (const shop of shops) {
     // « En attente » in the admin before the job exists (the worker then writes « running »); an import already

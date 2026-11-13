@@ -57,6 +57,12 @@ const HOUR_MS = 60 * MINUTE_MS;
 function StockChecked({ checkedAt, refreshing }: { checkedAt: string | null; refreshing: boolean }) {
   const t = useTranslations("Discover.sheet");
   const format = useFormatter();
+  // « il y a N min » moves on by itself while the sheet stays open.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((n) => n + 1), MINUTE_MS);
+    return () => clearInterval(timer);
+  }, []);
   let text: string | null = null;
   if (refreshing) text = t("checking");
   else if (checkedAt) {
@@ -103,6 +109,8 @@ export function CatalogueSheet({ productId }: { productId: string }) {
   const [sharing, setSharing] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [backHref, setBackHref] = useState(DISCOVER_PATH);
+  // The fresh read found the article gone from the shop (or out of the catalogue): said on the sheet, kept open.
+  const [gone, setGone] = useState(false);
 
   useEffect(() => setBackHref(readLastDiscoverHref()), []);
 
@@ -157,7 +165,12 @@ export function CatalogueSheet({ productId }: { productId: string }) {
         // Kept as it is.
       }
       if (controller.signal.aborted) return;
-      const sheet = found === "not_found" ? null : found;
+      if (found === "not_found") {
+        setGone(true);
+        settle(null);
+        return;
+      }
+      const sheet = found;
       // Read: put in place (this effect then ends). Not yet: wait for the last try, then keep what was read.
       if (sheet && (sheet.checkedAt !== checkedAt || !sheet.refreshing)) settle(sheet);
       else if (last) settle(sheet);
@@ -362,7 +375,13 @@ export function CatalogueSheet({ productId }: { productId: string }) {
                   </span>
                 )}
               </div>
-              <StockChecked checkedAt={sheet.checkedAt} refreshing={sheet.refreshing} />
+              {gone ? (
+                <p role="status" data-testid="stock-gone" className="text-meta font-strong text-danger">
+                  {t("gone")}
+                </p>
+              ) : (
+                <StockChecked checkedAt={sheet.checkedAt} refreshing={sheet.refreshing} />
+              )}
               {(sheet.sizeInStock === true || sheet.likes !== null) && (
                 <div className="flex flex-wrap items-center gap-x-space-3 gap-y-space-2">
                   {sheet.sizeInStock === true && <span className="clothing-tag">{tCard("mySize")}</span>}

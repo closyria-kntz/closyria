@@ -1,9 +1,11 @@
 /**
  * `shopify`: the request goes to a Shopify-hosted shop, so it also takes a slot of the one Shopify line (one request
- * every 2 s, all shops together). `high` (someone is looking: a sheet's refresh, a pasted link) is served before
- * `low` (catalogue pages, sitemaps, monitors).
+ * every 2 s, all shops together). `high` (a link someone pasted, an admin test) is served first, then `medium` (a
+ * sheet's refresh), then `low` (catalogue pages, sitemaps, monitors).
  */
-export type ThrottleOptions = { shopify?: "high" | "low" };
+export type LinePriority = "high" | "medium" | "low";
+export type ThrottleOptions = { shopify?: LinePriority };
+const PRIORITIES: readonly LinePriority[] = ["high", "medium", "low"];
 export type Throttle = { wait(domain: string, options?: ThrottleOptions): Promise<void> };
 
 const STALE_MS = 60_000;
@@ -15,18 +17,18 @@ const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => set
 
 /**
  * One line for every Shopify request of this process: each waiter gets its own slot, `intervalMs` after the previous
- * one; the `high` ones waiting go before the `low` ones, each in arrival order.
+ * one; the `high` ones waiting go first, then `medium`, then `low`, each in arrival order.
  */
 function createShopifyLine(intervalMs: number, now: () => number, sleep: (ms: number) => Promise<void>) {
-  const waiting: Record<"high" | "low", (() => void)[]> = { high: [], low: [] };
+  const waiting: Record<LinePriority, (() => void)[]> = { high: [], medium: [], low: [] };
   let last: number | null = null;
   let serving = false;
   const serve = async () => {
     serving = true;
     try {
       for (;;) {
-        const line = waiting.high.length > 0 ? waiting.high : waiting.low;
-        if (line.length === 0) return;
+        const line = PRIORITIES.map((priority) => waiting[priority]).find((queue) => queue.length > 0);
+        if (!line) return;
         const current = now();
         if (last !== null && current < last + intervalMs) {
           // Someone more urgent may arrive meanwhile: the next one is chosen after the pause.
@@ -40,7 +42,7 @@ function createShopifyLine(intervalMs: number, now: () => number, sleep: (ms: nu
       serving = false;
     }
   };
-  return (priority: "high" | "low") =>
+  return (priority: LinePriority) =>
     new Promise<void>((resolve) => {
       waiting[priority].push(resolve);
       if (!serving) void serve();

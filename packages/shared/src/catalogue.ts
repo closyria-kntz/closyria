@@ -287,8 +287,16 @@ export const CATALOGUE_IMPORT_DEAD_MS = 10 * 60_000;
 export const CATALOGUE_IMPORT_INTERVAL_MS = 60 * 60_000;
 export const CATALOGUE_IMPORT_LARGE_INTERVAL_MS = 3 * 60 * 60_000;
 export const CATALOGUE_IMPORT_LARGE_SHOP = 5000;
-/** An open catalogue sheet whose article was read longer ago than this asks the worker for a fresh read. */
+/**
+ * An open catalogue sheet whose article was read longer ago than this asks the worker for a fresh read; 60 min for a
+ * Shopify shop while Shopify asks us to slow down (`doubled`), none at all in `nightly`.
+ */
 export const CATALOGUE_SHEET_FRESH_MS = 15 * 60_000;
+export const CATALOGUE_SHEET_FRESH_SLOWED_MS = 60 * 60_000;
+/** At most this many sheet refreshes asked per minute, every shop and person together. */
+export const CATALOGUE_SHEET_REFRESHES_PER_MINUTE = 10;
+/** A sheet refresh still waiting this long after it was asked is dropped: the person has moved on. */
+export const CATALOGUE_SHEET_REFRESH_MAX_WAIT_MS = 30_000;
 
 /**
  * « Shopify nous demande de ralentir »: after a 429/430 from a Shopify shop, the import intervals are doubled for 6 h
@@ -303,6 +311,16 @@ export const SHOPIFY_SLOWDOWN_MS: Record<ShopifySlowdownLevel, number> = {
 };
 export const shopifySlowdownSchema = z.object({ level: shopifySlowdownLevelSchema, until: z.iso.datetime() });
 export type ShopifySlowdown = z.infer<typeof shopifySlowdownSchema>;
+
+/**
+ * How often a shop's catalogue is read again: every hour, every 3 h above 5 000 products at its last complete import;
+ * doubled while Shopify asks us to slow down (`doubled`). Null for `nightly`: once a night from 03:00 (Paris).
+ */
+export function catalogueImportIntervals(level: ShopifySlowdownLevel | null): { small: number; large: number } | null {
+  if (level === "nightly") return null;
+  const factor = level === "doubled" ? 2 : 1;
+  return { small: CATALOGUE_IMPORT_INTERVAL_MS * factor, large: CATALOGUE_IMPORT_LARGE_INTERVAL_MS * factor };
+}
 
 export const importStateSchema = z.enum(["queued", "running"]);
 export type ImportState = z.infer<typeof importStateSchema>;

@@ -330,8 +330,9 @@ async function shopOrigin(db: Database, shop: typeof schema.shops.$inferSelect):
 }
 
 /**
- * One request to the shop through the capture's guard rails: its domain's throttle, robots.txt (a refusal throws
- * `robots_disallowed`), the address policy, the size and time caps; cut short when `signal` is aborted.
+ * One request to the shop through the capture's guard rails: robots.txt (a refusal throws `robots_disallowed`), its
+ * domain's throttle and the Shopify line, the address policy, the size and time caps; cut short when `signal` is
+ * aborted.
  */
 async function fetchShop(
   deps: ImportDeps,
@@ -340,9 +341,10 @@ async function fetchShop(
   signal: AbortSignal,
   maxBytes = PAGE_MAX_BYTES,
 ) {
-  // A Shopify shop: also one request every 2 s across every Shopify shop, after the sheets' refreshes.
-  await deps.throttle.wait(shopDomain(url), { shopify: "low" });
+  // robots.txt first (cached per origin): its own request never shares the slot of the page.
   if (!(await deps.robots.allows(url))) throw new ImportStop("robots_disallowed");
+  // A Shopify shop: also one request every 2 s across every Shopify shop, after the links and sheets' refreshes.
+  await deps.throttle.wait(shopDomain(url), { shopify: "low" });
   return safeFetch(url, {
     accept,
     policy: deps.policy ?? strictPolicy,

@@ -526,6 +526,43 @@ describe("« Shopify nous demande de ralentir » (stocks frais)", () => {
   });
 });
 
+describe("stocks frais: the dashboard's figures", () => {
+  it("leaves sheet refreshes out of the capture figures, the shop's health and its recent errors", async () => {
+    await t.db.delete(schema.captures);
+    const shop = await newShop({ status: "published" });
+    const fin = { createdAt: ago(HOUR), finishedAt: ago(HOUR) };
+    await newCapture(shop.id, { method: "shopify", durationMs: 100, ...fin });
+    await newCapture(shop.id, { trigger: "refresh", method: "shopify", durationMs: 100, ...fin });
+    await newCapture(shop.id, { trigger: "refresh", status: "failed", errorCode: "timeout", ...fin });
+    await newCapture(shop.id, { trigger: "refresh", status: "failed", errorCode: "blocked", ...fin });
+
+    const body = adminOverviewSchema.parse(await (await call("GET", "/overview")).json());
+    expect(body.captures).toMatchObject({ last24h: 1, last7d: 1, successRate7d: 1 });
+    const detail = adminShopDetailSchema.parse(await (await call("GET", `/shops/${shop.id}`)).json());
+    expect(detail.successRate7d).toBe(1);
+    expect(detail.recentErrors).toEqual([]);
+  });
+
+  it("« Relecture en retard » counts the due shops waiting more than twice their interval", async () => {
+    await t.db.update(schema.shops).set({ importEnabled: false });
+    const late = { status: "published" as const, platform: "shopify" as const, importEnabled: true };
+    const overview = async () => adminOverviewSchema.parse(await (await call("GET", "/overview")).json()).rereadLate;
+    expect(await overview()).toBe(0);
+    await newShop({ ...late, importStartedAt: ago(90 * 60_000) }); // due, not late
+    await newShop({ ...late, importStartedAt: ago(3 * HOUR) }); // late (> 2 h)
+    await newShop({ ...late, importStartedAt: ago(5 * HOUR), lastImportSeen: 9000 }); // big shop: 6 h
+    await newShop({ ...late, importStartedAt: ago(7 * HOUR), lastImportSeen: 9000 }); // late
+    await newShop({ ...late, importStartedAt: ago(9 * HOUR), importState: "running", importHeartbeatAt: ago(60_000) });
+    await newShop({ ...late, status: "pending", importStartedAt: ago(9 * HOUR) });
+    expect(await overview()).toBe(2);
+    // Doubled: 4 h and 12 h.
+    await recordShopifyRejection(t.db, ago(HOUR));
+    expect(await overview()).toBe(0);
+    await t.db.delete(schema.crawlSlowdowns);
+    await t.db.update(schema.shops).set({ importEnabled: false });
+  });
+});
+
 describe("audit", () => {
   it("journals every admin mutation", async () => {
     await t.db.delete(schema.adminAuditLog);

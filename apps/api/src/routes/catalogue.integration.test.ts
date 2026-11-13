@@ -116,6 +116,8 @@ async function newProduct(shopId: string, options: ProductOptions = {}) {
       priceCents: 5000,
       currency: "EUR",
       createdAt: ago(30 * DAY),
+      // Read just now: opening its sheet asks nothing in the background (the « stocks frais » tests set it).
+      lastCapturedAt: NOW,
       ...values,
     })
     .returning();
@@ -770,38 +772,66 @@ describe("GET /api/catalog/{productId} — live check (« stocks frais »)", () 
   const MIN = 60_000;
   const refreshesOf = (productId: string) =>
     t.db.select().from(schema.captures).where(eq(schema.captures.productId, productId));
+  /** Direct call, waiting for the asking the sheet never waits for. */
+  const ask = async (productId: string, checkedAt: Date | null, queue = t.queue) => {
+    const outcome = await requestSheetRefresh(t.db, queue, productId, checkedAt, NOW);
+    await outcome.done;
+    return outcome.refreshing;
+  };
+  const stale = { lastCapturedAt: ago(20 * MIN) };
 
   it("asks a fresh read of an article read over 15 min ago, once, and says so; never for a fresh one", async () => {
     const shop = await newShop();
-    const stale = await newProduct(shop.id, { lastCapturedAt: ago(20 * MIN) });
+    const old = await newProduct(shop.id, stale);
     const fresh = await newProduct(shop.id, { lastCapturedAt: ago(5 * MIN) });
     const callsBefore = t.calls.length;
 
-    const first = (await detail(stale.id)).body;
-    expect(first).toMatchObject({ refreshing: true, checkedAt: ago(20 * MIN).toISOString() });
-    const [capture] = await refreshesOf(stale.id);
-    expect(capture).toMatchObject({
-      trigger: "refresh",
-      status: "queued",
-      requestedBy: null,
-      url: stale.canonicalUrl,
-      shopId: shop.id,
-    });
-    expect(t.calls.slice(callsBefore)).toEqual([{ queue: "capture-user", id: capture?.id }]);
+    expect((await detail(old.id)).body).toMatchObject({ refreshing: true, checkedAt: ago(20 * MIN).toISOString() });
+    await vi.waitFor(async () => expect(await refreshesOf(old.id)).toHaveLength(1));
+    const [capture] = await refreshesOf(old.id);
+    expect(capture).toMatchObject({ trigger: "refresh", status: "queued", requestedBy: null, url: old.canonicalUrl });
+    await vi.waitFor(() => expect(t.calls.slice(callsBefore)).toEqual([{ queue: "capture-refresh", id: capture?.id }]));
 
     // Opened again while it runs (by her or anyone): the same read, nothing more asked.
-    expect((await detail(stale.id, "", other.cookie)).body.refreshing).toBe(true);
-    expect(await refreshesOf(stale.id)).toHaveLength(1);
-    expect(t.calls.length).toBe(callsBefore + 1);
+    expect((await detail(old.id, "", other.cookie)).body.refreshing).toBe(true);
+    expect(await refreshesOf(old.id)).toHaveLength(1);
 
     expect((await detail(fresh.id)).body).toMatchObject({ refreshing: false, checkedAt: ago(5 * MIN).toISOString() });
     expect(await refreshesOf(fresh.id)).toEqual([]);
   });
 
-  it("asks one for an article never read, but not again for 15 min after a failed one", async () => {
+  it("a fresh sheet runs no query at all", async () => {
+    const noDb = new Proxy(
+      {},
+      {
+        get: () => () => {
+          throw new Error("no query expected");
+        },
+      },
+    ) as unknown as typeof t.db;
+    const outcome = await requestSheetRefresh(
+      noDb,
+      t.queue,
+      "00000000-0000-4000-8000-000000000000",
+      ago(14 * MIN),
+      NOW,
+    );
+    expect(outcome.refreshing).toBe(false);
+  });
+
+  it("never waits for the queue: a queue that hangs still gives refreshing at once", async () => {
     const shop = await newShop();
-    const never = await newProduct(shop.id);
-    expect((await detail(never.id)).body).toMatchObject({ refreshing: true, checkedAt: null });
+    const p = await newProduct(shop.id, stale);
+    const hanging = { ...t.queue, refreshProduct: () => new Promise<boolean>(() => {}) };
+    const outcome = await requestSheetRefresh(t.db, hanging, p.id, ago(20 * MIN), NOW);
+    expect(outcome.refreshing).toBe(true);
+  });
+
+  it("asks one for an article never read, but not again within the window after a failed one", async () => {
+    const shop = await newShop();
+    const never = await newProduct(shop.id, { lastCapturedAt: null });
+    expect(await ask(never.id, null)).toBe(true);
+    expect(await refreshesOf(never.id)).toHaveLength(1);
 
     const failed = await newProduct(shop.id, { lastCapturedAt: ago(60 * MIN) });
     await t.db.insert(schema.captures).values({
@@ -831,18 +861,67 @@ describe("GET /api/catalog/{productId} — live check (« stocks frais »)", () 
       await newProduct(merged.id, old),
     ];
     for (const p of products) {
-      expect(await requestSheetRefresh(t.db, t.queue, p.id, NOW)).toBe(false);
+      expect(await ask(p.id, ago(DAY))).toBe(false);
       expect(await refreshesOf(p.id)).toEqual([]);
     }
     // The sheet of the manual shop's article still opens, quietly.
     expect((await detail(products[2]?.id ?? "")).body.refreshing).toBe(false);
   });
 
+  it("asks at most 10 refreshes a minute, every article together; past that the sheet shows its age", async () => {
+    const shop = await newShop();
+    const filler = await newProduct(shop.id, { lastCapturedAt: ago(MIN) });
+    const recent = (n: number) =>
+      t.db.insert(schema.captures).values(
+        Array.from({ length: n }, (_, i) => ({
+          productId: filler.id,
+          shopId: shop.id,
+          url: filler.canonicalUrl,
+          trigger: "refresh",
+          status: "succeeded",
+          createdAt: ago(50_000 - i),
+        })),
+      );
+    await recent(9);
+    const ninth = await newProduct(shop.id, stale);
+    expect(await ask(ninth.id, ago(20 * MIN))).toBe(true);
+    const over = await newProduct(shop.id, stale);
+    expect(await ask(over.id, ago(20 * MIN))).toBe(false);
+    expect(await refreshesOf(over.id)).toEqual([]);
+    expect((await detail(over.id)).body.refreshing).toBe(false);
+  });
+
+  it("Shopify slowed down: a 60 min window while doubled, no refresh in the nightly rhythm; other shops as usual", async () => {
+    const shopify = await newShop({ platform: "shopify" });
+    const otherShop = await newShop({ platform: "other" });
+    await t.db.delete(schema.crawlSlowdowns);
+    try {
+      await t.db
+        .insert(schema.crawlSlowdowns)
+        .values({ platform: "shopify", level: "doubled", since: ago(MIN), until: ago(-5 * 60 * MIN) });
+      const halfHour = await newProduct(shopify.id, { lastCapturedAt: ago(30 * MIN) });
+      expect(await ask(halfHour.id, ago(30 * MIN))).toBe(false);
+      const hourAndMore = await newProduct(shopify.id, { lastCapturedAt: ago(70 * MIN) });
+      expect(await ask(hourAndMore.id, ago(70 * MIN))).toBe(true);
+      const elsewhere = await newProduct(otherShop.id, { lastCapturedAt: ago(30 * MIN) });
+      expect(await ask(elsewhere.id, ago(30 * MIN))).toBe(true);
+
+      await t.db.update(schema.crawlSlowdowns).set({ level: "nightly" });
+      const night = await newProduct(shopify.id, { lastCapturedAt: ago(DAY) });
+      expect(await ask(night.id, ago(DAY))).toBe(false);
+      expect(await refreshesOf(night.id)).toEqual([]);
+      const nightElsewhere = await newProduct(otherShop.id, { lastCapturedAt: ago(DAY) });
+      expect(await ask(nightElsewhere.id, ago(DAY))).toBe(true);
+    } finally {
+      await t.db.delete(schema.crawlSlowdowns);
+    }
+  });
+
   it("drops its row when the queue already has one for the article, and keeps the sheet when the queue is down", async () => {
     const shop = await newShop();
     const p = await newProduct(shop.id, { lastCapturedAt: ago(DAY) });
     const taken = { ...t.queue, refreshProduct: async () => false };
-    expect(await requestSheetRefresh(t.db, taken, p.id, NOW)).toBe(false);
+    await ask(p.id, ago(DAY), taken);
     expect(await refreshesOf(p.id)).toEqual([]);
 
     const down = {
@@ -852,7 +931,7 @@ describe("GET /api/catalog/{productId} — live check (« stocks frais »)", () 
       },
     };
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(await requestSheetRefresh(t.db, down, p.id, NOW)).toBe(false);
+    await ask(p.id, ago(DAY), down);
     log.mockRestore();
     expect(await refreshesOf(p.id)).toEqual([
       expect.objectContaining({ trigger: "refresh", status: "failed", errorCode: "queue_unavailable" }),

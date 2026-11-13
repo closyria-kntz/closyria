@@ -1,6 +1,7 @@
 CREATE TABLE "crawl_slowdowns" (
 	"platform" text PRIMARY KEY NOT NULL,
 	"level" text NOT NULL,
+	"since" timestamp with time zone NOT NULL,
 	"until" timestamp with time zone NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "crawl_slowdowns_level_check" CHECK ("crawl_slowdowns"."level" IN ('doubled', 'nightly'))

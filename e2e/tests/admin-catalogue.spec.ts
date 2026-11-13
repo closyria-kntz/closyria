@@ -310,8 +310,8 @@ test("« Shopify nous demande de ralentir » : l’alerte du tableau de bord et 
   // A 429 from a Shopify shop an hour ago (the database is shared: the alert lives only for this test).
   const until = new Date(Date.now() + 5 * 3_600_000);
   await db.query(
-    `insert into crawl_slowdowns (platform, level, until) values ('shopify', 'doubled', $1)
-     on conflict (platform) do update set level = 'doubled', until = $1`,
+    `insert into crawl_slowdowns (platform, level, since, until) values ('shopify', 'doubled', now(), $1)
+     on conflict (platform) do update set level = 'doubled', since = now(), until = $1`,
     [until],
   );
   try {
