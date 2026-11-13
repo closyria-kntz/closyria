@@ -105,10 +105,9 @@ export const shopShippingOptions = pgTable(
   ],
 );
 
-/** Prices are in cents with an ISO 4217 currency. */
 /**
  * The searchable text of a product (name and brand), lowercased and without accents by the SQL function
- * `catalog_fold` (migration 0022, no extension needed). The catalogue query uses this exact expression (with its
+ * `catalog_fold` (migrations 0022 and 0023, no extension needed). The catalogue query uses this exact expression (with its
  * table alias) so that `products_search_idx` serves it.
  */
 export const productSearchDocument = (alias?: string) => {
@@ -118,6 +117,7 @@ export const productSearchDocument = (alias?: string) => {
   );
 };
 
+/** Prices are in cents with an ISO 4217 currency. */
 export const products = pgTable(
   "products",
   {

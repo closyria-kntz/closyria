@@ -1,6 +1,7 @@
 import { type Database, type SQL, schema, sql } from "@closyria/db";
 import {
   type CatalogCard,
+  type CatalogClosePiece,
   type CatalogDetail,
   type CatalogPage,
   type CatalogQuery,
@@ -12,7 +13,7 @@ import {
   type SizeKind,
 } from "@closyria/shared";
 import { z } from "zod";
-import { type KeyType, validKeyValue } from "../wardrobe/item-view";
+import { type KeyType, privateMediaUrl, validKeyValue } from "../wardrobe/item-view";
 import { PROFILE_ORDER } from "../wardrobe/profiles";
 import { catalogImageUrl } from "./product-view";
 
@@ -159,13 +160,13 @@ const toCard = (r: CardRow): CatalogCard => ({
   wanted: r.wanted,
 });
 
-/** Cards of the products matching `where`, in `orderBy`; `visibleOnly` false only for her own pieces (« proche »). */
+/** Cards of the visible products matching `where`, in `orderBy`. */
 async function selectCards(
   db: Database,
   viewer: Viewer,
-  options: { where: SQL[]; orderBy: SQL; limit: number; visibleOnly?: boolean; join?: SQL; extra?: SQL },
+  options: { where: SQL[]; orderBy: SQL; limit: number; extra?: SQL },
 ): Promise<CardRow[]> {
-  const where = [complete, ...(options.visibleOnly === false ? [] : [visible]), ...options.where];
+  const where = [complete, visible, ...options.where];
   const { rows } = await db.execute<CardRow>(sql`
     select p.id, p.name, s.id as shop_id, s.name as shop_name, img.id as image_id, p.price_cents,
       p.compare_at_cents, p.currency, ${sizeInStock(viewer)} as size_in_stock, ${wanted(viewer)} as wanted
@@ -176,7 +177,6 @@ async function selectCards(
     join lateral (
       select pi.id from product_images pi where pi.product_id = p.id order by pi.position, pi.id limit 1
     ) img on true
-    ${options.join ?? sql``}
     where ${sql.join(where, sql` and `)}
     order by ${options.orderBy}
     limit ${options.limit}`);
@@ -227,16 +227,40 @@ function decodeCursor(sort: CatalogSort, cursor: string): string[] {
  * text search configuration see the stored text. One-letter words are dropped when there are longer ones.
  */
 export function searchTerms(q: string): string[] {
-  const words = q
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .replace(/œ/g, "oe")
-    .replace(/æ/g, "ae")
+  const words = foldText(q)
     .split(/[^a-z0-9]+/)
     .filter(Boolean);
   const long = words.filter((w) => w.length > 1);
   return [...new Set(long.length ? long : words)].slice(0, MAX_SEARCH_TERMS);
+}
+
+/** Letters that lose no accent by decomposition (« ł », « ø », « ß »…): the same table as `catalog_fold` (0023). */
+const NON_DECOMPOSING: Record<string, string> = {
+  ð: "d",
+  ø: "o",
+  đ: "d",
+  ħ: "h",
+  ı: "i",
+  ĸ: "k",
+  ŀ: "l",
+  ł: "l",
+  ŋ: "n",
+  ŧ: "t",
+  ſ: "s",
+  œ: "oe",
+  æ: "ae",
+  ß: "ss",
+  ĳ: "ij",
+  þ: "th",
+};
+
+/** Lowercase without accents, as the SQL `catalog_fold` does for Latin-1 and Latin Extended-A. */
+export function foldText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[ðøđħıĸŀłŋŧſœæßĳþ]/g, (ch) => NON_DECOMPOSING[ch] ?? ch);
 }
 
 const folded = (expr: SQL) => sql`to_tsvector('simple'::regconfig, catalog_fold(${expr}))`;
@@ -257,7 +281,12 @@ function termMatches(term: string): SQL {
 
 function filters(query: CatalogQuery, viewer: Viewer, now: Date): SQL[] {
   const where: SQL[] = [];
-  if (query.q) for (const term of searchTerms(query.q)) where.push(termMatches(term));
+  if (query.q) {
+    const terms = searchTerms(query.q);
+    // Nothing searchable left (punctuation only): no article matches, rather than the whole catalogue.
+    if (terms.length === 0) where.push(sql`false`);
+    for (const term of terms) where.push(termMatches(term));
+  }
   if (query.category) {
     // The category and everything under it (« Robes » holds « Robe courte »).
     where.push(sql`p.category_id in (
@@ -365,23 +394,7 @@ export async function loadCatalogDetail(
         sql`${schema.items.productId} = ${productId} and ${schema.items.userId} = ${viewer.userId} and ${schema.items.deletedAt} is null`,
       )
       .limit(1),
-    // Her own owned pieces (« Reçu » and « Dans mon dressing ») of the same category and color, her corrections first;
-    // shown whatever their catalogue visibility: they are hers.
-    categoryId && colorId
-      ? selectCards(db, viewer, {
-          visibleOnly: false,
-          join: sql`join items i on i.product_id = p.id`,
-          where: [
-            sql`i.user_id = ${viewer.userId} and i.deleted_at is null and i.stage = 'owned'`,
-            ...(viewer.profileId ? [sql`i.profile_id = ${viewer.profileId}`] : []),
-            sql`p.id <> ${productId}`,
-            sql`coalesce(i.category_id, p.category_id) = ${categoryId}`,
-            sql`coalesce(i.color_id, p.color_id) = ${colorId}`,
-          ],
-          orderBy: sql`i.created_at desc, i.id desc`,
-          limit: CATALOG_DETAIL_LIMITS.close,
-        })
-      : [],
+    categoryId && colorId ? loadClosePieces(db, viewer, productId, categoryId, colorId) : [],
     selectCards(db, viewer, {
       where: [sql`p.shop_id = ${row.own_shop_id as string}`, sql`p.id <> ${productId}`],
       orderBy: newest,
@@ -410,10 +423,62 @@ export async function loadCatalogDetail(
     sizes,
     likes: likes >= LIKES_THRESHOLD ? likes : null,
     myItem: own ? { itemId: own.id, stage: own.stage as ItemStage } : null,
-    close: close.map(toCard),
+    close,
     sameShop: sameShop.map(toCard),
     sameStyle: sameStyle.map(toCard),
   };
+}
+
+type CloseRow = {
+  id: string;
+  name: string;
+  stage: ItemStage;
+  cover_media_id: string | null;
+  product_image_id: string | null;
+  own_media_id: string | null;
+};
+
+/**
+ * « Tu as déjà quelque chose de proche »: up to 3 of her own owned pieces (« Reçu » and « Dans mon dressing ») of the
+ * viewer's profile, of the same category and color (her corrections first), newest first. Whatever their product's
+ * catalogue visibility or price: they are hers. Only her own data is read.
+ */
+async function loadClosePieces(
+  db: Database,
+  viewer: Viewer,
+  productId: string,
+  categoryId: string,
+  colorId: string,
+): Promise<CatalogClosePiece[]> {
+  if (!viewer.profileId) return [];
+  const { rows } = await db.execute<CloseRow>(sql`
+    select i.id, coalesce(i.name_override, ip.name, '') as name, i.stage, i.cover_media_id,
+      (select pi.id from product_images pi where pi.product_id = i.product_id
+        order by pi.position, pi.id limit 1) as product_image_id,
+      (select im.media_id from item_media im where im.item_id = i.id
+        order by im.position, im.id limit 1) as own_media_id
+    from items i
+    left join products ip on ip.id = i.product_id
+    where i.user_id = ${viewer.userId} and i.profile_id = ${viewer.profileId}
+      and i.deleted_at is null and i.stage = 'owned'
+      and i.product_id is distinct from ${productId}::uuid
+      and coalesce(i.category_id, ip.category_id) = ${categoryId}
+      and coalesce(i.color_id, ip.color_id) = ${colorId}
+    order by i.created_at desc, i.id desc
+    limit ${CATALOG_DETAIL_LIMITS.close}`);
+  return rows.map((r) => ({
+    itemId: r.id,
+    name: r.name,
+    // The item card's cover rule (`coverUrl` in item-view.ts).
+    imageUrl: r.cover_media_id
+      ? privateMediaUrl(r.cover_media_id)
+      : r.product_image_id
+        ? catalogImageUrl(r.product_image_id)
+        : r.own_media_id
+          ? privateMediaUrl(r.own_media_id)
+          : null,
+    stage: r.stage,
+  }));
 }
 
 // --- Reports. ---

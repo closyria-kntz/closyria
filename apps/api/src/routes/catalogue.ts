@@ -70,7 +70,8 @@ const detailRoute = defineAccess(
     description:
       "Photos, sizes, her own item on it, and `likes`: how many people keep it, null under " +
       `${LIKES_THRESHOLD} (never who). \`close\`: up to ${CATALOG_DETAIL_LIMITS.close} of her own owned pieces ` +
-      "(« Reçu », « Dans mon dressing ») of `profile` (else her first) with the same category and color; " +
+      "(« Reçu », « Dans mon dressing ») of `profile` (else her first) with the same category and color, as " +
+      "`{ itemId, name, imageUrl, stage }` whatever their catalogue visibility; " +
       `\`sameShop\` up to ${CATALOG_DETAIL_LIMITS.sameShop}, \`sameStyle\` up to ` +
       `${CATALOG_DETAIL_LIMITS.sameStyle} from other shops (same category, color or a price within 20 %).`,
     request: { params: productParams, query: catalogDetailQuerySchema },

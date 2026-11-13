@@ -1,6 +1,7 @@
-import { eq, schema } from "@closyria/db";
+import { eq, schema, sql } from "@closyria/db";
 import { type CatalogCard, catalogDetailSchema, catalogPageSchema } from "@closyria/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { foldText } from "../catalog/catalogue";
 import { BASE_URL, createCatalogHarness } from "../catalog/test-app";
 
 // Catalogue « Découvrir », task 3: the catalogue of visible products, its sheet and the reports.
@@ -270,7 +271,29 @@ describe("GET /api/catalog — filters", () => {
     expect(ids((await page("?q=bordeaux")).items)).toEqual([dress.id]);
     expect(ids((await page("?q=noir")).items)).toEqual([coat.id]);
     expect(ids((await page(`?q=${encodeURIComponent("robe noir")}`)).items)).toEqual([]);
-    expect(ids((await page(`?q=${encodeURIComponent("'&|!:*()")}`)).items)).toHaveLength(3);
+    // Nothing searchable left: no article, never the whole catalogue.
+    expect(ids((await page(`?q=${encodeURIComponent("'&|!:*()")}`)).items)).toEqual([]);
+    expect(ids((await page(`?q=${encodeURIComponent("— !")}`)).items)).toEqual([]);
+  });
+
+  it("folds the letters of Latin Extended-A the same way in the search and in the stored text", async () => {
+    const shop = await newShop({ name: "Łódź Atelier" });
+    const a = await newProduct(shop.id, { name: "Veste Šimić" });
+    const b = await newProduct((await newShop()).id, { name: "Gürtel Straße Øre" });
+    expect(ids((await page("?q=simic")).items)).toEqual([a.id]);
+    expect(ids((await page(`?q=${encodeURIComponent("ŠIMIĆ")}`)).items)).toEqual([a.id]);
+    expect(ids((await page("?q=lodz")).items)).toEqual([a.id]);
+    expect(ids((await page("?q=strasse")).items)).toEqual([b.id]);
+    expect(ids((await page(`?q=${encodeURIComponent("gürtel øre")}`)).items)).toEqual([b.id]);
+  });
+
+  it("folds every letter of Latin-1 and Latin Extended-A alike in SQL (`catalog_fold`) and in the API", async () => {
+    const letters = Array.from({ length: 0x180 - 0xc0 }, (_, i) => String.fromCodePoint(0xc0 + i))
+      .filter((ch) => /\p{L}/u.test(ch) && ch !== "ŉ" && ch !== "İ")
+      .join(" ");
+    const { rows } = await t.db.execute<{ folded: string }>(sql`select catalog_fold(${letters}) as folded`);
+    expect(rows[0]?.folded).toBe(foldText(letters));
+    expect(foldText(letters)).toMatch(/^[a-z ]+$/);
   });
 
   it("« Ma taille en stock » compares her size by kind of article, case and spaces aside", async () => {
@@ -460,10 +483,9 @@ describe("GET /api/catalog/{productId}", () => {
     const mine: string[] = [];
     for (let i = 0; i < 4; i++) {
       const q = await newProduct(shop.id, { categoryId: ref.shortDress, colorId: ref.red, createdAt: ago(i * DAY) });
-      mine.push(q.id);
-      await newItem(me.userId, q.id, { stage: "owned", createdAt: ago(i * DAY) });
+      mine.push(await newItem(me.userId, q.id, { stage: "owned", createdAt: ago(i * DAY) }));
     }
-    // Not close: a wish, a trashed piece, another color, someone else's dressing, hidden from the catalogue (still hers).
+    // Not close: a wish, a trashed piece, another color, someone else's dressing.
     const wish = await newProduct(shop.id, { categoryId: ref.shortDress, colorId: ref.red });
     await newItem(me.userId, wish.id, { stage: "spotted" });
     const trashed = await newProduct(shop.id, { categoryId: ref.shortDress, colorId: ref.red });
@@ -471,18 +493,84 @@ describe("GET /api/catalog/{productId}", () => {
     const black = await newProduct(shop.id, { categoryId: ref.shortDress, colorId: ref.black });
     await newItem(me.userId, black.id, { stage: "owned" });
     const theirs = await newProduct(shop.id, { categoryId: ref.shortDress, colorId: ref.red, createdAt: ago(0) });
-    await newItem(other.userId, theirs.id, { stage: "owned", createdAt: ago(0) });
+    const theirItem = await newItem(other.userId, theirs.id, { stage: "owned", createdAt: ago(0) });
 
     const { body } = await detail(p.id);
-    expect(ids(body.close)).toEqual(mine.slice(0, 3));
+    expect(body.close.map((c) => c.itemId)).toEqual(mine.slice(0, 3));
     // Her correction of the color wins over the product's.
     await t.db
       .update(schema.items)
       .set({ colorId: ref.black })
-      .where(eq(schema.items.productId, mine[0] ?? ""));
-    expect(ids((await detail(p.id)).body.close)).toEqual(mine.slice(1, 4));
-    // Another person sees nothing of her dressing.
-    expect((await detail(p.id, "", other.cookie)).body.close.map((c) => c.productId)).toEqual([theirs.id]);
+      .where(eq(schema.items.id, mine[0] ?? ""));
+    expect((await detail(p.id)).body.close.map((c) => c.itemId)).toEqual(mine.slice(1, 4));
+    // Another person sees nothing of her dressing, only her own.
+    const seenByOther = await detail(p.id, "", other.cookie);
+    expect(seenByOther.body.close.map((c) => c.itemId)).toEqual([theirItem]);
+    for (const id of mine) expect(seenByOther.text).not.toContain(id);
+  });
+
+  it("« proche » lists her pieces as they are: hidden or unpublished products, no price, her cover first", async () => {
+    const shop = await newShop();
+    const p = await newProduct(shop.id, { categoryId: ref.shortDress, colorId: ref.red });
+    const hidden = await newProduct(shop.id, {
+      name: "Robe masquée",
+      categoryId: ref.shortDress,
+      colorId: ref.red,
+      hiddenAt: ago(DAY),
+      priceCents: null,
+      createdAt: ago(3 * DAY),
+    });
+    const unpublished = await newProduct((await newShop({ status: "pending" })).id, {
+      name: "Robe en attente",
+      categoryId: ref.shortDress,
+      colorId: ref.red,
+      image: false,
+    });
+    const profile = await newProfile(me.userId);
+    const withCover = await newItem(me.userId, hidden.id, {
+      stage: "owned",
+      profileId: profile.id,
+      nameOverride: "Ma robe rouge",
+      createdAt: ago(2 * DAY),
+    });
+    const [cover] = await t.db
+      .insert(schema.media)
+      .values({
+        id: crypto.randomUUID(),
+        userId: me.userId,
+        key: `media/${me.userId}/cover.webp`,
+        contentType: "image/webp",
+        sizeBytes: 10,
+        width: 600,
+        height: 800,
+      })
+      .returning();
+    await t.db.update(schema.items).set({ coverMediaId: cover?.id }).where(eq(schema.items.id, withCover));
+    const bare = await newItem(me.userId, unpublished.id, {
+      stage: "owned",
+      profileId: profile.id,
+      createdAt: ago(DAY),
+    });
+    // On her second profile: not shown while she looks as her first one.
+    const second = await newProfile(me.userId, { name: "Léa", position: 1 });
+    const elsewhere = await newProduct(shop.id, { categoryId: ref.shortDress, colorId: ref.red });
+    const onSecond = await newItem(me.userId, elsewhere.id, { stage: "owned", profileId: second.id });
+
+    const { body } = await detail(p.id);
+    expect(body.close).toEqual([
+      { itemId: bare, name: "Robe en attente", imageUrl: null, stage: "owned" },
+      { itemId: withCover, name: "Ma robe rouge", imageUrl: `/api/me/media/${cover?.id}`, stage: "owned" },
+    ]);
+    for (const piece of body.close) expect(Object.keys(piece).sort()).toEqual(["imageUrl", "itemId", "name", "stage"]);
+    // Without her cover: the shop's photo.
+    await t.db.update(schema.items).set({ coverMediaId: null }).where(eq(schema.items.id, withCover));
+    const [shopPhoto] = await t.db
+      .select({ id: schema.productImages.id })
+      .from(schema.productImages)
+      .where(eq(schema.productImages.productId, hidden.id));
+    expect((await detail(p.id)).body.close[1]?.imageUrl).toBe(`/api/catalog-images/${shopPhoto?.id}`);
+    // Looking as her second profile.
+    expect((await detail(p.id, `?profile=${second.id}`)).body.close.map((c) => c.itemId)).toEqual([onSecond]);
   });
 
   it("« proche » is empty when the product has no category or color", async () => {

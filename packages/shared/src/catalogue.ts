@@ -53,13 +53,23 @@ export const catalogPageSchema = z.object({
 });
 export type CatalogPage = z.infer<typeof catalogPageSchema>;
 
+/** « Tu as déjà quelque chose de proche »: one of her own pieces (« Reçu » / « Dans mon dressing »), never anyone else's. */
+export const catalogClosePieceSchema = z.object({
+  itemId: z.uuid(),
+  name: z.string(),
+  /** Her cover, else the shop's first photo, else her first own photo (the item card's rule); null without any. */
+  imageUrl: z.string().nullable(),
+  stage: itemStageSchema,
+});
+export type CatalogClosePiece = z.infer<typeof catalogClosePieceSchema>;
+
 export const catalogDetailSchema = catalogCardSchema.extend({
   images: z.array(z.string()),
   sizes: z.array(z.object({ label: z.string(), available: z.boolean() })),
   /** Null under 3 people: the counter is shown from 3. */
   likes: z.number().int().nonnegative().nullable(),
   myItem: z.object({ itemId: z.uuid(), stage: itemStageSchema }).nullable(),
-  close: z.array(catalogCardSchema),
+  close: z.array(catalogClosePieceSchema),
   sameShop: z.array(catalogCardSchema),
   sameStyle: z.array(catalogCardSchema),
 });

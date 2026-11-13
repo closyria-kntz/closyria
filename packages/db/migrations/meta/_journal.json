@@ -162,6 +162,13 @@
       "when": 1794570187674,
       "tag": "0022_catalogue_search",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794570755879,
+      "tag": "0023_catalogue_fold_wider",
+      "breakpoints": true
     }
   ]
 }
