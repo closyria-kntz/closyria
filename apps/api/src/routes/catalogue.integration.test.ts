@@ -2,6 +2,7 @@ import { eq, schema, sql } from "@closyria/db";
 import { type CatalogCard, catalogDetailSchema, catalogPageSchema, isOneSize, sizeTokens } from "@closyria/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { foldText } from "../catalog/catalogue";
+import { requestSheetRefresh } from "../catalog/sheet-refresh";
 import { BASE_URL, createCatalogHarness } from "../catalog/test-app";
 
 // Catalogue « Découvrir », task 3: the catalogue of visible products, its sheet and the reports.
@@ -66,6 +67,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  await t.db.delete(schema.captures);
   await t.db.delete(schema.productReports);
   await t.db.delete(schema.itemEvents);
   await t.db.delete(schema.items);
@@ -761,6 +763,100 @@ describe("GET /api/catalog/{productId}", () => {
     expect(ids(body.sameShop)).not.toContain(p.id);
     expect(body.sameShop.every((c) => c.shop.id === shop.id)).toBe(true);
     expect(ids(body.sameStyle)).toEqual([sameBoth.id, sameColor.id, unfiled.id, nearPrice.id]);
+  });
+});
+
+describe("GET /api/catalog/{productId} — live check (« stocks frais »)", () => {
+  const MIN = 60_000;
+  const refreshesOf = (productId: string) =>
+    t.db.select().from(schema.captures).where(eq(schema.captures.productId, productId));
+
+  it("asks a fresh read of an article read over 15 min ago, once, and says so; never for a fresh one", async () => {
+    const shop = await newShop();
+    const stale = await newProduct(shop.id, { lastCapturedAt: ago(20 * MIN) });
+    const fresh = await newProduct(shop.id, { lastCapturedAt: ago(5 * MIN) });
+    const callsBefore = t.calls.length;
+
+    const first = (await detail(stale.id)).body;
+    expect(first).toMatchObject({ refreshing: true, checkedAt: ago(20 * MIN).toISOString() });
+    const [capture] = await refreshesOf(stale.id);
+    expect(capture).toMatchObject({
+      trigger: "refresh",
+      status: "queued",
+      requestedBy: null,
+      url: stale.canonicalUrl,
+      shopId: shop.id,
+    });
+    expect(t.calls.slice(callsBefore)).toEqual([{ queue: "capture-user", id: capture?.id }]);
+
+    // Opened again while it runs (by her or anyone): the same read, nothing more asked.
+    expect((await detail(stale.id, "", other.cookie)).body.refreshing).toBe(true);
+    expect(await refreshesOf(stale.id)).toHaveLength(1);
+    expect(t.calls.length).toBe(callsBefore + 1);
+
+    expect((await detail(fresh.id)).body).toMatchObject({ refreshing: false, checkedAt: ago(5 * MIN).toISOString() });
+    expect(await refreshesOf(fresh.id)).toEqual([]);
+  });
+
+  it("asks one for an article never read, but not again for 15 min after a failed one", async () => {
+    const shop = await newShop();
+    const never = await newProduct(shop.id);
+    expect((await detail(never.id)).body).toMatchObject({ refreshing: true, checkedAt: null });
+
+    const failed = await newProduct(shop.id, { lastCapturedAt: ago(60 * MIN) });
+    await t.db.insert(schema.captures).values({
+      productId: failed.id,
+      shopId: shop.id,
+      url: failed.canonicalUrl,
+      trigger: "refresh",
+      status: "failed",
+      errorCode: "timeout",
+      createdAt: ago(5 * MIN),
+    });
+    expect((await detail(failed.id)).body.refreshing).toBe(false);
+    expect(await refreshesOf(failed.id)).toHaveLength(1);
+  });
+
+  it("never asks for a hidden or removed article, an unpublished or merged shop, or a shop captured by hand", async () => {
+    const auto = await newShop();
+    const manual = await newShop({ captureMode: "manual" });
+    const pending = await newShop({ status: "pending" });
+    const merged = await newShop({ mergedIntoId: auto.id });
+    const old = { lastCapturedAt: ago(DAY) };
+    const products = [
+      await newProduct(auto.id, { ...old, hiddenAt: ago(DAY) }),
+      await newProduct(auto.id, { ...old, removedAt: ago(DAY) }),
+      await newProduct(manual.id, old),
+      await newProduct(pending.id, old),
+      await newProduct(merged.id, old),
+    ];
+    for (const p of products) {
+      expect(await requestSheetRefresh(t.db, t.queue, p.id, NOW)).toBe(false);
+      expect(await refreshesOf(p.id)).toEqual([]);
+    }
+    // The sheet of the manual shop's article still opens, quietly.
+    expect((await detail(products[2]?.id ?? "")).body.refreshing).toBe(false);
+  });
+
+  it("drops its row when the queue already has one for the article, and keeps the sheet when the queue is down", async () => {
+    const shop = await newShop();
+    const p = await newProduct(shop.id, { lastCapturedAt: ago(DAY) });
+    const taken = { ...t.queue, refreshProduct: async () => false };
+    expect(await requestSheetRefresh(t.db, taken, p.id, NOW)).toBe(false);
+    expect(await refreshesOf(p.id)).toEqual([]);
+
+    const down = {
+      ...t.queue,
+      refreshProduct: async () => {
+        throw new Error("queue down");
+      },
+    };
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await requestSheetRefresh(t.db, down, p.id, NOW)).toBe(false);
+    log.mockRestore();
+    expect(await refreshesOf(p.id)).toEqual([
+      expect.objectContaining({ trigger: "refresh", status: "failed", errorCode: "queue_unavailable" }),
+    ]);
   });
 });
 

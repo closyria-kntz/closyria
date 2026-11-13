@@ -513,6 +513,61 @@ describe("importShopifyCatalog", () => {
     expect(after?.lastImportError).toBe("blocked (HTTP 429)");
   });
 
+  it("on a 429 or 430 slows every Shopify import down: doubled for 6 h, then nightly for 24 h; no retry", async () => {
+    await handle.db.delete(schema.crawlSlowdowns);
+    const s = await newShop();
+    const at = new Date("2026-11-13T10:00:00Z");
+    deps.now = () => at;
+    routes[pagePath(1)] = { status: 430, headers: JSON_TYPE, body: "{}" };
+
+    const first = await importShopifyCatalog(deps, s.id);
+
+    expect(first.error).toBe("blocked (HTTP 430)");
+    // Shopify's security rejection: never asked again within the import.
+    expect(pageHits()).toEqual([pagePath(1)]);
+    expect(await handle.db.select().from(schema.crawlSlowdowns)).toEqual([
+      expect.objectContaining({ platform: "shopify", level: "doubled", until: new Date("2026-11-13T16:00:00Z") }),
+    ]);
+
+    routes[pagePath(1)] = { status: 429, headers: JSON_TYPE, body: "{}" };
+    deps.now = () => new Date("2026-11-13T12:00:00Z");
+    expect((await importShopifyCatalog(deps, s.id)).error).toBe("blocked (HTTP 429)");
+    expect(await handle.db.select().from(schema.crawlSlowdowns)).toEqual([
+      expect.objectContaining({ level: "nightly", until: new Date("2026-11-14T12:00:00Z") }),
+    ]);
+    await handle.db.delete(schema.crawlSlowdowns);
+  });
+
+  it("stops at a 429 on the sitemap too (no estimate is worth a ban), and slows Shopify down", async () => {
+    await handle.db.delete(schema.crawlSlowdowns);
+    routes["/sitemap.xml"] = { status: 429, headers: XML_TYPE, body: "" };
+    servePages([[{ id: 1, title: "Robe" }]]);
+    const s = await newShop();
+
+    const result = await importShopifyCatalog(deps, s.id);
+
+    expect(result.error).toBe("blocked (HTTP 429)");
+    expect(pageHits()).toEqual([]);
+    expect((await handle.db.select().from(schema.crawlSlowdowns))[0]?.level).toBe("doubled");
+    await handle.db.delete(schema.crawlSlowdowns);
+  });
+
+  it("takes a low-priority slot on the Shopify line for every request to the shop", async () => {
+    const s = await newShop({ lastImportSeen: 1 });
+    servePages([[{ id: 1, title: "Robe" }]]);
+    const waits: [string, unknown][] = [];
+    deps.throttle = {
+      wait: async (domain, options) => {
+        waits.push([domain, options]);
+      },
+    };
+
+    await importShopifyCatalog(deps, s.id);
+
+    expect(waits.length).toBeGreaterThan(0);
+    expect(new Set(waits.map(([, options]) => JSON.stringify(options)))).toEqual(new Set(['{"shopify":"low"}']));
+  });
+
   it("does not request a page robots.txt forbids, and records the error", async () => {
     const s = await newShop();
     await handle.db.insert(schema.products).values({
@@ -663,7 +718,7 @@ describe("importShopifyCatalog", () => {
       expect(await shopRow(s.id)).toMatchObject({ importExpected: null, lastImportError: null, lastImportSeen: 250 });
     });
 
-    it("gives no estimate for a sitemap that is not one, too big or empty of products, without an import error", async () => {
+    it("gives no estimate for a sitemap that is not one, forbidden (403), too big or empty of products, without an import error", async () => {
       const cases: Record<string, FakeRoute>[] = [
         { "/sitemap.xml": { headers: { "content-type": "text/html" }, body: "<html>Oups</html>" } },
         { "/sitemap.xml": { headers: XML_TYPE, body: "<sitemapindex><sitemap><loc>broken" } },
@@ -673,7 +728,7 @@ describe("importShopifyCatalog", () => {
         },
         {
           "/sitemap.xml": { headers: XML_TYPE, body: index(["/sitemap_products_1.xml"]) },
-          "/sitemap_products_1.xml": { status: 429, headers: XML_TYPE, body: "" },
+          "/sitemap_products_1.xml": { status: 403, headers: XML_TYPE, body: "" },
         },
         {
           "/sitemap.xml": { headers: XML_TYPE, body: index(["/sitemap_products_1.xml"]) },

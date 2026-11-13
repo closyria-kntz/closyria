@@ -9,7 +9,7 @@ import {
   sizeMatches,
 } from "@closyria/shared";
 import Link from "next/link";
-import { useLocale, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useState } from "react";
 import { AddToListDialog } from "@/components/add-to-list-dialog";
 import { CatalogueCard, HeartIcon, useWant } from "@/components/catalogue-card";
@@ -42,6 +42,37 @@ type Load =
 const touch = "min-h-touch-target";
 /** The photos' nominal size (3:4): the API resizes them, the frame keeps the shape. */
 const PHOTO_SIZE = { width: 600, height: 800 } as const;
+/**
+ * « Stocks frais »: while the API reads the article again at the shop, the sheet reads itself again 3 s then 8 s after
+ * it opened, and stops as soon as the article was read (its `checkedAt` moved).
+ */
+const REFRESH_POLLS_MS = [3000, 8000] as const;
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+
+/**
+ * « Vérification du stock… » while the article is read again, then « Vérifié à l’instant » / « Stock vérifié il y a
+ * N min » (or N h, or the day): discreet, under the price, announced politely when it changes.
+ */
+function StockChecked({ checkedAt, refreshing }: { checkedAt: string | null; refreshing: boolean }) {
+  const t = useTranslations("Discover.sheet");
+  const format = useFormatter();
+  let text: string | null = null;
+  if (refreshing) text = t("checking");
+  else if (checkedAt) {
+    const age = Math.max(0, Date.now() - new Date(checkedAt).getTime());
+    if (age < MINUTE_MS) text = t("checkedNow");
+    else if (age < HOUR_MS) text = t("checkedMinutes", { minutes: Math.floor(age / MINUTE_MS) });
+    else if (age < 24 * HOUR_MS) text = t("checkedHours", { hours: Math.floor(age / HOUR_MS) });
+    else text = t("checkedOn", { date: format.dateTime(new Date(checkedAt), { day: "numeric", month: "long" }) });
+  }
+  if (!text) return null;
+  return (
+    <p data-testid="stock-checked" aria-live="polite" className="text-meta text-ink-muted">
+      {text}
+    </p>
+  );
+}
 
 function Skeleton({ className }: { className: string }) {
   return <div aria-hidden="true" className={`skeleton rounded-card ${className}`} />;
@@ -95,6 +126,50 @@ export function CatalogueSheet({ productId }: { productId: string }) {
     );
     return () => controller.abort();
   }, [productId, current.id, ready, attempt]);
+
+  // « Stocks frais »: the article is being read again at the shop. Its sizes and price are put in place quietly,
+  // everything else (her choices on the sheet) stays as it is.
+  const refreshing = load.status === "ready" && load.sheet.refreshing;
+  const checkedAt = load.status === "ready" ? load.sheet.checkedAt : null;
+  useEffect(() => {
+    if (!refreshing) return;
+    const controller = new AbortController();
+    const settle = (found: CatalogDetail | null) =>
+      setLoad((previous) => {
+        if (previous.status !== "ready") return previous;
+        const fresh = found
+          ? {
+              priceCents: found.priceCents,
+              previousPriceCents: found.previousPriceCents,
+              currency: found.currency,
+              sizes: found.sizes,
+              sizeInStock: found.sizeInStock,
+              checkedAt: found.checkedAt,
+            }
+          : {};
+        return { status: "ready", sheet: { ...previous.sheet, ...fresh, refreshing: false } };
+      });
+    const poll = async (last: boolean) => {
+      let found: CatalogDetail | "not_found" | null = null;
+      try {
+        found = await fetchCatalogueDetail(productId, current.id, undefined, controller.signal);
+      } catch {
+        // Kept as it is.
+      }
+      if (controller.signal.aborted) return;
+      const sheet = found === "not_found" ? null : found;
+      // Read: put in place (this effect then ends). Not yet: wait for the last try, then keep what was read.
+      if (sheet && (sheet.checkedAt !== checkedAt || !sheet.refreshing)) settle(sheet);
+      else if (last) settle(sheet);
+    };
+    const timers = REFRESH_POLLS_MS.map((ms, index) =>
+      setTimeout(() => void poll(index === REFRESH_POLLS_MS.length - 1), ms),
+    );
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+      controller.abort();
+    };
+  }, [refreshing, checkedAt, productId, current.id]);
 
   const back = (
     <Link
@@ -287,6 +362,7 @@ export function CatalogueSheet({ productId }: { productId: string }) {
                   </span>
                 )}
               </div>
+              <StockChecked checkedAt={sheet.checkedAt} refreshing={sheet.refreshing} />
               {(sheet.sizeInStock === true || sheet.likes !== null) && (
                 <div className="flex flex-wrap items-center gap-x-space-3 gap-y-space-2">
                   {sheet.sizeInStock === true && <span className="clothing-tag">{tCard("mySize")}</span>}

@@ -230,7 +230,7 @@ describe("safeFetch with the fake shop and loopbackForTests", () => {
     expect(error.code).toBe("timeout");
   });
 
-  it.each([401, 403, 429])("gives blocked for %i", async (status) => {
+  it.each([401, 403, 429, 430])("gives blocked for %i", async (status) => {
     const { origin } = await serve({ "/b": { status, headers: HTML, body: "non" } });
     const error = await captureError(safeFetch(`${origin}/b`, { accept: "page", policy: loopbackForTests }));
     expect(error.code).toBe("blocked");

@@ -261,6 +261,9 @@ describe("POST /api/captures", () => {
         importCatalogue: async () => {
           throw new Error("queue down");
         },
+        refreshProduct: async () => {
+          throw new Error("queue down");
+        },
       },
     });
     vi.spyOn(console, "error").mockImplementation(() => {});

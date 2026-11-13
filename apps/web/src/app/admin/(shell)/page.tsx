@@ -2,6 +2,7 @@ import { adminOverviewSchema } from "@closyria/shared";
 import Link from "next/link";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { adminRead, requireAdminPage } from "../server";
+import { ShopifySlowdownAlert } from "./shopify-slowdown";
 
 /** Dashboard: aggregate figures only (spec D13), never a user's content. */
 export default async function AdminDashboardPage() {
@@ -42,6 +43,7 @@ export default async function AdminDashboardPage() {
   return (
     <>
       <h1 className="font-display text-title font-strong">{t("title")}</h1>
+      <ShopifySlowdownAlert slowdown={overview.shopifySlowdown} />
       <dl className="grid grid-cols-1 gap-space-3 sm:grid-cols-2 lg:grid-cols-3">
         {figures.map((figure) => (
           <div

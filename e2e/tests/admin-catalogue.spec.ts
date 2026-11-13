@@ -296,6 +296,55 @@ test("l’avancement d’un import se lit tout seul dans la fiche boutique, et l
   await expect(listed.getByTestId("importing-tag")).toHaveCount(0);
 });
 
+test("« Shopify nous demande de ralentir » : l’alerte du tableau de bord et des fiches boutique Shopify", async ({
+  page,
+  request,
+  db,
+  userAgentTag,
+}) => {
+  const shop = await seedShop(db, "published");
+  const other = await db.query<{ id: string }>(
+    `insert into shops (name, slug, status, platform) values ($1, $2, 'published', 'other') returning id`,
+    [`Autre ${shop.tag}`, `e2e-admin-other-${shop.tag}`],
+  );
+  // A 429 from a Shopify shop an hour ago (the database is shared: the alert lives only for this test).
+  const until = new Date(Date.now() + 5 * 3_600_000);
+  await db.query(
+    `insert into crawl_slowdowns (platform, level, until) values ('shopify', 'doubled', $1)
+     on conflict (platform) do update set level = 'doubled', until = $1`,
+    [until],
+  );
+  try {
+    const date = new Intl.DateTimeFormat("fr", {
+      day: "numeric",
+      month: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Europe/Paris",
+    }).format(until);
+    const text = `Shopify nous demande de ralentir : imports espacés jusqu’au ${date}`;
+    await signInAsAdmin(page, request, db, userAgentTag);
+
+    await page.goto("/admin");
+    await expect(page.getByTestId("shopify-slowdown")).toHaveText(text);
+    await axeLightAndDark(page);
+    await page.goto(`/admin/boutiques/${shop.id}`);
+    await expect(page.getByTestId("shopify-slowdown")).toHaveText(text);
+    // A shop that is not on Shopify is not concerned.
+    await page.goto(`/admin/boutiques/${other.rows[0]?.id}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByTestId("shopify-slowdown")).toHaveCount(0);
+
+    // Over: no alert.
+    await db.query("update crawl_slowdowns set until = now() - interval '1 minute' where platform = 'shopify'");
+    await page.goto("/admin");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByTestId("shopify-slowdown")).toHaveCount(0);
+  } finally {
+    await db.query("delete from crawl_slowdowns where platform = 'shopify'");
+  }
+});
+
 test("un nouvel import se mesure au total du précédent : une barre et « environ n articles »", async ({
   page,
   request,

@@ -492,6 +492,73 @@ test("« Je le veux » sur la fiche, puis « Signaler » : « Merci, on regarde.
   expect(rows).toEqual([{ reason: "shocking" }]);
 });
 
+test("« stocks frais » : la fiche relue à l’ouverture met tailles et prix à jour en silence, le retour reste en place", async ({
+  page,
+  db,
+}) => {
+  const tag = randomUUID().slice(0, 8);
+  const shop = await seedShop(db, tag, "Frais");
+  const name = `Gilet frais ${tag}`;
+  const id = await seedProduct(db, shop.id, {
+    name,
+    priceCents: 4900,
+    sizes: [
+      ["S", false],
+      ["M", true],
+    ],
+  });
+  // The API's answers, as when the article was read 3 h ago and the shop's stock moved meanwhile: first « a read is
+  // under way », then the fresh sizes and price (the worker's part is covered by the API and worker tests).
+  const reads: string[] = [];
+  await page.route(
+    (url) => url.pathname === `/api/catalog/${id}`,
+    async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      reads.push(route.request().url());
+      const fresh =
+        reads.length === 1
+          ? { refreshing: true, checkedAt: new Date(Date.now() - 3 * 3_600_000).toISOString() }
+          : {
+              refreshing: false,
+              checkedAt: new Date().toISOString(),
+              priceCents: 3900,
+              sizes: [
+                { label: "S", available: true },
+                { label: "M", available: false },
+              ],
+            };
+      await route.fulfill({ response, json: { ...body, ...fresh } });
+    },
+  );
+
+  await page.goto(`/decouvrir?recherche=${tag}`);
+  await expect(cards(page)).toHaveCount(1);
+  await card(page, name).getByRole("link").click();
+  await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+  const info = page.getByTestId("product-info");
+  const checked = info.getByTestId("stock-checked");
+  await expect(checked).toHaveText("Vérification du stock…");
+  await expect(info.getByText(/49,00/)).toBeVisible();
+  const sizes = info.locator('section[aria-labelledby="sizes-title"]');
+  const size = (label: string) => sizes.getByRole("listitem").filter({ hasText: new RegExp(`^${label}`) });
+  await expect(size("S")).toContainText("indisponible");
+
+  // Read again 3 s after it opened: in place, without a reload nor a spinner.
+  await expect(checked).toHaveText("Vérifié à l’instant", { timeout: 10_000 });
+  await expect(info.getByText(/39,00/)).toBeVisible();
+  await expect(size("S")).not.toContainText("indisponible");
+  await expect(size("M")).toContainText("indisponible");
+  // Read: no second try.
+  await page.waitForTimeout(6_000);
+  expect(reads).toHaveLength(2);
+  await axeLightAndDark(page);
+
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`recherche=${tag}`));
+  await expect(card(page, name)).toBeVisible();
+});
+
 test("le retour arrière depuis une fiche garde les filtres, les pages chargées et la position", async ({
   page,
   db,

@@ -293,7 +293,12 @@
       "reportCancel": "Fermer",
       "reportDone": "Merci, on regarde.",
       "reportFailed": "Le signalement n’est pas parti. Réessaie dans un instant.",
-      "addToList": "Ajouter à une liste"
+      "addToList": "Ajouter à une liste",
+      "checking": "Vérification du stock…",
+      "checkedNow": "Vérifié à l’instant",
+      "checkedMinutes": "Stock vérifié il y a {minutes} min",
+      "checkedHours": "Stock vérifié il y a {hours} h",
+      "checkedOn": "Stock vérifié le {date}"
     }
   },
   "Auth": {
@@ -459,7 +464,8 @@
       "triggers": {
         "user": "Utilisatrice",
         "admin_test": "Test admin",
-        "monitor": "Surveillance"
+        "monitor": "Surveillance",
+        "refresh": "Vérification de fiche"
       },
       "health": {
         "ok": "OK",
@@ -485,7 +491,8 @@
         "notShopify": "Seul le catalogue d’une boutique Shopify peut être importé.",
         "shopMerged": "Cette boutique a été fusionnée : importe plutôt celle qui la remplace.",
         "shopRefused": "Cette boutique est refusée : son catalogue n’est jamais importé."
-      }
+      },
+      "shopifySlowdown": "Shopify nous demande de ralentir : imports espacés jusqu’au {date}"
     },
     "shops": {
       "title": "Boutiques",

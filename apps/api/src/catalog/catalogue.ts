@@ -426,7 +426,8 @@ export async function loadCatalogDetail(
     where: [sql`p.id = ${productId}`],
     orderBy: sql`p.id`,
     limit: 1,
-    extra: sql`p.category_id, p.color_id, p.shop_id as own_shop_id, ${likesOf} as likes, p.canonical_url`,
+    extra: sql`p.category_id, p.color_id, p.shop_id as own_shop_id, ${likesOf} as likes, p.canonical_url,
+      p.last_captured_at`,
   });
   if (!row) return null;
   const categoryId = row.category_id as string | null;
@@ -489,6 +490,9 @@ export async function loadCatalogDetail(
     close,
     sameShop: sameShop.map(toCard),
     sameStyle: sameStyle.map(toCard),
+    checkedAt: row.last_captured_at ? new Date(row.last_captured_at as string | Date).toISOString() : null,
+    // The route says whether a fresh read is under way (`requestSheetRefresh`).
+    refreshing: false,
   };
 }
 

@@ -14,6 +14,7 @@ import {
   reportReasonSchema,
   reportResolutionSchema,
   seasonSchema,
+  shopifySlowdownLevelSchema,
   shopStatusSchema,
   shopValueSchema,
 } from "@closyria/shared";
@@ -304,6 +305,21 @@ export const captures = pgTable(
       sql`${t.errorCode} IS NULL OR ${oneOf(t.errorCode, captureErrorCodeSchema.options)}`,
     ),
   ],
+);
+
+/**
+ * A platform asked us to slow down (« Shopify nous demande de ralentir », after a 429/430): one row per platform
+ * (`shopify` only today). The import planner spaces the imports while `until` is ahead; the row stays afterwards.
+ */
+export const crawlSlowdowns = pgTable(
+  "crawl_slowdowns",
+  {
+    platform: text("platform").primaryKey(),
+    level: text("level").notNull(),
+    until: timestamp("until", { withTimezone: true }).notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [check("crawl_slowdowns_level_check", oneOf(t.level, shopifySlowdownLevelSchema.options))],
 );
 
 /** A signed-in person flags a catalogue article; one report per person and article. */

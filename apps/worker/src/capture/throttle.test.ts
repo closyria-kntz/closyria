@@ -91,3 +91,54 @@ describe("createThrottle", () => {
     expect(delays).toEqual([2000]);
   });
 });
+
+describe("createThrottle — Shopify-hosted shops (one request every 2 s overall)", () => {
+  it("spaces requests to different Shopify shops by 2 000 ms, and leaves other shops alone", async () => {
+    const c = clock();
+    const throttle = createThrottle(2000, c.now, c.sleep, 2000);
+    const at: [string, number][] = [];
+    const go = async (domain: string, shopify: boolean) => {
+      await throttle.wait(domain, shopify ? { shopify: "low" } : undefined);
+      at.push([domain, c.state.now - 1_000_000]);
+    };
+    await go("a.fr", true);
+    await go("b.fr", true);
+    await go("other.fr", false);
+    await go("c.fr", true);
+    expect(at).toEqual([
+      ["a.fr", 0],
+      ["b.fr", 2000],
+      ["other.fr", 2000],
+      ["c.fr", 4000],
+    ]);
+  });
+
+  it("serves concurrent waiters one slot each, 2 s apart, whatever their shop", async () => {
+    const c = clock();
+    const throttle = createThrottle(2000, c.now, c.sleep, 2000);
+    await Promise.all(["a.fr", "b.fr", "c.fr", "d.fr"].map((domain) => throttle.wait(domain, { shopify: "low" })));
+    // The first goes at once, each next one 2 s after the previous.
+    expect(c.state.slept).toEqual([2000, 2000, 2000]);
+    expect(c.state.now - 1_000_000).toBe(6000);
+  });
+
+  it("gives the next slot to a sheet's refresh (high) before the catalogue pages waiting (low)", async () => {
+    const c = clock();
+    const throttle = createThrottle(2000, c.now, c.sleep, 2000);
+    const order: string[] = [];
+    const go = (name: string, priority: "high" | "low") =>
+      throttle.wait(`${name}.fr`, { shopify: priority }).then(() => void order.push(name));
+    await go("first", "low");
+    await Promise.all([go("page-1", "low"), go("page-2", "low"), go("refresh", "high")]);
+    expect(order).toEqual(["first", "refresh", "page-1", "page-2"]);
+  });
+
+  it("does not wait when the last Shopify request is over 2 s old", async () => {
+    const c = clock();
+    const throttle = createThrottle(2000, c.now, c.sleep, 2000);
+    await throttle.wait("a.fr", { shopify: "high" });
+    c.state.now += 2500;
+    await throttle.wait("b.fr", { shopify: "high" });
+    expect(c.state.slept).toEqual([]);
+  });
+});

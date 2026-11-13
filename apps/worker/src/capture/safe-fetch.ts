@@ -54,7 +54,8 @@ const ACCEPTED_TYPES: Record<SafeFetchAccept, (mime: string) => boolean> = {
 };
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
-const BLOCKED_STATUSES = new Set([401, 403, 429]);
+/** 430: Shopify's security rejection (« too many requests » from its edge), a block like 429. */
+const BLOCKED_STATUSES = new Set([401, 403, 429, 430]);
 const CHALLENGE_MARKERS = ["captcha-delivery", "cf-chl", "_incapsula_"];
 const CHALLENGE_SCAN_BYTES = 64 * 1024;
 const STANDARD_PORTS = new Set([80, 443]);

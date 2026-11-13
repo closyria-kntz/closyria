@@ -14,7 +14,11 @@ function fakeBoss(failStart = 0, taken = new Set<string>()) {
       },
       createQueue: async (name: string, options?: object) =>
         void log.push(`create ${name}${options ? ` ${JSON.stringify(options)}` : ""}`),
-      send: async (name: string, data?: object | null, options?: { singletonKey: string }) => {
+      send: async (
+        name: string,
+        data?: object | null,
+        options?: { singletonKey: string; singletonSeconds?: number },
+      ) => {
         log.push(`send ${name} ${JSON.stringify(data)}${options ? ` ${JSON.stringify(options)}` : ""}`);
         return taken.has(options?.singletonKey ?? "") ? null : "job";
       },
@@ -49,6 +53,17 @@ describe("pgBossQueue", () => {
     expect(log.slice(-2)).toEqual([
       'send catalogue-import {"shopId":"s1","manual":true} {"singletonKey":"s1"}',
       'send catalogue-import {"shopId":"busy","manual":true} {"singletonKey":"busy"}',
+    ]);
+  });
+
+  it("sends a sheet's refresh on capture-user, one per product every 15 min; false when the window has one", async () => {
+    const { boss, log } = fakeBoss(0, new Set(["busy-product"]));
+    const queue = pgBossQueue(boss);
+    expect(await queue.refreshProduct("p1", "c1")).toBe(true);
+    expect(await queue.refreshProduct("busy-product", "c2")).toBe(false);
+    expect(log.slice(-2)).toEqual([
+      'send capture-user {"captureId":"c1"} {"singletonKey":"p1","singletonSeconds":900}',
+      'send capture-user {"captureId":"c2"} {"singletonKey":"busy-product","singletonSeconds":900}',
     ]);
   });
 

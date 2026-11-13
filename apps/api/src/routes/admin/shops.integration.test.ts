@@ -1,5 +1,5 @@
-import { eq, schema } from "@closyria/db";
-import { adminOverviewSchema } from "@closyria/shared";
+import { eq, recordShopifyRejection, schema } from "@closyria/db";
+import { adminOverviewSchema, adminShopDetailSchema } from "@closyria/shared";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { BASE_URL, createCatalogHarness } from "../../catalog/test-app";
 
@@ -502,6 +502,27 @@ describe("GET /api/admin/overview (catalog figures)", () => {
       byMethod: { shopify: 0, jsonld: 0, opengraph: 0 },
       medianDurationMs: null,
     });
+  });
+});
+
+describe("« Shopify nous demande de ralentir » (stocks frais)", () => {
+  it("shows the slow-down on the dashboard and every shop page while it lasts, and nothing once over", async () => {
+    await t.db.delete(schema.crawlSlowdowns);
+    const shop = await newShop({ platform: "shopify" });
+    const overview = async () => adminOverviewSchema.parse(await (await call("GET", "/overview")).json());
+    const detail = async () => adminShopDetailSchema.parse(await (await call("GET", `/shops/${shop.id}`)).json());
+    expect((await overview()).shopifySlowdown).toBeNull();
+    expect((await detail()).shopifySlowdown).toBeNull();
+
+    await recordShopifyRejection(t.db, ago(HOUR));
+    const doubled = { level: "doubled", until: new Date(NOW.getTime() + 5 * HOUR).toISOString() };
+    expect((await overview()).shopifySlowdown).toEqual(doubled);
+    expect((await detail()).shopifySlowdown).toEqual(doubled);
+
+    // Over (6 h after the 429): nothing shown.
+    await t.db.update(schema.crawlSlowdowns).set({ until: ago(1) });
+    expect((await overview()).shopifySlowdown).toBeNull();
+    await t.db.delete(schema.crawlSlowdowns);
   });
 });
 

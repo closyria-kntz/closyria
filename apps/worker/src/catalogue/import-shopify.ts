@@ -1,11 +1,23 @@
 import { createHash } from "node:crypto";
 import type dns from "node:dns";
-import { and, asc, count, type Database, eq, inArray, isNotNull, isNull, or, schema } from "@closyria/db";
+import {
+  and,
+  asc,
+  count,
+  type Database,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  recordShopifyRejection,
+  schema,
+} from "@closyria/db";
 import { extractShopifyCatalogPage, extractSitemap, type ShopifyCatalogPage } from "@closyria/extract";
 import { CATALOGUE_IMPORT_HEARTBEAT_MS, canonicalizeUrl, shopDomain } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import { type AddressPolicy, strictPolicy } from "../capture/address-policy";
-import { CaptureError } from "../capture/capture-error";
+import { CaptureError, isShopifyRejection } from "../capture/capture-error";
 import { copyImages } from "../capture/copy-images";
 import { decodeBody } from "../capture/decode";
 import type { RobotsCache } from "../capture/robots";
@@ -104,10 +116,11 @@ class ImportStop extends Error {
 
 /**
  * Imports the public catalogue of a Shopify shop (`/products.json?limit=250&page=n`), one page at a time with a 1 s
- * pause, through the same guard rails as a capture (robots.txt, address policy, size and time caps). Products are
- * written exactly like a captured link (sizes, history, photos, classification). Once every page is read, products
- * of the shop that are no longer listed get `removed_at` (cleared when they come back); the wishes (`items`) are
- * never touched. At the first refusal the import stops, records `last_import_error` and removes nothing.
+ * pause, through the same guard rails as a capture (robots.txt, address policy, size and time caps, and the one
+ * Shopify line: a request every 2 s across every Shopify shop). A 429/430 stops it and slows every Shopify import.
+ * Products are written exactly like a captured link (sizes, history, photos, classification). Once every page is
+ * read, products of the shop that are no longer listed get `removed_at` (cleared when they come back); the wishes
+ * (`items`) are never touched. At the first refusal the import stops, records `last_import_error` and removes nothing.
  * A product whose listing has the same content as at its last write (`source_hash`), that is not removed and was
  * checked less than 7 days ago is not written again: its check date moves (one update per page) and it counts as read
  * and listed. Shopify's `updated_at` is not trusted for this: a stock change may not move it.
@@ -256,6 +269,8 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult, signa
     }
     result.error = reason;
     await db.update(schema.shops).set({ lastImportError: reason, updatedAt: now() }).where(eq(schema.shops.id, shopId));
+    // Shopify asks us to slow down (429/430): this import stops (« blocked ») and every Shopify import slows down.
+    if (!signal.aborted && isShopifyRejection(error)) await noteShopifyRejection(db, shopId, now());
     return result;
   }
 
@@ -282,6 +297,18 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult, signa
     })
     .where(eq(schema.shops.id, shopId));
   return result;
+}
+
+/** Records « Shopify ralenti » (never fails the caller: the import already stopped). */
+async function noteShopifyRejection(db: Database, shopId: string, at: Date): Promise<void> {
+  try {
+    const state = await recordShopifyRejection(db, at);
+    console.warn(
+      `catalogue import ${shopId}: Shopify asks to slow down, imports ${state.level} until ${state.until.toISOString()}`,
+    );
+  } catch (error) {
+    console.error(`catalogue import ${shopId}: cannot record the Shopify slow-down`, error);
+  }
 }
 
 /** The origin of the shop's reference page, else of its first domain. */
@@ -313,7 +340,8 @@ async function fetchShop(
   signal: AbortSignal,
   maxBytes = PAGE_MAX_BYTES,
 ) {
-  await deps.throttle.wait(shopDomain(url));
+  // A Shopify shop: also one request every 2 s across every Shopify shop, after the sheets' refreshes.
+  await deps.throttle.wait(shopDomain(url), { shopify: "low" });
   if (!(await deps.robots.allows(url))) throw new ImportStop("robots_disallowed");
   return safeFetch(url, {
     accept,
@@ -354,7 +382,8 @@ async function fetchPage(
  * on the same site (at most 50), counting distinct product handles (`/products/<handle>`, whatever the market prefix;
  * Shopify also lists the home page). Every request goes like a page's (`spacing`: 1 s apart; same guard rails, 8 MB
  * per sitemap). An estimate only: any failure (missing, forbidden by robots.txt, blocked, too big, unreadable, no
- * product) gives null and is not an import error. Only an interruption of the import goes through.
+ * product) gives null and is not an import error. Only an interruption of the import and a Shopify « slow down »
+ * (429/430, which stops the import) go through.
  */
 async function estimateProducts(
   deps: ImportDeps,
@@ -397,6 +426,7 @@ async function estimateProducts(
     if (signal.aborted || (error instanceof ImportStop && error.reason === "interrupted")) {
       throw new ImportStop("interrupted");
     }
+    if (isShopifyRejection(error)) throw error;
     return null;
   }
 }

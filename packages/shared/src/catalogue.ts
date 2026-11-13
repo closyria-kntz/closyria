@@ -90,6 +90,10 @@ export const catalogDetailSchema = catalogCardSchema.extend({
   close: z.array(catalogClosePieceSchema),
   sameShop: z.array(catalogCardSchema),
   sameStyle: z.array(catalogCardSchema),
+  /** When the article was last read at the shop (« Stock vérifié il y a … »); null when never. */
+  checkedAt: z.iso.datetime().nullable(),
+  /** A fresh read was asked (sheet older than 15 min) and is under way: read the sheet again in a few seconds. */
+  refreshing: z.boolean(),
 });
 export type CatalogDetail = z.infer<typeof catalogDetailSchema>;
 
@@ -275,6 +279,30 @@ export const CATALOGUE_IMPORT_HEARTBEAT_MS = 30_000;
  * Well above the heartbeat: a slow page (30 s per request, a retry, photos) still beats several times within it.
  */
 export const CATALOGUE_IMPORT_DEAD_MS = 10 * 60_000;
+
+/**
+ * « Stocks frais »: each shop's catalogue is read again every hour, every 3 h when its last complete import counted
+ * more than 5 000 products. The planner runs every 15 minutes.
+ */
+export const CATALOGUE_IMPORT_INTERVAL_MS = 60 * 60_000;
+export const CATALOGUE_IMPORT_LARGE_INTERVAL_MS = 3 * 60 * 60_000;
+export const CATALOGUE_IMPORT_LARGE_SHOP = 5000;
+/** An open catalogue sheet whose article was read longer ago than this asks the worker for a fresh read. */
+export const CATALOGUE_SHEET_FRESH_MS = 15 * 60_000;
+
+/**
+ * « Shopify nous demande de ralentir »: after a 429/430 from a Shopify shop, the import intervals are doubled for 6 h
+ * (`doubled`); a second one within those 6 h sends the imports back to once a night (03:00, Paris) for 24 h
+ * (`nightly`). Over at `until`.
+ */
+export const shopifySlowdownLevelSchema = z.enum(["doubled", "nightly"]);
+export type ShopifySlowdownLevel = z.infer<typeof shopifySlowdownLevelSchema>;
+export const SHOPIFY_SLOWDOWN_MS: Record<ShopifySlowdownLevel, number> = {
+  doubled: 6 * 60 * 60_000,
+  nightly: 24 * 60 * 60_000,
+};
+export const shopifySlowdownSchema = z.object({ level: shopifySlowdownLevelSchema, until: z.iso.datetime() });
+export type ShopifySlowdown = z.infer<typeof shopifySlowdownSchema>;
 
 export const importStateSchema = z.enum(["queued", "running"]);
 export type ImportState = z.infer<typeof importStateSchema>;

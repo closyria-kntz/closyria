@@ -11,7 +11,7 @@ import {
   shopStatusSchema,
 } from "./catalog";
 import { canonicalizeUrl } from "./catalog-url";
-import { importStateSchema, reportReasonSchema, shopValueSchema } from "./catalogue";
+import { importStateSchema, reportReasonSchema, shopifySlowdownSchema, shopValueSchema } from "./catalogue";
 import { audienceSchema, childDetailSchema, classifiedBySchema, seasonSchema } from "./wardrobe";
 
 const count = z.number().int().nonnegative();
@@ -35,6 +35,8 @@ export const adminOverviewSchema = z.object({
     medianDurationMs: z.number().nonnegative().nullable(),
   }),
   shops: z.object({ pending: count, down: count }),
+  /** « Shopify nous demande de ralentir » while it lasts; null otherwise. */
+  shopifySlowdown: shopifySlowdownSchema.nullable(),
 });
 export type AdminOverview = z.infer<typeof adminOverviewSchema>;
 
@@ -167,6 +169,8 @@ export const adminShopDetailSchema = adminShopSchema.extend({
   featured: z.boolean(),
   /** Products of the shop still on sale (not removed by the last import). */
   catalogueProducts: count,
+  /** « Shopify nous demande de ralentir » while it lasts (whatever the shop); null otherwise. */
+  shopifySlowdown: shopifySlowdownSchema.nullable(),
 });
 export type AdminShopDetail = z.infer<typeof adminShopDetailSchema>;
 

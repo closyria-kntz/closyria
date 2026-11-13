@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { adminRead, requireAdminPage } from "../../../server";
 import { buttonClass } from "../../../ui";
+import { ShopifySlowdownAlert } from "../../shopify-slowdown";
 import { HealthBadge } from "../health-badge";
 import { LinkTester } from "../link-tester";
 import { MergeDialog } from "../merge-dialog";
@@ -42,6 +43,8 @@ export default async function AdminShopPage({ params }: Props) {
           {t("back")}
         </Link>
       </div>
+      {/* Every Shopify import is spaced out, this shop's too. */}
+      {shop.platform === "shopify" && <ShopifySlowdownAlert slowdown={shop.shopifySlowdown} />}
 
       <div className="rounded-card border border-card-border bg-card-bg p-space-4">
         <ShopReview shopId={shop.id} status={shop.status} />

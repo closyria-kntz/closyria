@@ -8,7 +8,8 @@ export const shopStatusSchema = z.enum(["pending", "draft", "published", "refuse
 export const captureModeSchema = z.enum(["auto", "manual"]);
 export const listingKindSchema = z.enum(["catalog", "secondhand"]);
 export const platformSchema = z.enum(["shopify", "other", "unknown"]);
-export const captureTriggerSchema = z.enum(["user", "admin_test", "monitor"]);
+/** `refresh`: the live check of a catalogue sheet (« stocks frais »), asked by nobody in particular. */
+export const captureTriggerSchema = z.enum(["user", "admin_test", "monitor", "refresh"]);
 export const captureStatusSchema = z.enum(["queued", "running", "succeeded", "failed", "skipped_manual"]);
 export const captureMethodSchema = z.enum(["shopify", "jsonld", "opengraph"]);
 export const captureErrorCodeSchema = z.enum([

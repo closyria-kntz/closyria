@@ -67,7 +67,7 @@ beforeAll(async () => {
     catalog: {
       db: handle.db,
       store: memoryStore(),
-      queue: { enqueue: async () => {}, importCatalogue: async () => true },
+      queue: { enqueue: async () => {}, importCatalogue: async () => true, refreshProduct: async () => true },
     },
     admin: { db: handle.db, now: () => NOW },
     wardrobe: { db: handle.db, shareLinkKey: Buffer.alloc(32) },
@@ -121,6 +121,7 @@ describe("GET /api/admin/overview", () => {
       signupsToday: 2,
       captures: expect.any(Object),
       shops: expect.any(Object),
+      shopifySlowdown: null,
     });
   });
 

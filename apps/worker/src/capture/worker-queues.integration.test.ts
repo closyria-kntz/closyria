@@ -273,7 +273,7 @@ describe("catalogue imports", () => {
     });
     const silent = await importShop("plan-silent", {
       importState: "running",
-      importStartedAt: new Date(now.getTime() - 30 * 60_000),
+      importStartedAt: new Date(now.getTime() - 90 * 60_000),
       importHeartbeatAt: new Date(now.getTime() - 20 * 60_000),
     });
     const last = { lastImportSeen: 40, lastImportCreated: 4, lastImportRemoved: 1, importPages: 2, importSeen: 40 };
@@ -334,11 +334,15 @@ describe("catalogue imports", () => {
 });
 
 describe("registerCaptureQueues", () => {
-  it("creates the catalogue import queue (one job per shop) and schedules it at 03:00 Paris time", async () => {
+  it("creates the catalogue import queue (one job per shop), plans it every 15 min and drops the nightly plan", async () => {
     const created: { name: string; options?: object }[] = [];
     const scheduled: { name: string; cron: string; options?: object }[] = [];
     const worked: { name: string; options: object }[] = [];
+    const unscheduled: [string, string | undefined][] = [];
     const boss = {
+      unschedule: async (name: string, key?: string) => {
+        unscheduled.push([name, key]);
+      },
       // Startup recovery: no job left by a previous process (shops left « running » by other tests are queued again).
       findJobs: async () => [],
       send: async () => null,
@@ -361,9 +365,12 @@ describe("registerCaptureQueues", () => {
     expect(worked).toContainEqual({ name: "catalogue-import", options: { localConcurrency: 1 } });
     expect(scheduled).toContainEqual({
       name: "catalogue-import",
-      cron: "0 3 * * *",
-      options: { key: "nightly-import", tz: "Europe/Paris" },
+      cron: "*/15 * * * *",
+      options: { key: "plan-imports" },
     });
+    expect(scheduled.filter((s) => s.name === "catalogue-import")).toHaveLength(1);
+    // The nightly plan of the previous version (« stocks frais » replaces it).
+    expect(unscheduled).toContainEqual(["catalogue-import", "nightly-import"]);
   });
 
   it("hands an injected DNS lookup and throttle to the captures (browser tests: loopback names, no spacing)", async () => {
@@ -384,6 +391,7 @@ describe("registerCaptureQueues", () => {
       send: async () => null,
       createQueue: async () => {},
       schedule: async () => {},
+      unschedule: async () => {},
       work: async (name: string, _options: object, handler: (jobs: { data: unknown }[]) => Promise<void>) => {
         handlers.set(name, handler);
         return name;

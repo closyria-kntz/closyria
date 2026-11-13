@@ -2,6 +2,7 @@ import {
   CAPTURE_QUEUES,
   CATALOGUE_IMPORT_QUEUE,
   CATALOGUE_IMPORT_QUEUE_OPTIONS,
+  CATALOGUE_SHEET_FRESH_MS,
   type CatalogueImportJob,
   PHOTO_IMPORT_QUEUE,
 } from "@closyria/shared";
@@ -20,6 +21,11 @@ export type CaptureQueue = {
    * import of that shop is already queued or running.
    */
   importCatalogue(shopId: string): Promise<boolean>;
+  /**
+   * Hands a sheet's refresh (`{ captureId }` on `capture-user`) to the worker, at most one per product in each
+   * 15-minute window (`singletonKey` = product id); false when one was already sent in that window.
+   */
+  refreshProduct(productId: string, captureId: string): Promise<boolean>;
 };
 
 /**
@@ -31,7 +37,7 @@ export type CaptureQueue = {
 export function pgBossQueue(boss: {
   start(): Promise<unknown>;
   createQueue(name: string, options?: object): Promise<unknown>;
-  send(name: string, data: object, options?: { singletonKey: string }): Promise<unknown>;
+  send(name: string, data: object, options?: { singletonKey: string; singletonSeconds?: number }): Promise<unknown>;
 }): CaptureQueue {
   let ready: Promise<void> | undefined;
   const start = () =>
@@ -57,6 +63,15 @@ export function pgBossQueue(boss: {
       const job: CatalogueImportJob = { shopId, manual: true };
       // pg-boss answers null instead of a job id when the singleton is taken (policy `exclusive`).
       const id = await boss.send(CATALOGUE_IMPORT_QUEUE, job, { singletonKey: shopId });
+      return id !== null && id !== undefined;
+    },
+    async refreshProduct(productId, captureId) {
+      await start();
+      const id = await boss.send(
+        CAPTURE_QUEUES.user,
+        { captureId },
+        { singletonKey: productId, singletonSeconds: CATALOGUE_SHEET_FRESH_MS / 1000 },
+      );
       return id !== null && id !== undefined;
     },
   };

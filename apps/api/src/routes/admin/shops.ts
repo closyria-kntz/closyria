@@ -48,6 +48,7 @@ import { featuredShopId } from "../../catalog/directory";
 import { enqueueCapture } from "../../catalog/enqueue";
 import { loadShopStats, type ShopStats, shopHealth } from "../../catalog/health";
 import { createDraftShop, type Shop } from "../../catalog/shops";
+import { shopifySlowdownOf } from "../../catalog/slowdown";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENT_ERRORS = 10;
@@ -405,7 +406,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       const { id } = c.req.valid("param");
       const shop = await activeShop(db, id);
       if (!shop) return c.json(notFound, 404);
-      const [domains, stats, errors, monitors, featured, onSale] = await Promise.all([
+      const [domains, stats, errors, monitors, featured, onSale, slowdown] = await Promise.all([
         domainsOf(db, [id]),
         loadShopStats(db, now(), [id]),
         db
@@ -431,6 +432,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
         db.execute<{ n: number }>(sql`
           select count(*)::int as n from products p join shops s on s.id = p.shop_id
           where p.shop_id = ${id} and ${inCatalogue}`),
+        shopifySlowdownOf(db, now()),
       ]);
       const s = stats.get(id);
       const [lastMonitor] = monitors;
@@ -448,6 +450,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
           })),
           featured: featured === id,
           catalogueProducts: onSale.rows[0]?.n ?? 0,
+          shopifySlowdown: slowdown,
         },
         200,
       );

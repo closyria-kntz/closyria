@@ -412,6 +412,9 @@ describe("values and import of a shop", () => {
         importCatalogue: async () => {
           throw new Error("queue down");
         },
+        refreshProduct: async () => {
+          throw new Error("queue down");
+        },
       },
     });
     try {

@@ -125,7 +125,7 @@ describe("route coverage", () => {
       catalog: {
         db: {} as Database,
         store: memoryStore(),
-        queue: { enqueue: async () => {}, importCatalogue: async () => true },
+        queue: { enqueue: async () => {}, importCatalogue: async () => true, refreshProduct: async () => true },
       },
       admin: { db: {} as Database },
       wardrobe: { db: {} as Database, shareLinkKey: Buffer.alloc(32) },
@@ -162,7 +162,7 @@ describe("route coverage", () => {
       catalog: {
         db: {} as Database,
         store: memoryStore(),
-        queue: { enqueue: async () => {}, importCatalogue: async () => true },
+        queue: { enqueue: async () => {}, importCatalogue: async () => true, refreshProduct: async () => true },
       },
       admin: { db: {} as Database },
       wardrobe: { db: {} as Database, shareLinkKey: Buffer.alloc(32) },

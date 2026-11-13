@@ -4,6 +4,7 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { defineAccess } from "../../access";
 import type { AdminEnv } from "../../admin-audit";
 import { HEALTH_WINDOW_MS, loadShopStats, REAL_ATTEMPT, shopHealth } from "../../catalog/health";
+import { shopifySlowdownOf } from "../../catalog/slowdown";
 
 export type AdminDeps = {
   db: Database;
@@ -29,7 +30,8 @@ const overviewRoute = defineAccess(
       "`eventsToday`: audience events that occurred during the current UTC day. " +
       "`signupsToday`: accounts (not anonymous) created during the current UTC day. " +
       "`captures`: rates and durations cover finished captures that were real fetch attempts (not 24 h reuses nor queue failures); `shops.down` counts published, " +
-      "automatically captured shops whose two latest monitor captures failed.",
+      "automatically captured shops whose two latest monitor captures failed. `shopifySlowdown`: « Shopify nous demande de ralentir » " +
+      "(after a 429/430 from a Shopify shop: imports doubled, else nightly) until `until`; null when none.",
     responses: {
       200: { description: "Figures", content: { "application/json": { schema: adminOverviewSchema } } },
     },
@@ -46,7 +48,7 @@ export function overviewRoutes(deps: AdminDeps) {
     const at = now();
     const since7d = new Date(at.getTime() - HEALTH_WINDOW_MS).toISOString();
     const since24h = new Date(at.getTime() - DAY_MS).toISOString();
-    const [[users], [today], captureFigures, [pending], monitored] = await Promise.all([
+    const [[users], [today], captureFigures, [pending], monitored, shopifySlowdown] = await Promise.all([
       deps.db
         .select({
           total: count(),
@@ -96,6 +98,7 @@ export function overviewRoutes(deps: AdminDeps) {
             isNull(schema.shops.mergedIntoId),
           ),
         ),
+      shopifySlowdownOf(deps.db, at),
     ]);
     const stats = await loadShopStats(
       deps.db,
@@ -127,6 +130,7 @@ export function overviewRoutes(deps: AdminDeps) {
           medianDurationMs: cap?.median ?? null,
         },
         shops: { pending: pending?.pending ?? 0, down },
+        shopifySlowdown,
       },
       200,
     );

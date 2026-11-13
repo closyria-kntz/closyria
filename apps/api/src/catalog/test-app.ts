@@ -21,6 +21,10 @@ export function recordingQueue() {
       calls.push({ queue: CATALOGUE_IMPORT_QUEUE, id: shopId });
       return true;
     },
+    async refreshProduct(_productId, captureId) {
+      calls.push({ queue: "capture-user", id: captureId });
+      return true;
+    },
   };
   return { queue, calls };
 }

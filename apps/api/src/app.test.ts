@@ -13,7 +13,7 @@ const events = { db: {} as Database };
 const catalog = {
   db: {} as Database,
   store: memoryStore(),
-  queue: { enqueue: async () => {}, importCatalogue: async () => true },
+  queue: { enqueue: async () => {}, importCatalogue: async () => true, refreshProduct: async () => true },
 };
 const ORIGIN = "http://localhost:3001";
 const make = (dbOk: boolean) =>

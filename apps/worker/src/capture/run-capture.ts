@@ -1,16 +1,16 @@
 import type dns from "node:dns";
-import { and, type Database, eq, isNotNull, isNull, ne, schema } from "@closyria/db";
+import { and, type Database, eq, isNotNull, isNull, ne, recordShopifyRejection, schema } from "@closyria/db";
 import { extract, isShopifyPage, shopifyJsUrl } from "@closyria/extract";
 import { type CaptureErrorCode, type CaptureMethod, type ExtractedProduct, shopDomain } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import { type AddressPolicy, strictPolicy } from "./address-policy";
-import { CaptureError } from "./capture-error";
+import { CaptureError, isShopifyRejection } from "./capture-error";
 import { copyImages } from "./copy-images";
 import { decodeBody } from "./decode";
 import type { RobotsCache } from "./robots";
 import { type SafeFetchAccept, safeFetch } from "./safe-fetch";
 import { loadReferenceSet } from "./seed-reference";
-import type { Throttle } from "./throttle";
+import type { Throttle, ThrottleOptions } from "./throttle";
 import { writeProduct } from "./write-product";
 
 export type CaptureDeps = {
@@ -41,11 +41,11 @@ function isGone(error: unknown): boolean {
 }
 
 /**
- * The product a capture speaks for: the user's product, or for a monitor the product known at its test address
- * (`canonical_url` is unique). An admin test speaks for none.
+ * The product a capture speaks for: the user's (or a sheet refresh's) product, or for a monitor the product known at
+ * its test address (`canonical_url` is unique). An admin test speaks for none.
  */
 async function productOf(db: Database, capture: typeof schema.captures.$inferSelect): Promise<string | null> {
-  if (capture.trigger === "user") return capture.productId;
+  if (capture.trigger === "user" || capture.trigger === "refresh") return capture.productId;
   if (capture.trigger !== "monitor") return null;
   if (capture.productId) return capture.productId;
   const [product] = await db
@@ -80,14 +80,20 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
   }
   if (!capture) return;
 
+  let platform: string | undefined;
   try {
     const [shop] = await db.select().from(schema.shops).where(eq(schema.shops.id, capture.shopId));
     if (!shop) throw new Error("shop not found");
-    const outcome = await fetchAndExtract(capture.url, shop.platform, deps);
+    platform = shop.platform;
+    // Someone is waiting for it (a pasted link, an open sheet, the admin): before the catalogue pages on Shopify.
+    const priority = capture.trigger === "monitor" ? "low" : "high";
+    const outcome = await fetchAndExtract(capture.url, shop.platform, priority, deps);
     const { product } = outcome;
 
-    if (capture.trigger === "user") {
-      if (!capture.productId) throw new Error("user capture without a product");
+    // A sheet's refresh (« stocks frais ») writes like her capture, but the history only on a change: it may run
+    // every 15 minutes.
+    if (capture.trigger === "user" || capture.trigger === "refresh") {
+      if (!capture.productId) throw new Error(`${capture.trigger} capture without a product`);
       const productId = capture.productId;
       const at = now();
       // Small tables, read once per capture and only for a product the rules may still touch.
@@ -104,7 +110,7 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
           listingKind: shop.listingKind,
           reference,
           at,
-          history: "always",
+          history: capture.trigger === "user" ? "always" : "on_change",
           // The page answers again: a product marked gone comes back to the catalogue.
           extra: { removedAt: null },
         });
@@ -151,12 +157,23 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
         httpStatus: outcome.httpStatus,
         durationMs: finishedAt.getTime() - startedAt.getTime(),
         finishedAt,
-        ...(capture.trigger === "user" ? {} : { result: product }),
+        ...(capture.trigger === "user" || capture.trigger === "refresh" ? {} : { result: product }),
       })
       // Not when the sweep already failed it (timeout): a late success must not undo that.
       .where(and(eq(schema.captures.id, captureId), eq(schema.captures.status, "running")));
   } catch (error) {
     await recordFailure(capture, error, startedAt, deps);
+    // A Shopify shop asks us to slow down (429/430): every Shopify import slows down.
+    if (platform === "shopify" && isShopifyRejection(error)) {
+      try {
+        const state = await recordShopifyRejection(db, now());
+        console.warn(
+          `capture ${captureId}: Shopify asks to slow down, imports ${state.level} until ${state.until.toISOString()}`,
+        );
+      } catch (writeError) {
+        console.error(`capture ${captureId}: cannot record the Shopify slow-down`, writeError);
+      }
+    }
   }
 }
 
@@ -185,7 +202,7 @@ async function recordFailure(
         })
         // Only while running: a capture already swept to failed/timeout keeps its error code.
         .where(and(eq(schema.captures.id, capture.id), eq(schema.captures.status, "running")));
-      if (capture.trigger === "user" && capture.productId) {
+      if ((capture.trigger === "user" || capture.trigger === "refresh") && capture.productId) {
         await tx
           .update(schema.products)
           .set({ captureStatus: "failed", updatedAt: finishedAt })
@@ -211,19 +228,28 @@ async function recordFailure(
   }
 }
 
-async function fetchAndExtract(url: string, platform: string, deps: CaptureDeps): Promise<Outcome> {
+async function fetchAndExtract(
+  url: string,
+  platform: string,
+  priority: "high" | "low",
+  deps: CaptureDeps,
+): Promise<Outcome> {
   const policy = deps.policy ?? strictPolicy;
   const domain = shopDomain(url);
 
-  /** Paced and robots-checked fetch: the page and its `.js` only (photos go through `copyImages`). */
-  async function fetchPaced(target: string, accept: SafeFetchAccept) {
-    await deps.throttle.wait(domain);
+  /**
+   * Paced and robots-checked fetch: the page and its `.js` only (photos go through `copyImages`). A Shopify shop's
+   * (known, or found by its page) also takes a slot on the Shopify line.
+   */
+  async function fetchPaced(target: string, accept: SafeFetchAccept, shopify = platform === "shopify") {
+    const options: ThrottleOptions | undefined = shopify ? { shopify: priority } : undefined;
+    await deps.throttle.wait(domain, options);
     if (!(await deps.robots.allows(target))) throw new CaptureError("robots_disallowed");
     return safeFetch(target, { accept, policy, ...(deps.lookup ? { lookup: deps.lookup } : {}) });
   }
 
   async function fromShopifyJs(jsUrl: string, page?: { finalUrl: string; contentType: string; html: string }) {
-    const js = await fetchPaced(jsUrl, "json");
+    const js = await fetchPaced(jsUrl, "json", true);
     const result = extract({
       url: page?.finalUrl ?? url,
       contentType: page?.contentType ?? "text/html",
@@ -241,6 +267,8 @@ async function fetchAndExtract(url: string, platform: string, deps: CaptureDeps)
       if (result.ok) return { method: result.method, product: result.product, httpStatus: status };
       jsFailure = result.error;
     } catch (error) {
+      // Shopify asks us to slow down: never ask its page as well.
+      if (isShopifyRejection(error)) throw error;
       // Fall back to the HTML page below.
       jsFailure = error instanceof CaptureError ? error.message : "unexpected error";
     }

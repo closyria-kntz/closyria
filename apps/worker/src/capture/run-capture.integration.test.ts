@@ -101,7 +101,7 @@ async function setup(
     shop?: Partial<typeof schema.shops.$inferInsert>;
     product?: Partial<typeof schema.products.$inferInsert>;
   } = {},
-  trigger: "user" | "admin_test" | "monitor" = "user",
+  trigger: "user" | "admin_test" | "monitor" | "refresh" = "user",
 ) {
   const n = ++counter;
   const [s] = await handle.db
@@ -130,7 +130,7 @@ async function newCapture(
   shopId: string,
   productId: string | null,
   url: string,
-  trigger: "user" | "admin_test" | "monitor",
+  trigger: "user" | "admin_test" | "monitor" | "refresh",
 ) {
   const [c] = await handle.db.insert(schema.captures).values({ shopId, productId, url, trigger }).returning();
   if (!c) throw new Error("no capture");
@@ -350,6 +350,72 @@ describe("runCapture", () => {
     const r = await load(t.capture.id, t.product.id);
     expect(r.capture?.status).toBe("succeeded");
     expect(r.capture?.method).not.toBe("shopify");
+  });
+
+  it("a sheet's refresh writes the product like her capture, with a history row only on a change", async () => {
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } }, "refresh");
+
+    await runCapture(t.capture.id, deps);
+    const first = await load(t.capture.id, t.product.id);
+    expect(first.capture).toMatchObject({ status: "succeeded", dataReady: true, result: null });
+    expect(first.product).toMatchObject({ name: "PANTALON LEONIE", captureStatus: "ok" });
+    expect(first.history).toHaveLength(1);
+
+    // Read again, same content: the check date moves, no new history row.
+    const again = await newCapture(t.shop.id, t.product.id, t.url, "refresh");
+    await runCapture(again.id, deps);
+    const second = await load(again.id, t.product.id);
+    expect(second.capture?.status).toBe("succeeded");
+    expect(second.history).toHaveLength(1);
+    expect(second.product?.lastCapturedAt?.getTime()).toBeGreaterThanOrEqual(
+      first.product?.lastCapturedAt?.getTime() ?? 0,
+    );
+  });
+
+  it("a Shopify 429/430 on the .js stops the capture (no HTML fallback) and slows Shopify imports down", async () => {
+    await handle.db.delete(schema.crawlSlowdowns);
+    for (const status of [430, 429]) {
+      const path = `/products/busy-${status}`;
+      routes[`${path}.js`] = { status, headers: { "content-type": "application/json" }, body: "{}" };
+      servePage(path, "real/mcb-paris.html");
+      const t = await setup(path, { shop: { platform: "shopify" } }, "refresh");
+      await runCapture(t.capture.id, deps);
+      const r = await load(t.capture.id, t.product.id);
+      expect(r.capture).toMatchObject({ status: "failed", errorCode: "blocked", httpStatus: status });
+      expect(shop.hits).not.toContain(path);
+    }
+    // Two rejections within 6 h: once a night.
+    const [state] = await handle.db.select().from(schema.crawlSlowdowns);
+    expect(state?.level).toBe("nightly");
+    await handle.db.delete(schema.crawlSlowdowns);
+  });
+
+  it("a 429 from a shop not on Shopify slows nothing down", async () => {
+    await handle.db.delete(schema.crawlSlowdowns);
+    routes["/other-busy"] = { status: 429, headers: { "content-type": "text/html" }, body: "non" };
+    const t = await setup("/other-busy", { shop: { platform: "other" } });
+    await runCapture(t.capture.id, deps);
+    expect((await load(t.capture.id, t.product.id)).capture?.status).toBe("failed");
+    expect(await handle.db.select().from(schema.crawlSlowdowns)).toEqual([]);
+  });
+
+  it("takes a Shopify slot: high for a person's capture or a refresh, low for a monitor, none off Shopify", async () => {
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    servePage("/plain", "real/zalando.html");
+    const waits: unknown[] = [];
+    deps.throttle = {
+      wait: async (_domain, options) => {
+        waits.push(options?.shopify ?? null);
+      },
+    };
+    for (const trigger of ["user", "refresh", "monitor"] as const) {
+      const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } }, trigger);
+      await runCapture(t.capture.id, deps);
+    }
+    const plain = await setup("/plain", { shop: { platform: "other" } });
+    await runCapture(plain.capture.id, deps);
+    expect(waits).toEqual(["high", "high", "low", null]);
   });
 
   it("extracts JSON-LD from a Zalando page", async () => {

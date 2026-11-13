@@ -39,6 +39,7 @@ const overview = {
     medianDurationMs: null,
   },
   shops: { pending: 0, down: 0 },
+  shopifySlowdown: null,
 };
 
 describe("internalApiUrl", () => {
@@ -210,6 +211,7 @@ describe("shop and capture reads", () => {
       recentErrors: [],
       featured: false,
       catalogueProducts: 12,
+      shopifySlowdown: null,
     };
     const ok = fakeFetch(200, detail);
     const found = await fetchAdminShop(api(ok.fetch), shopId);

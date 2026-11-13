@@ -17,7 +17,7 @@ import { type MonitorQueue, scheduleMonitors } from "./monitor";
 import { createRobotsCache, safeRobotsFetcher } from "./robots";
 import { type CaptureDeps, runCapture } from "./run-capture";
 import { sweepStuckCaptures } from "./sweep";
-import { createThrottle, type Throttle } from "./throttle";
+import { createThrottle, SHOPIFY_INTERVAL_MS, type Throttle } from "./throttle";
 
 /** As pg-boss hands it to a handler: `signal` is aborted when pg-boss gives the job up (stop, lost claim). */
 type JobLike = { id?: string; data: unknown; signal?: AbortSignal };
@@ -53,7 +53,7 @@ export function monitorHandler(deps: CaptureDeps, queue: MonitorQueue) {
   };
 }
 
-/** catalogue-import: no data or `{}` plans the night's imports; `{ shopId }` imports that shop; anything else fails. */
+/** catalogue-import: no data or `{}` plans the imports that are due; `{ shopId }` imports that shop; anything else fails. */
 export function catalogueImportHandler(deps: ImportDeps, queue: ImportQueue) {
   return async (jobs: JobLike[]): Promise<void> => {
     for (const job of jobs) {
@@ -89,21 +89,25 @@ export type CaptureQueueDeps = {
   policy?: AddressPolicy;
   /** Browser tests only: resolves their loopback shop names without DNS. Defaults to the system resolver. */
   lookup?: typeof dns.lookup;
-  /** Browser tests only: no spacing between requests to their one local shop. Defaults to 2 s per domain. */
+  /**
+   * Browser tests only: no spacing between requests to their one local shop. Defaults to 2 s per domain, and 2 s
+   * between any two requests to Shopify-hosted shops.
+   */
   throttle?: Throttle;
 };
 
 /**
  * Creates the capture queues (same default options as the API, which creates them too), processes them and
- * schedules the daily monitor (04:00) and the 5-minute sweep of stuck captures. Also the Shopify catalogue imports:
- * planned every night at 03:00 (Paris), one shop at a time; at start, the imports a previous process left under way
- * are queued again (one worker process only).
+ * schedules the daily monitor (04:00) and the 5-minute sweep of stuck captures. Also the Shopify catalogue imports
+ * (« stocks frais »): planned every 15 minutes (each shop every hour, 3 h for big ones, slower when Shopify asks), one
+ * shop at a time; at start, the imports a previous process left under way are queued again (one worker process only).
  */
 export async function registerCaptureQueues(boss: PgBoss, deps: CaptureQueueDeps): Promise<void> {
   const { db, store, lookup } = deps;
   const policy = deps.policy ?? strictPolicy;
   const robots = createRobotsCache(safeRobotsFetcher(policy, lookup), Date.now);
-  const throttle = deps.throttle ?? createThrottle();
+  // One per process: every capture and import shares the shops' spacing and the one Shopify line.
+  const throttle = deps.throttle ?? createThrottle(2000, Date.now, undefined, SHOPIFY_INTERVAL_MS);
   const captureDeps: CaptureDeps = { db, store, policy, robots, throttle, ...(lookup ? { lookup } : {}) };
 
   for (const name of [CAPTURE_QUEUES.user, CAPTURE_QUEUES.admin, CAPTURE_QUEUES.monitor, SWEEP_QUEUE]) {
@@ -133,5 +137,7 @@ export async function registerCaptureQueues(boss: PgBoss, deps: CaptureQueueDeps
 
   await boss.schedule(CAPTURE_QUEUES.monitor, "0 4 * * *", undefined, { key: "daily-monitor" });
   await boss.schedule(SWEEP_QUEUE, "*/5 * * * *");
-  await boss.schedule(CATALOGUE_IMPORT_QUEUE, "0 3 * * *", undefined, { key: "nightly-import", tz: "Europe/Paris" });
+  // « Stocks frais » replaced the nightly plan (03:00): its schedule, kept by pg-boss, goes.
+  await boss.unschedule(CATALOGUE_IMPORT_QUEUE, "nightly-import");
+  await boss.schedule(CATALOGUE_IMPORT_QUEUE, "*/15 * * * *", undefined, { key: "plan-imports" });
 }

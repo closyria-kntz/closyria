@@ -20,6 +20,7 @@ import {
   reportProduct,
 } from "../catalog/catalogue";
 import type { CatalogDeps } from "../catalog/deps";
+import { sheetRefreshing } from "../catalog/sheet-refresh";
 import { rateLimit } from "../rate-limit";
 
 /** Reports a person may send in an hour. */
@@ -77,7 +78,11 @@ const detailRoute = defineAccess(
       "`{ itemId, productId, name, imageUrl, stage }` whatever their catalogue visibility; `mySizes`: her sizes for " +
       "its kind of article; `url`: its page at the shop; " +
       `\`sameShop\` up to ${CATALOG_DETAIL_LIMITS.sameShop}, \`sameStyle\` up to ` +
-      `${CATALOG_DETAIL_LIMITS.sameStyle} from other shops (same category, color or a price within 20 %).`,
+      `${CATALOG_DETAIL_LIMITS.sameStyle} from other shops (same category, color or a price within 20 %). ` +
+      "`checkedAt`: when the article was last read at the shop. Read more than 15 min ago (or never), the sheet asks " +
+      "the worker to read it again (once per article every 15 min, never for a shop captured by hand) without " +
+      "waiting for it: `refreshing` is then true, and the sheet read again a few seconds later has the fresh sizes " +
+      "and price.",
     request: { params: productParams, query: catalogDetailQuerySchema },
     responses: {
       200: json("The sheet", catalogDetailSchema),
@@ -144,7 +149,10 @@ export function catalogueRoutes(deps: CatalogDeps) {
       const viewer = await loadViewer(db, userIdOf(c), c.req.valid("query").profile);
       const sheet = await loadCatalogDetail(db, viewer, productId);
       c.header("Cache-Control", "private, no-cache");
-      return sheet ? c.json(sheet, 200) : c.json(notFound, 404);
+      if (!sheet) return c.json(notFound, 404);
+      // « Stocks frais »: a stale article is read again in the background; the sheet goes out at once.
+      const refreshing = await sheetRefreshing(db, deps.queue, productId, now());
+      return c.json({ ...sheet, refreshing }, 200);
     })
     .openapi(reportRoute(reportLimiter), async (c) => {
       const { productId } = c.req.valid("param");

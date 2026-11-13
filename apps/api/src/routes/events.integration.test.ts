@@ -69,7 +69,7 @@ beforeAll(async () => {
     catalog: {
       db: handle.db,
       store: memoryStore(),
-      queue: { enqueue: async () => {}, importCatalogue: async () => true },
+      queue: { enqueue: async () => {}, importCatalogue: async () => true, refreshProduct: async () => true },
     },
     events: { db: handle.db, now: () => NOW, rateLimit: { max: RATE_LIMIT, windowMs: 60_000 } },
     admin: { db: handle.db },

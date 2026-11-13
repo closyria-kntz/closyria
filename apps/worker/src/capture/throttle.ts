@@ -1,21 +1,67 @@
-export type Throttle = { wait(domain: string): Promise<void> };
+/**
+ * `shopify`: the request goes to a Shopify-hosted shop, so it also takes a slot of the one Shopify line (one request
+ * every 2 s, all shops together). `high` (someone is looking: a sheet's refresh, a pasted link) is served before
+ * `low` (catalogue pages, sitemaps, monitors).
+ */
+export type ThrottleOptions = { shopify?: "high" | "low" };
+export type Throttle = { wait(domain: string, options?: ThrottleOptions): Promise<void> };
 
 const STALE_MS = 60_000;
 const MAX_DOMAINS = 10_000;
+/** At most one request every 2 s to all the Shopify-hosted shops together (anti-ban, never evaded). */
+export const SHOPIFY_INTERVAL_MS = 2000;
 
 const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Spaces requests to the same domain by at least `minIntervalMs`; other domains do not wait for
- * each other. Concurrent calls on one domain are queued: each takes the next free slot.
+ * One line for every Shopify request of this process: each waiter gets its own slot, `intervalMs` after the previous
+ * one; the `high` ones waiting go before the `low` ones, each in arrival order.
+ */
+function createShopifyLine(intervalMs: number, now: () => number, sleep: (ms: number) => Promise<void>) {
+  const waiting: Record<"high" | "low", (() => void)[]> = { high: [], low: [] };
+  let last: number | null = null;
+  let serving = false;
+  const serve = async () => {
+    serving = true;
+    try {
+      for (;;) {
+        const line = waiting.high.length > 0 ? waiting.high : waiting.low;
+        if (line.length === 0) return;
+        const current = now();
+        if (last !== null && current < last + intervalMs) {
+          // Someone more urgent may arrive meanwhile: the next one is chosen after the pause.
+          await sleep(last + intervalMs - current);
+          continue;
+        }
+        last = current;
+        line.shift()?.();
+      }
+    } finally {
+      serving = false;
+    }
+  };
+  return (priority: "high" | "low") =>
+    new Promise<void>((resolve) => {
+      waiting[priority].push(resolve);
+      if (!serving) void serve();
+    });
+}
+
+/**
+ * Spaces requests to the same domain by at least `minIntervalMs`; other domains do not wait for each other.
+ * Concurrent calls on one domain are queued: each takes the next free slot. A request to a Shopify-hosted shop then
+ * also waits for its slot on the Shopify line (`shopifyIntervalMs` between any two, across shops).
  */
 export function createThrottle(
   minIntervalMs = 2000,
   now: () => number = Date.now,
   sleep: (ms: number) => Promise<void> = defaultSleep,
+  // The worker passes SHOPIFY_INTERVAL_MS; `createThrottle(0)` (tests) spaces nothing.
+  shopifyIntervalMs = minIntervalMs,
 ): Throttle {
   // Per domain, the time at which the last reserved slot starts.
   const nextSlot = new Map<string, number>();
+  const shopifyLine = createShopifyLine(shopifyIntervalMs, now, sleep);
   const prune = (current: number) => {
     // Re-inserting on each use keeps the map ordered by last use, so the oldest come first.
     for (const [domain, slot] of nextSlot) {
@@ -24,7 +70,7 @@ export function createThrottle(
     }
   };
   return {
-    async wait(domain) {
+    wait(domain, options) {
       const current = now();
       const previous = nextSlot.get(domain);
       const slot = previous === undefined ? current : Math.max(current, previous + minIntervalMs);
@@ -32,7 +78,10 @@ export function createThrottle(
       nextSlot.delete(domain);
       nextSlot.set(domain, slot);
       prune(current);
-      if (slot > current) await sleep(slot - current);
+      const priority = options?.shopify;
+      // Synchronous up to the line when the domain is free: callers arriving together queue in their call order.
+      const onLine = () => (priority ? shopifyLine(priority) : Promise.resolve());
+      return slot > current ? sleep(slot - current).then(onLine) : onLine();
     },
   };
 }
