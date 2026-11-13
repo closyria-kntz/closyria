@@ -73,7 +73,7 @@ export function catalogueImportHandler(deps: ImportDeps, queue: ImportQueue) {
       const result = await importShopifyCatalog(deps, parsed.data.shopId);
       // Counts and a short reason only: the details are on the shop (last_import_error).
       console.log(
-        `catalogue import ${parsed.data.shopId}: ${result.created} created, ${result.updated} updated, ${result.removed} removed${result.error ? `, stopped: ${result.error}` : ""}`,
+        `catalogue import ${parsed.data.shopId}: ${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged, ${result.removed} removed${result.error ? `, stopped: ${result.error}` : ""}`,
       );
     }
   };

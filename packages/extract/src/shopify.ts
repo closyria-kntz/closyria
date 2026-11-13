@@ -148,6 +148,7 @@ const catalogProductSchema = z.object({
   body_html: z.string().nullish(),
   published_at: z.string().nullish(),
   created_at: z.string().nullish(),
+  updated_at: z.unknown().optional(),
   vendor: z.string().nullish(),
   product_type: z.string().nullish(),
   tags: z.union([z.array(z.string()), z.string()]).nullish(),
@@ -162,6 +163,7 @@ const catalogProductSchema = z.object({
         option1: z.string().nullish(),
         option2: z.string().nullish(),
         option3: z.string().nullish(),
+        updated_at: z.unknown().optional(),
       }),
     )
     .min(1),
@@ -173,7 +175,11 @@ export type ShopifyCatalogPage = {
   count: number;
   /** Shopify id of every listed product, valid or not: a product skipped here is still on sale. */
   listedIds: string[];
-  products: { url: string; product: ExtractedProduct }[];
+  /**
+   * `sourceUpdatedAt`: the shop's last change of the product (ISO), the latest of the product's and its variants'
+   * `updated_at` (a stock or price change may only move a variant's); absent when the shop gives none.
+   */
+  products: { url: string; product: ExtractedProduct; sourceUpdatedAt?: string }[];
 };
 
 /**
@@ -245,7 +251,20 @@ function catalogProduct(item: unknown, origin: string): ShopifyCatalogPage["prod
     externalId: String(p.id),
   };
   const product = extractedProductSchema.safeParse({ ...candidate, currency: "EUR", platform: "shopify" });
-  return product.success ? { url, product: product.data } : null;
+  if (!product.success) return null;
+  const sourceUpdatedAt = latestDate([p.updated_at, ...p.variants.map((v) => v.updated_at)]);
+  return sourceUpdatedAt ? { url, product: product.data, sourceUpdatedAt } : { url, product: product.data };
+}
+
+/** The latest of the valid dates given (ISO), or undefined when none is. */
+function latestDate(values: unknown[]): string | undefined {
+  let latest: string | undefined;
+  for (const value of values) {
+    const iso = cleanDate(value);
+    // ISO strings in UTC compare in time order.
+    if (iso && (!latest || iso > latest)) latest = iso;
+  }
+  return latest;
 }
 
 function decodeHandle(handle: string): string {

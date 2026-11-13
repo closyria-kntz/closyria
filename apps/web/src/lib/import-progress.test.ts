@@ -1,6 +1,12 @@
 import type { AdminShopImportStatus } from "@closyria/shared";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { IMPORT_POLL_MS, readImportStatus, startImportPolling, statusAfterImportRequest } from "./import-progress";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  IMPORT_POLL_MS,
+  importProgress,
+  readImportStatus,
+  startImportPolling,
+  statusAfterImportRequest,
+} from "./import-progress";
 
 const status = (over: Partial<AdminShopImportStatus> = {}): AdminShopImportStatus => ({
   importState: "running",
@@ -128,4 +134,46 @@ it("after « Importer maintenant »: queued at once only when queued, else the c
   expect(await statusAfterImportRequest({ queued: false, current, read, now })).toMatchObject({ importPages: 6 });
   const failing = vi.fn(async () => null);
   expect(await statusAfterImportRequest({ queued: false, current, read: failing, now })).toEqual(current);
+});
+
+describe("importProgress", () => {
+  it("has no bar once the import is over", () => {
+    expect(importProgress(status({ importState: null, lastImportSeen: 900 }))).toBeNull();
+  });
+
+  it("waits with an indeterminate bar, even with a previous total", () => {
+    expect(
+      importProgress(status({ importState: "queued", importPages: 0, importSeen: 0, lastImportSeen: 900 })),
+    ).toEqual({ line: "queued", value: null, seen: 0, total: null });
+  });
+
+  it("is indeterminate on a first import, with the pages read", () => {
+    expect(importProgress(status({ lastImportSeen: null }))).toEqual({
+      line: "running",
+      value: null,
+      seen: 712,
+      total: null,
+    });
+    // A previous import that read nothing is no total either.
+    expect(importProgress(status({ lastImportSeen: 0 }))?.value).toBeNull();
+    expect(importProgress(status({ lastImportSeen: null, importPages: 0, importSeen: 0 }))?.line).toBe("starting");
+  });
+
+  it("measures against the previous import's total", () => {
+    expect(importProgress(status({ importSeen: 712, lastImportSeen: 1900 }))).toEqual({
+      line: "runningTotal",
+      value: 712 / 1900,
+      seen: 712,
+      total: 1900,
+    });
+    expect(importProgress(status({ importPages: 0, importSeen: 0, lastImportSeen: 1900 }))).toMatchObject({
+      line: "runningTotal",
+      value: 0,
+    });
+  });
+
+  it("never shows a full bar before the end, even past the previous total", () => {
+    expect(importProgress(status({ importSeen: 1900, lastImportSeen: 1900 }))?.value).toBe(0.99);
+    expect(importProgress(status({ importSeen: 2500, lastImportSeen: 1900 }))?.value).toBe(0.99);
+  });
 });

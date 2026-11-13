@@ -173,6 +173,8 @@ export const products = pgTable(
     hiddenAt: timestamp("hidden_at", { withTimezone: true }),
     /** Gone from the shop catalogue at the last import; kept for those who want it. */
     removedAt: timestamp("removed_at", { withTimezone: true }),
+    /** The shop's own last change of the product (Shopify `updated_at`) at its last full import write: same at the next import → skipped. */
+    sourceUpdatedAt: timestamp("source_updated_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

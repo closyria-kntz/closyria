@@ -183,6 +183,13 @@
       "when": 1794581214060,
       "tag": "0025_catalogue_retours_1",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794590326117,
+      "tag": "0026_catalogue_retours_2",
+      "breakpoints": true
     }
   ]
 }

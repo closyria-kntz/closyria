@@ -118,6 +118,8 @@ Prises pendant le chantier, en plus des décisions validées du §2 :
 - **« Ma taille en stock » strict** (retours n°1) : tailles de son type, ou « taille unique » d'un haut, d'un bas ou de chaussures seulement — sacs, accessoires et non classés disparaissent (§3.3) ; lecture des étiquettes partagée entre l'API (SQL `catalog_size_tokens`) et l'interface.
 - **Nouveautés** (retours n°1) : date de mise en ligne chez la boutique (Shopify `published_at`, sinon sa date de création chez Shopify), à défaut le jour où Closyria a vu l'article ; vaut pour le filtre, le tri et « Nouveautés de la semaine ».
 - Un article dont la page a disparu chez la boutique (erreur 404/410 à la capture) sort du catalogue ; il revient si la page répond de nouveau.
+- **Réimport plus rapide** (retours n°2) : chaque article garde la date de sa dernière modification chez Shopify (la plus récente entre l'article et ses variantes, migration 0026) ; au réimport, un article déjà connu, non retiré et dont cette date n'a pas bougé n'est pas réécrit — il compte quand même comme lu et présent (retraits, garde « plus de la moitié » et « Terminé » inchangés). Un article dont une photo n'a pas pu être copiée est réécrit au prochain import pour la retenter ; les corrections de l'admin restent intactes.
+- **Barre d'avancement** (retours n°2) : pendant un import, une barre sous la ligne d'état. S'il existe un import précédent, elle se mesure à son total : « Import en cours : x / environ n articles », jamais pleine avant la fin ; sinon (premier import, « En attente ») elle est indéterminée et la ligne reste « page n, x articles lus ». Plus de barre une fois terminé ; les lecteurs d'écran n'annoncent toujours que le début et la fin.
 
 ## 9. Hors de ce chantier
 

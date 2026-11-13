@@ -16,8 +16,9 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
  * Copies the photos of a product to object storage (WebP, `products/<productId>/<sha256 of the address>.webp`).
  * Existing rows are kept and a photo already stored (same `source_hash`) is not downloaded again; a product
  * never holds more than 8. A photo that fails is skipped. Photos are not paced and robots.txt does not apply.
+ * Returns the number of photos that failed (worth another try later).
  */
-export async function copyImages(productId: string, urls: string[], deps: CopyImagesDeps): Promise<void> {
+export async function copyImages(productId: string, urls: string[], deps: CopyImagesDeps): Promise<number> {
   const { db, store, policy, lookup } = deps;
   const existing = await db
     .select({ sourceHash: schema.productImages.sourceHash, position: schema.productImages.position })
@@ -41,6 +42,7 @@ export async function copyImages(productId: string, urls: string[], deps: CopyIm
   }
 
   let next = 0;
+  let failed = 0;
   const worker = async () => {
     for (let item = wanted[next++]; item; item = wanted[next++]) {
       try {
@@ -65,8 +67,10 @@ export async function copyImages(productId: string, urls: string[], deps: CopyIm
           .onConflictDoNothing();
       } catch {
         // A photo that cannot be fetched or decoded is skipped; the capture still succeeds.
+        failed += 1;
       }
     }
   };
   await Promise.all(Array.from({ length: Math.min(PARALLEL_DOWNLOADS, wanted.length) }, worker));
+  return failed;
 }

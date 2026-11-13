@@ -629,6 +629,8 @@
           "queued": "En attente",
           "starting": "Import en cours…",
           "running": "Import en cours : page {pages, number}, {seen, plural, one {# article lu} other {# articles lus}}",
+          "runningTotal": "Import en cours : {seen, number} / environ {total, plural, one {# article} other {# articles}}",
+          "progress": "Avancement de l’import",
           "done": "Terminé à {hours} h {minutes} : {total, plural, one {# article} other {# articles}} ({created, plural, one {# nouveau} other {# nouveaux}}, {removed, plural, one {# retiré} other {# retirés}})",
           "doneShort": "Terminé à {hours} h {minutes}"
         },

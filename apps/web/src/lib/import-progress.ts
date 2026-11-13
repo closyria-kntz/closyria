@@ -89,3 +89,28 @@ export function startImportPolling(options: {
   }
   return stop;
 }
+
+/**
+ * What the admin shop page shows while an import is queued or running: the line to write and the bar. `value` is
+ * between 0 and 0.99 when the previous import's total gives a scale (never full before the end: the shop may have
+ * grown), null for an indeterminate bar (« En attente », a first import). Null once the import is over (no bar).
+ */
+export type ImportProgress = {
+  line: "queued" | "starting" | "running" | "runningTotal";
+  value: number | null;
+  seen: number;
+  total: number | null;
+};
+
+export const IMPORT_PROGRESS_MAX = 0.99;
+
+export function importProgress(status: AdminShopImportStatus): ImportProgress | null {
+  if (status.importState === null) return null;
+  if (status.importState === "queued") return { line: "queued", value: null, seen: 0, total: null };
+  const seen = status.importSeen;
+  const total = status.lastImportSeen;
+  if (total !== null && total > 0) {
+    return { line: "runningTotal", value: Math.min(seen / total, IMPORT_PROGRESS_MAX), seen, total };
+  }
+  return { line: status.importPages > 0 ? "running" : "starting", value: null, seen, total: null };
+}

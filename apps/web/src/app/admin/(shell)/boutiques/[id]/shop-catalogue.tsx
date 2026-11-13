@@ -5,14 +5,15 @@ import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { adminRequest, catalogErrorKey, importErrorMessage, parisClock } from "@/lib/admin-catalog";
-import { readImportStatus, startImportPolling, statusAfterImportRequest } from "@/lib/import-progress";
+import { importProgress, readImportStatus, startImportPolling, statusAfterImportRequest } from "@/lib/import-progress";
 import { buttonClass, primaryButtonClass } from "../../../ui";
 
 /**
  * The shop in « Découvrir »: its values (filters), « Importer tout le catalogue » for a Shopify shop, and its import
  * with « Importer maintenant »: « En attente », then « Import en cours : page n, x articles lus » (read again every
  * 3 s by a light call, without reloading the page), then « Terminé à HH h MM : … » or the error in plain words; the date of the last import and the articles on
- * sale.
+ * sale. While it is queued or running a bar shows how far it is: measured against the previous import's total
+ * (« x / environ n articles »), indeterminate when there is none (« En attente », a first import).
  */
 export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
   const t = useTranslations("Admin.shops.catalogue");
@@ -97,12 +98,13 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
     return t(`importErrors.${message.key}`, { status: message.status === null ? "none" : String(message.status) });
   })();
 
+  const progress = importProgress(status);
   const importLine = (() => {
-    if (status.importState === "queued") return t("state.queued");
-    if (status.importState === "running") {
-      return status.importPages > 0
-        ? t("state.running", { pages: status.importPages, seen: status.importSeen })
-        : t("state.starting");
+    if (progress?.line === "queued") return t("state.queued");
+    if (progress?.line === "starting") return t("state.starting");
+    if (progress?.line === "running") return t("state.running", { pages: status.importPages, seen: progress.seen });
+    if (progress?.line === "runningTotal") {
+      return t("state.runningTotal", { seen: progress.seen, total: progress.total ?? 0 });
     }
     if (lastError !== null) return lastError;
     if (!status.lastImportAt) return t("state.none");
@@ -186,6 +188,18 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
                 >
                   {importLine}
                 </p>
+                {progress ? (
+                  // Native bar: determinate against the previous total, indeterminate (no value) otherwise. Its text
+                  // is the line above; screen readers are told of the start and the end only (status below).
+                  <progress
+                    data-testid="import-progress"
+                    className="import-progress mt-space-2"
+                    aria-label={t("state.progress")}
+                    aria-valuetext={importLine}
+                    max={1}
+                    {...(progress.value === null ? {} : { value: progress.value })}
+                  />
+                ) : null}
                 {/* Read out on a change of state only (queued, started, over), never on each page read every 3 s. */}
                 <p role="status" className="sr-only">
                   {announcement}

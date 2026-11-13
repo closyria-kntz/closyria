@@ -27,7 +27,14 @@ export type ImportDeps = {
   sleep?: (ms: number) => Promise<void>;
 };
 
-export type ImportResult = { created: number; updated: number; removed: number; error: string | null };
+/** `unchanged`: listed products skipped because the shop's last change is the one already written. */
+export type ImportResult = {
+  created: number;
+  updated: number;
+  unchanged: number;
+  removed: number;
+  error: string | null;
+};
 
 export const IMPORT_PAGE_SIZE = 250;
 export const IMPORT_PAUSE_MS = 1000;
@@ -62,9 +69,11 @@ class ImportStop extends Error {
  * written exactly like a captured link (sizes, history, photos, classification). Once every page is read, products
  * of the shop that are no longer listed get `removed_at` (cleared when they come back); the wishes (`items`) are
  * never touched. At the first refusal the import stops, records `last_import_error` and removes nothing.
+ * A product whose Shopify `updated_at` is the one stored at its last write (`source_updated_at`) and that is not
+ * removed is not written again: it only counts as read and listed.
  */
 export async function importShopifyCatalog(deps: ImportDeps, shopId: string): Promise<ImportResult> {
-  const result: ImportResult = { created: 0, updated: 0, removed: 0, error: null };
+  const result: ImportResult = { created: 0, updated: 0, unchanged: 0, removed: 0, error: null };
   if (running.has(shopId)) return { ...result, error: "already_running" };
   running.add(shopId);
   try {
@@ -119,7 +128,14 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult): Prom
       if (page > 1) await sleep(IMPORT_PAUSE_MS);
       const listing = await fetchPage(deps, origin, page, sleep);
       for (const id of listing.listedIds) listedIds.add(id);
+      const unchanged = await unchangedOf(db, shopId, listing.products);
       for (const item of listing.products) {
+        const ids = unchanged.get(item);
+        if (ids) {
+          for (const id of ids) seen.add(id);
+          result.unchanged += 1;
+          continue;
+        }
         await writeImported(deps, shop, item, reference, seen, result, now());
       }
       // « Import en cours : page n, x articles lus » in the admin, after each page.
@@ -212,7 +228,55 @@ async function fetchPage(
   }
 }
 
-/** Creates or updates the rows of one listed product, then copies its photos. */
+/**
+ * The products of a page that need no write, with the ids of their rows: every row of the shop under that Shopify id
+ * holds the same `source_updated_at` as the listing and is not removed. One query per page.
+ */
+async function unchangedOf(
+  db: Database,
+  shopId: string,
+  items: ShopifyCatalogPage["products"],
+): Promise<Map<ShopifyCatalogPage["products"][number], string[]>> {
+  const out = new Map<ShopifyCatalogPage["products"][number], string[]>();
+  const externalIds = [
+    ...new Set(items.filter((i) => i.sourceUpdatedAt && i.product.externalId).map((i) => i.product.externalId ?? "")),
+  ];
+  if (externalIds.length === 0) return out;
+  const rows = await db
+    .select({
+      id: schema.products.id,
+      externalId: schema.products.externalId,
+      sourceUpdatedAt: schema.products.sourceUpdatedAt,
+      removedAt: schema.products.removedAt,
+    })
+    .from(schema.products)
+    .where(and(eq(schema.products.shopId, shopId), inArray(schema.products.externalId, externalIds)));
+  const byExternalId = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = row.externalId ?? "";
+    byExternalId.set(key, [...(byExternalId.get(key) ?? []), row]);
+  }
+  for (const item of items) {
+    const known = byExternalId.get(item.product.externalId ?? "");
+    const at = item.sourceUpdatedAt ? new Date(item.sourceUpdatedAt).getTime() : null;
+    if (
+      at !== null &&
+      known?.length &&
+      known.every((row) => row.removedAt === null && row.sourceUpdatedAt?.getTime() === at)
+    ) {
+      out.set(
+        item,
+        known.map((row) => row.id),
+      );
+    }
+  }
+  return out;
+}
+
+/**
+ * Creates or updates the rows of one listed product, then copies its photos. The shop's last change of the product is
+ * stored with it, unless a photo could not be copied: the next import then writes it again and retries the photo.
+ */
 async function writeImported(
   deps: ImportDeps,
   shop: typeof schema.shops.$inferSelect,
@@ -227,6 +291,7 @@ async function writeImported(
   const canonicalUrl = canonicalizeUrl(item.url);
   if (!canonicalUrl) return;
   const externalId = product.externalId;
+  const sourceUpdatedAt = item.sourceUpdatedAt ? new Date(item.sourceUpdatedAt) : null;
 
   // Same Shopify product pasted by link under another address (collection path, variant): the same rows.
   const matches = await db
@@ -253,7 +318,7 @@ async function writeImported(
         reference,
         at,
         history: "on_change",
-        extra: { removedAt: null },
+        extra: { removedAt: null, sourceUpdatedAt },
       });
     });
     ids.push(match.id);
@@ -275,6 +340,7 @@ async function writeImported(
         reference,
         at,
         history: "on_change",
+        extra: { sourceUpdatedAt },
       });
       return row.id;
     });
@@ -285,16 +351,21 @@ async function writeImported(
 
   for (const id of ids) {
     seen.add(id);
+    let complete = false;
     try {
-      await copyImages(id, product.images, {
+      const failed = await copyImages(id, product.images, {
         db,
         store: deps.store,
         ...(deps.policy ? { policy: deps.policy } : {}),
         ...(deps.lookup ? { lookup: deps.lookup } : {}),
       });
+      complete = failed === 0;
     } catch (error) {
       // The data is committed: a photo failure does not stop the import.
       console.error(`catalogue import: photo step failed for product ${id}`, error);
+    }
+    if (!complete && sourceUpdatedAt) {
+      await db.update(schema.products).set({ sourceUpdatedAt: null }).where(eq(schema.products.id, id));
     }
   }
 }

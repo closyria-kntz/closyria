@@ -261,6 +261,10 @@ test("l’avancement d’un import se lit tout seul dans la fiche boutique, et l
   const catalogue = page.getByRole("region", { name: "Catalogue" });
   const state = catalogue.getByTestId("import-state");
   await expect(state).toHaveText("Import en cours : page 3, 712 articles lus");
+  // A first import has no total to measure against: the bar is indeterminate.
+  const bar = catalogue.getByRole("progressbar", { name: "Avancement de l’import" });
+  await expect(bar).toBeVisible();
+  await expect(bar).not.toHaveAttribute("value");
   await expect(catalogue.getByRole("button", { name: "Importer maintenant" })).toBeDisabled();
   await axeLightAndDark(page);
 
@@ -277,6 +281,7 @@ test("l’avancement d’un import se lit tout seul dans la fiche boutique, et l
     [shop.id],
   );
   await expect(state).toHaveText("Terminé à 14 h 05 : 962 articles (12 nouveaux, 3 retirés)", { timeout: 15_000 });
+  await expect(bar).toHaveCount(0);
   await expect(catalogue.getByRole("button", { name: "Importer maintenant" })).toBeEnabled();
 
   // A job dead for over 6 h is not « en cours » any more.
@@ -289,6 +294,54 @@ test("l’avancement d’un import se lit tout seul dans la fiche boutique, et l
   await page.goto(`/admin/boutiques?status=published`);
   await expect(listed).toBeVisible();
   await expect(listed.getByTestId("importing-tag")).toHaveCount(0);
+});
+
+test("un nouvel import se mesure au total du précédent : une barre et « environ n articles »", async ({
+  page,
+  request,
+  db,
+  userAgentTag,
+}) => {
+  const shop = await seedShop(db, "published");
+  await db.query(
+    `update shops set import_state = 'running', import_started_at = now(), import_pages = 3, import_seen = 712,
+       last_import_at = '2026-11-12T02:05:00Z', last_import_seen = 1900, last_import_created = 4,
+       last_import_removed = 1 where id = $1`,
+    [shop.id],
+  );
+  await signInAsAdmin(page, request, db, userAgentTag);
+  await page.goto(`/admin/boutiques/${shop.id}`);
+  const catalogue = page.getByRole("region", { name: "Catalogue" });
+  const state = catalogue.getByTestId("import-state");
+  // French grouping: a narrow no-break space in « 1 900 ».
+  await expect(state).toHaveText("Import en cours : 712 / environ 1\u202f900 articles");
+  const bar = catalogue.getByRole("progressbar", { name: "Avancement de l’import" });
+  await expect(bar).toBeVisible();
+  await expect(bar).toHaveAttribute("value", String(712 / 1900));
+  await expect(bar).toHaveAttribute("aria-valuetext", "Import en cours : 712 / environ 1\u202f900 articles");
+  await axeLightAndDark(page);
+
+  // Past the previous total the bar stays just short of full until the end.
+  await db.query("update shops set import_pages = 9, import_seen = 2100 where id = $1", [shop.id]);
+  await expect(state).toHaveText("Import en cours : 2\u202f100 / environ 1\u202f900 articles", { timeout: 15_000 });
+  await expect(bar).toHaveAttribute("value", "0.99");
+
+  // « En attente »: indeterminate, whatever the previous total.
+  await db.query("update shops set import_state = 'queued', import_pages = 0, import_seen = 0 where id = $1", [
+    shop.id,
+  ]);
+  await expect(state).toHaveText("En attente", { timeout: 15_000 });
+  await expect(bar).not.toHaveAttribute("value");
+
+  await db.query(
+    `update shops set import_state = null, last_import_at = '2026-11-13T13:05:00Z', last_import_seen = 2100,
+       last_import_created = 200, last_import_removed = 0 where id = $1`,
+    [shop.id],
+  );
+  await expect(state).toHaveText("Terminé à 14 h 05 : 2\u202f100 articles (200 nouveaux, 0 retiré)", {
+    timeout: 15_000,
+  });
+  await expect(bar).toHaveCount(0);
 });
 
 test("un échec ponctuel du suivi d’import ne fait pas disparaître la fiche boutique", async ({

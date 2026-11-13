@@ -478,3 +478,63 @@ html:has([data-admin-shell]) {
     animation: none;
   }
 }
+
+/* The admin's import bar: a native <progress> drawn like the other bars (6 px, the line's colour, the accent's fill,
+   pill ends), in light and dark through the tokens. Without a value it is indeterminate: a short segment slides
+   along the track; under reduced motion it stands still as stripes along the whole track (never read as a share). */
+.import-progress {
+  appearance: none;
+  display: block;
+  inline-size: 100%;
+  max-inline-size: var(--container-budget);
+  block-size: var(--spacing-bar);
+  border: 0;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background-color: var(--color-line);
+  color: var(--color-accent);
+}
+.import-progress::-webkit-progress-bar {
+  background-color: var(--color-line);
+  border-radius: var(--radius-pill);
+}
+.import-progress::-webkit-progress-value {
+  background-color: var(--color-accent);
+  border-radius: var(--radius-pill);
+  transition: inline-size var(--motion-duration-base) var(--ease-standard);
+}
+.import-progress::-moz-progress-bar {
+  background-color: var(--color-accent);
+  border-radius: var(--radius-pill);
+}
+.import-progress:indeterminate {
+  background-image: linear-gradient(var(--color-accent), var(--color-accent));
+  background-size: calc(100% / 3) 100%;
+  background-repeat: no-repeat;
+  animation: import-progress-slide calc(var(--motion-duration-slow) * 4) var(--ease-standard) infinite;
+}
+.import-progress:indeterminate::-webkit-progress-bar {
+  background-color: transparent;
+}
+.import-progress:indeterminate::-moz-progress-bar {
+  background-color: transparent;
+}
+@keyframes import-progress-slide {
+  from {
+    background-position: calc(100% / -2) 0;
+  }
+  to {
+    background-position: calc(100% * 3 / 2) 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .import-progress:indeterminate {
+    animation: none;
+    background-image: repeating-linear-gradient(
+      to right,
+      var(--color-accent) 0 var(--spacing-space-2),
+      transparent var(--spacing-space-2) var(--spacing-space-4)
+    );
+    background-size: 100% 100%;
+  }
+}
