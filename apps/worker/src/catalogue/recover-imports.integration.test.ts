@@ -123,6 +123,21 @@ describe("recoverInterruptedImports (worker startup)", () => {
     expect(await states(boss, c.id)).toEqual(["created"]);
   });
 
+  it("resumes a cut WooCommerce import like a Shopify one; a shop on another platform only loses its « en cours »", async () => {
+    const hourAgo = new Date(Date.now() - 3_600_000);
+    const woo = await newShop({ platform: "woocommerce", importState: "running", importStartedAt: hourAgo });
+    const other = await newShop({ platform: "prestashop", importState: "running", importStartedAt: hourAgo });
+    const boss = await newBoss();
+    const log = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const result = await recoverInterruptedImports(handle.db, boss);
+    log.mockRestore();
+    expect(result.requeued).toContain(woo.id);
+    expect(result.requeued).not.toContain(other.id);
+    expect(await states(boss, woo.id)).toEqual(["created"]);
+    expect(await shopRow(woo.id)).toMatchObject({ importState: "queued" });
+    expect(await shopRow(other.id)).toMatchObject({ importState: null });
+  });
+
   it("resumes a shop with the nightly import off (or a « grande enseigne ») only when the admin launched it by hand", async () => {
     const hourAgo = new Date(Date.now() - 3_600_000);
     const off = { importEnabled: false };

@@ -1,0 +1,347 @@
+[
+  {
+    "id": 101,
+    "name": "Sac cabas &#8211; lin",
+    "slug": "sac-cabas-lin",
+    "parent": 0,
+    "type": "simple",
+    "variation": "",
+    "permalink": "https://boutique.example.fr/produit/sac-cabas-lin/",
+    "sku": "CAB-01",
+    "short_description": "<p>Court</p>",
+    "description": "<p>Grand sac en lin lavé.</p><ul><li>Anses cuir</li></ul>",
+    "on_sale": false,
+    "prices": {
+      "price": "3900",
+      "regular_price": "3900",
+      "sale_price": "3900",
+      "price_range": null,
+      "currency_code": "EUR",
+      "currency_symbol": "€",
+      "currency_minor_unit": 2,
+      "currency_decimal_separator": ",",
+      "currency_thousand_separator": " ",
+      "currency_prefix": "",
+      "currency_suffix": " €"
+    },
+    "price_html": "",
+    "average_rating": "0",
+    "review_count": 0,
+    "images": [
+      {
+        "id": 1,
+        "src": "https://boutique.example.fr/wp-content/uploads/2026/10/cabas.jpg",
+        "thumbnail": "https://boutique.example.fr/t.jpg",
+        "srcset": "",
+        "sizes": "",
+        "name": "cabas",
+        "alt": ""
+      }
+    ],
+    "categories": [
+      {
+        "id": 15,
+        "name": "Sacs",
+        "slug": "sacs",
+        "link": "https://boutique.example.fr/categorie/sacs/"
+      }
+    ],
+    "tags": [
+      {
+        "id": 30,
+        "name": "Été",
+        "slug": "ete",
+        "link": "https://boutique.example.fr/etiquette/ete/"
+      }
+    ],
+    "brands": [],
+    "attributes": [
+      {
+        "id": 0,
+        "name": "Matière",
+        "taxonomy": null,
+        "has_variations": false,
+        "terms": [
+          {
+            "id": 0,
+            "name": "Lin",
+            "slug": "lin",
+            "default": false
+          }
+        ]
+      }
+    ],
+    "variations": [],
+    "has_options": false,
+    "is_purchasable": true,
+    "is_in_stock": true,
+    "is_on_backorder": false,
+    "low_stock_remaining": null,
+    "sold_individually": false,
+    "add_to_cart": {}
+  },
+  {
+    "id": 202,
+    "name": "Robe portefeuille",
+    "slug": "robe-portefeuille",
+    "parent": 0,
+    "type": "variable",
+    "variation": "",
+    "permalink": "https://boutique.example.fr/produit/robe-portefeuille/",
+    "sku": "",
+    "short_description": "",
+    "description": "<p>Robe fluide.</p>",
+    "on_sale": true,
+    "prices": {
+      "price": "4990",
+      "regular_price": "6990",
+      "sale_price": "4990",
+      "price_range": {
+        "min_amount": "4990",
+        "max_amount": "5490"
+      },
+      "currency_code": "EUR",
+      "currency_symbol": "€",
+      "currency_minor_unit": 2,
+      "currency_decimal_separator": ",",
+      "currency_thousand_separator": " ",
+      "currency_prefix": "",
+      "currency_suffix": " €"
+    },
+    "images": [
+      {
+        "id": 2,
+        "src": "https://boutique.example.fr/wp-content/uploads/robe-1.jpg",
+        "thumbnail": "",
+        "srcset": "",
+        "sizes": "",
+        "name": "",
+        "alt": ""
+      },
+      {
+        "id": 3,
+        "src": "https://boutique.example.fr/wp-content/uploads/robe-2.jpg",
+        "thumbnail": "",
+        "srcset": "",
+        "sizes": "",
+        "name": "",
+        "alt": ""
+      }
+    ],
+    "categories": [
+      {
+        "id": 16,
+        "name": "Robes",
+        "slug": "robes",
+        "link": "https://boutique.example.fr/categorie/robes/"
+      }
+    ],
+    "tags": [],
+    "brands": [
+      {
+        "id": 5,
+        "name": "Maison Sahel",
+        "slug": "maison-sahel",
+        "link": ""
+      }
+    ],
+    "attributes": [
+      {
+        "id": 1,
+        "name": "Couleur",
+        "taxonomy": "pa_couleur",
+        "has_variations": false,
+        "terms": [
+          {
+            "id": 40,
+            "name": "Terracotta",
+            "slug": "terracotta",
+            "default": false
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Taille",
+        "taxonomy": "pa_taille",
+        "has_variations": true,
+        "terms": [
+          {
+            "id": 50,
+            "name": "S",
+            "slug": "s",
+            "default": false
+          },
+          {
+            "id": 51,
+            "name": "M",
+            "slug": "m",
+            "default": false
+          },
+          {
+            "id": 52,
+            "name": "L",
+            "slug": "l",
+            "default": false
+          }
+        ]
+      }
+    ],
+    "variations": [
+      {
+        "id": 2021,
+        "attributes": [
+          {
+            "name": "Taille",
+            "value": "s"
+          }
+        ]
+      },
+      {
+        "id": 2022,
+        "attributes": [
+          {
+            "name": "Taille",
+            "value": "m"
+          }
+        ]
+      },
+      {
+        "id": 2023,
+        "attributes": [
+          {
+            "name": "Taille",
+            "value": "l"
+          }
+        ]
+      }
+    ],
+    "has_options": true,
+    "is_purchasable": true,
+    "is_in_stock": true,
+    "is_on_backorder": false
+  },
+  {
+    "id": 303,
+    "name": "Chemise rayée",
+    "slug": "chemise-rayee",
+    "parent": 0,
+    "type": "simple",
+    "variation": "",
+    "permalink": "https://boutique.example.fr/produit/chemise-rayee/",
+    "sku": "CAB-01",
+    "short_description": "<p>Court</p>",
+    "description": "<p>Grand sac en lin lavé.</p><ul><li>Anses cuir</li></ul>",
+    "on_sale": false,
+    "prices": {
+      "price": "2500",
+      "regular_price": "2500",
+      "sale_price": "2500",
+      "price_range": null,
+      "currency_code": "EUR",
+      "currency_symbol": "€",
+      "currency_minor_unit": 2,
+      "currency_decimal_separator": ",",
+      "currency_thousand_separator": " ",
+      "currency_prefix": "",
+      "currency_suffix": " €"
+    },
+    "price_html": "",
+    "average_rating": "0",
+    "review_count": 0,
+    "images": [],
+    "categories": [],
+    "tags": [],
+    "brands": [],
+    "attributes": [
+      {
+        "id": 2,
+        "name": "Taille",
+        "taxonomy": "pa_taille",
+        "has_variations": false,
+        "terms": [
+          {
+            "id": 59,
+            "name": "TU",
+            "slug": "tu",
+            "default": false
+          }
+        ]
+      }
+    ],
+    "variations": [],
+    "has_options": false,
+    "is_purchasable": true,
+    "is_in_stock": false,
+    "is_on_backorder": false,
+    "low_stock_remaining": null,
+    "sold_individually": false,
+    "add_to_cart": {}
+  },
+  {
+    "id": 404,
+    "name": "Furoshiki",
+    "slug": "furoshiki",
+    "parent": 0,
+    "type": "simple",
+    "variation": "",
+    "permalink": "https://boutique.example.fr/produit/furoshiki/",
+    "sku": "CAB-01",
+    "short_description": "<p>Court</p>",
+    "description": "<p>Grand sac en lin lavé.</p><ul><li>Anses cuir</li></ul>",
+    "on_sale": false,
+    "prices": {
+      "price": "3500",
+      "regular_price": "4000",
+      "sale_price": "3500",
+      "price_range": null,
+      "currency_code": "JPY",
+      "currency_symbol": "€",
+      "currency_minor_unit": 0,
+      "currency_decimal_separator": ",",
+      "currency_thousand_separator": " ",
+      "currency_prefix": "",
+      "currency_suffix": " €"
+    },
+    "price_html": "",
+    "average_rating": "0",
+    "review_count": 0,
+    "images": [
+      {
+        "id": 1,
+        "src": "https://boutique.example.fr/wp-content/uploads/2026/10/cabas.jpg",
+        "thumbnail": "https://boutique.example.fr/t.jpg",
+        "srcset": "",
+        "sizes": "",
+        "name": "cabas",
+        "alt": ""
+      }
+    ],
+    "categories": [
+      {
+        "id": 15,
+        "name": "Sacs",
+        "slug": "sacs",
+        "link": "https://boutique.example.fr/categorie/sacs/"
+      }
+    ],
+    "tags": [
+      {
+        "id": 30,
+        "name": "Été",
+        "slug": "ete",
+        "link": "https://boutique.example.fr/etiquette/ete/"
+      }
+    ],
+    "brands": [],
+    "attributes": [],
+    "variations": [],
+    "has_options": false,
+    "is_purchasable": true,
+    "is_in_stock": true,
+    "is_on_backorder": false,
+    "low_stock_remaining": null,
+    "sold_individually": false,
+    "add_to_cart": {}
+  }
+]

@@ -1,5 +1,5 @@
 import type { PgBoss } from "pg-boss";
-import { abortRunningImports, settleRunningImports } from "./catalogue/import-shopify";
+import { abortRunningImports, settleRunningImports } from "./catalogue/import-core";
 
 /**
  * SIGTERM (a deploy restarts the worker; systemd kills it 20 s later): the catalogue imports stop first, before their

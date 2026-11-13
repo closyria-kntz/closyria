@@ -189,6 +189,11 @@ export const products = pgTable(
      * full import write: the same content, checked again within 7 days, is not written again. Null: never skipped.
      */
     sourceHash: text("source_hash"),
+    /**
+     * WooCommerce: when the per-size stock (one request per variation) was last read. The listing does not hold it:
+     * read for new or changed products, and for every variable product at most once a day. Null: never read.
+     */
+    variantsCheckedAt: timestamp("variants_checked_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

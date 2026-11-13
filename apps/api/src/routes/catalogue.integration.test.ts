@@ -939,6 +939,21 @@ describe("GET /api/catalog/{productId} — live check (« stocks frais »)", () 
     }
   });
 
+  it("asks a refresh for an imported WooCommerce product, even while Shopify is in its nightly rhythm", async () => {
+    const woo = await newShop({ platform: "woocommerce" });
+    await t.db.delete(schema.crawlSlowdowns);
+    try {
+      await t.db
+        .insert(schema.crawlSlowdowns)
+        .values({ platform: "shopify", level: "nightly", since: ago(MIN), until: ago(-5 * 60 * MIN) });
+      const product = await newProduct(woo.id, { lastCapturedAt: ago(20 * MIN), externalId: "77" });
+      expect(await ask(product.id, ago(20 * MIN))).toBe(true);
+      expect(await refreshesOf(product.id)).toHaveLength(1);
+    } finally {
+      await t.db.delete(schema.crawlSlowdowns);
+    }
+  });
+
   it("reads its captures through the indexes: per product, and the refreshes of the minute", async () => {
     const shop = await newShop();
     const p = await newProduct(shop.id, stale);

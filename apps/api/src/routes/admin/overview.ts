@@ -1,5 +1,10 @@
-import { and, count, type Database, eq, gte, importNotUnderWay, isNull, lt, schema, sql } from "@closyria/db";
-import { adminOverviewSchema, CATALOGUE_IMPORT_LARGE_SHOP, catalogueImportIntervals } from "@closyria/shared";
+import { and, count, type Database, eq, gte, importNotUnderWay, inArray, isNull, lt, schema, sql } from "@closyria/db";
+import {
+  adminOverviewSchema,
+  CATALOGUE_IMPORT_LARGE_SHOP,
+  CATALOGUE_IMPORT_PLATFORMS,
+  catalogueImportIntervals,
+} from "@closyria/shared";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { defineAccess } from "../../access";
 import type { AdminEnv } from "../../admin-audit";
@@ -42,14 +47,19 @@ const overviewRoute = defineAccess(
 );
 
 /**
- * « Relecture en retard »: the shops the planner should re-read (published Shopify shops with the import on, not
+ * « Relecture en retard »: the shops the planner should re-read (published Shopify or WooCommerce shops with the import on, not
  * merged, no import under way) whose last import started (else, never imported, the shop was created) more than twice
- * their interval ago: 2 h, 6 h above 5 000 products; doubled while Shopify asks to slow down; a day in its nightly
- * rhythm. The planner takes the longest waiting first, so any such shop means it does not keep up.
+ * their interval ago: 2 h, 6 h above 5 000 products; for a Shopify shop, doubled while Shopify asks to slow down, a day
+ * in its nightly rhythm. The planner takes the longest waiting first, so any such shop means it does not keep up.
  */
 async function countRereadLate(db: Database, at: Date, level: "doubled" | "nightly" | null): Promise<number> {
-  const intervals = catalogueImportIntervals(level) ?? { small: DAY_MS, large: DAY_MS };
   const before = (ms: number) => new Date(at.getTime() - 2 * ms).toISOString();
+  const lateBefore = (intervals: { small: number; large: number }) => sql`case
+    when coalesce(${schema.shops.lastImportSeen}, 0) > ${CATALOGUE_IMPORT_LARGE_SHOP}
+    then ${before(intervals.large)}::timestamptz else ${before(intervals.small)}::timestamptz end`;
+  // The Shopify slow-down only spaces the Shopify shops; the others keep the usual intervals.
+  const shopify = lateBefore(catalogueImportIntervals(level) ?? { small: DAY_MS, large: DAY_MS });
+  const usual = lateBefore(catalogueImportIntervals(null) ?? { small: DAY_MS, large: DAY_MS });
   const [row] = await db
     .select({ n: count() })
     .from(schema.shops)
@@ -57,14 +67,13 @@ async function countRereadLate(db: Database, at: Date, level: "doubled" | "night
       and(
         eq(schema.shops.importEnabled, true),
         eq(schema.shops.status, "published"),
-        eq(schema.shops.platform, "shopify"),
+        inArray(schema.shops.platform, [...CATALOGUE_IMPORT_PLATFORMS]),
         // A « grande enseigne » is never imported by the planner.
         eq(schema.shops.isMajorBrand, false),
         isNull(schema.shops.mergedIntoId),
         importNotUnderWay(at),
         sql`coalesce(${schema.shops.importStartedAt}, ${schema.shops.createdAt}) < case
-          when coalesce(${schema.shops.lastImportSeen}, 0) > ${CATALOGUE_IMPORT_LARGE_SHOP}
-          then ${before(intervals.large)}::timestamptz else ${before(intervals.small)}::timestamptz end`,
+          when ${schema.shops.platform} = 'shopify' then ${shopify} else ${usual} end`,
       ),
     );
   return row?.n ?? 0;
@@ -102,6 +111,7 @@ export function overviewRoutes(deps: AdminDeps) {
         shopify: number;
         jsonld: number;
         opengraph: number;
+        woocommerce: number;
         median: number | null;
       }>(sql`
         select
@@ -112,6 +122,7 @@ export function overviewRoutes(deps: AdminDeps) {
           (count(*) filter (where status = 'succeeded' and method = 'shopify'))::int as shopify,
           (count(*) filter (where status = 'succeeded' and method = 'jsonld'))::int as jsonld,
           (count(*) filter (where status = 'succeeded' and method = 'opengraph'))::int as opengraph,
+          (count(*) filter (where status = 'succeeded' and method = 'woocommerce'))::int as woocommerce,
           (percentile_cont(0.5) within group (order by duration_ms) filter (where status = 'succeeded' and ${REAL_ATTEMPT}))::float8 as median
         from captures
         -- Sheet refreshes (« stocks frais ») are not counted: automatic, many, and dropped when late.
@@ -159,7 +170,12 @@ export function overviewRoutes(deps: AdminDeps) {
           last24h: cap?.last24h ?? 0,
           last7d: cap?.last7d ?? 0,
           successRate7d: cap && cap.finished > 0 ? cap.succeeded / cap.finished : null,
-          byMethod: { shopify: cap?.shopify ?? 0, jsonld: cap?.jsonld ?? 0, opengraph: cap?.opengraph ?? 0 },
+          byMethod: {
+            shopify: cap?.shopify ?? 0,
+            jsonld: cap?.jsonld ?? 0,
+            opengraph: cap?.opengraph ?? 0,
+            woocommerce: cap?.woocommerce ?? 0,
+          },
           medianDurationMs: cap?.median ?? null,
         },
         shops: { pending: pending?.pending ?? 0, down },

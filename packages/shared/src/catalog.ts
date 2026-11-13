@@ -24,7 +24,8 @@ export const platformSchema = z.enum([
 /** `refresh`: the live check of a catalogue sheet (« stocks frais »), asked by nobody in particular. */
 export const captureTriggerSchema = z.enum(["user", "admin_test", "monitor", "refresh"]);
 export const captureStatusSchema = z.enum(["queued", "running", "succeeded", "failed", "skipped_manual"]);
-export const captureMethodSchema = z.enum(["shopify", "jsonld", "opengraph"]);
+/** How a capture read the product: `woocommerce` is the shop's Store API (an imported WooCommerce product's refresh). */
+export const captureMethodSchema = z.enum(["shopify", "jsonld", "opengraph", "woocommerce"]);
 export const captureErrorCodeSchema = z.enum([
   "blocked",
   "timeout",

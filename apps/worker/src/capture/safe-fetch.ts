@@ -29,9 +29,18 @@ export type SafeFetchOptions = {
   lookup?: typeof dns.lookup;
   /** Gives up at once when aborted (a worker stopping), like the deadline: a `timeout` CaptureError. */
   signal?: AbortSignal;
+  /** Headers of the answer to give back (lower case), e.g. a WooCommerce listing's `x-wp-total`. */
+  keepHeaders?: readonly string[];
 };
 
-export type SafeResponse = { finalUrl: string; status: number; contentType: string; body: Buffer };
+export type SafeResponse = {
+  finalUrl: string;
+  status: number;
+  contentType: string;
+  body: Buffer;
+  /** The answer's headers named in `keepHeaders` (lower case), when it names any. */
+  headers?: Record<string, string>;
+};
 
 const ACCEPT_HEADER: Record<SafeFetchAccept, string> = {
   page: "text/html,application/xhtml+xml;q=0.9",
@@ -291,7 +300,14 @@ async function run(rawUrl: string, options: SafeFetchOptions, signal: AbortSigna
     }
     const body = await readBody(res, maxBytes);
     if (ACCEPTED_TYPES.page(mime) && isChallenge(body)) throw new CaptureError("blocked", status);
-    return { finalUrl: url.href, status, contentType, body };
+    if (!options.keepHeaders?.length) return { finalUrl: url.href, status, contentType, body };
+    const headers: Record<string, string> = {};
+    for (const name of options.keepHeaders) {
+      const value = res.headers[name];
+      const first = Array.isArray(value) ? value[0] : value;
+      if (first !== undefined) headers[name] = first;
+    }
+    return { finalUrl: url.href, status, contentType, body, headers };
   }
 }
 

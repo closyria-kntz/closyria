@@ -30,7 +30,7 @@ export const adminOverviewSchema = z.object({
     /** Succeeded / finished captures over 7 days; null when none finished. */
     successRate7d: z.number().min(0).max(1).nullable(),
     /** Succeeded captures per method over 7 days. */
-    byMethod: z.object({ shopify: count, jsonld: count, opengraph: count }),
+    byMethod: z.object({ shopify: count, jsonld: count, opengraph: count, woocommerce: count }),
     /** Median duration of the succeeded captures over 7 days; null when none. */
     medianDurationMs: z.number().nonnegative().nullable(),
   }),

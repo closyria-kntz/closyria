@@ -42,6 +42,7 @@ describe("importErrorMessage", () => {
     expect(importErrorMessage("http_error (HTTP 503)")).toEqual({ key: "httpError", status: 503 });
     expect(importErrorMessage("too_many_pages")).toEqual({ key: "tooManyPages", status: null });
     expect(importErrorMessage("interrupted")).toEqual({ key: "interrupted", status: null });
+    expect(importErrorMessage("woocommerce_api_unavailable")).toEqual({ key: "wooApiUnavailable", status: null });
   });
 
   it("gives an unknown code back as it is", () => {

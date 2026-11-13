@@ -345,6 +345,46 @@ test("« Shopify nous demande de ralentir » : l’alerte du tableau de bord et 
   }
 });
 
+test("une admin importe tout le catalogue d’une boutique WooCommerce : l’avancement puis « Terminé »", async ({
+  page,
+  request,
+  db,
+  userAgentTag,
+}) => {
+  const tag = randomUUID().slice(0, 8);
+  const { rows } = await db.query<{ id: string }>(
+    `insert into shops (name, slug, status, platform, test_url) values ($1, $2, 'published', 'woocommerce', $3)
+     returning id`,
+    [`Boutique Woo ${tag}`, `e2e-admin-woo-${tag}`, `${setupValue("E2E_FAKE_SHOP_URL")}/produit/e2e-woo-7101/`],
+  );
+  const shopId = rows[0]?.id ?? "";
+  await signInAsAdmin(page, request, db, userAgentTag);
+
+  await page.goto(`/admin/boutiques/${shopId}`);
+  const catalogue = page.getByRole("region", { name: "Catalogue" });
+  // A WooCommerce shop has the whole-catalogue import, like a Shopify one.
+  await expect(catalogue.getByRole("checkbox", { name: /Importer tout le catalogue/ })).toBeVisible();
+  const state = catalogue.getByTestId("import-state");
+  await expect(state).toHaveText("Aucun import pour l’instant");
+  await catalogue.getByRole("button", { name: "Importer maintenant" }).click();
+
+  // The worker reads the shop's Store API (its listing answers after 2.5 s): « En attente », then under way.
+  await expect(state).toHaveText(/^(En attente|Import en cours)/);
+  await expect(catalogue.getByRole("progressbar", { name: "Avancement de l’import" })).toBeVisible();
+  await expect(catalogue.getByRole("button", { name: "Importer maintenant" })).toBeDisabled();
+  // Its two articles (new for the first device's run; the other devices find them taken by that shop).
+  await expect(state).toHaveText(/^Terminé à \d{2} h \d{2} : 2 articles \(\d+ nouveaux?, 0 retiré\)$/, {
+    timeout: 30_000,
+  });
+  await expect(catalogue.getByRole("button", { name: "Importer maintenant" })).toBeEnabled();
+  const shop = await db.query<{ last_import_error: string | null; last_import_seen: number | null }>(
+    "select last_import_error, last_import_seen from shops where id = $1",
+    [shopId],
+  );
+  expect(shop.rows[0]).toEqual({ last_import_error: null, last_import_seen: 2 });
+  await axeLightAndDark(page);
+});
+
 test("un nouvel import se mesure au total du précédent : une barre et « environ n articles »", async ({
   page,
   request,

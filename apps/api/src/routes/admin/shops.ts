@@ -29,6 +29,7 @@ import {
   type CaptureMode,
   type CaptureStatus,
   type CaptureTrigger,
+  canImportCatalogue,
   canonicalizeUrl,
   captureModeSchema,
   type ListingKind,
@@ -228,7 +229,7 @@ const importRoute = defineAccess(
   createRoute({
     method: "post",
     path: "/admin/shops/{id}/import",
-    summary: "« Importer maintenant »: queue the import of a Shopify shop's catalogue",
+    summary: "« Importer maintenant »: queue the import of a Shopify or WooCommerce shop's catalogue",
     description:
       "Queued like the nightly import (one job per shop at a time): `queued` is false when one is already queued or running.",
     request: { params: idParam },
@@ -236,7 +237,7 @@ const importRoute = defineAccess(
       202: { description: "Queued", content: { "application/json": { schema: adminImportQueuedSchema } } },
       404: errorContent("Unknown shop"),
       409: errorContent(
-        "not_shopify: only a Shopify shop's catalogue can be imported; merged or refused: the shop is out of the catalogue",
+        "not_shopify: only a Shopify or WooCommerce shop's catalogue can be imported (the code predates WooCommerce); merged or refused: the shop is out of the catalogue",
       ),
     },
   }),
@@ -612,7 +613,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       // A pending or draft shop may be imported (preview); a merged or refused one never.
       if (shop.mergedIntoId) return c.json({ error: "merged" } as const, 409);
       if (shop.status === "refused") return c.json({ error: "refused" } as const, 409);
-      if (shop.platform !== "shopify") return c.json({ error: "not_shopify" } as const, 409);
+      if (!canImportCatalogue(shop.platform)) return c.json({ error: "not_shopify" } as const, 409);
       // « En attente » before the job exists, so the worker's « running » is never overwritten; an import already
       // under way keeps its state, a dead one (`liveImportState`: queued over 6 h, running without heartbeat for
       // 10 min) is replaced.

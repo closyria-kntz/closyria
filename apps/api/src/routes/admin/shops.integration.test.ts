@@ -539,7 +539,7 @@ describe("GET /api/admin/overview (catalog figures)", () => {
       last24h: 6, // 3 finished + 1 queued + 1 reuse + 1 queue failure, created within 24h
       last7d: 9,
       successRate7d: 3 / 6,
-      byMethod: { shopify: 1, jsonld: 1, opengraph: 1 },
+      byMethod: { shopify: 1, jsonld: 1, opengraph: 1, woocommerce: 0 },
       medianDurationMs: 300,
     });
     expect(body.shops).toEqual({ pending: 1, down: 1 });
@@ -552,7 +552,7 @@ describe("GET /api/admin/overview (catalog figures)", () => {
       last24h: 0,
       last7d: 0,
       successRate7d: null,
-      byMethod: { shopify: 0, jsonld: 0, opengraph: 0 },
+      byMethod: { shopify: 0, jsonld: 0, opengraph: 0, woocommerce: 0 },
       medianDurationMs: null,
     });
   });
@@ -613,6 +613,20 @@ describe("stocks frais: the dashboard's figures", () => {
     // Doubled: 4 h and 12 h.
     await recordShopifyRejection(t.db, ago(HOUR));
     expect(await overview()).toBe(0);
+    await t.db.delete(schema.crawlSlowdowns);
+    await t.db.update(schema.shops).set({ importEnabled: false });
+  });
+
+  it("« Relecture en retard » counts a late WooCommerce shop, which the Shopify slow-down never excuses", async () => {
+    await t.db.update(schema.shops).set({ importEnabled: false });
+    const woo = { status: "published" as const, platform: "woocommerce" as const, importEnabled: true };
+    const overview = async () => adminOverviewSchema.parse(await (await call("GET", "/overview")).json()).rereadLate;
+    await newShop({ ...woo, importStartedAt: ago(90 * 60_000) }); // due, not late
+    await newShop({ ...woo, importStartedAt: ago(3 * HOUR) }); // late (> 2 h)
+    await newShop({ ...woo, platform: "prestashop", importStartedAt: ago(9 * HOUR) }); // never planned
+    expect(await overview()).toBe(1);
+    await recordShopifyRejection(t.db, ago(HOUR));
+    expect(await overview()).toBe(1);
     await t.db.delete(schema.crawlSlowdowns);
     await t.db.update(schema.shops).set({ importEnabled: false });
   });

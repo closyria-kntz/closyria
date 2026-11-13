@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   CATALOGUE_IMPORT_DEAD_MS,
   CATALOGUE_IMPORT_HEARTBEAT_MS,
+  CATALOGUE_IMPORT_PLATFORMS,
+  canImportCatalogue,
   catalogDetailSchema,
   catalogQuerySchema,
   isHttpUrl,
@@ -264,5 +266,16 @@ describe("liveImportState", () => {
     expect(liveImportState(null, ago(min), ago(min), now)).toBeNull();
     expect(liveImportState("other", ago(min), ago(min), now)).toBeNull();
     expect(liveImportState("running", null, ago(min), now)).toBeNull();
+  });
+});
+
+describe("canImportCatalogue", () => {
+  it("is true for Shopify and WooCommerce shops only", () => {
+    expect(CATALOGUE_IMPORT_PLATFORMS).toEqual(["shopify", "woocommerce"]);
+    expect(canImportCatalogue("shopify")).toBe(true);
+    expect(canImportCatalogue("woocommerce")).toBe(true);
+    for (const other of ["prestashop", "wix", "squarespace", "magento", "other", "unknown"]) {
+      expect(canImportCatalogue(other)).toBe(false);
+    }
   });
 });

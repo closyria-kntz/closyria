@@ -412,7 +412,8 @@
       "methods": {
         "shopify": "Shopify",
         "jsonld": "JSON-LD",
-        "opengraph": "Open Graph"
+        "opengraph": "Open Graph",
+        "woocommerce": "WooCommerce"
       },
       "rereadLate": "Relecture en retard : {count, plural, one {# boutique attend} other {# boutiques attendent}} depuis plus de deux fois leur intervalle."
     },
@@ -450,7 +451,8 @@
       "methods": {
         "shopify": "Shopify",
         "jsonld": "JSON-LD",
-        "opengraph": "Open Graph"
+        "opengraph": "Open Graph",
+        "woocommerce": "WooCommerce"
       },
       "errorCodes": {
         "blocked": "Accès bloqué",
@@ -491,7 +493,7 @@
         "invalidProduct": "Vérifie le nom, la marque, le prix et les choix.",
         "notPublished": "Seules les boutiques publiées peuvent faire la une.",
         "majorBrand": "Une grande enseigne ne va jamais en une.",
-        "notShopify": "Seul le catalogue d’une boutique Shopify peut être importé.",
+        "notShopify": "Seul le catalogue d’une boutique Shopify ou WooCommerce peut être importé.",
         "shopMerged": "Cette boutique a été fusionnée : importe plutôt celle qui la remplace.",
         "shopRefused": "Cette boutique est refusée : son catalogue n’est jamais importé."
       },
@@ -637,7 +639,7 @@
           "free_returns": "Retours gratuits"
         },
         "importEnabled": "Importer tout le catalogue",
-        "importEnabledHint": "Chaque nuit, tous les articles de la boutique sont lus depuis Shopify.",
+        "importEnabledHint": "Toutes les heures, tous les articles de la boutique sont relus (toutes les 3 h au-delà de 5 000 articles).",
         "save": "Enregistrer",
         "saved": "Catalogue enregistré.",
         "lastImport": "Dernier import",
@@ -657,7 +659,7 @@
         "importNow": "Importer maintenant",
         "importQueued": "Import lancé : son avancement s’affiche ci-dessus.",
         "importAlready": "Un import de cette boutique est déjà en cours.",
-        "notShopify": "L’import du catalogue n’existe que pour les boutiques Shopify.",
+        "notShopify": "L’import du catalogue n’existe que pour les boutiques Shopify et WooCommerce.",
         "importErrors": {
           "blocked": "La boutique bloque l’import{status, select, none {} other { (HTTP {status})}}",
           "robots": "Le fichier robots.txt de la boutique interdit l’import",
@@ -667,7 +669,8 @@
           "httpError": "La boutique a répondu par une erreur{status, select, none {} other { (HTTP {status})}}",
           "invalidData": "La réponse de la boutique est illisible",
           "tooManyPages": "Catalogue trop grand : import arrêté",
-          "interrupted": "Import interrompu par un redémarrage du serveur"
+          "interrupted": "Import interrompu par un redémarrage du serveur",
+          "wooApiUnavailable": "L’API publique WooCommerce de la boutique est désactivée"
         }
       }
     },

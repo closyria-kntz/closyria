@@ -55,6 +55,70 @@ const loopbackNames = ((
   callback(Object.assign(new Error(`no DNS in the browser tests: ${host}`), { code: "ENOTFOUND" }), []);
 }) as unknown as typeof dns.lookup;
 
+/** The WooCommerce shop of the browser tests: its Store API, at the fake shop (`WOO_PRODUCT_PATH` is its robe). */
+export const WOO_STORE = "/wp-json/wc/store/v1/products";
+
+/**
+ * A small WooCommerce catalogue on the fake shop's Store API: a robe in S and M (M sold out) and a bag, with the
+ * shop's counts. The listing answers after 2.5 s, so the admin sees the import under way.
+ */
+function serveWooStore(origin: string, routes: Record<string, FakeRoute>): void {
+  const json = { "content-type": "application/json; charset=UTF-8" };
+  const prices = (price: string) => ({
+    price,
+    regular_price: price,
+    sale_price: price,
+    currency_code: "EUR",
+    currency_minor_unit: 2,
+  });
+  routes["/img/woo.png"] = { headers: { "content-type": "image/png" }, body: PNG };
+  const product = (id: number, name: string, sizes: string[]) => ({
+    id,
+    name,
+    type: sizes.length > 0 ? "variable" : "simple",
+    permalink: `${origin}/produit/e2e-woo-${id}/`,
+    description: "<p>Pièce de la boutique WooCommerce des tests.</p>",
+    prices: prices("4500"),
+    images: [{ id, src: `${origin}/img/woo.png` }],
+    categories: [{ id: 1, name: sizes.length > 0 ? "Robes" : "Sacs" }],
+    tags: [],
+    attributes:
+      sizes.length > 0
+        ? [
+            {
+              id: 1,
+              name: "Taille",
+              has_variations: true,
+              terms: sizes.map((s, i) => ({ id: i, name: s, slug: s.toLowerCase() })),
+            },
+          ]
+        : [],
+    variations: sizes.map((s, i) => ({ id: id * 10 + i, attributes: [{ name: "Taille", value: s.toLowerCase() }] })),
+    is_in_stock: true,
+    is_purchasable: true,
+  });
+  routes[`${WOO_STORE}?per_page=100&page=1`] = {
+    headers: { ...json, "x-wp-total": "2", "x-wp-totalpages": "1" },
+    body: JSON.stringify([product(7101, "Robe e2e WooCommerce", ["S", "M"]), product(7102, "Sac e2e WooCommerce", [])]),
+    delayMs: 2500,
+  };
+  for (const [id, inStock] of [
+    [71010, true],
+    [71011, false],
+  ] as const) {
+    routes[`${WOO_STORE}/${id}`] = {
+      headers: json,
+      body: JSON.stringify({
+        id,
+        type: "variation",
+        is_in_stock: inStock,
+        is_purchasable: true,
+        prices: prices("4500"),
+      }),
+    };
+  }
+}
+
 export type CaptureWorker = { shop: FakeShop; stop(): Promise<void> };
 
 /**
@@ -86,6 +150,8 @@ export async function startCaptureWorker(databaseUrl: string, storageDir: string
       headers: { "content-type": "application/json; charset=utf-8" },
       body: localAddresses(js, shop.origin, routes),
     };
+
+    serveWooStore(shop.origin, routes);
 
     const { db, pool } = createDb(databaseUrl, { max: 4 });
     cleanups.push(() => pool.end());

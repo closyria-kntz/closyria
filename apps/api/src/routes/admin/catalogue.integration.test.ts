@@ -275,6 +275,21 @@ describe("values and import of a shop", () => {
     expect(t.calls).toHaveLength(1);
   });
 
+  it("queues an import of a WooCommerce shop like a Shopify one; a PrestaShop shop is still refused", async () => {
+    const woo = await newShop({ platform: "woocommerce" });
+    const res = await call("POST", `/admin/shops/${woo.id}/import`);
+    expect(res.status).toBe(202);
+    expect(await json(res)).toEqual({ queued: true });
+    expect(t.calls).toEqual([{ queue: "catalogue-import", id: woo.id }]);
+    expect(await json(await call("GET", `/admin/shops/${woo.id}`))).toMatchObject({ importState: "queued" });
+
+    const presta = await newShop({ platform: "prestashop" });
+    const refused = await call("POST", `/admin/shops/${presta.id}/import`);
+    expect(refused.status).toBe(409);
+    expect(await json(refused)).toEqual({ error: "not_shopify" });
+    expect(t.calls).toHaveLength(1);
+  });
+
   it("shows « En attente » once queued, the progress of a running import, and forgets a job dead for over 6 h", async () => {
     const shop = await newShop({ platform: "shopify" });
     const fresh = await json(await call("GET", `/admin/shops/${shop.id}`));

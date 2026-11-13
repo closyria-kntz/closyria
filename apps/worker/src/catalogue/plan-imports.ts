@@ -1,5 +1,20 @@
-import { and, type Database, eq, importNotUnderWay, isNull, readShopifySlowdown, schema, sql } from "@closyria/db";
-import { CATALOGUE_IMPORT_LARGE_SHOP, CATALOGUE_IMPORT_QUEUE, catalogueImportIntervals } from "@closyria/shared";
+import {
+  and,
+  type Database,
+  eq,
+  importNotUnderWay,
+  inArray,
+  isNull,
+  readShopifySlowdown,
+  schema,
+  sql,
+} from "@closyria/db";
+import {
+  CATALOGUE_IMPORT_LARGE_SHOP,
+  CATALOGUE_IMPORT_PLATFORMS,
+  CATALOGUE_IMPORT_QUEUE,
+  catalogueImportIntervals,
+} from "@closyria/shared";
 
 export type ImportQueue = {
   send(queue: string, data: object, options: { singletonKey: string }): Promise<unknown>;
@@ -44,26 +59,27 @@ export function lastNightlyStart(now: Date): Date {
 export const importIntervals = catalogueImportIntervals;
 
 /**
- * « Stocks frais »: queues every published Shopify shop with the import on (not merged into another, not a « grande
- * enseigne ») whose last import
+ * « Stocks frais »: queues every published shop on an importable platform (Shopify, WooCommerce) with the import on
+ * (not merged into another, not a « grande enseigne ») whose last import
  * started longer ago than its interval (`importIntervals`, within 5 min) or never did, and with no import under way.
- * While Shopify asks for the nightly rhythm, a shop is due once after each 03:00 (Paris). The shop id is the job's
+ * While Shopify asks to slow down, its shops (and only them: the others are off its line) are due every doubled
+ * interval, or once after each 03:00 (Paris) in the nightly rhythm. The shop id is the job's
  * singleton key, so a shop already queued or being imported is not queued twice. The longest waiting go first (never
  * imported, then the oldest start): the one worker takes them in that order. Returns how many shops were offered to
  * the queue.
  */
 export async function planCatalogueImports(db: Database, queue: ImportQueue, now = new Date()): Promise<number> {
   const slowdown = await readShopifySlowdown(db, now);
-  const intervals = importIntervals(slowdown?.level ?? null);
   const startedAt = schema.shops.importStartedAt;
-  let startedBefore: ReturnType<typeof sql>;
-  if (intervals) {
+  const dueSince = (intervals: ReturnType<typeof importIntervals>) => {
+    if (!intervals) return sql`${lastNightlyStart(now).toISOString()}::timestamptz`;
     const since = (ms: number) => new Date(now.getTime() - ms + PLAN_GRACE_MS).toISOString();
-    startedBefore = sql`case when coalesce(${schema.shops.lastImportSeen}, 0) > ${CATALOGUE_IMPORT_LARGE_SHOP}
+    return sql`case when coalesce(${schema.shops.lastImportSeen}, 0) > ${CATALOGUE_IMPORT_LARGE_SHOP}
       then ${since(intervals.large)}::timestamptz else ${since(intervals.small)}::timestamptz end`;
-  } else {
-    startedBefore = sql`${lastNightlyStart(now).toISOString()}::timestamptz`;
-  }
+  };
+  // The Shopify slow-down is the Shopify line's: the other platforms keep the usual intervals.
+  const startedBefore = sql`case when ${schema.shops.platform} = 'shopify'
+    then ${dueSince(importIntervals(slowdown?.level ?? null))} else ${dueSince(importIntervals(null))} end`;
   const shops = await db
     .select({ id: schema.shops.id })
     .from(schema.shops)
@@ -71,7 +87,7 @@ export async function planCatalogueImports(db: Database, queue: ImportQueue, now
       and(
         eq(schema.shops.importEnabled, true),
         eq(schema.shops.status, "published"),
-        eq(schema.shops.platform, "shopify"),
+        inArray(schema.shops.platform, [...CATALOGUE_IMPORT_PLATFORMS]),
         // A « grande enseigne » is never imported by the planner.
         eq(schema.shops.isMajorBrand, false),
         isNull(schema.shops.mergedIntoId),

@@ -9,7 +9,8 @@ import {
 } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import type { PgBoss } from "pg-boss";
-import { type ImportDeps, importShopifyCatalog } from "../catalogue/import-shopify";
+import { importCatalog } from "../catalogue/import-catalog";
+import type { ImportDeps } from "../catalogue/import-core";
 import { type ImportQueue, planCatalogueImports } from "../catalogue/plan-imports";
 import { recoverInterruptedImports } from "../catalogue/recover-imports";
 import { type AddressPolicy, strictPolicy } from "./address-policy";
@@ -72,7 +73,7 @@ export function catalogueImportHandler(deps: ImportDeps, queue: ImportQueue) {
         console.error(`${CATALOGUE_IMPORT_QUEUE}: invalid job data (job ${job.id ?? "?"}), failing it`);
         throw new Error(`invalid job data on ${CATALOGUE_IMPORT_QUEUE}`);
       }
-      const result = await importShopifyCatalog(deps, parsed.data.shopId, job.signal ? { signal: job.signal } : {});
+      const result = await importCatalog(deps, parsed.data.shopId, job.signal ? { signal: job.signal } : {});
       // Counts and a short reason only: the details are on the shop (last_import_error).
       console.log(
         `catalogue import ${parsed.data.shopId}: ${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged, ${result.removed} removed${result.error ? `, stopped: ${result.error}` : ""}`,

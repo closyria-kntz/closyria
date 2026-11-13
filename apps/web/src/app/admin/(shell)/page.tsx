@@ -22,7 +22,7 @@ export default async function AdminDashboardPage() {
 
   const { captures, shops } = overview;
   const percent = (value: number | null) => (value === null ? t("none") : format.number(value, { style: "percent" }));
-  const methods = (["shopify", "jsonld", "opengraph"] as const)
+  const methods = (["shopify", "woocommerce", "jsonld", "opengraph"] as const)
     .map((method) => `${t(`methods.${method}`)} ${format.number(captures.byMethod[method])}`)
     .join(" · ");
   const captureFigures = [

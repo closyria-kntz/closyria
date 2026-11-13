@@ -211,6 +211,13 @@
       "when": 1794607879109,
       "tag": "0029_catalogue_enseignes_plateformes",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794611378686,
+      "tag": "0030_catalogue_woocommerce",
+      "breakpoints": true
     }
   ]
 }

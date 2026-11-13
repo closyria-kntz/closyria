@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Platform } from "./catalog";
 import { itemStageSchema } from "./wardrobe";
 
 /** What a shop can claim, ticked by the admin: used as filters of « Découvrir ». */
@@ -252,8 +253,17 @@ export function sizeKindsByCategory(
   return kinds;
 }
 
-/** pg-boss queue of the Shopify catalogue imports (nightly, or « Importer tout le catalogue » in the admin). */
+/** pg-boss queue of the catalogue imports (planned, or « Importer maintenant » in the admin). */
 export const CATALOGUE_IMPORT_QUEUE = "catalogue-import";
+/**
+ * Platforms whose whole public catalogue can be imported (« Importer tout le catalogue »): Shopify (`/products.json`)
+ * and WooCommerce (its public Store API). Only Shopify shops share the Shopify line and its slow-down.
+ */
+export const CATALOGUE_IMPORT_PLATFORMS = ["shopify", "woocommerce"] as const satisfies readonly Platform[];
+/** Whether a shop on this platform can have its catalogue imported. */
+export function canImportCatalogue(platform: string): boolean {
+  return (CATALOGUE_IMPORT_PLATFORMS as readonly string[]).includes(platform);
+}
 /**
  * One import job: one shop. A job without data plans the night's imports. `manual`: asked by the admin (« Importer
  * maintenant »), so resumed after a restart even when the shop's nightly import is off.

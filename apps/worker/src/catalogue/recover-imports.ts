@@ -1,5 +1,10 @@
 import { and, type Database, eq, inArray, isNull, or, schema } from "@closyria/db";
-import { CATALOGUE_IMPORT_QUEUE, type CatalogueImportJob, catalogueImportJobSchema } from "@closyria/shared";
+import {
+  CATALOGUE_IMPORT_QUEUE,
+  type CatalogueImportJob,
+  canImportCatalogue,
+  catalogueImportJobSchema,
+} from "@closyria/shared";
 import type { PgBoss } from "pg-boss";
 
 export type RecoveryQueue = Pick<PgBoss, "findJobs" | "fail" | "send">;
@@ -23,7 +28,7 @@ async function lastJobOf(boss: RecoveryQueue, shopId: string): Promise<Catalogue
  * Its jobs are failed through pg-boss (else they stay active until their 6 h expiry, and the shop's singleton key
  * blocks « Importer maintenant » and the nightly plan meanwhile). Those shops, and the ones whose import a clean stop
  * interrupted (`last_import_error` = `interrupted`), are queued again so the work resumes, when:
- * - the shop is still in the catalogue (Shopify, not merged, not refused), and
+ * - the shop is still in the catalogue (on an importable platform: Shopify, WooCommerce; not merged, not refused), and
  * - its nightly import is on, or the cut import was asked by the admin (`manual` on its job: « Importer maintenant »,
  *   possible on a shop without the nightly import). A nightly import of a shop whose import was turned off since is
  *   not resumed.
@@ -77,7 +82,7 @@ export async function recoverInterruptedImports(
     const job = active.has(shop.id) ? (active.get(shop.id)?.job ?? null) : await lastJobOf(boss, shop.id);
     const manual = job?.manual === true;
     const resumable =
-      shop.platform === "shopify" &&
+      canImportCatalogue(shop.platform) &&
       shop.status !== "refused" &&
       shop.mergedIntoId === null &&
       // A « grande enseigne » is never imported by the planner: only an import the admin asked for resumes.

@@ -1,6 +1,12 @@
 "use client";
 
-import { type AdminShopDetail, type AdminShopImportStatus, type ShopValue, shopValueSchema } from "@closyria/shared";
+import {
+  type AdminShopDetail,
+  type AdminShopImportStatus,
+  canImportCatalogue,
+  type ShopValue,
+  shopValueSchema,
+} from "@closyria/shared";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
@@ -9,7 +15,7 @@ import { importProgress, readImportStatus, startImportPolling, statusAfterImport
 import { buttonClass, primaryButtonClass } from "../../../ui";
 
 /**
- * The shop in « Découvrir »: its values (filters), « Importer tout le catalogue » for a Shopify shop, and its import
+ * The shop in « Découvrir »: its values (filters), « Importer tout le catalogue » for a Shopify or WooCommerce shop, and its import
  * with « Importer maintenant »: « En attente », then « Import en cours : page n, x articles lus » (read again every
  * 3 s by a light call, without reloading the page), then « Terminé à HH h MM : … » or the error in plain words; the date of the last import and the articles on
  * sale. While it is queued or running a bar shows how far it is: measured against the previous import's total
@@ -25,7 +31,7 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null);
   const [importMessage, setImportMessage] = useState<{ text: string; failed: boolean } | null>(null);
-  const shopify = shop.platform === "shopify";
+  const importable = canImportCatalogue(shop.platform);
 
   // After a save the page is refreshed: show what the server kept.
   const resync = useRef(false);
@@ -67,7 +73,7 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
     setMessage(null);
     const res = await adminRequest("PATCH", `/api/admin/shops/${shop.id}`, {
       values: shopValueSchema.options.filter((v) => values.includes(v)),
-      ...(shopify ? { importEnabled } : {}),
+      ...(importable ? { importEnabled } : {}),
     });
     setBusy(false);
     if (!res.ok) return setMessage({ text: errors(catalogErrorKey(res.status, res.body)), failed: true });
@@ -149,7 +155,7 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
             ))}
           </div>
         </fieldset>
-        {shopify ? (
+        {importable ? (
           <label className="flex min-h-touch-target items-start gap-space-2 text-sm">
             <input
               type="checkbox"
@@ -176,7 +182,7 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
         </p>
       </form>
 
-      {shopify ? (
+      {importable ? (
         <>
           <dl className="flex flex-col gap-space-2 text-sm">
             <div className="flex flex-col gap-space-1">

@@ -58,7 +58,14 @@ const shopifyProductSchema = z.object({
   compare_at_price: z.number().nullish(),
 });
 
-const SIZE_OPTION = /taille|size|pointure/i;
+/** A size option or attribute (« Taille », « Size », « Pointure »): shared by every platform's variants. */
+export const SIZE_OPTION = /taille|size|pointure/i;
+
+/** The option the sizes come from: the « Taille/Size/Pointure » one, else the first one. */
+export function sizeOptionIndex(names: string[]): number {
+  const found = names.findIndex((n) => SIZE_OPTION.test(n));
+  return found === -1 ? 0 : found;
+}
 
 type VariantSizes = {
   available?: boolean | undefined;
@@ -73,8 +80,7 @@ type VariantSizes = {
  * of its variants is. A size price is kept only when it differs from the product price.
  */
 function sizesOf(names: string[], variants: VariantSizes[], productPriceCents: number): Candidate["sizes"] {
-  const found = names.findIndex((n) => SIZE_OPTION.test(n));
-  const index = found === -1 ? 0 : found;
+  const index = sizeOptionIndex(names);
   const key = (["option1", "option2", "option3"] as const)[index];
 
   const bySize = new Map<string, { available: boolean; priceCents: number | undefined }>();
@@ -134,7 +140,8 @@ export function extractShopify(json: string, pageUrl: string): Candidate | null 
   };
 }
 
-const COLOR_OPTION = /^(couleur|couleurs|color|colour|colors|colours)$/i;
+/** A colour option or attribute: its values feed the classification. */
+export const COLOR_OPTION = /^(couleur|couleurs|color|colour|colors|colours)$/i;
 const HANDLE = /^[^/?#\\\s]+$/;
 const catalogPageSchema = z.object({ products: z.array(z.unknown()) });
 const listedIdSchema = z.object({ id: z.union([z.number().int().nonnegative(), z.string().min(1).max(40)]) });

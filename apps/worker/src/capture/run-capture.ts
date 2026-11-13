@@ -18,6 +18,7 @@ import type { RobotsCache } from "./robots";
 import { type SafeFetchAccept, safeFetch } from "./safe-fetch";
 import { loadReferenceSet } from "./seed-reference";
 import type { LinePriority, Throttle, ThrottleOptions } from "./throttle";
+import { readWooStore } from "./woo-store";
 import { writeProduct } from "./write-product";
 
 export type CaptureDeps = {
@@ -139,14 +140,30 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
         console.error(`capture ${captureId}: cannot record the platform ${detected}`, error);
       }
     };
-    const outcome = await fetchAndExtract(
-      capture.url,
-      shop.platform,
-      LINE_PRIORITY[capture.trigger as CaptureTrigger],
-      deps,
-      foundShopify,
-      foundPlatform,
-    );
+    // An imported WooCommerce product, read again for her or for a sheet: the Store API, like the import (the
+    // per-size stock included); the page when it cannot say.
+    const fromStore =
+      shop.platform === "woocommerce" &&
+      capture.productId &&
+      (capture.trigger === "refresh" || capture.trigger === "user")
+        ? await readWooStore(capture.url, capture.productId, {
+            db,
+            policy: deps.policy ?? strictPolicy,
+            robots: deps.robots,
+            throttle: deps.throttle,
+            ...(deps.lookup ? { lookup: deps.lookup } : {}),
+          })
+        : null;
+    const outcome: Outcome = fromStore
+      ? { method: "woocommerce", product: fromStore.product, httpStatus: fromStore.httpStatus }
+      : await fetchAndExtract(
+          capture.url,
+          shop.platform,
+          LINE_PRIORITY[capture.trigger as CaptureTrigger],
+          deps,
+          foundShopify,
+          foundPlatform,
+        );
     const { product } = outcome;
 
     // A sheet's refresh (« stocks frais ») writes like her capture, but the history only on a change: it may run
@@ -171,7 +188,7 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
           at,
           history: capture.trigger === "user" ? "always" : "on_change",
           // The page answers again: a product marked gone comes back to the catalogue.
-          extra: { removedAt: null },
+          extra: { removedAt: null, ...(fromStore?.complete ? { variantsCheckedAt: at } : {}) },
         });
         await tx.update(schema.captures).set({ dataReady: true }).where(eq(schema.captures.id, captureId));
       });

@@ -1,6 +1,7 @@
 import type dns from "node:dns";
 import { readFileSync } from "node:fs";
 import { createDb, eq, schema } from "@closyria/db";
+import { canonicalizeUrl } from "@closyria/shared";
 import { memoryStore } from "@closyria/storage";
 import { type FakeRoute, type FakeShop, startFakeShop } from "@closyria/testing";
 import { createTestDatabase } from "@closyria/testing/vitest";
@@ -538,6 +539,161 @@ describe("runCapture", () => {
     const plain = await setup("/plain", { shop: { platform: "other" } });
     await runCapture(plain.capture.id, deps);
     expect(waits).toEqual(["high", "medium", "low", null]);
+  });
+
+  describe("an imported WooCommerce product", () => {
+    const API = "/wp-json/wc/store/v1/products";
+    const JSON_TYPE = { "content-type": "application/json; charset=UTF-8" };
+    const prices = (price: string) => ({
+      price,
+      regular_price: price,
+      sale_price: price,
+      currency_code: "EUR",
+      currency_minor_unit: 2,
+    });
+
+    /** The product (WooCommerce id 77, sizes S and M) on its Store API, and its two variations. */
+    function serveWoo(options: { mInStock?: boolean; permalink?: string } = {}) {
+      routes[`${API}/77`] = {
+        headers: JSON_TYPE,
+        body: JSON.stringify({
+          id: 77,
+          name: "Robe portefeuille",
+          type: "variable",
+          permalink: options.permalink ?? `${shop.origin}/produit/robe-77/`,
+          description: "<p>Robe fluide</p>",
+          prices: prices("5900"),
+          images: [],
+          categories: [{ id: 1, name: "Robes" }],
+          tags: [],
+          attributes: [
+            {
+              id: 1,
+              name: "Taille",
+              taxonomy: "pa_taille",
+              has_variations: true,
+              terms: [
+                { id: 1, name: "S", slug: "s" },
+                { id: 2, name: "M", slug: "m" },
+              ],
+            },
+          ],
+          variations: [
+            { id: 770, attributes: [{ name: "Taille", value: "s" }] },
+            { id: 771, attributes: [{ name: "Taille", value: "m" }] },
+          ],
+          is_in_stock: true,
+          is_purchasable: true,
+        }),
+      };
+      for (const [id, inStock] of [
+        [770, true],
+        [771, options.mInStock ?? false],
+      ] as const) {
+        routes[`${API}/${id}`] = {
+          headers: JSON_TYPE,
+          body: JSON.stringify({
+            id,
+            type: "variation",
+            is_in_stock: inStock,
+            is_purchasable: true,
+            prices: prices("5900"),
+          }),
+        };
+      }
+    }
+
+    async function setupWoo(trigger: "refresh" | "user" = "refresh") {
+      const url = `${shop.origin}/produit/robe-77/`;
+      const n = ++counter;
+      const [s] = await handle.db
+        .insert(schema.shops)
+        .values({ name: `Woo ${n}`, slug: `capture-woo-${n}`, platform: "woocommerce" })
+        .returning();
+      if (!s) throw new Error("no shop");
+      // Imported: known by its WooCommerce id, at its own address.
+      const [p] = await handle.db
+        .insert(schema.products)
+        .values({
+          shopId: s.id,
+          canonicalUrl: canonicalizeUrl(url) ?? url,
+          name: "Robe",
+          currency: "EUR",
+          priceCents: 1,
+          externalId: "77",
+        })
+        .returning();
+      if (!p) throw new Error("no product");
+      return { shop: s, product: p, url, capture: await newCapture(s.id, p.id, url, trigger) };
+    }
+
+    it("a sheet's refresh reads the product and each variation's stock from the Store API, off the Shopify line", async () => {
+      serveWoo();
+      const waits: unknown[] = [];
+      const throttle = deps.throttle;
+      deps.throttle = {
+        wait: async (domain, options) => {
+          waits.push(options ?? null);
+          await throttle.wait(domain, options);
+        },
+      };
+      const t = await setupWoo();
+      await runCapture(t.capture.id, deps);
+      const { capture, product, sizes } = await load(t.capture.id, t.product.id);
+      expect(capture).toMatchObject({ status: "succeeded", method: "woocommerce", dataReady: true });
+      expect(product).toMatchObject({
+        name: "Robe portefeuille",
+        priceCents: 5900,
+        externalId: "77",
+        captureStatus: "ok",
+      });
+      expect(product?.variantsCheckedAt).not.toBeNull();
+      expect(sizes.map((s) => [s.label, s.available])).toEqual([
+        ["S", true],
+        ["M", false],
+      ]);
+      expect(shop.hits.filter((hit) => hit !== "/robots.txt")).toEqual([`${API}/77`, `${API}/770`, `${API}/771`]);
+      expect(waits.every((w) => w === null)).toBe(true);
+
+      // A size back in stock shows on the next refresh.
+      serveWoo({ mInStock: true });
+      const again = await newCapture(t.shop.id, t.product.id, t.url, "refresh");
+      await runCapture(again.id, deps);
+      expect((await load(again.id, t.product.id)).sizes.map((s) => s.available)).toEqual([true, true]);
+    });
+
+    it("falls back to the page when the Store API is off or speaks of another product", async () => {
+      routes["/produit/robe-77/"] = {
+        headers: { "content-type": "text/html; charset=utf-8" },
+        body: fixture("synthetic/jsonld-simple.html").toString("utf8"),
+      };
+      const off = await setupWoo();
+      await runCapture(off.capture.id, deps);
+      expect((await load(off.capture.id, off.product.id)).capture).toMatchObject({
+        status: "succeeded",
+        method: "jsonld",
+      });
+
+      serveWoo({ permalink: `${shop.origin}/produit/autre/` });
+      shop.hits.length = 0;
+      const other = await newCapture(off.shop.id, off.product.id, off.url, "refresh");
+      await runCapture(other.id, deps);
+      expect((await load(other.id, off.product.id)).capture?.method).toBe("jsonld");
+      expect(shop.hits).not.toContain(`${API}/770`);
+    });
+
+    it("a refusal from the Store API fails the refresh without asking the page", async () => {
+      serveWoo();
+      routes[`${API}/77`] = { status: 403, headers: JSON_TYPE, body: "{}" };
+      const t = await setupWoo();
+      await runCapture(t.capture.id, deps);
+      expect((await load(t.capture.id, t.product.id)).capture).toMatchObject({
+        status: "failed",
+        errorCode: "blocked",
+        httpStatus: 403,
+      });
+      expect(shop.hits).not.toContain("/produit/robe-77/");
+    });
   });
 
   it("drops a sheet's refresh that waited over 30 s, before any request", async () => {

@@ -94,7 +94,7 @@ describe("planCatalogueImports — intervals", () => {
     expect(row).toMatchObject({ importState: "queued", importStartedAt: NOW });
   });
 
-  it("never queues a refused, merged, unpublished, off or non-Shopify shop", async () => {
+  it("never queues a refused, merged, unpublished, off or non-importable shop", async () => {
     const on = await shop();
     await shop({ status: "refused" });
     await shop({ status: "pending" });
@@ -102,8 +102,20 @@ describe("planCatalogueImports — intervals", () => {
     await shop({ mergedIntoId: on.id });
     await shop({ importEnabled: false });
     await shop({ platform: "other" });
-    await shop({ platform: "woocommerce" });
+    await shop({ platform: "prestashop" });
+    await shop({ platform: "unknown" });
+    await shop({ platform: "woocommerce", importEnabled: false });
+    await shop({ platform: "woocommerce", isMajorBrand: true });
     expect(await plan()).toEqual([on.id]);
+  });
+
+  it("queues a WooCommerce shop like a Shopify one: every hour, every 3 h above 5 000 products", async () => {
+    const never = await shop({ platform: "woocommerce" });
+    const hourAgo = await shop({ platform: "woocommerce", ...startedAgo(62 * MIN) });
+    await shop({ platform: "woocommerce", ...startedAgo(40 * MIN) });
+    const large = await shop({ platform: "woocommerce", lastImportSeen: 6000, ...startedAgo(3 * HOUR) });
+    await shop({ platform: "woocommerce", lastImportSeen: 6000, ...startedAgo(2 * HOUR) });
+    expect(new Set(await plan())).toEqual(new Set([never.id, hourAgo.id, large.id]));
   });
 
   it("never queues a « grande enseigne », even with its import on", async () => {
@@ -238,6 +250,22 @@ describe("Shopify slow-down", () => {
     await handle.db.update(schema.shops).set({ importState: null });
     expect(await plan(new Date("2026-11-14T01:50:00Z"))).toEqual([]);
     expect(new Set(await plan(new Date("2026-11-14T02:00:00Z")))).toEqual(new Set(all));
+  });
+
+  it("never slows a WooCommerce shop down: off the Shopify line, it stays hourly when Shopify is doubled or nightly", async () => {
+    await recordShopifyRejection(handle.db, new Date(NOW.getTime() - HOUR));
+    const woo = await shop({ platform: "woocommerce", ...startedAgo(62 * MIN) });
+    await shop(startedAgo(90 * MIN));
+    expect(await plan()).toEqual([woo.id]);
+
+    await recordShopifyRejection(handle.db, new Date(NOW.getTime() - 30 * MIN));
+    expect((await readShopifySlowdown(handle.db, NOW))?.level).toBe("nightly");
+    await handle.db
+      .update(schema.shops)
+      .set({ importState: null, importStartedAt: new Date(NOW.getTime() - 62 * MIN) });
+    // 10:00 Paris: the Shopify shops wait for the night, the WooCommerce one is read on time.
+    await shop(startedAgo(6 * HOUR));
+    expect(await plan()).toEqual([woo.id]);
   });
 
   it("intervals per level", () => {

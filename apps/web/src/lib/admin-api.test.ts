@@ -35,7 +35,7 @@ const overview = {
     last24h: 0,
     last7d: 0,
     successRate7d: null,
-    byMethod: { shopify: 0, jsonld: 0, opengraph: 0 },
+    byMethod: { shopify: 0, jsonld: 0, opengraph: 0, woocommerce: 0 },
     medianDurationMs: null,
   },
   shops: { pending: 0, down: 0 },
