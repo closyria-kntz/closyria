@@ -34,9 +34,9 @@ type ProfileJson = {
   color: string;
   position: number;
   itemCount?: number;
-  sizeTop?: string | null;
-  sizeBottom?: string | null;
-  sizeShoes?: string | null;
+  sizesTop?: string[];
+  sizesBottom?: string[];
+  sizesShoes?: string[];
 };
 
 async function newProduct() {
@@ -72,9 +72,9 @@ describe("GET /api/me/profiles", () => {
         childDetail: null,
         color: "plum",
         position: 0,
-        sizeTop: null,
-        sizeBottom: null,
-        sizeShoes: null,
+        sizesTop: [],
+        sizesBottom: [],
+        sizesShoes: [],
         itemCount: 0,
       },
     ]);
@@ -144,38 +144,45 @@ describe("PATCH, DELETE and order", () => {
     expect(await res.json()).toMatchObject({ id: created.id, name: "Léa B.", audience: "women", childDetail: null });
   });
 
-  it("saves « Mes tailles » per profile, reads them back, and clears one with null", async () => {
+  it("saves several sizes per kind for each profile, reads them back, and clears a kind with []", async () => {
     const { cookie } = await t.signIn();
     const me = ((await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] })
       .profiles[0] as ProfileJson;
-    expect([me.sizeTop, me.sizeBottom, me.sizeShoes]).toEqual([null, null, null]);
+    expect([me.sizesTop, me.sizesBottom, me.sizesShoes]).toEqual([[], [], []]);
     const lea = (await (
       await call("POST", "/api/me/profiles", cookie, { name: "Léa", audience: "women", color: "rose" })
     ).json()) as ProfileJson;
 
     const saved = await call("PATCH", `/api/me/profiles/${me.id}`, cookie, {
-      sizeTop: " M ",
-      sizeBottom: "38",
-      sizeShoes: "40",
+      sizesTop: [" M ", "38", "m"],
+      sizesBottom: ["38", "W28"],
+      sizesShoes: ["38", "38,5"],
     });
     expect(saved.status).toBe(200);
-    expect(await saved.json()).toMatchObject({ sizeTop: "M", sizeBottom: "38", sizeShoes: "40" });
-    await call("PATCH", `/api/me/profiles/${lea.id}`, cookie, { sizeTop: "S" });
+    expect(await saved.json()).toMatchObject({
+      sizesTop: ["M", "38"],
+      sizesBottom: ["38", "W28"],
+      sizesShoes: ["38", "38,5"],
+    });
+    await call("PATCH", `/api/me/profiles/${lea.id}`, cookie, { sizesTop: ["S"] });
 
     const list = (await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] };
-    expect(list.profiles.map((p) => [p.name, p.sizeTop, p.sizeBottom, p.sizeShoes])).toEqual([
-      ["Moi", "M", "38", "40"],
-      ["Léa", "S", null, null],
+    expect(list.profiles.map((p) => [p.name, p.sizesTop, p.sizesBottom, p.sizesShoes])).toEqual([
+      ["Moi", ["M", "38"], ["38", "W28"], ["38", "38,5"]],
+      ["Léa", ["S"], [], []],
     ]);
 
-    // A field left out keeps its value; null clears it; "" and a size over 10 characters are refused.
-    const cleared = await call("PATCH", `/api/me/profiles/${me.id}`, cookie, { sizeBottom: null });
-    expect(await cleared.json()).toMatchObject({ sizeTop: "M", sizeBottom: null, sizeShoes: "40" });
-    expect((await call("PATCH", `/api/me/profiles/${me.id}`, cookie, { sizeTop: "" })).status).toBe(400);
-    expect((await call("PATCH", `/api/me/profiles/${me.id}`, cookie, { sizeTop: "12345678901" })).status).toBe(400);
+    // A kind left out keeps its sizes; [] clears it; null, "", a size over 10 characters or a 9th size are refused.
+    const cleared = await call("PATCH", `/api/me/profiles/${me.id}`, cookie, { sizesBottom: [] });
+    expect(await cleared.json()).toMatchObject({ sizesTop: ["M", "38"], sizesBottom: [], sizesShoes: ["38", "38,5"] });
+    for (const sizesTop of [null, "M", [""], ["12345678901"], ["1", "2", "3", "4", "5", "6", "7", "8", "9"]]) {
+      expect((await call("PATCH", `/api/me/profiles/${me.id}`, cookie, { sizesTop })).status, String(sizesTop)).toBe(
+        400,
+      );
+    }
     // Renaming does not touch the sizes.
     const renamed = await call("PATCH", `/api/me/profiles/${me.id}`, cookie, { name: "Moi-même" });
-    expect(await renamed.json()).toMatchObject({ name: "Moi-même", sizeTop: "M", sizeShoes: "40" });
+    expect(await renamed.json()).toMatchObject({ name: "Moi-même", sizesTop: ["M", "38"], sizesShoes: ["38", "38,5"] });
   });
 
   it("deletes an empty profile and refuses one that holds items", async () => {
@@ -294,19 +301,19 @@ describe("isolation", () => {
       await call("POST", "/api/me/profiles", owner.cookie, { name: "Léa", audience: "women", color: "rose" })
     ).json()) as ProfileJson;
     await call("PATCH", `/api/me/profiles/${lea.id}`, owner.cookie, {
-      sizeTop: "M",
-      sizeBottom: "38",
-      sizeShoes: null,
+      sizesTop: ["M"],
+      sizesBottom: ["38"],
+      sizesShoes: [],
     });
 
     const patch = await call("PATCH", `/api/me/profiles/${lea.id}`, other.cookie, {
-      sizeTop: "XL",
-      sizeBottom: null,
-      sizeShoes: "42",
+      sizesTop: ["XL"],
+      sizesBottom: [],
+      sizesShoes: ["42"],
     });
     expect(patch.status).toBe(404);
     const [row] = await t.db.select().from(schema.profiles).where(eq(schema.profiles.id, lea.id));
-    expect([row?.sizeTop, row?.sizeBottom, row?.sizeShoes]).toEqual(["M", "38", null]);
+    expect([row?.sizesTop, row?.sizesBottom, row?.sizesShoes]).toEqual([["M"], ["38"], []]);
   });
 });
 

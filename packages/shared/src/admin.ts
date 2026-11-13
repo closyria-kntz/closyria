@@ -11,7 +11,7 @@ import {
   shopStatusSchema,
 } from "./catalog";
 import { canonicalizeUrl } from "./catalog-url";
-import { reportReasonSchema, shopValueSchema } from "./catalogue";
+import { importStateSchema, reportReasonSchema, shopValueSchema } from "./catalogue";
 import { audienceSchema, childDetailSchema, classifiedBySchema, seasonSchema } from "./wardrobe";
 
 const count = z.number().int().nonnegative();
@@ -126,6 +126,16 @@ export const adminShopSchema = z.object({
   lastImportAt: isoDate.nullable(),
   /** Code of the last import's failure (`blocked (HTTP 429)`, `robots_disallowed`…); null after a full import. */
   lastImportError: z.string().nullable(),
+  /** « En attente » / « Import en cours »; null when none is under way (or its job died: over 6 h). */
+  importState: importStateSchema.nullable(),
+  /** When it was queued, then started. */
+  importStartedAt: isoDate.nullable(),
+  /** Pages and articles read by the import under way, or by the last one. */
+  importPages: count,
+  importSeen: count,
+  /** New and removed articles of the last complete import; null before the first one. */
+  lastImportCreated: count.nullable(),
+  lastImportRemoved: count.nullable(),
   createdAt: isoDate,
 });
 export type AdminShop = z.infer<typeof adminShopSchema>;

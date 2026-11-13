@@ -107,3 +107,15 @@ export function importErrorMessage(code: string): { key: ImportErrorKey; status:
     status: match[2] ? Number(match[2]) : null,
   };
 }
+
+/** The French clock of an instant, as « Terminé à {hours} h {minutes} » writes it (Paris time, 24 h, two digits). */
+export function parisClock(iso: string): { hours: string; minutes: string } {
+  const parts = new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "Europe/Paris",
+  }).formatToParts(new Date(iso));
+  const part = (type: "hour" | "minute") => parts.find((p) => p.type === type)?.value ?? "00";
+  return { hours: part("hour"), minutes: part("minute") };
+}

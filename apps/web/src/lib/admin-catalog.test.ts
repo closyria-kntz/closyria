@@ -3,6 +3,7 @@ import {
   adminRequest,
   catalogErrorKey,
   importErrorMessage,
+  parisClock,
   productErrorKey,
   readCaptureResult,
   referenceErrorKey,
@@ -124,5 +125,12 @@ describe("shopPatchErrorKey", () => {
       method: "DELETE",
       headers: { "content-type": "application/json" },
     });
+  });
+});
+
+describe("parisClock", () => {
+  it("gives the Paris hour and minutes, winter and summer, on two digits", () => {
+    expect(parisClock("2026-11-13T13:05:00Z")).toEqual({ hours: "14", minutes: "05" });
+    expect(parisClock("2026-07-01T22:30:00Z")).toEqual({ hours: "00", minutes: "30" });
   });
 });

@@ -313,7 +313,7 @@ test("chaque filtre, le tri, « Ma taille en stock » sans tailles puis avec, et
 
   // With her sizes (« M » for tops): the filter works, the card says « Ta taille en stock ».
   const { profileId } = await herProfile(page, db, userAgentTag);
-  await db.query("update profiles set size_top = 'M' where id = $1", [profileId]);
+  await db.query("update profiles set size_top = '{M}' where id = $1", [profileId]);
   await page.goto(`/decouvrir?recherche=${tag}`);
   await expect(card(page, `Blouse ${tag}`).getByTestId("card-size")).toHaveText("Ta taille en stock");
   await expect(card(page, `Chemise ${tag}`).getByTestId("card-size")).toHaveCount(0);
@@ -321,8 +321,8 @@ test("chaque filtre, le tri, « Ma taille en stock » sans tailles puis avec, et
   await expect(filters.getByRole("link", { name: "Ajoute tes tailles" })).toHaveCount(0);
   await filters.getByRole("button", { name: "Ma taille en stock" }).click();
   await expect(page).toHaveURL(/ma-taille=1/);
-  // The shirt is sold out in M; the skirt and the coat have no size of hers to compare: they stay.
-  await expect.poll(() => names(page)).toEqual([`Blouse ${tag}`, `Jupe ${tag}`, `Manteau ${tag}`]);
+  // Strict: the shirt is sold out in M; the skirt (no size of hers for skirts) and the unfiled coat are left out.
+  await expect.poll(() => names(page)).toEqual([`Blouse ${tag}`]);
 });
 
 test("« Je le veux » sur une carte : le cœur se remplit et l’article est dans Mes articles", async ({ page, db }) => {
@@ -392,7 +392,7 @@ test("la fiche : tailles, « Aimé par », pièces proches, même boutique, mêm
   await expect(card(page, `Blouse fiche ${tag}`)).toBeVisible();
   // Her size and a close piece of her own dressing.
   const { userId, profileId } = await herProfile(page, db, userAgentTag);
-  await db.query("update profiles set size_top = 'm' where id = $1", [profileId]);
+  await db.query("update profiles set size_top = '{m}' where id = $1", [profileId]);
   const hidden = await seedShop(db, tag, "Ancienne");
   const ownProduct = await seedProduct(db, hidden.id, { name: `Ma blouse ${tag}`, categoryId: tops, colorId: red.id });
   await db.query("insert into items (user_id, profile_id, product_id, stage) values ($1, $2, $3, 'owned')", [
@@ -550,15 +550,19 @@ test("« Mes tailles » : depuis Compte, par profil, puis « Ma taille en stock 
     sizes: [
       ["S", true],
       ["M", true],
+      ["T38", true],
       ["L", false],
     ],
   });
   const shoes = await sharedCategory(db, "chaussures", "Chaussures");
-  await seedProduct(db, shop.id, { name: `Sandale tailles ${tag}`, categoryId: shoes, sizes: [["38,5", true]] });
+  await seedProduct(db, shop.id, { name: `Sandale tailles ${tag}`, categoryId: shoes, sizes: [["EU 38,5", true]] });
+  // « Taille unique » fits whatever its kind; an unfiled article with sizes never does.
+  const scarf = await seedProduct(db, shop.id, { name: `Foulard tailles ${tag}`, sizes: [["Taille unique", true]] });
+  await seedProduct(db, shop.id, { name: `Inconnu tailles ${tag}`, sizes: [["M", true]] });
 
   // Without sizes the filter is greyed; « Ajoute tes tailles » leads to the page, and so does Compte.
   await page.goto(`/decouvrir?recherche=${tag}`);
-  await expect(cards(page)).toHaveCount(2);
+  await expect(cards(page)).toHaveCount(4);
   let filters = await openFilters(page);
   await expect(filters.getByRole("button", { name: "Ma taille en stock" })).toBeDisabled();
   await page.goto("/compte");
@@ -569,28 +573,33 @@ test("« Mes tailles » : depuis Compte, par profil, puis « Ma taille en stock 
   await expect(page).toHaveURL(/\/reglages\/tailles$/);
   const main = page.getByRole("main");
   await expect(main.getByRole("heading", { level: 2, name: "Mes tailles" })).toBeVisible();
-  await expect(
-    main.getByText("Pour voir d’un coup d’œil les articles disponibles à ta taille dans Découvrir."),
-  ).toBeVisible();
+  await expect(main.getByText("Coche toutes les tailles qui te vont")).toBeVisible();
 
-  const top = main.getByRole("combobox", { name: "Hauts" });
-  const bottom = main.getByRole("combobox", { name: "Bas" });
-  const foot = main.getByRole("combobox", { name: "Chaussures" });
-  for (const field of [top, bottom, foot]) {
-    await expect(field).toHaveValue("");
-    expect((await field.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
-  }
-  await expect(top.locator("option")).toHaveText([
-    "Aucune",
+  const group = (name: string) => main.getByRole("group", { name });
+  const top = group("Hauts");
+  const bottom = group("Bas");
+  const foot = group("Chaussures");
+  const chip = (kind: typeof top, size: string) => kind.getByRole("button", { name: size, exact: true });
+  const ticked = (kind: typeof top) =>
+    kind.locator("button[aria-pressed=true]").evaluateAll((list) => list.map((b) => b.textContent?.trim() ?? ""));
+  for (const kind of [top, bottom, foot]) expect(await ticked(kind)).toEqual([]);
+  await expect(top.getByRole("button", { pressed: false })).toHaveText([
     ...["XS", "S", "M", "L", "XL", "XXL", "32", "34", "36", "38", "40", "42", "44", "46", "48"],
     "Une autre taille…",
   ]);
+  await expect(chip(bottom, "W28")).toBeVisible();
+  await expect(chip(foot, "38,5")).toBeVisible();
   await axeLightAndDark(page);
 
-  // A suggested value for tops, a free one for shoes (typed with spaces and a lower case).
-  await top.selectOption("M");
-  await foot.selectOption({ label: "Une autre taille…" });
-  await main.getByRole("textbox", { name: "Chaussures : une autre taille" }).fill(" 38,5 ");
+  // Several sizes per kind: M and 38 for tops, 38,5 for shoes, and a size of her own typed for bottoms.
+  await chip(top, "M").click();
+  await chip(top, "38").click();
+  await chip(foot, "38,5").click();
+  await bottom.getByRole("button", { name: "Une autre taille…" }).click();
+  await main.getByRole("textbox", { name: "Bas : une autre taille" }).fill(" W27 L30 ");
+  await main.getByRole("textbox", { name: "Bas : une autre taille" }).press("Enter");
+  await expect(chip(bottom, "W27 L30")).toHaveAttribute("aria-pressed", "true");
+  expect(await ticked(top)).toEqual(["M", "38"]);
   await main.getByRole("button", { name: "Enregistrer" }).click();
   await expect(page.getByText("Tes tailles sont enregistrées.")).toBeVisible();
   const { profileId } = await herProfile(page, db, userAgentTag);
@@ -599,13 +608,12 @@ test("« Mes tailles » : depuis Compte, par profil, puis « Ma taille en stock 
       async () =>
         (await db.query("select size_top, size_bottom, size_shoes from profiles where id = $1", [profileId])).rows[0],
     )
-    .toEqual({ size_top: "M", size_bottom: null, size_shoes: "38,5" });
-  // Read back after a reload: the free size shows in its own box.
+    .toEqual({ size_top: ["M", "38"], size_bottom: ["W27 L30"], size_shoes: ["38,5"] });
+  // Read back after a reload: her own size is a ticked chip too.
   await page.reload();
-  await expect(top).toHaveValue("M");
-  await expect(bottom).toHaveValue("");
-  await expect(foot).toHaveValue("__other");
-  await expect(main.getByRole("textbox", { name: "Chaussures : une autre taille" })).toHaveValue("38,5");
+  await expect.poll(() => ticked(top)).toEqual(["M", "38"]);
+  expect(await ticked(bottom)).toEqual(["W27 L30"]);
+  expect(await ticked(foot)).toEqual(["38,5"]);
 
   // Another profile keeps its own sizes (none), and saving there leaves « Moi » alone.
   const lea = await page.evaluate(() =>
@@ -617,38 +625,52 @@ test("« Mes tailles » : depuis Compte, par profil, puis « Ma taille en stock 
   );
   await page.goto(`/reglages/tailles?profil=${lea.id}`);
   await expect(main.getByRole("heading", { level: 2, name: "Mes tailles" })).toBeVisible();
-  await expect(top).toHaveValue("");
-  await top.selectOption("S");
+  await expect.poll(() => ticked(top)).toEqual([]);
+  await chip(top, "S").click();
   await main.getByRole("button", { name: "Enregistrer" }).click();
   await expect(page.getByText("Tes tailles sont enregistrées.")).toBeVisible();
   const sizesOf = async (profile: string) =>
     (await db.query("select size_top from profiles where id = $1", [profile])).rows[0]?.size_top;
-  await expect.poll(() => sizesOf(lea.id)).toBe("S");
-  expect(await sizesOf(profileId)).toBe("M");
+  await expect.poll(() => sizesOf(lea.id)).toEqual(["S"]);
+  expect(await sizesOf(profileId)).toEqual(["M", "38"]);
 
   // « Ma taille en stock » is on offer now, and the sheet puts her size forward.
   await page.goto(`/decouvrir?recherche=${tag}`);
   await expect(card(page, `Blouse tailles ${tag}`).getByTestId("card-size")).toHaveText("Ta taille en stock");
   await expect(card(page, `Sandale tailles ${tag}`).getByTestId("card-size")).toHaveText("Ta taille en stock");
+  await expect(card(page, `Foulard tailles ${tag}`).getByTestId("card-size")).toHaveText("Ta taille en stock");
+  await expect(card(page, `Inconnu tailles ${tag}`).getByTestId("card-size")).toHaveCount(0);
   filters = await openFilters(page);
   await expect(filters.getByRole("link", { name: "Ajoute tes tailles" })).toHaveCount(0);
   await filters.getByRole("button", { name: "Ma taille en stock" }).click();
   await expect(page).toHaveURL(/ma-taille=1/);
-  await expect(cards(page)).toHaveCount(2);
+  // Strict: her sizes or « taille unique », never the unfiled article.
+  await expect
+    .poll(async () => (await names(page)).sort())
+    .toEqual([`Blouse tailles ${tag}`, `Foulard tailles ${tag}`, `Sandale tailles ${tag}`].sort());
   await page.goto(`/decouvrir/${id}`);
   await expect(page.getByTestId("product-info")).toContainText("Ta taille en stock");
+  // Every one of her sizes is put forward (« T38 » is her 38).
   await expect(page.getByRole("region", { name: "Ta taille" }).getByRole("listitem")).toHaveText([
     "S",
     "M (ta taille)",
+    "T38 (ta taille)",
     "L (indisponible)",
   ]);
+  await page.goto(`/decouvrir/${scarf}`);
+  await expect(page.getByTestId("product-info")).toContainText("Ta taille en stock");
+  await expect(page.getByRole("region", { name: "Ta taille" }).getByRole("listitem")).toHaveText([
+    "Taille unique (ta taille)",
+  ]);
 
-  // Emptying a field clears it (null on the wire, never an empty text).
+  // Unticking every size of a kind clears it (an empty list).
   await page.goto("/reglages/tailles");
-  await top.selectOption("");
+  await expect.poll(() => ticked(top)).toEqual(["M", "38"]);
+  await chip(top, "M").click();
+  await chip(top, "38").click();
   await main.getByRole("button", { name: "Enregistrer" }).click();
   await expect(page.getByText("Tes tailles sont enregistrées.")).toBeVisible();
   await expect
     .poll(async () => (await db.query("select size_top, size_shoes from profiles where id = $1", [profileId])).rows[0])
-    .toEqual({ size_top: null, size_shoes: "38,5" });
+    .toEqual({ size_top: [], size_shoes: ["38,5"] });
 });

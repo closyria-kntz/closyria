@@ -35,7 +35,7 @@ export async function loadShopDirectory(db: Database): Promise<ShopDirectory> {
       (select count(*)::int from products p where p.shop_id = s.id and ${inCatalogue}) as item_count,
       (select pi.id from products p join product_images pi on pi.product_id = p.id
         where p.shop_id = s.id and ${inCatalogue}
-        order by p.created_at desc, p.id, pi.position, pi.id limit 1) as image_id
+        order by coalesce(p.published_at, p.created_at) desc, p.id, pi.position, pi.id limit 1) as image_id
     from shops s
     join lateral (
       select domain from shop_domains where shop_id = s.id order by length(domain), domain limit 1

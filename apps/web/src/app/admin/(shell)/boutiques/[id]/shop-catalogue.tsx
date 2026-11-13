@@ -4,12 +4,17 @@ import { type AdminShopDetail, type ShopValue, shopValueSchema } from "@closyria
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
-import { adminRequest, catalogErrorKey, importErrorMessage } from "@/lib/admin-catalog";
+import { adminRequest, catalogErrorKey, importErrorMessage, parisClock } from "@/lib/admin-catalog";
 import { buttonClass, primaryButtonClass } from "../../../ui";
 
+/** While an import is queued or running, the page reads its progress again this often. */
+export const IMPORT_REFRESH_MS = 3000;
+
 /**
- * The shop in « Découvrir »: its values (filters), « Importer tout le catalogue » for a Shopify shop, and the state of
- * its last import (date, articles on sale, last error in plain words) with « Importer maintenant ».
+ * The shop in « Découvrir »: its values (filters), « Importer tout le catalogue » for a Shopify shop, and its import
+ * with « Importer maintenant »: « En attente », then « Import en cours : page n, x articles lus » (read again every
+ * 3 s), then « Terminé à HH h MM : … » or the error in plain words; the date of the last import and the articles on
+ * sale.
  */
 export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
   const t = useTranslations("Admin.shops.catalogue");
@@ -31,6 +36,14 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
     setValues(shop.values);
     setImportEnabled(shop.importEnabled);
   }, [shop]);
+
+  // The progress of an import under way, read again until it is over.
+  const importing = shop.importState !== null;
+  useEffect(() => {
+    if (!importing) return;
+    const timer = setInterval(() => router.refresh(), IMPORT_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [importing, router]);
 
   const toggle = (value: ShopValue) =>
     setValues((list) => (list.includes(value) ? list.filter((v) => v !== value) : [...list, value]));
@@ -60,13 +73,35 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
     if (!res.ok) return setImportMessage({ text: errors(catalogErrorKey(res.status, res.body)), failed: true });
     const queued = (res.body as { queued?: unknown } | null)?.queued === true;
     setImportMessage({ text: t(queued ? "importQueued" : "importAlready"), failed: false });
+    // « En attente » at once, then the progress.
+    router.refresh();
   };
 
   const lastError = (() => {
-    if (!shop.lastImportError) return t("noError");
+    if (!shop.lastImportError) return null;
     const message = importErrorMessage(shop.lastImportError);
     if ("raw" in message) return message.raw;
     return t(`importErrors.${message.key}`, { status: message.status === null ? "none" : String(message.status) });
+  })();
+
+  const importLine = (() => {
+    if (shop.importState === "queued") return t("state.queued");
+    if (shop.importState === "running") {
+      return shop.importPages > 0
+        ? t("state.running", { pages: shop.importPages, seen: shop.importSeen })
+        : t("state.starting");
+    }
+    if (lastError !== null) return lastError;
+    if (!shop.lastImportAt) return t("state.none");
+    const clock = parisClock(shop.lastImportAt);
+    return shop.lastImportCreated === null || shop.lastImportRemoved === null
+      ? t("state.doneShort", clock)
+      : t("state.done", {
+          ...clock,
+          total: shop.importSeen,
+          created: shop.lastImportCreated,
+          removed: shop.lastImportRemoved,
+        });
   })();
 
   return (
@@ -123,14 +158,27 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
         <>
           <dl className="flex flex-col gap-space-2 text-sm">
             <div className="flex flex-col gap-space-1">
+              <dt className="text-ink-muted">{t("state.label")}</dt>
+              <dd>
+                <p
+                  role="status"
+                  data-testid="import-state"
+                  className={`tabular-nums ${!importing && lastError !== null ? "text-danger" : importing ? "font-strong" : ""}`}
+                >
+                  {importLine}
+                </p>
+              </dd>
+            </div>
+            <div className="flex flex-col gap-space-1">
               <dt className="text-ink-muted">{t("lastImport")}</dt>
               <dd className="tabular-nums">
                 {shop.lastImportAt ? (
                   <time dateTime={shop.lastImportAt}>
+                    {/* Paris time, like « Terminé à … » above. */}
                     {format.dateTime(new Date(shop.lastImportAt), {
                       dateStyle: "short",
                       timeStyle: "short",
-                      timeZone: "UTC",
+                      timeZone: "Europe/Paris",
                     })}
                   </time>
                 ) : (
@@ -142,16 +190,12 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
               <dt className="text-ink-muted">{t("products")}</dt>
               <dd className="tabular-nums">{format.number(shop.catalogueProducts)}</dd>
             </div>
-            <div className="flex flex-col gap-space-1">
-              <dt className="text-ink-muted">{t("lastError")}</dt>
-              <dd className={shop.lastImportError ? "text-danger" : undefined}>{lastError}</dd>
-            </div>
           </dl>
           <div>
             <button
               type="button"
               onClick={() => void importNow()}
-              disabled={busy}
+              disabled={busy || importing}
               className={`${buttonClass} min-h-touch-target`}
             >
               {t("importNow")}

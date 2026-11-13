@@ -71,6 +71,12 @@ export async function importShopifyCatalog(deps: ImportDeps, shopId: string): Pr
     return await run(deps, shopId, result);
   } finally {
     running.delete(shopId);
+    // Over, whatever the outcome: no « Import en cours » left behind (a crash leaves it, shown for 6 h at most).
+    await deps.db
+      .update(schema.shops)
+      .set({ importState: null })
+      .where(eq(schema.shops.id, shopId))
+      .catch((error) => console.error(`catalogue import ${shopId}: cannot clear its state`, error));
   }
 }
 
@@ -97,10 +103,16 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult): Prom
     return { ...result, error: "no_address" };
   }
 
+  // « Import en cours » from now on; a state left by a dead job (« En attente », a crashed run) is replaced.
+  await db
+    .update(schema.shops)
+    .set({ importState: "running", importStartedAt: now(), importPages: 0, importSeen: 0 })
+    .where(eq(schema.shops.id, shopId));
   const reference = await loadReferenceSet(db);
   const activeBefore = await activeImported(db, shopId);
   const seen = new Set<string>();
   const listedIds = new Set<string>();
+  let read = 0;
   try {
     for (let page = 1; ; page++) {
       if (page > MAX_PAGES) throw new ImportStop("too_many_pages");
@@ -110,6 +122,9 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult): Prom
       for (const item of listing.products) {
         await writeImported(deps, shop, item, reference, seen, result, now());
       }
+      // « Import en cours : page n, x articles lus » in the admin, after each page.
+      read += listing.count;
+      await db.update(schema.shops).set({ importPages: page, importSeen: read }).where(eq(schema.shops.id, shopId));
       if (listing.count < IMPORT_PAGE_SIZE) break;
     }
   } catch (error) {
@@ -136,7 +151,13 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult): Prom
   const at = now();
   await db
     .update(schema.shops)
-    .set({ lastImportAt: at, lastImportError: null, updatedAt: at })
+    .set({
+      lastImportAt: at,
+      lastImportError: null,
+      lastImportCreated: result.created,
+      lastImportRemoved: result.removed,
+      updatedAt: at,
+    })
     .where(eq(schema.shops.id, shopId));
   return result;
 }

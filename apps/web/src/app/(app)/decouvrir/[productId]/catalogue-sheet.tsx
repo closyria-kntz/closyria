@@ -1,6 +1,13 @@
 "use client";
 
-import { type CatalogDetail, isHttpUrl, type ReportReason, reportReasonSchema, sizeMatches } from "@closyria/shared";
+import {
+  type CatalogDetail,
+  isHttpUrl,
+  isOneSize,
+  type ReportReason,
+  reportReasonSchema,
+  sizeMatches,
+} from "@closyria/shared";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useState } from "react";
@@ -171,7 +178,10 @@ export function CatalogueSheet({ productId }: { productId: string }) {
         </h2>
         <ul className="flex flex-wrap gap-space-2">
           {sheet.sizes.map((size) => {
-            const isMine = sheet.mySize !== null && sizeMatches(sheet.mySize, [size.label]) === true;
+            // Every one of her sizes, and « taille unique » when that is what makes it hers (the card's rule).
+            const isMine =
+              sizeMatches(sheet.mySizes, [size.label]) === true ||
+              (sheet.sizeInStock === true && size.available && isOneSize(size.label));
             return (
               <li
                 key={size.label}

@@ -82,8 +82,8 @@ export const catalogDetailSchema = catalogCardSchema.extend({
   /** The article's page at the shop (« Voir chez {boutique} », « Partager »): http(s) only. */
   url: z.string().refine(isHttpUrl),
   sizes: z.array(z.object({ label: z.string(), available: z.boolean() })),
-  /** Her size (« Mes tailles ») for this kind of article, as she typed it; null when none applies. */
-  mySize: z.string().nullable(),
+  /** Her sizes (« Mes tailles ») for this kind of article, as she typed them; empty when none applies. */
+  mySizes: z.array(z.string()),
   /** Null under 3 people: the counter is shown from 3. */
   likes: z.number().int().nonnegative().nullable(),
   myItem: z.object({ itemId: z.uuid(), stage: itemStageSchema }).nullable(),
@@ -105,25 +105,77 @@ export type ReportInput = z.infer<typeof reportInputSchema>;
 export const reportResolutionSchema = z.enum(["hidden", "kept"]);
 export type ReportResolution = z.infer<typeof reportResolutionSchema>;
 
-const squash = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+/** Words of a shop's size label that never name a size: « 38 FR », « EU 38 », « Taille 38 », « T38 ». */
+const SIZE_NOISE = new Set(["fr", "eu", "eur", "taille", "t", "size"]);
+/** « Taille unique » as shops write it (letters only, lowercased): TU, T.U., Taille unique, One size, OS, Unique, U. */
+const ONE_SIZE = ["tu", "tailleunique", "onesize", "os", "unique", "u"] as const;
 
-/** Her size against a product's available sizes, ignoring case and spaces; null without a profile size. */
-export function sizeMatches(profileSize: string | null, available: string[]): boolean | null {
-  if (profileSize === null || squash(profileSize) === "") return null;
-  const wanted = squash(profileSize);
-  return available.some((s) => squash(s) === wanted);
+/**
+ * Whether a shop's size label means « taille unique » (TU, T.U., Taille unique, One size, OS, Unique, U), whatever
+ * the case, spaces and dots. Mirrored by the SQL function `catalog_is_one_size` (migration 0025).
+ */
+export function isOneSize(label: string): boolean {
+  return (ONE_SIZE as readonly string[]).includes(label.toLowerCase().replace(/[^a-z]/g, ""));
+}
+
+/**
+ * The sizes a label names, in one comparable form, so that « Ma taille en stock » finds 38 in « 38 FR », « FR 38 »,
+ * « EU 38 », « T38 », « Taille 38 », « M (38) », « M - 38 », « 36-38 » or « 36/38 », S and M in « S/M », W28 in
+ * « W28 L32 ». Lowercase, without spaces; « 38,5 », « 38.5 » and « 38 1/2 » are « 38.5 »; « XXL » is « 2xl » like
+ * « 2XL ». The whole label without spaces is one more token (a size written in a way no rule knows still matches
+ * itself). Sorted, without repeats. Mirrored by the SQL function `catalog_size_tokens` (migration 0025): keep both
+ * in step (`size-tokens.integration.test.ts` compares them).
+ */
+export function sizeTokens(label: string): string[] {
+  const text = label
+    .replace(/\u00a0/g, " ")
+    .toLowerCase()
+    .replace(/(\d)\s*,\s*(\d)/g, "$1.$2")
+    .replace(/(\d+)(?:\s+1\/2|\s*½)(?!\d)/g, "$1.5")
+    .replace(/\b([wt])\s+(?=\d)/g, "$1");
+  const tokens = new Set<string>();
+  const whole = text.replace(/\s+/g, "");
+  if (whole) tokens.add(whole);
+  for (const raw of text.split(/[\s/()|,;+-]+/)) {
+    const word = raw.replace(/^\.+|\.+$/g, "");
+    if (!word || SIZE_NOISE.has(word)) continue;
+    const number = /^(?:t|taille)?(\d+(?:\.\d+)?)(?:fr|eu)?$/.exec(word);
+    const xs = /^(x{2,})([sl])$/.exec(word);
+    tokens.add(number?.[1] ?? (xs?.[1] && xs[2] ? `${xs[1].length}x${xs[2]}` : word));
+  }
+  return [...tokens].sort();
+}
+
+/** Every token of her sizes (`sizeTokens`), sorted, without repeats: what the SQL compares with `&&`. */
+export function sizeTokensOf(sizes: readonly string[]): string[] {
+  return [...new Set(sizes.flatMap(sizeTokens))].sort();
+}
+
+/**
+ * Whether one of her sizes is among a product's available sizes (`sizeTokens`: « 38 » finds « 38 FR », « M » finds
+ * « S/M »…); null when she has no size for it.
+ */
+export function sizeMatches(mySizes: readonly string[], available: readonly string[]): boolean | null {
+  const wanted = new Set(sizeTokensOf(mySizes));
+  if (wanted.size === 0) return null;
+  return available.some((label) => sizeTokens(label).some((token) => wanted.has(token)));
 }
 
 export type SizeKind = "top" | "bottom" | "shoes";
 
 const range = (from: number, to: number, step = 1) =>
   Array.from({ length: Math.floor((to - from) / step) + 1 }, (_, i) => String(from + i * step));
+const LETTERS = ["XS", "S", "M", "L", "XL", "XXL"];
+/** 35, 35,5, 36… 41,5, 42. */
+const SHOE_SIZES = range(35, 41)
+  .flatMap((n) => [n, `${n},5`])
+  .concat("42");
 
-/** The sizes « Mes tailles » offers as choices (a free text is always possible too); spec §3.3. */
+/** The sizes « Mes tailles » offers as chips (« Une autre taille… » adds her own); spec §3.3. */
 export const SIZE_SUGGESTIONS: Readonly<Record<SizeKind, readonly string[]>> = {
-  top: ["XS", "S", "M", "L", "XL", "XXL", ...range(32, 48, 2)],
-  bottom: [...range(24, 34), ...range(36, 48, 2)],
-  shoes: range(35, 42),
+  top: [...LETTERS, ...range(32, 48, 2)],
+  bottom: [...LETTERS, ...range(24, 34), ...range(36, 48, 2), ...range(24, 34).map((n) => `W${n}`)],
+  shoes: SHOE_SIZES,
 };
 
 /** Category slugs that take one of her sizes (the API filters « Ma taille en stock » in SQL from this table). */
@@ -198,3 +250,16 @@ export const CATALOGUE_IMPORT_QUEUE_OPTIONS = {
   retryLimit: 0,
   expireInSeconds: 6 * 60 * 60,
 } as const;
+
+/** An import queued or running for longer than its job may live (pg-boss expiry, 6 h) is a dead job, not under way. */
+export const CATALOGUE_IMPORT_STALE_MS = CATALOGUE_IMPORT_QUEUE_OPTIONS.expireInSeconds * 1000;
+
+export const importStateSchema = z.enum(["queued", "running"]);
+export type ImportState = z.infer<typeof importStateSchema>;
+
+/** The import under way as stored on the shop, or null when none is, or when it outlived the job expiry. */
+export function liveImportState(state: string | null, startedAt: Date | null, now: Date): ImportState | null {
+  const parsed = importStateSchema.safeParse(state);
+  if (!parsed.success || !startedAt) return null;
+  return now.getTime() - startedAt.getTime() < CATALOGUE_IMPORT_STALE_MS ? parsed.data : null;
+}

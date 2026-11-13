@@ -1,5 +1,5 @@
 import { eq, schema, sql } from "@closyria/db";
-import { type CatalogCard, catalogDetailSchema, catalogPageSchema } from "@closyria/shared";
+import { type CatalogCard, catalogDetailSchema, catalogPageSchema, isOneSize, sizeTokens } from "@closyria/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { foldText } from "../catalog/catalogue";
 import { BASE_URL, createCatalogHarness } from "../catalog/test-app";
@@ -167,6 +167,11 @@ async function page(query = "", cookie = me.cookie) {
 }
 
 const ids = (cards: CatalogCard[]) => cards.map((c) => c.productId);
+const textArrayParam = (values: string[]) =>
+  sql`array[${sql.join(
+    values.map((v) => sql`${v}`),
+    sql`, `,
+  )}]::text[]`;
 
 async function detail(productId: string, query = "", cookie = me.cookie) {
   const res = await call("GET", `/catalog/${productId}${query}`, cookie);
@@ -299,7 +304,7 @@ describe("GET /api/catalog — filters", () => {
     expect(foldText(letters)).toMatch(/^[a-z ]+$/);
   });
 
-  it("« Ma taille en stock » compares her size by kind of article, case and spaces aside", async () => {
+  it("« Ma taille en stock » is strict: one of her sizes for its kind available, or « taille unique » only", async () => {
     const shop = await newShop();
     const dressM = await newProduct(shop.id, {
       categoryId: ref.shortDress,
@@ -308,6 +313,8 @@ describe("GET /api/catalog — filters", () => {
         [" m ", true],
       ],
     });
+    // One of her several sizes is enough (« 38 » finds « 38 FR »).
+    const dress38 = await newProduct(shop.id, { categoryId: ref.dresses, sizes: [["38 FR", true]] });
     const dressSoldOut = await newProduct(shop.id, {
       categoryId: ref.dresses,
       sizes: [
@@ -315,34 +322,50 @@ describe("GET /api/catalog — filters", () => {
         ["L", true],
       ],
     });
-    const shoes38 = await newProduct(shop.id, { categoryId: ref.shoes, sizes: [["38", true]] });
+    const shoes38 = await newProduct(shop.id, { categoryId: ref.shoes, sizes: [["EU 38,5", true]] });
     const shoes40 = await newProduct(shop.id, { categoryId: ref.shoes, sizes: [["40", true]] });
-    const bag = await newProduct(shop.id, { categoryId: ref.bags });
-    const unfiled = await newProduct(shop.id);
-    await newProfile(me.userId, { sizeTop: "M", sizeShoes: "38" });
-    const kid = await newProfile(me.userId, { name: "Léa", position: 1, sizeTop: "L" });
+    const bag = await newProduct(shop.id, { categoryId: ref.bags, sizes: [["M", true]] });
+    const unfiled = await newProduct(shop.id, { sizes: [["M", true]] });
+    const sizeless = await newProduct(shop.id, { categoryId: ref.shortDress });
+    const oneSize = await newProduct(shop.id, { categoryId: ref.bags, sizes: [["Taille unique", true]] });
+    const oneSizeUnfiled = await newProduct(shop.id, { sizes: [["T.U.", true]] });
+    const oneSizeSoldOut = await newProduct(shop.id, { sizes: [["TU", false]] });
+    const oneSizeAndMore = await newProduct(shop.id, {
+      sizes: [
+        ["TU", true],
+        ["XL", true],
+      ],
+    });
+    await newProfile(me.userId, { sizesTop: ["M", "38"], sizesShoes: ["38,5"] });
+    const kid = await newProfile(me.userId, { name: "Léa", position: 1, sizesTop: ["L"] });
 
     const all = await page();
     const inStock = new Map(all.items.map((i) => [i.productId, i.sizeInStock]));
     expect(inStock.get(dressM.id)).toBe(true);
+    expect(inStock.get(dress38.id)).toBe(true);
     expect(inStock.get(dressSoldOut.id)).toBe(false);
     expect(inStock.get(shoes38.id)).toBe(true);
     expect(inStock.get(shoes40.id)).toBe(false);
     expect(inStock.get(bag.id)).toBeNull();
     expect(inStock.get(unfiled.id)).toBeNull();
+    expect(inStock.get(sizeless.id)).toBe(false);
+    expect(inStock.get(oneSize.id)).toBe(true);
+    expect(inStock.get(oneSizeUnfiled.id)).toBe(true);
+    expect(inStock.get(oneSizeSoldOut.id)).toBeNull();
+    expect(inStock.get(oneSizeAndMore.id)).toBeNull();
 
-    // Articles without a kind of size are not filtered out; those in her size but sold out are.
+    // Accessories, unfiled and sizeless articles are left out; « taille unique » is kept whatever its kind.
     expect(new Set(ids((await page("?mySize=true")).items))).toEqual(
-      new Set([dressM.id, shoes38.id, bag.id, unfiled.id]),
+      new Set([dressM.id, dress38.id, shoes38.id, oneSize.id, oneSizeUnfiled.id]),
     );
-    // The sizes of the chosen profile.
+    // The sizes of the chosen profile: a kind she left empty (shoes for Léa) shows nothing of that kind.
     expect(new Set(ids((await page(`?mySize=true&profile=${kid.id}`)).items))).toEqual(
-      new Set([dressSoldOut.id, shoes38.id, shoes40.id, bag.id, unfiled.id]),
+      new Set([dressSoldOut.id, oneSize.id, oneSizeUnfiled.id]),
     );
     // Another person's profile is never read: her first profile is used.
-    const stranger = await newProfile(other.userId, { sizeTop: "L" });
+    const stranger = await newProfile(other.userId, { sizesTop: ["L"] });
     expect(new Set(ids((await page(`?mySize=true&profile=${stranger.id}`)).items))).toEqual(
-      new Set([dressM.id, shoes38.id, bag.id, unfiled.id]),
+      new Set([dressM.id, dress38.id, shoes38.id, oneSize.id, oneSizeUnfiled.id]),
     );
   });
 
@@ -350,27 +373,85 @@ describe("GET /api/catalog — filters", () => {
     const shop = await newShop();
     const inSize = await newProduct(shop.id, { categoryId: ref.wrapDress, sizes: [["M", true]] });
     const soldOut = await newProduct(shop.id, { categoryId: ref.wrapDress, sizes: [["M", false]] });
-    await newProfile(me.userId, { sizeTop: "M" });
+    await newProfile(me.userId, { sizesTop: ["M", "38"] });
 
     const inStock = new Map((await page()).items.map((i) => [i.productId, i.sizeInStock]));
     expect(inStock.get(inSize.id)).toBe(true);
     expect(inStock.get(soldOut.id)).toBe(false);
     expect(ids((await page("?mySize=true")).items)).toEqual([inSize.id]);
-    expect((await detail(inSize.id)).body.mySize).toBe("M");
+    expect((await detail(inSize.id)).body.mySizes).toEqual(["M", "38"]);
   });
 
   it("« Ma taille en stock » filters nothing when she has no sizes", async () => {
     const shop = await newShop();
     await newProduct(shop.id, { categoryId: ref.shortDress, sizes: [["M", true]] });
-    await newProduct(shop.id, { categoryId: ref.shoes, sizes: [["38", false]] });
+    await newProduct(shop.id, { categoryId: ref.shoes, sizes: [["TU", true]] });
     expect((await page("?mySize=true")).items).toHaveLength(2);
     expect((await page()).items.map((i) => i.sizeInStock)).toEqual([null, null]);
     // The page says so, for « Ajoute tes tailles ».
     expect((await page()).hasSizes).toBe(false);
-    const profile = await newProfile(me.userId, { sizeShoes: " " });
+    const profile = await newProfile(me.userId, { sizesShoes: [" "] });
     expect((await page()).hasSizes).toBe(false);
-    await t.db.update(schema.profiles).set({ sizeShoes: "38" }).where(eq(schema.profiles.id, profile.id));
+    await t.db
+      .update(schema.profiles)
+      .set({ sizesShoes: ["38"] })
+      .where(eq(schema.profiles.id, profile.id));
     expect((await page()).hasSizes).toBe(true);
+  });
+
+  it("matches labels in SQL exactly as `sizeTokens` and `isOneSize` do", async () => {
+    const labels = [
+      "38 FR",
+      "FR 38",
+      "EU 38",
+      "T38",
+      "Taille 38",
+      "T 38",
+      "S/M",
+      "M - 38",
+      "M (38)",
+      "36-38",
+      "36/38",
+      "2XL",
+      "XXL",
+      "3XL",
+      "XXXL",
+      "38,5",
+      "38.5",
+      "38 1/2",
+      "38½",
+      "W28",
+      "W28 L32",
+      "w 28",
+      " m ",
+      "x l",
+      "TU",
+      "T.U.",
+      "Taille unique",
+      "One size",
+      "OS",
+      "Unique",
+      "U",
+      "XS",
+      "Taille 38 (M)",
+      "40|42",
+      "L;XL",
+      "1/2",
+      "",
+      "  ",
+      "38\u00a0FR",
+      "W28/L32",
+      "Taille 36 ½",
+      "S+M",
+    ];
+    const { rows } = await t.db.execute<{ label: string; tokens: string[]; one: boolean }>(sql`
+      select label, catalog_size_tokens(label) as tokens, catalog_is_one_size(label) as one
+      from unnest(${textArrayParam(labels)}) as label`);
+    for (const row of rows) {
+      expect([...row.tokens].sort(), JSON.stringify(row.label)).toEqual(sizeTokens(row.label));
+      expect(row.one, JSON.stringify(row.label)).toBe(isOneSize(row.label));
+    }
+    expect(rows).toHaveLength(labels.length);
   });
 
   it("marks what she already wants, never what another person wants", async () => {
@@ -414,13 +495,29 @@ describe("GET /api/catalog — sorts and pages", () => {
     expect(ids((await page("?sort=popular")).items)).toEqual([c.id, a.id, b.id]);
   });
 
+  it("« Nouveautés » goes by the shop's put-online date, else the day Closyria first saw the article", async () => {
+    const shop = await newShop();
+    // Imported today, but online at the shop for a month: not new.
+    const old = await newProduct(shop.id, { createdAt: ago(DAY / 2), publishedAt: ago(30 * DAY) });
+    // Seen long ago, put online 2 days ago: new, and newer than one first seen 3 days ago without a date.
+    const fresh = await newProduct(shop.id, { createdAt: ago(40 * DAY), publishedAt: ago(2 * DAY) });
+    const undated = await newProduct(shop.id, { createdAt: ago(3 * DAY) });
+
+    expect(ids((await page("?sort=new")).items)).toEqual([fresh.id, undated.id, old.id]);
+    expect(ids((await page("?isNew=true")).items)).toEqual([fresh.id, undated.id]);
+  });
+
   for (const sort of ["new", "price_asc", "price_desc", "popular"] as const) {
     it(`pages by 24 without duplicates nor gaps (${sort}), even when products arrive between pages`, async () => {
       const shop = await newShop();
       const created: string[] = [];
       for (let i = 0; i < 50; i++) {
-        // Ties on the price and the date, so that the id breaks them.
-        const p = await newProduct(shop.id, { createdAt: ago((i % 5) * DAY), priceCents: 1000 * (i % 7) });
+        // Ties on the price and the date, so that the id breaks them; a third put online by the shop (its date wins).
+        const p = await newProduct(shop.id, {
+          createdAt: ago((i % 5) * DAY),
+          ...(i % 3 === 0 ? { publishedAt: ago((i % 4) * DAY + 3_600_000) } : {}),
+          priceCents: 1000 * (i % 7),
+        });
         created.push(p.id);
         if (i % 9 === 0) await newItem(other.userId, p.id);
       }
@@ -462,7 +559,7 @@ describe("GET /api/catalog/{productId}", () => {
       height: 800,
       sourceHash: "b",
     });
-    await newProfile(me.userId, { sizeTop: "m" });
+    await newProfile(me.userId, { sizesTop: ["m"] });
 
     const before = (await detail(p.id)).body;
     expect(before.images).toHaveLength(2);
@@ -473,10 +570,10 @@ describe("GET /api/catalog/{productId}", () => {
     ]);
     expect(before).toMatchObject({ sizeInStock: true, previousPriceCents: 6000, wanted: false, myItem: null });
     // Her size for this kind of article, to put forward among the sizes; the shop's page for « Voir chez ».
-    expect(before.mySize).toBe("m");
+    expect(before.mySizes).toEqual(["m"]);
     expect(before.url).toBe(p.canonicalUrl);
     const bag = await newProduct(shop.id, { categoryId: ref.bags });
-    expect((await detail(bag.id)).body.mySize).toBeNull();
+    expect((await detail(bag.id)).body.mySizes).toEqual([]);
 
     const itemId = await newItem(me.userId, p.id, { stage: "ordered" });
     const after = (await detail(p.id)).body;

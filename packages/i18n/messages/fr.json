@@ -492,6 +492,7 @@
       "intro": "Les boutiques à valider passent en tête, classées par nombre de fiches créées sur 30 jours.",
       "add": "Ajouter une boutique",
       "empty": "Aucune boutique ne correspond à ces filtres.",
+      "importing": "Import en cours",
       "filters": "Filtres",
       "filterStatus": "Statut",
       "filterMode": "Mode de capture",
@@ -622,10 +623,17 @@
         "lastImport": "Dernier import",
         "never": "Jamais",
         "products": "Articles dans Découvrir",
-        "lastError": "Dernière erreur",
-        "noError": "Aucune",
+        "state": {
+          "label": "Import",
+          "none": "Aucun import pour l’instant",
+          "queued": "En attente",
+          "starting": "Import en cours…",
+          "running": "Import en cours : page {pages, number}, {seen, plural, one {# article lu} other {# articles lus}}",
+          "done": "Terminé à {hours} h {minutes} : {total, plural, one {# article} other {# articles}} ({created, plural, one {# nouveau} other {# nouveaux}}, {removed, plural, one {# retiré} other {# retirés}})",
+          "doneShort": "Terminé à {hours} h {minutes}"
+        },
         "importNow": "Importer maintenant",
-        "importQueued": "Import lancé : il tourne en arrière-plan, recharge la page dans quelques minutes.",
+        "importQueued": "Import lancé : son avancement s’affiche ci-dessus.",
         "importAlready": "Un import de cette boutique est déjà en cours.",
         "notShopify": "L’import du catalogue n’existe que pour les boutiques Shopify.",
         "importErrors": {
@@ -711,6 +719,8 @@
       "lastCaptured": "Dernière lecture (UTC)",
       "updatedAt": "Modifiée (UTC)",
       "address": "Adresse",
+      "openAtShop": "Voir chez {shop}",
+      "newTab": "(s’ouvre dans un nouvel onglet)",
       "brand": "Marque",
       "currency": "Devise",
       "source": "Source",
@@ -851,6 +861,7 @@
       "empty": "Tout est classé.",
       "productType": "Type chez la boutique : {type}",
       "noType": "Pas de type chez la boutique",
+      "openSheet": "Voir la fiche",
       "category": "Type",
       "color": "Couleur",
       "choose": "Choisir…",
@@ -881,7 +892,8 @@
       "kept": "Article gardé dans le catalogue.",
       "unnamed": "Article sans nom",
       "noPhoto": "Pas de photo",
-      "showHidden": "Voir les articles masqués"
+      "showHidden": "Voir les articles masqués",
+      "openSheet": "Voir la fiche"
     }
   },
   "Capture": {
@@ -1885,14 +1897,15 @@
     "sizes": {
       "metadata": "Mes tailles",
       "title": "Mes tailles",
-      "intro": "Pour voir d’un coup d’œil les articles disponibles à ta taille dans Découvrir.",
+      "intro": "Coche toutes les tailles qui te vont : Découvrir te montre les articles disponibles dans l’une d’elles.",
       "forProfile": "Tailles de {name}",
       "top": "Hauts",
       "bottom": "Bas",
       "shoes": "Chaussures",
-      "none": "Aucune",
       "other": "Une autre taille…",
       "otherLabel": "{kind} : une autre taille",
+      "add": "Ajouter",
+      "full": "{max} tailles au plus par type.",
       "save": "Enregistrer",
       "saved": "Tes tailles sont enregistrées."
     },

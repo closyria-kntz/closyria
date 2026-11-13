@@ -9,7 +9,8 @@ import { focusRing } from "./ui";
 export function AdminNavLinks({ items }: { items: Array<AdminNavItem & { label: string }> }) {
   const pathname = usePathname();
   return (
-    <ul className="flex flex-row flex-wrap gap-space-1 md:flex-col">
+    // One row that scrolls sideways on a phone (the menu stays a single line under the bar), a column on a computer.
+    <ul className="-mx-space-3 flex flex-row gap-space-1 overflow-x-auto px-space-3 md:sticky md:top-space-8 md:mx-space-0 md:flex-col md:overflow-visible md:px-space-0 md:py-space-3">
       {items.map((item) => {
         const current = isActive(item, pathname);
         return (
@@ -17,7 +18,7 @@ export function AdminNavLinks({ items }: { items: Array<AdminNavItem & { label: 
             <Link
               href={item.href}
               aria-current={current ? "page" : undefined}
-              className={`block rounded-button px-space-3 py-space-2 text-sm hover:bg-surface-strong aria-[current=page]:bg-surface-strong aria-[current=page]:font-strong ${focusRing}`}
+              className={`flex min-h-touch-target items-center rounded-button px-space-3 text-sm whitespace-nowrap hover:bg-surface-strong aria-[current=page]:bg-surface-strong aria-[current=page]:font-strong ${focusRing}`}
             >
               {item.label}
             </Link>

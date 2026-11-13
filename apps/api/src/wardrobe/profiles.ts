@@ -58,9 +58,9 @@ export function toProfileView(profile: Profile, itemCount?: number): ProfileView
     childDetail: profile.childDetail as ProfileView["childDetail"],
     color: profile.color as ProfileView["color"],
     position: profile.position,
-    sizeTop: profile.sizeTop,
-    sizeBottom: profile.sizeBottom,
-    sizeShoes: profile.sizeShoes,
+    sizesTop: profile.sizesTop,
+    sizesBottom: profile.sizesBottom,
+    sizesShoes: profile.sizesShoes,
     ...(itemCount === undefined ? {} : { itemCount }),
   };
 }

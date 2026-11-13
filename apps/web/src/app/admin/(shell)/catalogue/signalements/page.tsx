@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { fetchAdminJson } from "@/lib/admin-api";
 import { adminCallOrThrow, requireAdminPage } from "../../../server";
+import { sheetLinkClass } from "../../../ui";
 import { ReportActions } from "./report-actions";
 
 /** « Signalements »: the open reports, one line per article (reasons, count, latest date), never who reported. */
@@ -47,6 +48,12 @@ export default async function AdminReportsPage() {
                   </Link>
                 </h2>
                 <p className="text-sm text-ink-muted">{report.shopName}</p>
+                <p>
+                  <Link href={`/admin/fiches/${report.productId}`} className={sheetLinkClass}>
+                    {t("openSheet")}
+                    <span className="sr-only"> {report.name ?? t("unnamed")}</span>
+                  </Link>
+                </p>
                 <p className="text-sm">
                   <span className="font-strong">{t("count", { count: report.count })}</span>
                   {" · "}

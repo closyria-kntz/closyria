@@ -47,12 +47,14 @@ const listRoute = defineAccess(
     summary: "The catalogue of « Découvrir »",
     description:
       `${CATALOG_PAGE_SIZE} visible articles per page (published shop, not hidden, not removed, with a photo and a ` +
-      "price); `nextCursor` gives the next page of the same sort. `sort`: `new` (first seen), `price_asc`, " +
+      "price); `nextCursor` gives the next page of the same sort. `sort`: `new` (put online at the shop, else first " +
+      "seen), `price_asc`, " +
       "`price_desc`, `popular` (the most kept, then the newest). `q` looks for every word (prefix, accents and case " +
       "aside) in the name, brand, shop, category or color. `priceMin`/`priceMax` in cents; `values` keeps the shops " +
-      `that claim all of them; \`onSale\`: a crossed price above the price; \`isNew\`: first seen less than ${NEW_DAYS} ` +
-      "days ago; `mySize`: leaves out the articles not available in her size (sizes of `profile`, else of her first " +
-      "profile; articles with no kind of size are kept). `wanted` and `sizeInStock` are hers only; " +
+      `that claim all of them; \`onSale\`: a crossed price above the price; \`isNew\`: put online (else first seen) less than ${NEW_DAYS} ` +
+      "days ago; `mySize` (strict): only the articles where one of her sizes for their kind is available, or whose " +
+      "only available size is « taille unique » (sizes of `profile`, else of her first profile; off without any " +
+      "size). `wanted` and `sizeInStock` are hers only; " +
       "`hasSizes`: whether that profile has any size at all.",
     request: { query: catalogQuerySchema },
     responses: {
@@ -72,8 +74,8 @@ const detailRoute = defineAccess(
       "Photos, sizes, her own item on it, and `likes`: how many people keep it, null under " +
       `${LIKES_THRESHOLD} (never who). \`close\`: up to ${CATALOG_DETAIL_LIMITS.close} of her own owned pieces ` +
       "(« Reçu », « Dans mon dressing ») of `profile` (else her first) with the same category and color, as " +
-      "`{ itemId, productId, name, imageUrl, stage }` whatever their catalogue visibility; `mySize`: her size for its " +
-      "kind of article; `url`: its page at the shop; " +
+      "`{ itemId, productId, name, imageUrl, stage }` whatever their catalogue visibility; `mySizes`: her sizes for " +
+      "its kind of article; `url`: its page at the shop; " +
       `\`sameShop\` up to ${CATALOG_DETAIL_LIMITS.sameShop}, \`sameStyle\` up to ` +
       `${CATALOG_DETAIL_LIMITS.sameStyle} from other shops (same category, color or a price within 20 %).`,
     request: { params: productParams, query: catalogDetailQuerySchema },

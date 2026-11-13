@@ -60,6 +60,19 @@ export const shops = pgTable(
     importEnabled: boolean("import_enabled").notNull().default(false),
     lastImportAt: timestamp("last_import_at", { withTimezone: true }),
     lastImportError: text("last_import_error"),
+    /**
+     * The import under way: `queued` (« Importer maintenant » or the night's plan), then `running` (the worker). Null
+     * when none; one older than the job expiry (6 h, `importStartedAt`) is a dead job, not an import under way.
+     */
+    importState: text("import_state"),
+    /** When the state above was set (queued, then started). */
+    importStartedAt: timestamp("import_started_at", { withTimezone: true }),
+    /** Pages and products read by the import under way, or by the last one once it is over. */
+    importPages: integer("import_pages").notNull().default(0),
+    importSeen: integer("import_seen").notNull().default(0),
+    /** New and removed products of the last complete import. */
+    lastImportCreated: integer("last_import_created"),
+    lastImportRemoved: integer("last_import_removed"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -68,6 +81,7 @@ export const shops = pgTable(
     check("shops_platform_check", oneOf(t.platform, platformSchema.options)),
     check("shops_capture_mode_check", oneOf(t.captureMode, captureModeSchema.options)),
     check("shops_listing_kind_check", oneOf(t.listingKind, listingKindSchema.options)),
+    check("shops_import_state_check", sql`${t.importState} IS NULL OR ${t.importState} IN ('queued', 'running')`),
     check(
       "shops_values_check",
       sql`${t.values} <@ ARRAY[${sql.raw(shopValueSchema.options.map((v) => `'${v}'`).join(", "))}]::text[]`,

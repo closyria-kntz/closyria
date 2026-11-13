@@ -18,14 +18,17 @@ export default async function AdminShellLayout({ children }: { children: ReactNo
   const items = adminNav.map((item) => ({ ...item, label: t(`nav.${item.key}`) }));
 
   return (
-    <div className="flex min-h-dvh flex-col bg-surface text-ink">
+    <div data-admin-shell className="flex min-h-dvh flex-col bg-surface text-ink">
       <a
         href="#admin-content"
         className={`sr-only rounded-button bg-surface-raised px-space-3 py-space-2 focus:not-sr-only focus:absolute focus:top-space-2 focus:left-space-2 ${focusRing}`}
       >
         {t("shell.skipToContent")}
       </a>
-      <header className="flex items-center justify-between gap-space-4 border-b border-line bg-surface-raised px-space-5 py-space-3">
+      {/* The menu stays in view while the page scrolls (sticky, opaque): on a phone its one-line row at the top (the
+          bar, taller there, scrolls away); on a computer the bar and, under it, the list of the full-height column.
+          `data-admin-shell` keeps anchors and focus below them. */}
+      <header className="flex shrink-0 items-center justify-between gap-space-4 border-b border-line bg-surface-raised px-space-5 py-space-3 md:sticky md:top-space-0 md:z-30 md:h-space-8 md:py-space-0">
         <p className="font-display text-lead font-strong">{t("shell.title")}</p>
         <div className="flex items-center gap-space-2">
           <CommandPalette
@@ -45,7 +48,7 @@ export default async function AdminShellLayout({ children }: { children: ReactNo
       <div className="flex flex-1 flex-col md:flex-row">
         <nav
           aria-label={t("shell.navLabel")}
-          className="border-b border-line bg-surface-sunken p-space-3 md:border-r md:border-b-0"
+          className="sticky top-space-0 z-20 border-b border-line bg-surface-sunken px-space-3 py-space-2 md:static md:z-auto md:border-r md:border-b-0 md:px-space-3 md:py-space-0"
         >
           <AdminNavLinks items={items} />
         </nav>

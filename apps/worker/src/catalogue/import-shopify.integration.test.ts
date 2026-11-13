@@ -235,6 +235,69 @@ describe("importShopifyCatalog", () => {
     expect(after?.lastImportError).toBeNull();
   });
 
+  it("writes its progress after each page for the admin, then the counts of the finished import", async () => {
+    servePages(twoPages([{ id: 1, title: "Robe" }]));
+    // A state left by a dead job (« En attente » a day ago) is replaced at the start.
+    const s = await newShop({ importState: "queued", importStartedAt: new Date(Date.now() - 86_400_000) });
+    const during: unknown[] = [];
+    deps.sleep = async () => {
+      const row = await shopRow(s.id);
+      during.push({ state: row?.importState, pages: row?.importPages, seen: row?.importSeen });
+      expect(Date.now() - (row?.importStartedAt?.getTime() ?? 0)).toBeLessThan(60_000);
+    };
+
+    await importShopifyCatalog(deps, s.id);
+
+    expect(during).toEqual([{ state: "running", pages: 1, seen: 250 }]);
+    expect(await shopRow(s.id)).toMatchObject({
+      importState: null,
+      importPages: 2,
+      importSeen: 251,
+      lastImportCreated: 251,
+      lastImportRemoved: 0,
+      lastImportError: null,
+    });
+
+    // The next import counts what is new and what is gone.
+    servePages(twoPages([{ id: 2, title: "Jupe" }]));
+    await importShopifyCatalog(deps, s.id);
+    expect(await shopRow(s.id)).toMatchObject({ importState: null, lastImportCreated: 1, lastImportRemoved: 1 });
+  });
+
+  it("clears « Import en cours » when the import stops on an error, and keeps the last counts", async () => {
+    const s = await newShop({ lastImportCreated: 4, lastImportRemoved: 1 });
+    routes[pagePath(1)] = { status: 429, headers: JSON_TYPE, body: "{}" };
+    await importShopifyCatalog(deps, s.id);
+    expect(await shopRow(s.id)).toMatchObject({
+      importState: null,
+      lastImportError: "blocked (HTTP 429)",
+      lastImportCreated: 4,
+      lastImportRemoved: 1,
+    });
+  });
+
+  it("dates each product by the shop's put-online date, else its creation date at the shop", async () => {
+    const s = await newShop();
+    servePages([
+      [
+        { id: 1, title: "Robe" },
+        { id: 2, title: "Jupe" },
+      ],
+    ]);
+    const listing = JSON.parse(routes[pagePath(1)]?.body as string) as { products: Record<string, unknown>[] };
+    const [first, second] = listing.products;
+    if (!first || !second) throw new Error("no products");
+    first.published_at = "2026-10-01T10:00:00Z";
+    second.published_at = null;
+    second.created_at = "2026-09-15T08:00:00Z";
+    routes[pagePath(1)] = { headers: JSON_TYPE, body: JSON.stringify(listing) };
+
+    await importShopifyCatalog(deps, s.id);
+
+    expect((await byExternalId(s.id, "1"))?.publishedAt?.toISOString()).toBe("2026-10-01T10:00:00.000Z");
+    expect((await byExternalId(s.id, "2"))?.publishedAt?.toISOString()).toBe("2026-09-15T08:00:00.000Z");
+  });
+
   it("marks a product gone from the shop as removed without touching wishes, updates prices, and brings it back", async () => {
     const s = await newShop();
     servePages([
@@ -451,6 +514,7 @@ describe("importShopifyCatalog", () => {
     const [first, second] = await Promise.all([importShopifyCatalog(deps, s.id), importShopifyCatalog(deps, s.id)]);
 
     expect([first.error, second.error].sort()).toEqual([null, "already_running"].sort());
+    expect((await shopRow(s.id))?.importState).toBeNull();
     expect(pageHits()).toEqual([pagePath(1)]);
     expect(shop.maxInFlight).toBe(1);
   });

@@ -100,9 +100,19 @@ export default async function AdminShopsPage({ searchParams }: Props) {
               {list.shops.map((shop) => (
                 <tr key={shop.id} className="border-t border-line">
                   <td className={`${cell} font-strong`}>
-                    <Link href={`/admin/boutiques/${shop.id}`} className="underline">
-                      {shop.name}
-                    </Link>
+                    <span className="flex flex-wrap items-center gap-space-2">
+                      <Link href={`/admin/boutiques/${shop.id}`} className="underline">
+                        {shop.name}
+                      </Link>
+                      {shop.importState !== null && (
+                        <span
+                          data-testid="importing-tag"
+                          className="inline-flex items-center rounded-button bg-premium-surface px-space-2 py-space-0-5 text-caption font-strong whitespace-nowrap text-premium"
+                        >
+                          {t("importing")}
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className={`${cell} break-all`}>{shop.domains.join(", ")}</td>
                   <td className={cell}>{t(`statuses.${shop.status}`)}</td>

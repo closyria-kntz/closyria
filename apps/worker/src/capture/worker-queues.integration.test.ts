@@ -247,6 +247,39 @@ describe("catalogue imports", () => {
     });
     expect(planned).toBe(1);
     expect(sent).toEqual([{ queue: "catalogue-import", data: { shopId: on.id }, options: { singletonKey: on.id } }]);
+    // « En attente » in the admin for the planned shop only.
+    const states = await handle.db
+      .select({ id: schema.shops.id, state: schema.shops.importState })
+      .from(schema.shops)
+      .where(eq(schema.shops.importState, "queued"));
+    expect(states.map((s) => s.id)).toEqual([on.id]);
+  });
+
+  it("does not turn a running import back to « En attente », but replaces a dead one", async () => {
+    const now = new Date();
+    const running = await importShop("plan-running", {
+      importState: "running",
+      importStartedAt: new Date(now.getTime() - 60_000),
+    });
+    const dead = await importShop("plan-dead", {
+      importState: "running",
+      importStartedAt: new Date(now.getTime() - 7 * 3_600_000),
+    });
+    const failing = await importShop("plan-failing", {});
+    await planCatalogueImports(
+      handle.db,
+      {
+        send: async (_queue, data) => {
+          if ((data as { shopId: string }).shopId === failing.id) throw new Error("queue down");
+        },
+      },
+      now,
+    );
+    const state = async (id: string) =>
+      (await handle.db.select().from(schema.shops).where(eq(schema.shops.id, id)))[0]?.importState;
+    expect(await state(running.id)).toBe("running");
+    expect(await state(dead.id)).toBe("queued");
+    expect(await state(failing.id)).toBeNull();
   });
 
   it("the handler plans on no data, imports a shop on { shopId } and fails anything else", async () => {

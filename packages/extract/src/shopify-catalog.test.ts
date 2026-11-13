@@ -79,6 +79,16 @@ describe("extractShopifyCatalogPage", () => {
     expect(p?.publishedAt).toBeUndefined();
   });
 
+  it("dates a product by its put-online date, else by its creation at the shop", () => {
+    const at = (fields: Record<string, unknown>) =>
+      extractShopifyCatalogPage(page([product(fields)]), ORIGIN)?.products[0]?.product.publishedAt;
+    expect(at({ published_at: "2026-10-01T10:00:00+02:00", created_at: "2026-09-01T10:00:00+02:00" })).toBe(
+      "2026-10-01T08:00:00.000Z",
+    );
+    expect(at({ published_at: null, created_at: "2026-09-01T10:00:00+02:00" })).toBe("2026-09-01T08:00:00.000Z");
+    expect(at({ published_at: undefined, created_at: "pas une date" })).toBeUndefined();
+  });
+
   it("uses the first option when none is a size, merges duplicate labels, ignores a compare-at price not above", () => {
     const result = extractShopifyCatalogPage(
       page([

@@ -147,6 +147,7 @@ const catalogProductSchema = z.object({
     .refine((h) => h !== "." && h !== ".."),
   body_html: z.string().nullish(),
   published_at: z.string().nullish(),
+  created_at: z.string().nullish(),
   vendor: z.string().nullish(),
   product_type: z.string().nullish(),
   tags: z.union([z.array(z.string()), z.string()]).nullish(),
@@ -224,7 +225,8 @@ function catalogProduct(item: unknown, origin: string): ShopifyCatalogPage["prod
   const colors = p.options.filter((o) => COLOR_OPTION.test(o.name.trim())).flatMap((o) => o.values);
   const candidate: Candidate = {
     name: cleanText(p.title, 300) ?? "",
-    publishedAt: cleanDate(p.published_at),
+    // The shop's put-online date (« Nouveautés »), else the day the product was created there.
+    publishedAt: cleanDate(p.published_at) ?? cleanDate(p.created_at),
     shopData: buildShopData({
       gtins: cleanList(p.variants.map((v) => cleanGtin(v.barcode))),
       category: cleanText(p.product_type, 200),

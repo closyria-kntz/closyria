@@ -45,10 +45,17 @@ articles de boutiques qu'elle ne connaissait pas, et les ajoute à ses envies sa
 - « Signaler » discret → motif (« Pas de la mode », « Contenu choquant », « Autre ») → « Merci, on regarde. »
 
 ### 3.3 Mes tailles (Compte)
-- Par profil : hauts (XS…XXL et 32…48), bas (32…48 et 24…34), chaussures (35…42) ; chaque type facultatif.
-- « Ma taille en stock » compare, sans tenir compte de la casse ni des espaces, la taille du profil à la liste des
-  tailles disponibles de l'article selon sa catégorie (haut / bas / chaussures) ; une catégorie sans type (accessoires)
-  ne filtre pas.
+- Par profil, **plusieurs tailles par type** (8 au plus, 10 caractères chacune), cochées en pastilles : hauts (XS…XXL
+  et 32…48), bas (XS…XXL, 24…34, 36…48 et W24…W34), chaussures (35…42 avec les demi-pointures 35,5…41,5) ; « Une autre
+  taille… » ajoute la sienne ; chaque type facultatif (tout décocher le vide).
+- « Ma taille en stock » est **strict** : seulement les articles d'un type à tailles (haut / bas / chaussures) dont
+  l'une de ses tailles de ce type est disponible, et ceux dont la seule taille disponible est « taille unique » (TU,
+  T.U., Taille unique, One size, OS, Unique, U). Accessoires, articles non classés, sans tailles ou d'un type pour
+  lequel elle n'a rien donné sont masqués. Sans aucune taille, le filtre reste grisé.
+- Les étiquettes des boutiques sont lues intelligemment (casse et espaces ignorés) : « 38 FR », « EU 38 », « T38 »,
+  « Taille 38 » = 38 ; « S/M » = S et M ; « M (38) » = M et 38 ; « 36-38 » = 36 et 38 ; 2XL = XXL ; 38,5 = 38.5 =
+  38 1/2 ; « W28 L32 » = W28. « Ta taille en stock » et la fiche (toutes ses tailles mises en avant) suivent la même
+  règle.
 
 ## 4. Admin
 
@@ -105,7 +112,10 @@ Prises pendant le chantier, en plus des décisions validées du §2 :
 - **« Proche » = ses propres pièces** : « Tu as déjà quelque chose de proche » ne regarde que son dressing, jamais celui d'une autre.
 - **Titre de Découvrir** : « Les pépites des petites boutiques » (choix de la fondatrice).
 - **Recherche plein texte maison**, accents repliés (chercher « ecru » trouve « écru »), sans moteur externe.
-- **« Mes tailles »** : listes proposées en choix (hauts XS…XXL puis 32…48 de 2 en 2 ; bas 24…34 puis 36…48 de 2 en 2 ; chaussures 35…42) et « Une autre taille… » en texte libre (10 caractères au plus) ; vider un champ envoie `null`.
+- **« Mes tailles »** : plusieurs tailles par type en pastilles (voir §3.3) ; vider un type envoie une liste vide. Les tailles déjà enregistrées (une par type) sont devenues des listes d'une taille (migration 0025).
+- **Avancement de l'import** (retours n°1) : la fiche boutique affiche « En attente », puis « Import en cours : page n, x articles lus » (relu toutes les 3 s), puis « Terminé à HH h MM : n articles (x nouveaux, y retirés) » (heure de Paris) ou l'erreur ; la liste des boutiques marque « Import en cours ». Un import resté « en cours » plus de 6 h (durée de vie du travail) est considéré comme mort.
+- **« Ma taille en stock » strict** (retours n°1) : tailles de son type ou « taille unique » seulement (§3.3) ; lecture des étiquettes partagée entre l'API (SQL `catalog_size_tokens`) et l'interface.
+- **Nouveautés** (retours n°1) : date de mise en ligne chez la boutique (Shopify `published_at`, sinon sa date de création chez Shopify), à défaut le jour où Closyria a vu l'article ; vaut pour le filtre, le tri et « Nouveautés de la semaine ».
 - Un article dont la page a disparu chez la boutique (erreur 404/410 à la capture) sort du catalogue ; il revient si la page répond de nouveau.
 
 ## 9. Hors de ce chantier

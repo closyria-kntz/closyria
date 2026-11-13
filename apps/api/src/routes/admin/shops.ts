@@ -10,6 +10,7 @@ import {
   adminShopListSchema,
   adminShopPatchSchema,
   adminShopSchema,
+  CATALOGUE_IMPORT_STALE_MS,
   type CaptureErrorCode,
   type CaptureMode,
   type CaptureStatus,
@@ -17,6 +18,7 @@ import {
   canonicalizeUrl,
   captureModeSchema,
   type ListingKind,
+  liveImportState,
   type Platform,
   type ShopStatus,
   type ShopValue,
@@ -224,7 +226,7 @@ function pgCode(error: unknown): string | undefined {
 
 type Outcome = { shop: Shop } | { error: "domain_taken" | "slug_taken" | "not_found" };
 
-function shape(shop: Shop, domains: string[], stats: ShopStats | undefined) {
+function shape(shop: Shop, domains: string[], stats: ShopStats | undefined, now: Date) {
   return {
     id: shop.id,
     name: shop.name,
@@ -239,6 +241,12 @@ function shape(shop: Shop, domains: string[], stats: ShopStats | undefined) {
     importEnabled: shop.importEnabled,
     lastImportAt: shop.lastImportAt?.toISOString() ?? null,
     lastImportError: shop.lastImportError,
+    importState: liveImportState(shop.importState, shop.importStartedAt, now),
+    importStartedAt: shop.importStartedAt?.toISOString() ?? null,
+    importPages: shop.importPages,
+    importSeen: shop.importSeen,
+    lastImportCreated: shop.lastImportCreated,
+    lastImportRemoved: shop.lastImportRemoved,
     health: shopHealth({
       status: shop.status as ShopStatus,
       captureMode: shop.captureMode as CaptureMode,
@@ -340,7 +348,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
         .map((shop) => {
           const last = lastBy.get(shop.id);
           return {
-            ...shape(shop, domains.get(shop.id) ?? [], stats.get(shop.id)),
+            ...shape(shop, domains.get(shop.id) ?? [], stats.get(shop.id), at),
             recentProducts: recentBy.get(shop.id) ?? 0,
             lastCapture: last ? captureShape(last) : null,
           };
@@ -389,7 +397,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       const [lastMonitor] = monitors;
       return c.json(
         {
-          ...shape(shop, domains.get(id) ?? [], s),
+          ...shape(shop, domains.get(id) ?? [], s, now()),
           successRate7d: s?.successRate7d ?? null,
           lastMonitors: s?.lastMonitors ?? [],
           lastMonitor: lastMonitor ? captureShape(lastMonitor) : null,
@@ -469,7 +477,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
         return outcome.error === "not_found" ? c.json(notFound, 404) : c.json({ error: outcome.error }, 409);
       }
       const [owned, stats] = await Promise.all([domainsOf(db, [id]), loadShopStats(db, now(), [id])]);
-      return c.json(shape(outcome.shop, owned.get(id) ?? [], stats.get(id)), 200);
+      return c.json(shape(outcome.shop, owned.get(id) ?? [], stats.get(id), now()), 200);
     })
     .openapi(createShopRoute, async (c) => {
       noteAudit(c, { action: "shop.create" });
@@ -543,7 +551,32 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       if (shop.mergedIntoId) return c.json({ error: "merged" } as const, 409);
       if (shop.status === "refused") return c.json({ error: "refused" } as const, 409);
       if (shop.platform !== "shopify") return c.json({ error: "not_shopify" } as const, 409);
-      const queued = await queue.importCatalogue(id);
+      // « En attente » before the job exists, so the worker's « running » is never overwritten; an import already
+      // under way keeps its state, a dead one (over 6 h) is replaced.
+      const at = now();
+      await db
+        .update(schema.shops)
+        .set({ importState: "queued", importStartedAt: at, importPages: 0, importSeen: 0 })
+        .where(
+          and(
+            eq(schema.shops.id, id),
+            sql`(${schema.shops.importState} is null or ${schema.shops.importStartedAt} is null
+              or ${schema.shops.importStartedAt} < ${new Date(at.getTime() - CATALOGUE_IMPORT_STALE_MS).toISOString()})`,
+          ),
+        );
+      let queued: boolean;
+      try {
+        queued = await queue.importCatalogue(id);
+      } catch (error) {
+        // Nothing was queued: no « En attente » left behind.
+        await db
+          .update(schema.shops)
+          .set({ importState: null })
+          .where(
+            and(eq(schema.shops.id, id), eq(schema.shops.importState, "queued"), eq(schema.shops.importStartedAt, at)),
+          );
+        throw error;
+      }
       noteAudit(c, { action: "shop.import", target: `shop:${id}`, details: { queued } });
       return c.json({ queued }, 202);
     })

@@ -274,6 +274,91 @@ describe("values and import of a shop", () => {
     expect(t.calls).toHaveLength(1);
   });
 
+  it("shows « En attente » once queued, the progress of a running import, and forgets a job dead for over 6 h", async () => {
+    const shop = await newShop({ platform: "shopify" });
+    const fresh = await json(await call("GET", `/admin/shops/${shop.id}`));
+    expect(fresh).toMatchObject({
+      importState: null,
+      importStartedAt: null,
+      importPages: 0,
+      importSeen: 0,
+      lastImportCreated: null,
+      lastImportRemoved: null,
+    });
+
+    await call("POST", `/admin/shops/${shop.id}/import`);
+    expect(await json(await call("GET", `/admin/shops/${shop.id}`))).toMatchObject({
+      importState: "queued",
+      importStartedAt: NOW.toISOString(),
+    });
+    // The list tags it too.
+    const listed = (await json(await call("GET", "/admin/shops"))).shops.find((s: { id: string }) => s.id === shop.id);
+    expect(listed.importState).toBe("queued");
+
+    // The worker runs it: a second « Importer maintenant » leaves its progress alone.
+    const started = new Date(NOW.getTime() - 60_000);
+    await t.db
+      .update(schema.shops)
+      .set({ importState: "running", importStartedAt: started, importPages: 3, importSeen: 712 })
+      .where(eq(schema.shops.id, shop.id));
+    await call("POST", `/admin/shops/${shop.id}/import`);
+    expect(await json(await call("GET", `/admin/shops/${shop.id}`))).toMatchObject({
+      importState: "running",
+      importStartedAt: started.toISOString(),
+      importPages: 3,
+      importSeen: 712,
+    });
+
+    // Started over 6 h ago: the job died, nothing is under way any more, and a new import replaces it.
+    const dead = new Date(NOW.getTime() - 6 * 3_600_000 - 1000);
+    await t.db.update(schema.shops).set({ importStartedAt: dead }).where(eq(schema.shops.id, shop.id));
+    expect((await json(await call("GET", `/admin/shops/${shop.id}`))).importState).toBeNull();
+    await call("POST", `/admin/shops/${shop.id}/import`);
+    expect(await json(await call("GET", `/admin/shops/${shop.id}`))).toMatchObject({
+      importState: "queued",
+      importStartedAt: NOW.toISOString(),
+      importPages: 0,
+      importSeen: 0,
+    });
+  });
+
+  it("leaves no « En attente » behind when the queue cannot take the import", async () => {
+    const failing = await createCatalogHarness({
+      now: () => NOW,
+      queue: {
+        enqueue: async () => {},
+        importCatalogue: async () => {
+          throw new Error("queue down");
+        },
+      },
+    });
+    try {
+      const boss = await failing.signIn();
+      await failing.db
+        .update(schema.user)
+        .set({ role: "admin", isAnonymous: false })
+        .where(eq(schema.user.id, boss.userId));
+      await failing.db
+        .update(schema.session)
+        .set({ authMethod: "passkey" })
+        .where(eq(schema.session.userId, boss.userId));
+      const [shop] = await failing.db
+        .insert(schema.shops)
+        .values({ name: "S", slug: "queue-down", status: "published", platform: "shopify" })
+        .returning();
+      if (!shop) throw new Error("no shop");
+      const res = await failing.app.request(`/api/admin/shops/${shop.id}/import`, {
+        method: "POST",
+        headers: { origin: BASE_URL, cookie: boss.cookie },
+      });
+      expect(res.status).toBe(500);
+      const [row] = await failing.db.select().from(schema.shops).where(eq(schema.shops.id, shop.id));
+      expect(row?.importState).toBeNull();
+    } finally {
+      await failing.stop();
+    }
+  }, 60_000);
+
   it("refuses with 409 the import of a merged or refused shop; a pending or draft one may be imported", async () => {
     const target = await newShop({ platform: "shopify" });
     const merged = await newShop({ platform: "shopify", mergedIntoId: target.id });

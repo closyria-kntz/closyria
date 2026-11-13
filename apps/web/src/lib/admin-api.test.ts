@@ -164,6 +164,12 @@ const shop = {
   importEnabled: false,
   lastImportAt: null,
   lastImportError: null,
+  importState: null,
+  importStartedAt: null,
+  importPages: 0,
+  importSeen: 0,
+  lastImportCreated: null,
+  lastImportRemoved: null,
   createdAt: "2026-11-01T10:00:00.000Z",
 };
 

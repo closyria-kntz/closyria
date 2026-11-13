@@ -70,10 +70,10 @@ export const profiles = pgTable(
     /** Name of a palette token, never a raw colour. */
     color: text("color").notNull(),
     position: integer("position").notNull().default(0),
-    /** « Mes tailles »: free text (« M », « 38 »), at most 10 characters. */
-    sizeTop: text("size_top"),
-    sizeBottom: text("size_bottom"),
-    sizeShoes: text("size_shoes"),
+    /** « Mes tailles »: several per kind (« M », « 38 »), each at most 10 characters (API), at most 8 per kind. */
+    sizesTop: text("size_top").array().notNull().default(sql`'{}'::text[]`),
+    sizesBottom: text("size_bottom").array().notNull().default(sql`'{}'::text[]`),
+    sizesShoes: text("size_shoes").array().notNull().default(sql`'{}'::text[]`),
     createdAt: createdAt(),
   },
   (t) => [
@@ -85,9 +85,9 @@ export const profiles = pgTable(
       sql`${t.childDetail} IS NULL OR ${oneOf(t.childDetail, childDetailSchema.options)}`,
     ),
     check("profiles_color_check", oneOf(t.color, profileColorSchema.options)),
-    check("profiles_size_top_check", sql`char_length(${t.sizeTop}) <= 10`),
-    check("profiles_size_bottom_check", sql`char_length(${t.sizeBottom}) <= 10`),
-    check("profiles_size_shoes_check", sql`char_length(${t.sizeShoes}) <= 10`),
+    check("profiles_size_top_check", sql`cardinality(${t.sizesTop}) <= 8`),
+    check("profiles_size_bottom_check", sql`cardinality(${t.sizesBottom}) <= 8`),
+    check("profiles_size_shoes_check", sql`cardinality(${t.sizesShoes}) <= 8`),
   ],
 );
 

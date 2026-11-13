@@ -27,6 +27,13 @@ async function axeLightAndDark(page: Page) {
   await page.emulateMedia({ colorScheme: "light" });
 }
 
+/** The admin's element under a point of the window (what a tap there would reach). */
+const tagAt = (page: Page, x: number, y: number) =>
+  page.evaluate(
+    ([px, py]) => document.elementFromPoint(px ?? 0, py ?? 0)?.closest("header, nav, main")?.tagName,
+    [x, y],
+  );
+
 /** A Shopify shop of its own, without any domain or test page. */
 async function seedShop(db: pg.Pool, status: "pending" | "published") {
   const tag = randomUUID().slice(0, 8);
@@ -94,8 +101,13 @@ test("une admin valide une boutique, coche ses valeurs et lance l’import de so
   expect(saved.rows).toEqual([{ values: ["made_in_france", "free_returns"], import_enabled: true }]);
   await expect(catalogue.getByText("Jamais")).toBeVisible();
 
+  await expect(catalogue.getByTestId("import-state")).toHaveText("Aucun import pour l’instant");
   await catalogue.getByRole("button", { name: "Importer maintenant" }).click();
   await expect(catalogue.getByText(/Import lancé|déjà en cours/)).toBeVisible();
+  // « En attente », then the worker stops at once (no address): the page reads it again on its own.
+  await expect(catalogue.getByTestId("import-state")).toHaveText("Adresse de la boutique introuvable", {
+    timeout: 15_000,
+  });
   const jobs = await db.query<{ n: number }>(
     "select count(*)::int as n from pgboss.job where name = 'catalogue-import' and singleton_key = $1",
     [shop.id],
@@ -131,6 +143,10 @@ test("une admin classe un article « À classer » et l’applique aux articles 
       page.getByRole("listitem").filter({ has: page.getByRole("heading", { name, exact: true }) });
     const form = row(`Robe portefeuille ${shop.tag}`);
     await expect(form).toBeVisible();
+    // Each row opens the article's admin sheet, by a written link a finger high.
+    const sheet = form.getByRole("link", { name: `Voir la fiche Robe portefeuille ${shop.tag}` });
+    await expect(sheet).toHaveAttribute("href", `/admin/fiches/${first}`);
+    expect((await sheet.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
     await axeLightAndDark(page);
 
     await form.getByRole("combobox", { name: "Type" }).selectOption({ label: category });
@@ -173,6 +189,9 @@ test("une admin masque du catalogue un article signalé", async ({ page, request
   const line = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name }) });
   await expect(line).toContainText("1 signalement");
   await expect(line).toContainText("Choquant (1)");
+  const sheet = line.getByRole("link", { name: `Voir la fiche ${name}` });
+  await expect(sheet).toHaveAttribute("href", `/admin/fiches/${product}`);
+  expect((await sheet.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   await axeLightAndDark(page);
 
   await line.getByRole("button", { name: "Masquer du catalogue" }).click();
@@ -197,6 +216,11 @@ test("une admin masque du catalogue un article signalé", async ({ page, request
   await expect(page).toHaveURL(/\/admin\/fiches\?catalogue=hidden/);
   await page.getByRole("link", { name }).click();
   await expect(page.getByText("Masqué de « Découvrir » le")).toBeVisible();
+  // The article at the shop, in a new tab.
+  const atShop = page.getByRole("link", { name: `Voir chez ${shop.name} (s’ouvre dans un nouvel onglet)` });
+  await expect(atShop).toHaveAttribute("href", /^https:\/\/admin-catalogue\.e2e\.test\//);
+  await expect(atShop).toHaveAttribute("target", "_blank");
+  await expect(atShop).toHaveAttribute("rel", "noopener noreferrer");
   await axeLightAndDark(page);
   await page.getByRole("button", { name: "Remettre dans le catalogue" }).click();
   await expect(page.getByText("Article remis dans le catalogue.")).toBeVisible();
@@ -206,4 +230,92 @@ test("une admin masque du catalogue un article signalé", async ({ page, request
     [product],
   );
   expect(back.rows).toEqual([{ hidden: false }]);
+});
+
+test("l’avancement d’un import se lit tout seul dans la fiche boutique, et la liste le signale", async ({
+  page,
+  request,
+  db,
+  userAgentTag,
+}) => {
+  const shop = await seedShop(db, "published");
+  await db.query(
+    "update shops set import_state = 'running', import_started_at = now(), import_pages = 3, import_seen = 712 where id = $1",
+    [shop.id],
+  );
+  await signInAsAdmin(page, request, db, userAgentTag);
+
+  await page.goto(`/admin/boutiques?status=published`);
+  const listed = page.getByRole("row").filter({ has: page.getByRole("link", { name: shop.name }) });
+  await expect(listed.getByTestId("importing-tag")).toHaveText("Import en cours");
+
+  await page.goto(`/admin/boutiques/${shop.id}`);
+  const catalogue = page.getByRole("region", { name: "Catalogue" });
+  const state = catalogue.getByTestId("import-state");
+  await expect(state).toHaveText("Import en cours : page 3, 712 articles lus");
+  await expect(catalogue.getByRole("button", { name: "Importer maintenant" })).toBeDisabled();
+  await axeLightAndDark(page);
+
+  // The worker reads the next page: the status follows without a reload.
+  await db.query("update shops set import_pages = 4, import_seen = 962 where id = $1", [shop.id]);
+  await expect(state).toHaveText("Import en cours : page 4, 962 articles lus", { timeout: 15_000 });
+  // It ends (13:05 UTC is 14 h 05 in Paris in November).
+  await db.query(
+    `update shops set import_state = null, last_import_at = '2026-11-13T13:05:00Z', last_import_error = null,
+       last_import_created = 12, last_import_removed = 3, import_seen = 962 where id = $1`,
+    [shop.id],
+  );
+  await expect(state).toHaveText("Terminé à 14 h 05 : 962 articles (12 nouveaux, 3 retirés)", { timeout: 15_000 });
+  await expect(catalogue.getByRole("button", { name: "Importer maintenant" })).toBeEnabled();
+
+  // A job dead for over 6 h is not « en cours » any more.
+  await db.query(
+    "update shops set import_state = 'running', import_started_at = now() - interval '7 hours' where id = $1",
+    [shop.id],
+  );
+  await page.reload();
+  await expect(state).toHaveText("Terminé à 14 h 05 : 962 articles (12 nouveaux, 3 retirés)");
+  await page.goto(`/admin/boutiques?status=published`);
+  await expect(listed).toBeVisible();
+  await expect(listed.getByTestId("importing-tag")).toHaveCount(0);
+});
+
+test("la barre et le menu de l’admin restent visibles quand la page défile", async ({
+  page,
+  request,
+  db,
+  userAgentTag,
+}) => {
+  await signInAsAdmin(page, request, db, userAgentTag);
+  await page.goto("/admin/catalogue/signalements");
+  await expect(page.getByRole("heading", { level: 1, name: "Signalements" })).toBeVisible();
+  // A page much taller than the window.
+  await page.evaluate(() => {
+    const filler = document.createElement("div");
+    filler.style.height = "4000px";
+    filler.dataset.testid = "filler";
+    document.querySelector("#admin-content")?.append(filler);
+  });
+  await page.evaluate(() => window.scrollTo(0, 2500));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(2000);
+
+  const header = page.locator("header").first();
+  const nav = page.getByRole("navigation", { name: "Navigation de l’administration" });
+  const link = nav.getByRole("link").first();
+  await expect(link).toBeInViewport();
+  const linkBox = await link.boundingBox();
+  expect(linkBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect(await tagAt(page, (linkBox?.x ?? 0) + 4, (linkBox?.y ?? 0) + (linkBox?.height ?? 0) / 2)).toBe("NAV");
+  if ((page.viewportSize()?.width ?? 0) >= 768) {
+    // Computer: the bar stays at the top, the menu's list right under it, never under it.
+    const headerBox = await header.boundingBox();
+    expect(headerBox?.y).toBe(0);
+    expect(linkBox?.y ?? 0).toBeGreaterThanOrEqual(headerBox?.height ?? 0);
+    expect(await tagAt(page, (headerBox?.width ?? 0) / 2, (headerBox?.height ?? 0) / 2)).toBe("HEADER");
+  } else {
+    // Phone: the menu row is pinned at the top of the window.
+    expect(Math.round((await nav.boundingBox())?.y ?? -1)).toBe(0);
+  }
+  await link.click();
+  await expect(page).toHaveURL(/\/admin$/);
 });

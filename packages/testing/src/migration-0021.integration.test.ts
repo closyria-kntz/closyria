@@ -50,13 +50,11 @@ describe("migration 0021 (catalogue de Découvrir)", () => {
           client.query(`update product_reports set reason = 'spam' where product_id = $1`, [productId]),
         ).rejects.toThrow(/product_reports_reason_check/);
 
-        const profile = await client.query<{ size_top: string | null; size_shoes: string | null }>(
+        // « Mes tailles » are lists since 0025 (its own test covers them).
+        const profile = await client.query<{ size_top: string[]; size_shoes: string[] }>(
           `insert into profiles (user_id, name, audience, color) values ('u', 'P', 'women', 'rose') returning size_top, size_bottom, size_shoes`,
         );
-        expect(profile.rows[0]).toMatchObject({ size_top: null, size_shoes: null });
-        await expect(client.query(`update profiles set size_top = '12345678901'`)).rejects.toThrow(
-          /profiles_size_top_check/,
-        );
+        expect(profile.rows[0]).toMatchObject({ size_top: [], size_shoes: [] });
 
         await client.query(`delete from "user" where id = 'u'`);
         const left = await client.query(`select 1 from product_reports`);

@@ -115,13 +115,28 @@ const centsSchema = z.number().int().nonnegative().max(100_000_000);
 const dateTimeSchema = z.iso.datetime({ offset: true });
 const nameOf = (max: number) => z.string().trim().min(1).max(max);
 
+/** Longest size of « Mes tailles » (« W28 L32 », « 38,5 »…). */
 export const MAX_PROFILE_SIZE = 10;
-const sizeField = z.string().trim().min(1).max(MAX_PROFILE_SIZE).nullable();
-/** « Mes tailles » of a profile: each one optional, null when she has none. */
+/** Most sizes of one kind (hauts, bas, chaussures) in « Mes tailles ». */
+export const MAX_PROFILE_SIZES = 8;
+/** One kind of « Mes tailles »: several sizes, trimmed, without repeats (case aside); empty when she has none. */
+const sizeList = z
+  .array(z.string().trim().min(1).max(MAX_PROFILE_SIZE))
+  .max(MAX_PROFILE_SIZES)
+  .transform((sizes) => {
+    const seen = new Set<string>();
+    return sizes.filter((size) => {
+      const key = size.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  });
+/** « Mes tailles » of a profile: several per kind, each kind optional (an empty list). */
 export const profileSizesSchema = z.object({
-  sizeTop: sizeField,
-  sizeBottom: sizeField,
-  sizeShoes: sizeField,
+  sizesTop: sizeList,
+  sizesBottom: sizeList,
+  sizesShoes: sizeList,
 });
 export type ProfileSizes = z.infer<typeof profileSizesSchema>;
 

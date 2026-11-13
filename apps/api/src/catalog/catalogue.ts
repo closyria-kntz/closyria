@@ -11,6 +11,7 @@ import {
   type ReportReason,
   type SizeKind,
   sizeKindsByCategory,
+  sizeTokensOf,
 } from "@closyria/shared";
 import { z } from "zod";
 import { type KeyType, privateMediaUrl, validKeyValue } from "../wardrobe/item-view";
@@ -23,7 +24,7 @@ export const CATALOG_PAGE_SIZE = 24;
 export const CATALOG_DETAIL_LIMITS = { close: 3, sameShop: 8, sameStyle: 8 } as const;
 /** « Aimé par N personnes » only from this many people. */
 export const LIKES_THRESHOLD = 3;
-/** `isNew`: first seen by Closyria less than this many days ago. */
+/** `isNew`: put online by the shop (else first seen by Closyria) less than this many days ago. */
 export const NEW_DAYS = 7;
 /** « Dans le même style »: a price within this share of the article's counts as close. */
 const NEAR_PRICE_RATIO = 0.2;
@@ -40,7 +41,7 @@ export class InvalidCatalogCursorError extends Error {}
 export type Viewer = {
   userId: string;
   profileId: string | null;
-  sizes: Record<SizeKind, string | null>;
+  sizes: Record<SizeKind, string[]>;
   sizeKinds: ReadonlyMap<string, SizeKind>;
 };
 
@@ -51,9 +52,9 @@ export type Viewer = {
 export async function loadViewer(db: Database, userId: string, profileId: string | undefined): Promise<Viewer> {
   const columns = {
     id: schema.profiles.id,
-    sizeTop: schema.profiles.sizeTop,
-    sizeBottom: schema.profiles.sizeBottom,
-    sizeShoes: schema.profiles.sizeShoes,
+    sizesTop: schema.profiles.sizesTop,
+    sizesBottom: schema.profiles.sizesBottom,
+    sizesShoes: schema.profiles.sizesShoes,
   };
   const own = profileId
     ? await db
@@ -79,9 +80,9 @@ export async function loadViewer(db: Database, userId: string, profileId: string
     userId,
     profileId: profile?.id ?? null,
     sizes: {
-      top: profile?.sizeTop ?? null,
-      bottom: profile?.sizeBottom ?? null,
-      shoes: profile?.sizeShoes ?? null,
+      top: profile?.sizesTop ?? [],
+      bottom: profile?.sizesBottom ?? [],
+      shoes: profile?.sizesShoes ?? [],
     },
     sizeKinds: sizeKindsByCategory(categories),
   };
@@ -89,35 +90,54 @@ export async function loadViewer(db: Database, userId: string, profileId: string
 
 // --- SQL building blocks. The product is `p`, its shop `s`, its first photo `img`. ---
 
-/** Size labels compared without case or spaces (as `sizeMatches`). */
-const squash = (expr: SQL) => sql`nullif(lower(regexp_replace(${expr}, '\\s', '', 'g')), '')`;
+/** Whether she gave any size at all (« Mes tailles »): without one, « Ma taille en stock » cannot filter. */
+export const hasSizes = (viewer: Viewer) => Object.values(viewer.sizes).some((sizes) => sizeTokensOf(sizes).length > 0);
+
+const textArray = (values: string[]) =>
+  sql`array[${sql.join(
+    values.map((v) => sql`${v}`),
+    sql`, `,
+  )}]::text[]`;
 
 /**
- * Her size for the product's kind of article, squashed; null when the kind has none (accessories, unfiled) or she
- * gave none for it.
+ * Whether one of her sizes for the product's kind of article (`viewer.sizeKinds`) is available, with the label
+ * matching of `sizeMatches` (`catalog_size_tokens`, migration 0025); null when the kind has none (accessories,
+ * unfiled) or she gave none for it.
  */
-function sizeOfKind(viewer: Viewer): SQL {
+function kindInStock(viewer: Viewer): SQL {
   const idsByKind: Record<SizeKind, string[]> = { top: [], bottom: [], shoes: [] };
   for (const [categoryId, kind] of viewer.sizeKinds) idsByKind[kind].push(categoryId);
-  const branches = (Object.keys(idsByKind) as SizeKind[])
-    .filter((kind) => viewer.sizes[kind] !== null && idsByKind[kind].length > 0)
-    .map(
-      (kind) =>
-        sql`when p.category_id in (${sql.join(
-          idsByKind[kind].map((id) => sql`${id}::uuid`),
-          sql`, `,
-        )}) then ${squash(sql`${viewer.sizes[kind]}::text`)}`,
-    );
-  return branches.length ? sql`(case ${sql.join(branches, sql` `)} end)` : sql`null::text`;
+  const branches = (Object.keys(idsByKind) as SizeKind[]).flatMap((kind) => {
+    const tokens = sizeTokensOf(viewer.sizes[kind]);
+    if (tokens.length === 0 || idsByKind[kind].length === 0) return [];
+    return [
+      sql`when p.category_id in (${sql.join(
+        idsByKind[kind].map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )}) then exists (
+        select 1 from product_sizes ps
+        where ps.product_id = p.id and ps.available and catalog_size_tokens(ps.label) && ${textArray(tokens)}
+      )`,
+    ];
+  });
+  return branches.length ? sql`(case ${sql.join(branches, sql` `)} end)` : sql`null::boolean`;
 }
 
-/** `sizeInStock`: null without a size for that kind, else whether her size is available. */
-function sizeInStock(viewer: Viewer): SQL {
-  const size = sizeOfKind(viewer);
-  return sql`(case when ${size} is null then null else exists (
+/** Its only available size is « taille unique » (TU, One size…): it fits her whatever its kind. */
+const oneSizeOnly = sql`(exists (select 1 from product_sizes ps where ps.product_id = p.id and ps.available)
+  and not exists (
     select 1 from product_sizes ps
-    where ps.product_id = p.id and ps.available and ${squash(sql`ps.label`)} = ${size}
-  ) end)`;
+    where ps.product_id = p.id and ps.available and not catalog_is_one_size(ps.label)
+  ))`;
+
+/**
+ * `sizeInStock` (« Ta taille en stock », and the strict « Ma taille en stock » filter: `is true`): null when she has
+ * no size at all; true for an article in « taille unique » only; else whether one of her sizes for its kind is
+ * available, null when its kind takes none of hers (accessories, unfiled, a kind she left empty).
+ */
+function sizeInStock(viewer: Viewer): SQL {
+  if (!hasSizes(viewer)) return sql`null::boolean`;
+  return sql`(case when ${oneSizeOnly} then true else ${kindInStock(viewer)} end)`;
 }
 
 const wanted = (viewer: Viewer) =>
@@ -203,12 +223,14 @@ async function selectCards(
 
 type SortKey = { expr: SQL; type: KeyType };
 const idKey: SortKey = { expr: sql`p.id`, type: "uuid" };
-const createdKey: SortKey = { expr: sql`p.created_at`, type: "timestamptz" };
+/** The shop's put-online date (Shopify `published_at`), else the day Closyria first saw the article. */
+const onlineSince = sql`coalesce(p.published_at, p.created_at)`;
+const onlineKey: SortKey = { expr: onlineSince, type: "timestamptz" };
 const priceKey: SortKey = { expr: sql`p.price_cents`, type: "integer" };
 
 /** Keyset of each sort: every key is non-null on a visible article and they all go one way. */
 const SORTS: Record<CatalogSort, { keys: SortKey[]; desc: boolean }> = {
-  new: { keys: [createdKey, idKey], desc: true },
+  new: { keys: [onlineKey, idKey], desc: true },
   price_asc: { keys: [priceKey, idKey], desc: false },
   price_desc: { keys: [priceKey, idKey], desc: true },
   /**
@@ -218,7 +240,7 @@ const SORTS: Record<CatalogSort, { keys: SortKey[]; desc: boolean }> = {
   popular: {
     keys: [
       { expr: sql`(case when ${likesOf} >= ${LIKES_THRESHOLD} then ${likesOf} else 0 end)`, type: "integer" },
-      createdKey,
+      onlineKey,
       idKey,
     ],
     desc: true,
@@ -334,9 +356,10 @@ function filters(query: CatalogQuery, viewer: Viewer, now: Date): SQL[] {
     );
   }
   if (query.onSale) where.push(onSale);
-  if (query.isNew) where.push(sql`p.created_at >= ${new Date(now.getTime() - NEW_DAYS * 86_400_000).toISOString()}`);
-  // Only the articles known not to be in her size are left out: no kind of size (bags) or no size of hers keeps them.
-  if (query.mySize) where.push(sql`${sizeInStock(viewer)} is distinct from false`);
+  if (query.isNew) where.push(sql`${onlineSince} >= ${new Date(now.getTime() - NEW_DAYS * 86_400_000).toISOString()}`);
+  // Strict: only what is known to fit her (one of her sizes available, or « taille unique »). Without any size of
+  // hers the filter is off (`hasSizes`, the web greys it out).
+  if (query.mySize && hasSizes(viewer)) where.push(sql`${sizeInStock(viewer)} is true`);
   return where;
 }
 
@@ -372,7 +395,7 @@ export async function listCatalog(db: Database, viewer: Viewer, query: CatalogQu
   const last = page.at(-1);
   return {
     items: page.map(toCard),
-    hasSizes: Object.values(viewer.sizes).some((size) => size !== null && size.trim() !== ""),
+    hasSizes: hasSizes(viewer),
     nextCursor:
       rows.length > CATALOG_PAGE_SIZE && last
         ? encodeCursor(
@@ -401,7 +424,7 @@ export async function loadCatalogDetail(
   const categoryId = row.category_id as string | null;
   const colorId = row.color_id as string | null;
   const price = Number(row.price_cents);
-  const newest = sql`p.created_at desc, p.id desc`;
+  const newest = sql`${onlineSince} desc, p.id desc`;
 
   const [images, sizes, mine, close, sameShop, sameStyle] = await Promise.all([
     db
@@ -446,13 +469,13 @@ export async function loadCatalogDetail(
   const likes = Number(row.likes);
   const own = mine[0];
   const kind = categoryId ? viewer.sizeKinds.get(categoryId) : undefined;
-  const mySize = kind ? viewer.sizes[kind] : null;
+  const mySizes = kind ? viewer.sizes[kind].filter((size) => size.trim() !== "") : [];
   return {
     ...toCard(row),
     images: images.map((i) => catalogImageUrl(i.id)),
     url: row.canonical_url as string,
     sizes,
-    mySize: mySize?.trim() ? mySize : null,
+    mySizes,
     likes: likes >= LIKES_THRESHOLD ? likes : null,
     myItem: own ? { itemId: own.id, stage: own.stage as ItemStage } : null,
     close,

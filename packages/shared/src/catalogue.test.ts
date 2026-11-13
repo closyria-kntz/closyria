@@ -3,27 +3,100 @@ import {
   catalogDetailSchema,
   catalogQuerySchema,
   isHttpUrl,
+  isOneSize,
   reportInputSchema,
   SIZE_SUGGESTIONS,
   sizeKindOf,
   sizeKindsByCategory,
   sizeMatches,
+  sizeTokens,
+  sizeTokensOf,
 } from "./catalogue";
 import { profileSizesSchema } from "./wardrobe";
 
-describe("sizeMatches", () => {
-  it("ignores case and spaces", () => {
-    expect(sizeMatches("m", ["S", "M"])).toBe(true);
-    expect(sizeMatches(" 38 ", ["36", "38"])).toBe(true);
+describe("sizeTokens", () => {
+  const finds = (label: string, ...sizes: string[]) =>
+    it(`« ${label} » names ${sizes.join(" and ")}`, () => {
+      for (const size of sizes) expect(sizeMatches([size], [label]), size).toBe(true);
+    });
+  finds("38 FR", "38");
+  finds("FR 38", "38");
+  finds("EU 38", "38");
+  finds("T38", "38");
+  finds("Taille 38", "38");
+  finds("S/M", "S", "M");
+  finds("M - 38", "M", "38");
+  finds("M (38)", "M", "38");
+  finds("36-38", "36", "38");
+  finds("36/38", "36", "38");
+  finds("2XL", "XXL", "2XL");
+  finds("XXL", "2XL");
+  finds("3XL", "XXXL");
+  finds("XXXL", "3XL");
+  finds("38,5", "38.5", "38,5", "38 1/2");
+  finds("38.5", "38,5");
+  finds("38 1/2", "38,5");
+  finds("W28", "W28", "w 28");
+  finds("W28 L32", "W28");
+  finds(" m ", "M");
+  finds("x l", "XL");
+
+  it("keeps sizes apart that only look alike", () => {
+    expect(sizeMatches(["S"], ["XS", "XXS"])).toBe(false);
+    expect(sizeMatches(["L"], ["XL", "2XL"])).toBe(false);
+    expect(sizeMatches(["38"], ["38,5", "380", "T36"])).toBe(false);
+    expect(sizeMatches(["38,5"], ["38"])).toBe(false);
+    expect(sizeMatches(["W28"], ["28", "W29 L28"])).toBe(false);
+    expect(sizeMatches(["M"], ["Taille unique"])).toBe(false);
   });
-  it("is false when the size is not there, null without a profile size", () => {
-    expect(sizeMatches("38", ["36"])).toBe(false);
-    expect(sizeMatches(null, ["36"])).toBeNull();
+
+  it("gives one sorted form per size, without repeats", () => {
+    expect(sizeTokens("M (38)")).toEqual(["38", "m", "m(38)"]);
+    expect(sizeTokens("XXL")).toEqual(["2xl", "xxl"]);
+    expect(sizeTokens("38 1/2")).toEqual(["38.5"]);
+    expect(sizeTokens("   ")).toEqual([]);
+    expect(sizeTokensOf(["M", "m", "38"])).toEqual(["38", "m"]);
+  });
+});
+
+describe("sizeMatches", () => {
+  it("is true when any of her sizes is available, ignoring case and spaces", () => {
+    expect(sizeMatches(["m"], ["S", "M"])).toBe(true);
+    expect(sizeMatches([" 38 "], ["36", "38"])).toBe(true);
+    expect(sizeMatches(["M", "40"], ["40 FR"])).toBe(true);
+  });
+  it("is false when none is there, null without a size of hers", () => {
+    expect(sizeMatches(["38", "S"], ["36", "XL"])).toBe(false);
+    expect(sizeMatches([], ["36"])).toBeNull();
+    expect(sizeMatches(["  "], ["36"])).toBeNull();
+  });
+});
+
+describe("isOneSize", () => {
+  it("knows the ways shops write « taille unique »", () => {
+    for (const label of [
+      "TU",
+      "T.U.",
+      "t.u",
+      "Taille unique",
+      "TAILLE UNIQUE",
+      "One size",
+      "one-size",
+      "OS",
+      "Unique",
+      "U",
+    ]) {
+      expect(isOneSize(label), label).toBe(true);
+    }
+  });
+  it("is false for real sizes", () => {
+    for (const label of ["M", "38", "XS", "S/M", "XXL", "Taille 38", "W28"])
+      expect(isOneSize(label), label).toBe(false);
   });
 });
 
 describe("SIZE_SUGGESTIONS", () => {
-  it("offers the letters and 32 to 48 for tops, 24 to 48 for bottoms, 35 to 42 for shoes", () => {
+  it("offers letters and 32 to 48 for tops; letters, 24 to 48 and W24 to W34 for bottoms; 35 to 42 by halves for shoes", () => {
     expect(SIZE_SUGGESTIONS.top).toEqual([
       "XS",
       "S",
@@ -41,28 +114,22 @@ describe("SIZE_SUGGESTIONS", () => {
       "46",
       "48",
     ]);
-    expect(SIZE_SUGGESTIONS.bottom.slice(0, 11)).toEqual([
-      "24",
-      "25",
-      "26",
-      "27",
-      "28",
-      "29",
-      "30",
-      "31",
-      "32",
-      "33",
-      "34",
+    expect(SIZE_SUGGESTIONS.bottom).toEqual([
+      ...["XS", "S", "M", "L", "XL", "XXL"],
+      ...["24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34"],
+      ...["36", "38", "40", "42", "44", "46", "48"],
+      ...["W24", "W25", "W26", "W27", "W28", "W29", "W30", "W31", "W32", "W33", "W34"],
     ]);
-    expect(SIZE_SUGGESTIONS.bottom.slice(11)).toEqual(["36", "38", "40", "42", "44", "46", "48"]);
-    expect(SIZE_SUGGESTIONS.shoes).toEqual(["35", "36", "37", "38", "39", "40", "41", "42"]);
+    expect(SIZE_SUGGESTIONS.shoes).toEqual([
+      ...["35", "35,5", "36", "36,5", "37", "37,5", "38", "38,5", "39", "39,5", "40", "40,5", "41", "41,5", "42"],
+    ]);
   });
   it("only holds sizes the profile accepts in their own field, without duplicates", () => {
-    const fields = { top: "sizeTop", bottom: "sizeBottom", shoes: "sizeShoes" } as const;
+    const fields = { top: "sizesTop", bottom: "sizesBottom", shoes: "sizesShoes" } as const;
     for (const [kind, list] of Object.entries(SIZE_SUGGESTIONS) as [keyof typeof fields, readonly string[]][]) {
       expect(new Set(list).size).toBe(list.length);
       for (const size of list) {
-        expect(profileSizesSchema.shape[fields[kind]].safeParse(size).success, `${kind} ${size}`).toBe(true);
+        expect(profileSizesSchema.shape[fields[kind]].safeParse([size]).success, `${kind} ${size}`).toBe(true);
       }
     }
   });
@@ -135,8 +202,16 @@ describe("schemas", () => {
   it("limits reasons and sizes", () => {
     expect(reportInputSchema.safeParse({ reason: "shocking" }).success).toBe(true);
     expect(reportInputSchema.safeParse({ reason: "x" }).success).toBe(false);
-    expect(profileSizesSchema.safeParse({ sizeTop: "12345678901", sizeBottom: null, sizeShoes: null }).success).toBe(
-      false,
-    );
+    const sizes = (sizesTop: string[]) => profileSizesSchema.safeParse({ sizesTop, sizesBottom: [], sizesShoes: [] });
+    expect(sizes(["12345678901"]).success).toBe(false);
+    expect(sizes(["1234567890"]).success).toBe(true);
+    expect(sizes(["XS", "S", "M", "L", "XL", "XXL", "32", "34"]).success).toBe(true);
+    expect(sizes(["XS", "S", "M", "L", "XL", "XXL", "32", "34", "36"]).success).toBe(false);
+    expect(sizes([""]).success).toBe(false);
+    expect(sizes([]).data?.sizesTop).toEqual([]);
+  });
+  it("trims her sizes and drops repeats, case aside", () => {
+    const parsed = profileSizesSchema.parse({ sizesTop: [" M ", "m", "38"], sizesBottom: [], sizesShoes: ["38,5"] });
+    expect(parsed).toEqual({ sizesTop: ["M", "38"], sizesBottom: [], sizesShoes: ["38,5"] });
   });
 });

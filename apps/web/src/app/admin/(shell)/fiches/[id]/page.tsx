@@ -1,4 +1,4 @@
-import { type ReferenceKind, shopDataSchema } from "@closyria/shared";
+import { isHttpUrl, type ReferenceKind, shopDataSchema } from "@closyria/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
@@ -6,7 +6,7 @@ import { ColorSwatch } from "@/components/color-swatch";
 import { fetchAdminProduct, fetchAdminReference } from "@/lib/admin-api";
 import { categoryChoices } from "@/lib/admin-reference";
 import { adminCall, adminCallOrThrow, requireAdminPage } from "../../../server";
-import { buttonClass } from "../../../ui";
+import { buttonClass, sheetLinkClass } from "../../../ui";
 import { CorrectedPill } from "../corrected-pill";
 import { CorrectForm } from "./correct-form";
 import { DeleteButton } from "./delete-button";
@@ -111,8 +111,14 @@ export default async function AdminProductPage({ params }: Props) {
         {rows([
           [
             t("address"),
-            <span key="a" className="break-all">
-              {product.canonicalUrl}
+            <span key="a" className="flex flex-col items-start">
+              {isHttpUrl(product.canonicalUrl) ? (
+                <a href={product.canonicalUrl} target="_blank" rel="noopener noreferrer" className={sheetLinkClass}>
+                  {t("openAtShop", { shop: product.shopName })}
+                  <span className="sr-only"> {t("newTab")}</span>
+                </a>
+              ) : null}
+              <span className="break-all text-ink-muted">{product.canonicalUrl}</span>
             </span>,
           ],
           [t("brand"), product.brand ?? t("notSet")],

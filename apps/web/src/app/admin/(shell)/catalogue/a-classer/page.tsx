@@ -1,8 +1,10 @@
 import { adminUnclassifiedListSchema, type ReferenceKind } from "@closyria/shared";
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { fetchAdminJson, fetchAdminReference } from "@/lib/admin-api";
 import { categoryChoices } from "@/lib/admin-reference";
 import { adminCallOrThrow, requireAdminPage } from "../../../server";
+import { sheetLinkClass } from "../../../ui";
 import { ClassifyForm } from "./classify-form";
 
 /** « À classer »: catalogue articles filed « Autres », without a type or a colour; each filed in two choices. */
@@ -53,6 +55,12 @@ export default async function AdminUnclassifiedPage() {
                   {product.shopName}
                   {" · "}
                   {product.productType ? t("productType", { type: product.productType }) : t("noType")}
+                </p>
+                <p>
+                  <Link href={`/admin/fiches/${product.id}`} className={sheetLinkClass}>
+                    {t("openSheet")}
+                    <span className="sr-only"> {product.name}</span>
+                  </Link>
                 </p>
                 <ClassifyForm product={product} options={options} />
               </div>
