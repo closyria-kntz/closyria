@@ -334,6 +334,27 @@ export function catalogueImportIntervals(level: ShopifySlowdownLevel | null): { 
 
 export const importStateSchema = z.enum(["queued", "running"]);
 export type ImportState = z.infer<typeof importStateSchema>;
+/** What a running import does after its pages: `sizes`, the per-size stock of a WooCommerce shop (« lecture des tailles »). */
+export const importPhaseSchema = z.enum(["sizes"]);
+export type ImportPhase = z.infer<typeof importPhaseSchema>;
+
+/**
+ * What the import learnt of a shop (`shops.import_hints`), so the next ones go straight to it. WooCommerce: `wooRoute`
+ * `plain` when its Store API only answers under `/?rest_route=` (plain permalinks); `wooSingleSince` when it refused to
+ * list variations (`type=variation`, an older WooCommerce): they are read one by one, and listing is tried again a
+ * week later.
+ */
+export const importHintsSchema = z.object({
+  wooRoute: z.literal("plain").optional(),
+  wooSingleSince: z.iso.datetime().optional(),
+});
+export type ImportHints = z.infer<typeof importHintsSchema>;
+
+/** The hints of a shop as stored; anything unreadable is no hint. */
+export function readImportHints(value: unknown): ImportHints {
+  const parsed = importHintsSchema.safeParse(value);
+  return parsed.success ? parsed.data : {};
+}
 
 /**
  * The import under way as stored on the shop, or null when none is, or when it is dead: queued for longer than the

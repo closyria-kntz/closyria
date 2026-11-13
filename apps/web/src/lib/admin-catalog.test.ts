@@ -43,6 +43,7 @@ describe("importErrorMessage", () => {
     expect(importErrorMessage("too_many_pages")).toEqual({ key: "tooManyPages", status: null });
     expect(importErrorMessage("interrupted")).toEqual({ key: "interrupted", status: null });
     expect(importErrorMessage("woocommerce_api_unavailable")).toEqual({ key: "wooApiUnavailable", status: null });
+    expect(importErrorMessage("unsupported_platform")).toEqual({ key: "unsupportedPlatform", status: null });
   });
 
   it("gives an unknown code back as it is", () => {

@@ -650,6 +650,7 @@
           "none": "Aucun import pour l’instant",
           "queued": "En attente",
           "starting": "Import en cours…",
+          "sizes": "Import en cours : lecture des tailles…",
           "running": "Import en cours : page {pages, number}, {seen, plural, one {# article lu} other {# articles lus}}",
           "runningTotal": "Import en cours : {seen, number} / environ {total, plural, one {# article} other {# articles}}",
           "progress": "Avancement de l’import",
@@ -670,7 +671,8 @@
           "invalidData": "La réponse de la boutique est illisible",
           "tooManyPages": "Catalogue trop grand : import arrêté",
           "interrupted": "Import interrompu par un redémarrage du serveur",
-          "wooApiUnavailable": "L’API publique WooCommerce de la boutique est désactivée"
+          "wooApiUnavailable": "L’API publique WooCommerce de la boutique est désactivée",
+          "unsupportedPlatform": "Plateforme non prise en charge pour l’import"
         }
       }
     },

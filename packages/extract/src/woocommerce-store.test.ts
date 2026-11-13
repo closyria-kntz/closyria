@@ -4,6 +4,7 @@ import {
   extractWooStorePage,
   extractWooStoreProduct,
   extractWooVariation,
+  extractWooVariations,
   type WooListedProduct,
   withVariationStock,
 } from "./index";
@@ -156,6 +157,29 @@ describe("extractWooVariation", () => {
     expect(extractWooVariation(JSON.stringify({ ...base, is_in_stock: false }))?.available).toBe(false);
     expect(extractWooVariation(JSON.stringify({ ...base, is_purchasable: false }))?.available).toBe(false);
     expect(extractWooVariation("{}")).toBeNull();
+  });
+});
+
+describe("extractWooVariations", () => {
+  it("reads a listing of variations (`type=variation&parent[]=…`): each one's parent, stock and price", () => {
+    expect(extractWooVariations(fixture("woocommerce-store-variations.json"))).toEqual({
+      count: 3,
+      variations: [
+        { id: "2021", parent: "202", available: true, priceCents: 4990 },
+        { id: "2023", parent: "202", available: false, priceCents: 5490 },
+        { id: "3051", parent: "305", available: true, priceCents: 4990 },
+      ],
+    });
+  });
+
+  it("skips an entry that is no variation, and is null for what is not a listing", () => {
+    const [first] = JSON.parse(fixture("woocommerce-store-variations.json")) as Record<string, unknown>[];
+    expect(extractWooVariations(JSON.stringify([{ ...first, parent: 0 }, { id: 9 }, first]))).toMatchObject({
+      count: 3,
+      variations: [{ id: "2021" }],
+    });
+    expect(extractWooVariations(JSON.stringify({ code: "rest_invalid_param" }))).toBeNull();
+    expect(extractWooVariations("<html></html>")).toBeNull();
   });
 });
 

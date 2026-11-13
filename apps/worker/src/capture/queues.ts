@@ -76,7 +76,7 @@ export function catalogueImportHandler(deps: ImportDeps, queue: ImportQueue) {
       const result = await importCatalog(deps, parsed.data.shopId, job.signal ? { signal: job.signal } : {});
       // Counts and a short reason only: the details are on the shop (last_import_error).
       console.log(
-        `catalogue import ${parsed.data.shopId}: ${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged, ${result.removed} removed${result.error ? `, stopped: ${result.error}` : ""}`,
+        `catalogue import ${parsed.data.shopId}: ${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged, ${result.removed} removed${result.skipped ? `, ${result.skipped} skipped` : ""}${result.error ? `, stopped: ${result.error}` : ""}`,
       );
     }
   };

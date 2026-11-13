@@ -544,6 +544,8 @@ describe("runCapture", () => {
   describe("an imported WooCommerce product", () => {
     const API = "/wp-json/wc/store/v1/products";
     const JSON_TYPE = { "content-type": "application/json; charset=UTF-8" };
+    const SIZES = ["S", "M", "L", "XL", "XXL"];
+    const bulkPath = `${API}?type=variation&parent[]=77&per_page=100&page=1`;
     const prices = (price: string) => ({
       price,
       regular_price: price,
@@ -551,9 +553,22 @@ describe("runCapture", () => {
       currency_code: "EUR",
       currency_minor_unit: 2,
     });
+    const variation = (id: number, inStock: boolean) => ({
+      id,
+      parent: 77,
+      type: "variation",
+      variation: "Taille: x",
+      is_in_stock: inStock,
+      is_purchasable: true,
+      prices: prices("5900"),
+    });
 
-    /** The product (WooCommerce id 77, sizes S and M) on its Store API, and its two variations. */
-    function serveWoo(options: { mInStock?: boolean; permalink?: string } = {}) {
+    /**
+     * The product (WooCommerce id 77, sizes S to XXL: variations 770 to 774) on its Store API, its variations listed
+     * at once (`inStock`: those in stock; the others are not listed) and one by one.
+     */
+    function serveWoo(options: { inStock?: number[]; permalink?: string } = {}) {
+      const inStock = options.inStock ?? [770];
       routes[`${API}/77`] = {
         headers: JSON_TYPE,
         body: JSON.stringify({
@@ -572,43 +587,30 @@ describe("runCapture", () => {
               name: "Taille",
               taxonomy: "pa_taille",
               has_variations: true,
-              terms: [
-                { id: 1, name: "S", slug: "s" },
-                { id: 2, name: "M", slug: "m" },
-              ],
+              terms: SIZES.map((s, i) => ({ id: i, name: s, slug: s.toLowerCase() })),
             },
           ],
-          variations: [
-            { id: 770, attributes: [{ name: "Taille", value: "s" }] },
-            { id: 771, attributes: [{ name: "Taille", value: "m" }] },
-          ],
+          variations: SIZES.map((s, i) => ({ id: 770 + i, attributes: [{ name: "Taille", value: s.toLowerCase() }] })),
           is_in_stock: true,
           is_purchasable: true,
         }),
       };
-      for (const [id, inStock] of [
-        [770, true],
-        [771, options.mInStock ?? false],
-      ] as const) {
-        routes[`${API}/${id}`] = {
-          headers: JSON_TYPE,
-          body: JSON.stringify({
-            id,
-            type: "variation",
-            is_in_stock: inStock,
-            is_purchasable: true,
-            prices: prices("5900"),
-          }),
-        };
-      }
+      routes[bulkPath] = {
+        headers: { ...JSON_TYPE, "x-wp-total": String(inStock.length), "x-wp-totalpages": "1" },
+        body: JSON.stringify(inStock.map((id) => variation(id, true))),
+      };
+      SIZES.forEach((_, i) => {
+        const id = 770 + i;
+        routes[`${API}/${id}`] = { headers: JSON_TYPE, body: JSON.stringify(variation(id, inStock.includes(id))) };
+      });
     }
 
-    async function setupWoo(trigger: "refresh" | "user" = "refresh") {
+    async function setupWoo(trigger: "refresh" | "user" = "refresh", shopValues: Record<string, unknown> = {}) {
       const url = `${shop.origin}/produit/robe-77/`;
       const n = ++counter;
       const [s] = await handle.db
         .insert(schema.shops)
-        .values({ name: `Woo ${n}`, slug: `capture-woo-${n}`, platform: "woocommerce" })
+        .values({ name: `Woo ${n}`, slug: `capture-woo-${n}`, platform: "woocommerce", ...shopValues })
         .returning();
       if (!s) throw new Error("no shop");
       // Imported: known by its WooCommerce id, at its own address.
@@ -627,8 +629,14 @@ describe("runCapture", () => {
       return { shop: s, product: p, url, capture: await newCapture(s.id, p.id, url, trigger) };
     }
 
-    it("a sheet's refresh reads the product and each variation's stock from the Store API, off the Shopify line", async () => {
-      serveWoo();
+    const storeHits = () => shop.hits.filter((hit) => hit !== "/robots.txt");
+    const stockOf = async (captureId: string, productId: string) =>
+      (await load(captureId, productId)).sizes
+        .sort((a, b) => a.position - b.position)
+        .map((s) => `${s.label}${s.available ? "" : " (épuisé)"}`);
+
+    it("a sheet's refresh makes 2 requests: the product, then its variations listed at once", async () => {
+      serveWoo({ inStock: [770, 772] });
       const waits: unknown[] = [];
       const throttle = deps.throttle;
       deps.throttle = {
@@ -639,7 +647,7 @@ describe("runCapture", () => {
       };
       const t = await setupWoo();
       await runCapture(t.capture.id, deps);
-      const { capture, product, sizes } = await load(t.capture.id, t.product.id);
+      const { capture, product } = await load(t.capture.id, t.product.id);
       expect(capture).toMatchObject({ status: "succeeded", method: "woocommerce", dataReady: true });
       expect(product).toMatchObject({
         name: "Robe portefeuille",
@@ -648,18 +656,60 @@ describe("runCapture", () => {
         captureStatus: "ok",
       });
       expect(product?.variantsCheckedAt).not.toBeNull();
-      expect(sizes.map((s) => [s.label, s.available])).toEqual([
-        ["S", true],
-        ["M", false],
+      // A variation the listing does not hold is sold out.
+      expect(await stockOf(t.capture.id, t.product.id)).toEqual([
+        "S",
+        "M (épuisé)",
+        "L",
+        "XL (épuisé)",
+        "XXL (épuisé)",
       ]);
-      expect(shop.hits.filter((hit) => hit !== "/robots.txt")).toEqual([`${API}/77`, `${API}/770`, `${API}/771`]);
+      expect(storeHits()).toEqual([`${API}/77`, bulkPath]);
       expect(waits.every((w) => w === null)).toBe(true);
 
       // A size back in stock shows on the next refresh.
-      serveWoo({ mInStock: true });
+      serveWoo({ inStock: [770, 771, 772] });
       const again = await newCapture(t.shop.id, t.product.id, t.url, "refresh");
       await runCapture(again.id, deps);
-      expect((await load(again.id, t.product.id)).sizes.map((s) => s.available)).toEqual([true, true]);
+      expect((await stockOf(again.id, t.product.id))[1]).toBe("M");
+    });
+
+    it("her capture of the product reads it the same way", async () => {
+      serveWoo();
+      const t = await setupWoo("user");
+      await runCapture(t.capture.id, deps);
+      expect((await load(t.capture.id, t.product.id)).capture?.method).toBe("woocommerce");
+      expect(storeHits()).toEqual([`${API}/77`, bulkPath]);
+    });
+
+    it("a shop that refuses the listing (400): remembered, then at most 4 requests, the other sizes as last known", async () => {
+      serveWoo({ inStock: [771] });
+      routes[bulkPath] = { status: 400, headers: JSON_TYPE, body: JSON.stringify({ code: "rest_invalid_param" }) };
+      const t = await setupWoo();
+      await handle.db
+        .insert(schema.productSizes)
+        .values(
+          SIZES.map((label, position) => ({ productId: t.product.id, label, position, available: label === "XXL" })),
+        );
+      await runCapture(t.capture.id, deps);
+      // The product, the refused listing, then 2 variations: 4 requests.
+      expect(storeHits()).toEqual([`${API}/77`, bulkPath, `${API}/770`, `${API}/771`]);
+      expect(await stockOf(t.capture.id, t.product.id)).toEqual([
+        "S (épuisé)",
+        "M",
+        "L (épuisé)",
+        "XL (épuisé)",
+        "XXL",
+      ]);
+      const [s] = await handle.db.select().from(schema.shops).where(eq(schema.shops.id, t.shop.id));
+      expect(s?.importHints).toMatchObject({ wooSingleSince: expect.any(String) });
+      expect((await load(t.capture.id, t.product.id)).product?.variantsCheckedAt).toBeNull();
+
+      // Remembered: straight to the variations, 3 of them.
+      shop.hits.length = 0;
+      const again = await newCapture(t.shop.id, t.product.id, t.url, "refresh");
+      await runCapture(again.id, deps);
+      expect(storeHits()).toEqual([`${API}/77`, `${API}/770`, `${API}/771`, `${API}/772`]);
     });
 
     it("falls back to the page when the Store API is off or speaks of another product", async () => {
@@ -679,7 +729,7 @@ describe("runCapture", () => {
       const other = await newCapture(off.shop.id, off.product.id, off.url, "refresh");
       await runCapture(other.id, deps);
       expect((await load(other.id, off.product.id)).capture?.method).toBe("jsonld");
-      expect(shop.hits).not.toContain(`${API}/770`);
+      expect(shop.hits).not.toContain(bulkPath);
     });
 
     it("a refusal from the Store API fails the refresh without asking the page", async () => {
@@ -693,6 +743,17 @@ describe("runCapture", () => {
         httpStatus: 403,
       });
       expect(shop.hits).not.toContain("/produit/robe-77/");
+    });
+
+    it("an HTML page where the variations should be is a refusal", async () => {
+      serveWoo();
+      routes[bulkPath] = { headers: { "content-type": "text/html" }, body: "<html>Vérification</html>" };
+      const t = await setupWoo();
+      await runCapture(t.capture.id, deps);
+      expect((await load(t.capture.id, t.product.id)).capture).toMatchObject({
+        status: "failed",
+        errorCode: "blocked",
+      });
     });
   });
 

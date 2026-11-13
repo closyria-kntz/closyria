@@ -168,6 +168,7 @@ const shop = {
   lastImportAt: null,
   lastImportError: null,
   importState: null,
+  importPhase: null,
   importStartedAt: null,
   importPages: 0,
   importSeen: 0,

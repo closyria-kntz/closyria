@@ -102,21 +102,20 @@ function serveWooStore(origin: string, routes: Record<string, FakeRoute>): void 
     body: JSON.stringify([product(7101, "Robe e2e WooCommerce", ["S", "M"]), product(7102, "Sac e2e WooCommerce", [])]),
     delayMs: 2500,
   };
-  for (const [id, inStock] of [
-    [71010, true],
-    [71011, false],
-  ] as const) {
-    routes[`${WOO_STORE}/${id}`] = {
-      headers: json,
-      body: JSON.stringify({
-        id,
-        type: "variation",
-        is_in_stock: inStock,
-        is_purchasable: true,
-        prices: prices("4500"),
-      }),
-    };
-  }
+  // The robe's variations, listed at once (M sold out).
+  const variation = (id: number, inStock: boolean) => ({
+    id,
+    parent: 7101,
+    type: "variation",
+    variation: "Taille: S",
+    is_in_stock: inStock,
+    is_purchasable: true,
+    prices: prices("4500"),
+  });
+  routes[`${WOO_STORE}?type=variation&parent[]=7101&per_page=100&page=1`] = {
+    headers: { ...json, "x-wp-total": "2", "x-wp-totalpages": "1" },
+    body: JSON.stringify([variation(71010, true), variation(71011, false)]),
+  };
 }
 
 export type CaptureWorker = { shop: FakeShop; stop(): Promise<void> };

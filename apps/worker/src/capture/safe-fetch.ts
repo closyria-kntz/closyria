@@ -14,6 +14,24 @@ export const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
 export const DEFAULT_TIMEOUT_MS = 15_000;
 export const DEFAULT_MAX_REDIRECTS = 5;
 
+/** The cause of an `invalid_data` failure when the answer was of another type than asked (`mime`, lower case). */
+export class WrongContentType extends Error {
+  constructor(readonly mime: string) {
+    super(`unexpected content type ${mime}`);
+    this.name = "WrongContentType";
+  }
+}
+
+/** Whether a failure is an HTML page answered where JSON (or another type) was asked. */
+export function isHtmlAnswer(error: unknown): boolean {
+  return (
+    error instanceof CaptureError &&
+    error.code === "invalid_data" &&
+    error.cause instanceof WrongContentType &&
+    ACCEPTED_TYPES.page(error.cause.mime)
+  );
+}
+
 export type SafeFetchAccept = "page" | "json" | "image" | "text" | "xml";
 
 export type SafeFetchOptions = {
@@ -296,7 +314,8 @@ async function run(rawUrl: string, options: SafeFetchOptions, signal: AbortSigna
     const mime = mimeOf(contentType);
     if (!ACCEPTED_TYPES[options.accept](mime)) {
       res.destroy();
-      throw new CaptureError("invalid_data", status);
+      // The type answered, for a caller that tells an HTML page apart (a WooCommerce endpoint answering a page).
+      throw new CaptureError("invalid_data", status, { cause: new WrongContentType(mime) });
     }
     const body = await readBody(res, maxBytes);
     if (ACCEPTED_TYPES.page(mime) && isChallenge(body)) throw new CaptureError("blocked", status);

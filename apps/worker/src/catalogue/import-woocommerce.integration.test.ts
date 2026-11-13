@@ -3,7 +3,7 @@ import { and, asc, createDb, eq, readShopifySlowdown, schema } from "@closyria/d
 import { memoryStore } from "@closyria/storage";
 import { type FakeRoute, type FakeShop, startFakeShop } from "@closyria/testing";
 import { createTestDatabase } from "@closyria/testing/vitest";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AddressPolicy } from "../capture/address-policy";
 import { createRobotsCache, safeRobotsFetcher } from "../capture/robots";
 import { seedReference } from "../capture/seed-reference";
@@ -11,7 +11,7 @@ import { loopbackForTests } from "../capture/testing";
 import { createThrottle, type ThrottleOptions } from "../capture/throttle";
 import { importCatalog } from "./import-catalog";
 import type { ImportDeps } from "./import-core";
-import { WOO_VARIATION_BUDGET } from "./import-woocommerce";
+import { WOO_VARIATION_REQUESTS } from "./import-woocommerce";
 
 let database: Awaited<ReturnType<typeof createTestDatabase>>;
 let handle: ReturnType<typeof createDb>;
@@ -35,6 +35,8 @@ const PNG = Buffer.from(
 );
 const JSON_TYPE = { "content-type": "application/json; charset=UTF-8" };
 const API = "/wp-json/wc/store/v1/products";
+const PLAIN = "/?rest_route=/wc/store/v1/products";
+const HOUR = 60 * 60_000;
 
 const loopbackOnly: AddressPolicy = Object.assign((ip: string): boolean => ip === "127.0.0.1" && loopbackForTests(ip), {
   anyPortOnLoopback: true as const,
@@ -49,10 +51,20 @@ let pauses: number[];
 let lines: (ThrottleOptions | undefined)[];
 let clock: Date;
 let deps: ImportDeps;
+/** The shop's variations: id → its product and stock. A variation absent is gone (neither listed nor served). */
+let variations: Map<number, { parent: number; inStock: boolean }>;
+/** What the variations listing answers instead (400: an older WooCommerce; 500: a failure). */
+let bulkStatus: number | null;
+/** Runs at each pause (before each request after the first): what the admin sees meanwhile. */
+let duringPause: (() => Promise<void>) | null;
 
 beforeEach(async () => {
   routes = {};
+  variations = new Map();
+  bulkStatus = null;
+  duringPause = null;
   shop = await startFakeShop(routes);
+  routes[API] = { dynamic: listVariations };
   pauses = [];
   lines = [];
   clock = new Date("2026-11-13T10:00:00Z");
@@ -72,6 +84,7 @@ beforeEach(async () => {
     now: () => clock,
     sleep: async (ms) => {
       pauses.push(ms);
+      await duringPause?.();
     },
   };
 });
@@ -80,6 +93,45 @@ afterEach(async () => {
   await shop.close();
 });
 
+const prices = (price: string, regular = price) => ({
+  price,
+  regular_price: regular,
+  sale_price: price,
+  currency_code: "EUR",
+  currency_minor_unit: 2,
+});
+
+/** A variation as the Store API gives it (the product schema of a `variation`, with its `parent`). */
+const variationJson = (id: number, parent: number, inStock: boolean) => ({
+  id,
+  parent,
+  type: "variation",
+  variation: "Taille: x",
+  is_in_stock: inStock,
+  is_purchasable: true,
+  prices: prices("4990"),
+});
+
+/** `…/products?type=variation&parent[]=…&per_page=100&page=n`: the variations of those products, 100 a page. */
+function listVariations(url: URL): FakeRoute {
+  if (url.searchParams.get("type") !== "variation") return { status: 404, body: "not found" };
+  if (bulkStatus)
+    return { status: bulkStatus, headers: JSON_TYPE, body: JSON.stringify({ code: "rest_invalid_param" }) };
+  const parents = new Set(url.searchParams.getAll("parent[]").map(Number));
+  const all = [...variations].filter(([, v]) => parents.has(v.parent));
+  const page = Number(url.searchParams.get("page") ?? 1);
+  const perPage = Number(url.searchParams.get("per_page") ?? 10);
+  const slice = all.slice((page - 1) * perPage, page * perPage);
+  return {
+    headers: {
+      ...JSON_TYPE,
+      "x-wp-total": String(all.length),
+      "x-wp-totalpages": String(Math.max(1, Math.ceil(all.length / perPage))),
+    },
+    body: JSON.stringify(slice.map(([id, v]) => variationJson(id, v.parent, v.inStock))),
+  };
+}
+
 type WooProduct = {
   id: number;
   name: string;
@@ -87,20 +139,15 @@ type WooProduct = {
   regular?: string;
   inStock?: boolean;
   image?: boolean;
-  /** Variable product: its sizes, each one variation (`id * 10 + index`). */
+  /** Variable product: its sizes, each one variation (`variationId(id, index)`). */
   sizes?: string[];
   category?: string;
 };
 
+const variationId = (productId: number, index: number) => productId * 10_000 + index;
+
 function wooProduct(p: WooProduct) {
   if (p.image) routes[`/wp-content/uploads/${p.id}.png`] = { headers: { "content-type": "image/png" }, body: PNG };
-  const prices = (price: string, regular = price) => ({
-    price,
-    regular_price: regular,
-    sale_price: price,
-    currency_code: "EUR",
-    currency_minor_unit: 2,
-  });
   return {
     id: p.id,
     name: p.name,
@@ -125,7 +172,7 @@ function wooProduct(p: WooProduct) {
         ]
       : [],
     variations: (p.sizes ?? []).map((s, i) => ({
-      id: p.id * 10 + i,
+      id: variationId(p.id, i),
       attributes: [{ name: "Taille", value: s.toLowerCase() }],
     })),
     is_in_stock: p.inStock ?? true,
@@ -134,13 +181,21 @@ function wooProduct(p: WooProduct) {
 }
 
 const pagePath = (page: number) => `${API}?per_page=100&page=${page}`;
+const plainPagePath = (page: number) => `${PLAIN}&per_page=100&page=${page}`;
 
-/** Serves the listing (with the shop's counts unless `counts` is false) and every variation, in stock by default. */
-function servePages(pages: WooProduct[][], options: { counts?: boolean; outOfStock?: number[] } = {}) {
-  for (const key of Object.keys(routes)) if (key.startsWith(API)) delete routes[key];
+/**
+ * Serves the listing (with the shop's counts unless `counts` is false) and every variation, in stock unless in
+ * `outOfStock`, not at all when in `gone`; each variation also one by one.
+ */
+function servePages(
+  pages: WooProduct[][],
+  options: { counts?: boolean; outOfStock?: number[]; gone?: number[]; plain?: boolean } = {},
+) {
+  for (const key of Object.keys(routes)) if (key.startsWith(`${API}?`) || key.startsWith(`${API}/`)) delete routes[key];
+  variations.clear();
   const total = pages.reduce((n, page) => n + page.length, 0);
   pages.forEach((products, index) => {
-    routes[pagePath(index + 1)] = {
+    routes[(options.plain ? plainPagePath : pagePath)(index + 1)] = {
       headers: {
         ...JSON_TYPE,
         ...(options.counts === false ? {} : { "x-wp-total": String(total), "x-wp-totalpages": String(pages.length) }),
@@ -149,28 +204,23 @@ function servePages(pages: WooProduct[][], options: { counts?: boolean; outOfSto
     };
     for (const p of products) {
       (p.sizes ?? []).forEach((_, i) => {
-        const id = p.id * 10 + i;
-        serveVariation(id, !(options.outOfStock ?? []).includes(id));
+        const id = variationId(p.id, i);
+        if ((options.gone ?? []).includes(id)) return;
+        const inStock = !(options.outOfStock ?? []).includes(id);
+        variations.set(id, { parent: p.id, inStock });
+        routes[`${API}/${id}`] = { headers: JSON_TYPE, body: JSON.stringify(variationJson(id, p.id, inStock)) };
       });
     }
   });
 }
 
-function serveVariation(id: number, inStock: boolean, price = "4990") {
-  routes[`${API}/${id}`] = {
-    headers: JSON_TYPE,
-    body: JSON.stringify({
-      id,
-      type: "variation",
-      is_in_stock: inStock,
-      is_purchasable: true,
-      prices: { price, regular_price: price, sale_price: price, currency_code: "EUR", currency_minor_unit: 2 },
-    }),
-  };
-}
-
-const variationHits = () => shop.hits.filter((hit) => /^\/wp-json\/wc\/store\/v1\/products\/\d+$/.test(hit));
-const pageHits = () => shop.hits.filter((hit) => hit.startsWith(`${API}?`));
+const bulkHits = () => shop.hits.filter((hit) => hit.startsWith(`${API}?type=variation`));
+const oneByOneHits = () => shop.hits.filter((hit) => /^\/wp-json\/wc\/store\/v1\/products\/\d+$/.test(hit));
+const variationRequests = () => [...bulkHits(), ...oneByOneHits()];
+/** The products whose variations were listed, in order. */
+const bulkParents = () =>
+  bulkHits().flatMap((hit) => new URL(hit, "http://x").searchParams.getAll("parent[]").map(Number));
+const pageHits = () => shop.hits.filter((hit) => hit.startsWith(`${API}?per_page`));
 
 async function newShop(over: Partial<typeof schema.shops.$inferInsert> = {}) {
   const n = ++counter;
@@ -191,6 +241,8 @@ async function newShop(over: Partial<typeof schema.shops.$inferInsert> = {}) {
 }
 
 const shopRow = async (id: string) => (await handle.db.select().from(schema.shops).where(eq(schema.shops.id, id)))[0];
+const productsOf = (shopId: string) =>
+  handle.db.select().from(schema.products).where(eq(schema.products.shopId, shopId));
 const byExternalId = async (shopId: string, externalId: string) => {
   const [p] = await handle.db
     .select()
@@ -214,6 +266,11 @@ function twoPages(extra: WooProduct[] = []): WooProduct[][] {
   return [first, extra];
 }
 
+const later = (ms: number) => {
+  clock = new Date(clock.getTime() + ms);
+  shop.hits.length = 0;
+};
+
 describe("WooCommerce catalogue import", () => {
   it("reads the Store API page by page, 1 s apart, off the Shopify line, and writes classified products", async () => {
     servePages(
@@ -225,7 +282,11 @@ describe("WooCommerce catalogue import", () => {
     const s = await newShop();
     const result = await importCatalog(deps, s.id);
     expect(result).toMatchObject({ created: 102, updated: 0, removed: 0, error: null });
+    expect(result.skipped).toBeUndefined();
     expect(pageHits()).toEqual([pagePath(1), pagePath(2)]);
+    // Then its variations, listed at once: one more request.
+    expect(bulkHits()).toEqual([`${API}?type=variation&parent[]=1&per_page=100&page=1`]);
+    expect(oneByOneHits()).toEqual([]);
     // Every request 1 s after the previous one; none on the Shopify line.
     expect(pauses.every((ms) => ms === 1000)).toBe(true);
     expect(pauses.length).toBe(shop.hits.filter((h) => h.startsWith(API)).length - 1);
@@ -248,6 +309,7 @@ describe("WooCommerce catalogue import", () => {
 
     expect(await shopRow(s.id)).toMatchObject({
       importState: null,
+      importPhase: null,
       importPages: 2,
       importSeen: 102,
       importExpected: 102,
@@ -265,21 +327,48 @@ describe("WooCommerce catalogue import", () => {
     expect(pageHits()).toEqual([pagePath(1)]);
     expect((await shopRow(s.id))?.importExpected).toBeNull();
 
-    shop.hits.length = 0;
+    later(0);
     servePages(twoPages(), { counts: false });
-    delete routes[pagePath(2)];
     routes[pagePath(2)] = { status: 400, headers: JSON_TYPE, body: JSON.stringify({ code: "rest_invalid_param" }) };
     const full = await newShop();
     expect(await importCatalog(deps, full.id)).toMatchObject({ created: 100, error: null });
   });
 
-  it("reads each size's stock from its variation; a gone variation is a size no longer on sale", async () => {
-    servePages([[{ id: 1, name: "Robe", sizes: ["S", "M", "L"] }]], { outOfStock: [11] });
-    delete routes[`${API}/12`];
+  it("shows « lecture des tailles » while it reads the variations, and clears it at the end", async () => {
+    servePages(twoPages([{ id: 1, name: "Robe", sizes: ["S", "M"] }]));
+    const s = await newShop();
+    const phases: (string | null)[] = [];
+    duringPause = async () => {
+      phases.push((await shopRow(s.id))?.importPhase ?? null);
+    };
+    await importCatalog(deps, s.id);
+    // The pause before the variations' request: the pages are read, the sizes come next.
+    expect(phases.at(-1)).toBe("sizes");
+    expect(phases[0]).toBeNull();
+    expect((await shopRow(s.id))?.importPhase).toBeNull();
+  });
+
+  it("a variation the listing does not hold is a size no longer on sale", async () => {
+    servePages([[{ id: 1, name: "Robe", sizes: ["S", "M", "L"] }]], {
+      outOfStock: [variationId(1, 1)],
+      gone: [variationId(1, 2)],
+    });
     const s = await newShop();
     await importCatalog(deps, s.id);
-    expect(variationHits()).toEqual([`${API}/10`, `${API}/11`, `${API}/12`]);
+    expect(variationRequests()).toHaveLength(1);
     expect(await sizesOf((await byExternalId(s.id, "1")).id)).toEqual(["S", "M (épuisé)", "L (épuisé)"]);
+  });
+
+  it("lists the variations of 25 products per request", async () => {
+    const products = Array.from({ length: 60 }, (_, i) => ({ id: 100 + i, name: `Robe ${i}`, sizes: ["S", "M"] }));
+    servePages([products]);
+    const s = await newShop();
+    await importCatalog(deps, s.id);
+    expect(bulkHits().map((hit) => new URL(hit, "http://x").searchParams.getAll("parent[]").length)).toEqual([
+      25, 25, 10,
+    ]);
+    expect(bulkParents()).toEqual(products.map((p) => p.id));
+    expect((await productsOf(s.id)).every((p) => p.variantsCheckedAt !== null)).toBe(true);
   });
 
   it("reads the variations again only for a changed product, or once a day", async () => {
@@ -291,13 +380,13 @@ describe("WooCommerce catalogue import", () => {
     ]);
     const s = await newShop();
     await importCatalog(deps, s.id);
-    expect(variationHits()).toHaveLength(3);
+    expect(bulkParents()).toEqual([1, 2]);
 
     // An hour later, same listing: nothing to read again.
-    shop.hits.length = 0;
-    clock = new Date(clock.getTime() + 60 * 60_000);
+    later(HOUR);
     expect(await importCatalog(deps, s.id)).toMatchObject({ unchanged: 2, error: null });
-    expect(variationHits()).toEqual([]);
+    expect(variationRequests()).toEqual([]);
+    expect((await shopRow(s.id))?.importPhase).toBeNull();
 
     // The robe's price changes: only its variations are read again.
     servePages(
@@ -307,59 +396,168 @@ describe("WooCommerce catalogue import", () => {
           { id: 2, name: "Jupe", sizes: ["S"] },
         ],
       ],
-      {
-        outOfStock: [10],
-      },
+      { outOfStock: [variationId(1, 0)] },
     );
-    shop.hits.length = 0;
-    clock = new Date(clock.getTime() + 60 * 60_000);
+    later(HOUR);
     await importCatalog(deps, s.id);
-    expect(variationHits()).toEqual([`${API}/10`, `${API}/11`]);
+    expect(bulkParents()).toEqual([1]);
     expect(await sizesOf((await byExternalId(s.id, "1")).id)).toEqual(["S (épuisé)", "M"]);
 
     // A day after their last read, every variable product is read again, even unchanged.
-    shop.hits.length = 0;
-    clock = new Date(clock.getTime() + 25 * 60 * 60_000);
+    later(25 * HOUR);
     await importCatalog(deps, s.id);
-    expect(variationHits().sort()).toEqual([`${API}/10`, `${API}/11`, `${API}/20`]);
+    expect(bulkParents().sort()).toEqual([1, 2]);
   });
 
-  it("keeps the last known stock of each size when the listing changes and the variations cannot be read", async () => {
-    servePages([[{ id: 1, name: "Robe", sizes: ["S", "M"] }]], { outOfStock: [10] });
+  it("keeps the last known stock when the variations cannot be read, and tries again only 24 h later", async () => {
+    servePages([[{ id: 1, name: "Robe", sizes: ["S", "M"] }]], { outOfStock: [variationId(1, 0)] });
     const s = await newShop();
     await importCatalog(deps, s.id);
     const robe = await byExternalId(s.id, "1");
     expect(await sizesOf(robe.id)).toEqual(["S (épuisé)", "M"]);
 
     servePages([[{ id: 1, name: "Robe", sizes: ["S", "M"], price: "3990" }]]);
-    routes[`${API}/10`] = { status: 500, body: "oops" };
-    clock = new Date(clock.getTime() + 60 * 60_000);
+    bulkStatus = 500;
+    later(HOUR);
     expect((await importCatalog(deps, s.id)).error).toBeNull();
     expect((await byExternalId(s.id, "1")).priceCents).toBe(3990);
     expect(await sizesOf(robe.id)).toEqual(["S (épuisé)", "M"]);
+    expect((await byExternalId(s.id, "1")).variantsTriedAt).toEqual(clock);
+
+    // Changed again an hour later: no new try within 24 h.
+    servePages([[{ id: 1, name: "Robe", sizes: ["S", "M"], price: "3490" }]]);
+    later(HOUR);
+    await importCatalog(deps, s.id);
+    expect(variationRequests()).toEqual([]);
+
+    // A day later it is read, and the failure is forgotten.
+    bulkStatus = null;
+    later(24 * HOUR);
+    await importCatalog(deps, s.id);
+    expect(bulkParents()).toEqual([1]);
+    expect(await byExternalId(s.id, "1")).toMatchObject({ variantsTriedAt: null, variantsCheckedAt: clock });
+    expect(await sizesOf(robe.id)).toEqual(["S", "M"]);
   });
 
-  it(`reads at most ${WOO_VARIATION_BUDGET} variations per import, the never-read products first`, async () => {
-    const products: WooProduct[] = Array.from({ length: 110 }, (_, i) => ({
-      id: 100 + i,
-      name: `Robe ${i}`,
-      sizes: ["S", "M", "L"],
-    }));
-    servePages([products.slice(0, 100), products.slice(100)]);
+  it(`makes at most ${WOO_VARIATION_REQUESTS} variation requests per import, the never-read products first`, async () => {
+    // 40 products of 100 sizes: one listing request per product.
+    const sizes = Array.from({ length: 100 }, (_, i) => `T${i}`);
+    const products: WooProduct[] = Array.from({ length: 40 }, (_, i) => ({ id: 100 + i, name: `Robe ${i}`, sizes }));
+    servePages([products]);
     const s = await newShop();
     await importCatalog(deps, s.id);
-    expect(variationHits()).toHaveLength(WOO_VARIATION_BUDGET);
-    const notChecked = (await handle.db.select().from(schema.products).where(eq(schema.products.shopId, s.id))).filter(
-      (p) => p.variantsCheckedAt === null,
-    );
+    expect(variationRequests()).toHaveLength(WOO_VARIATION_REQUESTS);
+    const notChecked = (await productsOf(s.id)).filter((p) => p.variantsCheckedAt === null);
     expect(notChecked).toHaveLength(10);
 
-    // The next import reads those first (and the rest, checked an hour ago, waits for its day).
-    shop.hits.length = 0;
-    clock = new Date(clock.getTime() + 60 * 60_000);
+    // The next import reads those first (and the rest, read an hour ago, waits for its day).
+    later(HOUR);
     await importCatalog(deps, s.id);
-    const read = new Set(variationHits().map((hit) => Math.floor(Number(hit.split("/").pop()) / 10)));
-    expect([...read].sort()).toEqual(notChecked.map((p) => Number(p.externalId)).sort());
+    expect(new Set(bulkParents())).toEqual(new Set(notChecked.map((p) => Number(p.externalId))));
+    expect(variationRequests()).toHaveLength(10);
+  }, 60_000);
+
+  it("never skips a product too big for the budget for good: read alone in a run with nothing else to read", async () => {
+    const huge = Array.from({ length: (WOO_VARIATION_REQUESTS + 5) * 100 }, (_, i) => `T${i}`);
+    servePages([
+      [
+        { id: 1, name: "Robe aux mille tailles", sizes: huge },
+        { id: 2, name: "Jupe", sizes: ["S"] },
+      ],
+    ]);
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const s = await newShop();
+      await importCatalog(deps, s.id);
+      expect(bulkParents()).toEqual([2]);
+      expect((await byExternalId(s.id, "1")).variantsCheckedAt).toBeNull();
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("product 1 (3500 variations) waits"));
+
+      later(HOUR);
+      await importCatalog(deps, s.id);
+      expect(bulkHits()).toHaveLength(35);
+      expect((await byExternalId(s.id, "1")).variantsCheckedAt).toEqual(clock);
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("product 1 has 3500 variations, read alone"));
+    } finally {
+      log.mockRestore();
+    }
+  }, 60_000);
+
+  it("reads the variations one by one for a shop that refuses the listing (400), and remembers it", async () => {
+    servePages([[{ id: 1, name: "Robe", sizes: ["S", "M"] }]], { outOfStock: [variationId(1, 1)] });
+    bulkStatus = 400;
+    const s = await newShop();
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    await importCatalog(deps, s.id);
+    log.mockRestore();
+    expect(bulkHits()).toHaveLength(1);
+    expect(oneByOneHits()).toEqual([`${API}/${variationId(1, 0)}`, `${API}/${variationId(1, 1)}`]);
+    expect(await sizesOf((await byExternalId(s.id, "1")).id)).toEqual(["S", "M (épuisé)"]);
+    expect((await shopRow(s.id))?.importHints).toEqual({ wooSingleSince: clock.toISOString() });
+
+    // Next time: straight to one by one.
+    servePages([[{ id: 1, name: "Robe", sizes: ["S", "M"], price: "3990" }]]);
+    later(HOUR);
+    await importCatalog(deps, s.id);
+    expect(bulkHits()).toEqual([]);
+    expect(oneByOneHits()).toHaveLength(2);
+  });
+
+  it("reads a site with plain permalinks under ?rest_route= once /wp-json/ answers 404, and remembers it", async () => {
+    servePages([[{ id: 1, name: "Robe" }]], { plain: true });
+    const s = await newShop();
+    expect(await importCatalog(deps, s.id)).toMatchObject({ created: 1, error: null });
+    expect(shop.hits.filter((h) => h !== "/robots.txt")).toEqual([pagePath(1), plainPagePath(1)]);
+    expect((await shopRow(s.id))?.importHints).toEqual({ wooRoute: "plain" });
+
+    later(HOUR);
+    await importCatalog(deps, s.id);
+    expect(shop.hits.filter((h) => h !== "/robots.txt")).toEqual([plainPagePath(1)]);
+  });
+
+  it("never reads under ?rest_route= what robots.txt forbids under /wp-json/", async () => {
+    servePages([[{ id: 1, name: "Robe" }]], { plain: true });
+    routes["/robots.txt"] = { headers: { "content-type": "text/plain" }, body: "User-agent: *\nDisallow: /wp-json/\n" };
+    const s = await newShop({ importHints: { wooRoute: "plain" } });
+    expect((await importCatalog(deps, s.id)).error).toBe("robots_disallowed");
+    expect(shop.hits.filter((h) => h !== "/robots.txt")).toEqual([]);
+  });
+
+  it("stops with woocommerce_api_unavailable when the Store API answers at neither address, and crawls nothing else", async () => {
+    const s = await newShop();
+    expect((await importCatalog(deps, s.id)).error).toBe("woocommerce_api_unavailable");
+    expect(shop.hits.filter((hit) => hit !== "/robots.txt")).toEqual([pagePath(1), plainPagePath(1)]);
+
+    // A WordPress without the Store API: its home page under ?rest_route=.
+    routes["/"] = { headers: { "content-type": "text/html" }, body: "<html>Accueil</html>" };
+    expect((await importCatalog(deps, s.id)).error).toBe("woocommerce_api_unavailable");
+    routes[pagePath(1)] = { headers: JSON_TYPE, body: JSON.stringify({ code: "rest_disabled" }) };
+    expect((await importCatalog(deps, s.id)).error).toBe("woocommerce_api_unavailable");
+    expect(await shopRow(s.id)).toMatchObject({ importState: null, lastImportError: "woocommerce_api_unavailable" });
+  });
+
+  it("takes an HTML page where the JSON should be for a refusal (blocked), not a disabled API", async () => {
+    routes[pagePath(1)] = { headers: { "content-type": "text/html" }, body: "<html>Un instant…</html>" };
+    const s = await newShop();
+    expect((await importCatalog(deps, s.id)).error).toBe("blocked (HTTP 200)");
+    expect(pageHits()).toEqual([pagePath(1)]);
+  });
+
+  it("counts and logs the listed products it could not read", async () => {
+    servePages([[{ id: 1, name: "Robe" }]]);
+    const page = JSON.parse(String(routes[pagePath(1)]?.body)) as unknown[];
+    routes[pagePath(1)] = {
+      headers: JSON_TYPE,
+      body: JSON.stringify([...page, { id: 2, name: "Sans prix" }, "nonsense"]),
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const s = await newShop();
+      expect(await importCatalog(deps, s.id)).toMatchObject({ created: 1, skipped: 2, error: null });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("2 listed product(s) skipped"));
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("marks a product gone from the listing as removed, and removes nothing from a much shorter listing", async () => {
@@ -375,13 +573,13 @@ describe("WooCommerce catalogue import", () => {
     });
 
     servePages(twoPages());
-    clock = new Date(clock.getTime() + 60 * 60_000);
+    later(HOUR);
     expect(await importCatalog(deps, s.id)).toMatchObject({ removed: 1, error: null });
     expect((await byExternalId(s.id, "1")).removedAt).toEqual(clock);
     expect((await byExternalId(s.id, "SKU-12")).removedAt).toBeNull();
 
     servePages([[{ id: 1000, name: "Article 0" }]]);
-    clock = new Date(clock.getTime() + 60 * 60_000);
+    later(HOUR);
     expect(await importCatalog(deps, s.id)).toMatchObject({ removed: 0, error: "suspicious_shrink" });
     expect((await byExternalId(s.id, "1001")).removedAt).toBeNull();
     expect((await shopRow(s.id))?.lastImportError).toBe("suspicious_shrink");
@@ -394,36 +592,23 @@ describe("WooCommerce catalogue import", () => {
       const s = await newShop();
       await importCatalog(deps, s.id);
       routes[pagePath(1)] = { status, headers: JSON_TYPE, body: "{}" };
-      shop.hits.length = 0;
-      clock = new Date(clock.getTime() + 60 * 60_000);
+      later(HOUR);
       expect((await importCatalog(deps, s.id)).error).toBe(`blocked (HTTP ${status})`);
-      // No second try after a refusal.
-      expect(pageHits()).toEqual([pagePath(1)]);
+      // No second try after a refusal, nor at the other address.
+      expect(shop.hits.filter((h) => h !== "/robots.txt")).toEqual([pagePath(1)]);
       expect(await shopRow(s.id)).toMatchObject({ importState: null, lastImportError: `blocked (HTTP ${status})` });
       expect((await byExternalId(s.id, "1")).removedAt).toBeNull();
       expect(await readShopifySlowdown(handle.db, clock)).toBeNull();
     },
   );
 
-  it("stops at a refused variation too, before any removal", async () => {
+  it("stops at a refused variations listing too, before any removal", async () => {
     servePages([[{ id: 1, name: "Robe", sizes: ["S", "M"] }]]);
-    routes[`${API}/10`] = { status: 429, headers: JSON_TYPE, body: "{}" };
+    bulkStatus = 429;
     const s = await newShop();
     expect((await importCatalog(deps, s.id)).error).toBe("blocked (HTTP 429)");
-    expect(variationHits()).toEqual([`${API}/10`]);
+    expect(bulkHits()).toHaveLength(1);
     expect((await shopRow(s.id))?.lastImportAt).toBeNull();
-  });
-
-  it("stops with woocommerce_api_unavailable when the Store API is absent or disabled, and crawls nothing else", async () => {
-    const s = await newShop();
-    expect((await importCatalog(deps, s.id)).error).toBe("woocommerce_api_unavailable");
-    expect(shop.hits.filter((hit) => hit !== "/robots.txt")).toEqual([pagePath(1)]);
-
-    routes[pagePath(1)] = { headers: { "content-type": "text/html" }, body: "<html>Accueil</html>" };
-    expect((await importCatalog(deps, s.id)).error).toBe("woocommerce_api_unavailable");
-    routes[pagePath(1)] = { headers: JSON_TYPE, body: JSON.stringify({ code: "rest_disabled" }) };
-    expect((await importCatalog(deps, s.id)).error).toBe("woocommerce_api_unavailable");
-    expect(await shopRow(s.id)).toMatchObject({ importState: null, lastImportError: "woocommerce_api_unavailable" });
   });
 
   it("does not request what robots.txt forbids (/wp-json/)", async () => {
@@ -439,16 +624,17 @@ describe("WooCommerce catalogue import", () => {
     const s = await newShop();
     await importCatalog(deps, s.id);
     const before = await byExternalId(s.id, "1");
-    clock = new Date(clock.getTime() + 60 * 60_000);
+    later(HOUR);
     expect(await importCatalog(deps, s.id)).toMatchObject({ created: 0, updated: 0, unchanged: 1, error: null });
     const after = await byExternalId(s.id, "1");
     expect(after.updatedAt).toEqual(before.updatedAt);
     expect(after.lastCapturedAt).toEqual(clock);
   });
 
-  it("dispatches by platform: Shopify through its own import, any other platform refused", async () => {
+  it("dispatches by platform: Shopify through its own import, any other platform refused and recorded", async () => {
     const other = await newShop({ platform: "prestashop" });
     expect((await importCatalog(deps, other.id)).error).toBe("unsupported_platform");
+    expect((await shopRow(other.id))?.lastImportError).toBe("unsupported_platform");
     routes["/products.json?limit=250&page=1"] = { headers: JSON_TYPE, body: JSON.stringify({ products: [] }) };
     const shopify = await newShop({ platform: "shopify" });
     // An empty Shopify listing: read, nothing removed.

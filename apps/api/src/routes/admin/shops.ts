@@ -262,8 +262,11 @@ function pgCode(error: unknown): string | undefined {
 type Outcome = { shop: Shop } | { error: "domain_taken" | "slug_taken" | "not_found" };
 
 function importStatusShape(shop: Shop, now: Date) {
+  const importState = liveImportState(shop.importState, shop.importStartedAt, shop.importHeartbeatAt, now);
   return {
-    importState: liveImportState(shop.importState, shop.importStartedAt, shop.importHeartbeatAt, now),
+    importState,
+    // Only for an import still alive and running.
+    importPhase: importState === "running" && shop.importPhase === "sizes" ? ("sizes" as const) : null,
     importStartedAt: shop.importStartedAt?.toISOString() ?? null,
     importPages: shop.importPages,
     importSeen: shop.importSeen,

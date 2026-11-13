@@ -146,11 +146,12 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
       shop.platform === "woocommerce" &&
       capture.productId &&
       (capture.trigger === "refresh" || capture.trigger === "user")
-        ? await readWooStore(capture.url, capture.productId, {
+        ? await readWooStore(capture.url, capture.productId, shop, {
             db,
             policy: deps.policy ?? strictPolicy,
             robots: deps.robots,
             throttle: deps.throttle,
+            now,
             ...(deps.lookup ? { lookup: deps.lookup } : {}),
           })
         : null;

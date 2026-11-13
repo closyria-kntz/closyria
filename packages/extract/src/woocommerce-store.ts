@@ -214,6 +214,34 @@ export function extractWooVariation(json: string): (WooVariationStock & { id: st
   };
 }
 
+/** One variation of a listing of variations: its product (`parent`), its stock and its price. */
+export type WooListedVariation = WooVariationStock & { id: string; parent: string };
+
+const listedVariationSchema = variationSchema.extend({ parent: z.number().int().positive() });
+
+/**
+ * A page of the Store API's variations (`…/products?type=variation&parent[]=…`), a JSON array of variation products:
+ * each one with its product, and how many entries the page had (a short page is the last one). An entry that is no
+ * variation of a product is skipped; null when the body is no listing.
+ */
+export function extractWooVariations(json: string): { count: number; variations: WooListedVariation[] } | null {
+  const raw = parseJson(json);
+  if (!Array.isArray(raw)) return null;
+  const out: WooListedVariation[] = [];
+  for (const item of raw) {
+    const parsed = listedVariationSchema.safeParse(item);
+    if (!parsed.success) continue;
+    const v = parsed.data;
+    out.push({
+      id: String(v.id),
+      parent: String(v.parent),
+      available: v.is_in_stock && v.is_purchasable !== false,
+      ...(v.prices ? { priceCents: centsOf(v.prices).priceCents } : {}),
+    });
+  }
+  return { count: raw.length, variations: out };
+}
+
 /**
  * The product with each size's stock from its variations: a size is available when one of its variations read is;
  * when none of them was read, its last known stock (`known`, by label), else the product's own. A size price is kept

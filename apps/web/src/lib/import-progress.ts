@@ -37,7 +37,14 @@ export async function statusAfterImportRequest(options: {
 }): Promise<AdminShopImportStatus> {
   const { queued, current, read, now = new Date() } = options;
   if (queued) {
-    return { ...current, importState: "queued", importStartedAt: now.toISOString(), importPages: 0, importSeen: 0 };
+    return {
+      ...current,
+      importState: "queued",
+      importPhase: null,
+      importStartedAt: now.toISOString(),
+      importPages: 0,
+      importSeen: 0,
+    };
   }
   return (await read().catch(() => null)) ?? current;
 }
@@ -97,7 +104,7 @@ export function startImportPolling(options: {
  * over (no bar).
  */
 export type ImportProgress =
-  | { line: "queued" | "starting" | "running"; value: null; seen: number; total: null }
+  | { line: "queued" | "starting" | "running" | "sizes"; value: null; seen: number; total: null }
   | { line: "runningTotal"; value: number; seen: number; total: number };
 
 export const IMPORT_PROGRESS_MAX = 0.99;
@@ -106,6 +113,8 @@ export function importProgress(status: AdminShopImportStatus): ImportProgress | 
   if (status.importState === null) return null;
   if (status.importState === "queued") return { line: "queued", value: null, seen: 0, total: null };
   const seen = status.importSeen;
+  // Every page read, the per-size stock now (WooCommerce): no count to show against the total.
+  if (status.importPhase === "sizes") return { line: "sizes", value: null, seen, total: null };
   // The last complete import's real count, else the sitemap's estimate (first import).
   const total = status.lastImportSeen ?? status.importExpected;
   if (total !== null && total > 0) {

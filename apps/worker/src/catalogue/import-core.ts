@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
 import type dns from "node:dns";
 import { and, asc, count, type Database, eq, inArray, isNotNull, isNull, or, type SQL, schema } from "@closyria/db";
-import { CATALOGUE_IMPORT_HEARTBEAT_MS, canonicalizeUrl, type ExtractedProduct, shopDomain } from "@closyria/shared";
+import {
+  CATALOGUE_IMPORT_HEARTBEAT_MS,
+  canonicalizeUrl,
+  type ExtractedProduct,
+  type ImportPhase,
+  shopDomain,
+} from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import { type AddressPolicy, strictPolicy } from "../capture/address-policy";
 import { CaptureError } from "../capture/capture-error";
@@ -47,6 +53,8 @@ export type ImportResult = {
   unchanged: number;
   removed: number;
   error: string | null;
+  /** Listed products the parser rejected (WooCommerce: logged and counted); absent when none or not counted. */
+  skipped?: number;
 };
 
 export const IMPORT_PAUSE_MS = 1000;
@@ -130,6 +138,8 @@ export type ImportContext = {
   beat: () => Promise<void>;
   /** Throws `interrupted` when the import was asked to stop. */
   interrupted: () => void;
+  /** « Import en cours : lecture des tailles… » in the admin, after the pages. */
+  setPhase: (phase: ImportPhase | null) => Promise<void>;
   /** One request to the shop through the guard rails (robots.txt, throttle, address policy, caps). */
   fetch: (url: string, accept: SafeFetchAccept, options?: FetchOptions) => Promise<SafeResponse>;
 };
@@ -157,12 +167,16 @@ export type CatalogSource<T extends Listed> = {
   stopped?: (ctx: ImportContext, error: unknown) => Promise<void>;
   /** Which of the shop's products the import may judge gone (on top of: known by an id, not removed). */
   judged?: SQL;
+  /** Counts (and logs) the listed products the parser rejected: `skipped` in the result. */
+  countsSkipped?: boolean;
 };
 
 export type ImportPlan<T extends Listed> = {
   /** The source for this shop's platform; null stops with `unsupported`. */
   source: (platform: string) => CatalogSource<T> | null;
   unsupported: string;
+  /** The stop for an unsupported platform is also the shop's `last_import_error` (shown in the admin). */
+  recordUnsupported?: boolean;
 };
 
 /**
@@ -193,7 +207,7 @@ export async function runImport<T extends Listed>(
       // then stops (shown as dead after 10 min), and the next worker start clears it and queues the import again.
       await deps.db
         .update(schema.shops)
-        .set({ importState: null })
+        .set({ importState: null, importPhase: null })
         .where(eq(schema.shops.id, shopId))
         .catch((error) => console.error(`catalogue import ${shopId}: cannot clear its state`, error));
     }
@@ -236,7 +250,15 @@ async function run<T extends Listed>(
     return { ...result, error: stopped };
   }
   const source = plan.source(shop.platform);
-  if (!source) return { ...result, error: plan.unsupported };
+  if (!source) {
+    if (plan.recordUnsupported) {
+      await db
+        .update(schema.shops)
+        .set({ lastImportError: plan.unsupported, updatedAt: now() })
+        .where(eq(schema.shops.id, shopId));
+    }
+    return { ...result, error: plan.unsupported };
+  }
   const origin = await shopOrigin(db, shop);
   if (!origin) {
     await db
@@ -257,6 +279,7 @@ async function run<T extends Listed>(
       importPages: 0,
       importSeen: 0,
       importExpected: null,
+      importPhase: null,
     })
     .where(eq(schema.shops.id, shopId));
   // Proof of life for the admin, within a page too: at most every 30 s.
@@ -279,12 +302,21 @@ async function run<T extends Listed>(
     spacing,
     beat,
     interrupted,
+    setPhase: async (phase) => {
+      await db.update(schema.shops).set({ importPhase: phase }).where(eq(schema.shops.id, shopId));
+    },
     fetch: (url, accept, fetchOptions) => fetchShop(deps, url, accept, signal, source.line, fetchOptions),
   };
   const activeBefore = await activeImported(db, shopId, source.judged);
   const seen = new Set<string>();
   const listedIds = new Set<string>();
   let read = 0;
+  let skipped = 0;
+  const noteSkipped = () => {
+    if (skipped === 0) return;
+    result.skipped = skipped;
+    console.warn(`catalogue import ${shopId}: ${skipped} listed product(s) skipped (unreadable or invalid)`);
+  };
   try {
     // The bar's scale before the first complete import (after it, its count is the scale). Any failure: no estimate.
     const expected = shop.lastImportSeen === null && source.estimate ? await source.estimate(ctx) : null;
@@ -297,6 +329,7 @@ async function run<T extends Listed>(
       await beat();
       const listing = await source.fetchPage(ctx, page);
       for (const id of listing.listedIds) listedIds.add(id);
+      if (source.countsSkipped) skipped += listing.count - listing.products.length;
       // The shop's own count, when its listing gives one: the bar's scale from the first page.
       if (page === 1 && listing.total !== undefined && listing.total !== null) {
         await db.update(schema.shops).set({ importExpected: listing.total }).where(eq(schema.shops.id, shopId));
@@ -355,11 +388,13 @@ async function run<T extends Listed>(
       console.error(`catalogue import ${shopId} failed`, error);
     }
     result.error = reason;
+    noteSkipped();
     await db.update(schema.shops).set({ lastImportError: reason, updatedAt: now() }).where(eq(schema.shops.id, shopId));
     if (!signal.aborted) await source.stopped?.(ctx, error);
     return result;
   }
 
+  noteSkipped();
   // An empty or much shorter listing is more likely a broken shop than a closing-down sale: remove nothing.
   if (listedIds.size === 0 || listedIds.size < activeBefore * SHRINK_RATIO) {
     result.error = "suspicious_shrink";

@@ -10,6 +10,7 @@ import {
 
 const status = (over: Partial<AdminShopImportStatus> = {}): AdminShopImportStatus => ({
   importState: "running",
+  importPhase: null,
   importStartedAt: "2026-11-13T12:00:00.000Z",
   importPages: 3,
   importSeen: 712,
@@ -146,6 +147,17 @@ describe("importProgress", () => {
     expect(
       importProgress(status({ importState: "queued", importPages: 0, importSeen: 0, lastImportSeen: 900 })),
     ).toEqual({ line: "queued", value: null, seen: 0, total: null });
+  });
+
+  it("reads the sizes after the pages (WooCommerce): « lecture des tailles », an indeterminate bar", () => {
+    expect(importProgress(status({ importPhase: "sizes", importSeen: 100, lastImportSeen: 100 }))).toEqual({
+      line: "sizes",
+      value: null,
+      seen: 100,
+      total: null,
+    });
+    // Only while running.
+    expect(importProgress(status({ importState: null, importPhase: "sizes" }))).toBeNull();
   });
 
   it("is indeterminate on a first import, with the pages read", () => {

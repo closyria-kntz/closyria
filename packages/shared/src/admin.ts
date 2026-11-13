@@ -11,7 +11,13 @@ import {
   shopStatusSchema,
 } from "./catalog";
 import { canonicalizeUrl } from "./catalog-url";
-import { importStateSchema, reportReasonSchema, shopifySlowdownSchema, shopValueSchema } from "./catalogue";
+import {
+  importPhaseSchema,
+  importStateSchema,
+  reportReasonSchema,
+  shopifySlowdownSchema,
+  shopValueSchema,
+} from "./catalogue";
 import { audienceSchema, childDetailSchema, classifiedBySchema, seasonSchema } from "./wardrobe";
 
 const count = z.number().int().nonnegative();
@@ -138,6 +144,8 @@ export const adminShopSchema = z.object({
   lastImportError: z.string().nullable(),
   /** « En attente » / « Import en cours »; null when none is under way, or its job died (`liveImportState`). */
   importState: importStateSchema.nullable(),
+  /** `sizes` while a running import reads the per-size stock after its pages (WooCommerce); null otherwise. */
+  importPhase: importPhaseSchema.nullable(),
   /** When it was queued, then started. */
   importStartedAt: isoDate.nullable(),
   /** Pages and articles read by the import under way (reset when the worker starts it). */
@@ -185,6 +193,7 @@ export type AdminShopDetail = z.infer<typeof adminShopDetailSchema>;
 /** Only the import fields of the shop page's panel: read every 3 s while an import runs (same definitions as the detail). */
 export const adminShopImportStatusSchema = adminShopSchema.pick({
   importState: true,
+  importPhase: true,
   importStartedAt: true,
   importPages: true,
   importSeen: true,

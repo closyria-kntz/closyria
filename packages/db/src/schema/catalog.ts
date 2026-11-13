@@ -85,6 +85,14 @@ export const shops = pgTable(
     lastImportSeen: integer("last_import_seen"),
     lastImportCreated: integer("last_import_created"),
     lastImportRemoved: integer("last_import_removed"),
+    /** What the running import is doing after its pages: `sizes` while it reads the per-size stock (WooCommerce). */
+    importPhase: text("import_phase"),
+    /**
+     * What the import learnt of the shop's platform, read again by the next ones (`importHintsSchema`): for a
+     * WooCommerce shop, its Store API under `?rest_route=` (plain permalinks) and variations read one by one (an older
+     * WooCommerce that refuses `type=variation`).
+     */
+    importHints: jsonb("import_hints").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -94,6 +102,7 @@ export const shops = pgTable(
     check("shops_capture_mode_check", oneOf(t.captureMode, captureModeSchema.options)),
     check("shops_listing_kind_check", oneOf(t.listingKind, listingKindSchema.options)),
     check("shops_import_state_check", sql`${t.importState} IS NULL OR ${t.importState} IN ('queued', 'running')`),
+    check("shops_import_phase_check", sql`${t.importPhase} IS NULL OR ${t.importPhase} IN ('sizes')`),
     check(
       "shops_values_check",
       sql`${t.values} <@ ARRAY[${sql.raw(shopValueSchema.options.map((v) => `'${v}'`).join(", "))}]::text[]`,
@@ -194,6 +203,8 @@ export const products = pgTable(
      * read for new or changed products, and for every variable product at most once a day. Null: never read.
      */
     variantsCheckedAt: timestamp("variants_checked_at", { withTimezone: true }),
+    /** WooCommerce: the last read of its per-size stock that failed (5xx, unreadable); not tried again for 24 h. */
+    variantsTriedAt: timestamp("variants_tried_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

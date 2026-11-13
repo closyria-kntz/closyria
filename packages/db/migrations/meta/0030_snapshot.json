@@ -1,5 +1,5 @@
 {
-  "id": "5a8b0e0f-9325-485f-b3ec-0d1436381f9f",
+  "id": "6825d39a-f1a0-47c6-aff4-4caece763863",
   "prevId": "99fb4104-051d-4b82-9c89-790eaeeef011",
   "version": "7",
   "dialect": "postgresql",
@@ -1518,6 +1518,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "variants_tried_at": {
+          "name": "variants_tried_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2052,6 +2058,19 @@
           "primaryKey": false,
           "notNull": false
         },
+        "import_phase": {
+          "name": "import_phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "import_hints": {
+          "name": "import_hints",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2114,6 +2133,10 @@
         "shops_import_state_check": {
           "name": "shops_import_state_check",
           "value": "\"shops\".\"import_state\" IS NULL OR \"shops\".\"import_state\" IN ('queued', 'running')"
+        },
+        "shops_import_phase_check": {
+          "name": "shops_import_phase_check",
+          "value": "\"shops\".\"import_phase\" IS NULL OR \"shops\".\"import_phase\" IN ('sizes')"
         },
         "shops_values_check": {
           "name": "shops_values_check",

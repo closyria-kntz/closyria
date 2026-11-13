@@ -97,6 +97,7 @@ const IMPORT_ERROR_KEYS = {
   too_many_pages: "tooManyPages",
   interrupted: "interrupted",
   woocommerce_api_unavailable: "wooApiUnavailable",
+  unsupported_platform: "unsupportedPlatform",
 } as const;
 export type ImportErrorKey = (typeof IMPORT_ERROR_KEYS)[keyof typeof IMPORT_ERROR_KEYS];
 

@@ -14,6 +14,8 @@ export type FakeRoute = {
   delayMs?: number;
   /** Absolute URL or relative path; answers 302 unless `status` is a 3xx. */
   redirect?: string;
+  /** Builds the answer from the request's address (path and query), for a route keyed by its path alone. */
+  dynamic?: (url: URL) => FakeRoute;
 };
 
 export type FakeShop = {
@@ -64,7 +66,8 @@ export async function startFakeShop(routes: Record<string, FakeRoute>): Promise<
       inFlight -= 1;
     });
     // A route keyed by the full address (with its query) wins over the one keyed by the path alone.
-    const route = routes[url] ?? routes[url.split("?")[0] ?? "/"];
+    const found = routes[url] ?? routes[url.split("?")[0] ?? "/"];
+    const route = found?.dynamic ? found.dynamic(new URL(url, "http://127.0.0.1")) : found;
     const respond = async () => {
       if (!route) {
         res.writeHead(404, { "content-type": "text/plain" }).end("not found");

@@ -356,6 +356,7 @@ describe("values and import of a shop", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(adminShopImportStatusSchema.parse(await json(res))).toEqual({
       importState: "running",
+      importPhase: null,
       importStartedAt: started.toISOString(),
       importPages: 3,
       importSeen: 712,
@@ -366,13 +367,19 @@ describe("values and import of a shop", () => {
       lastImportRemoved: null,
       importExpected: null,
     });
-    expect(Object.keys(await json(await call("GET", `/admin/shops/${shop.id}/import-status`)))).toHaveLength(10);
+    expect(Object.keys(await json(await call("GET", `/admin/shops/${shop.id}/import-status`)))).toHaveLength(11);
+    // « Lecture des tailles » (WooCommerce), while the import is alive only.
+    await t.db.update(schema.shops).set({ importPhase: "sizes" }).where(eq(schema.shops.id, shop.id));
+    expect((await json(await call("GET", `/admin/shops/${shop.id}/import-status`))).importPhase).toBe("sizes");
 
     await t.db
       .update(schema.shops)
       .set({ importStartedAt: new Date(NOW.getTime() - 7 * 3_600_000) })
       .where(eq(schema.shops.id, shop.id));
-    expect((await json(await call("GET", `/admin/shops/${shop.id}/import-status`))).importState).toBeNull();
+    expect(await json(await call("GET", `/admin/shops/${shop.id}/import-status`))).toMatchObject({
+      importState: null,
+      importPhase: null,
+    });
 
     const id = "00000000-0000-4000-8000-000000000000";
     expect((await call("GET", `/admin/shops/${id}/import-status`)).status).toBe(404);

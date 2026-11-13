@@ -16,5 +16,10 @@ function sourceFor(platform: string): CatalogSource<Listed> | null {
  * and the same admin tracking for both; a shop on another platform stops with `unsupported_platform`.
  */
 export function importCatalog(deps: ImportDeps, shopId: string, options: ImportOptions = {}): Promise<ImportResult> {
-  return runImport(deps, shopId, { source: sourceFor, unsupported: "unsupported_platform" }, options);
+  return runImport(
+    deps,
+    shopId,
+    { source: sourceFor, unsupported: "unsupported_platform", recordUnsupported: true },
+    options,
+  );
 }

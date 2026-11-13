@@ -108,6 +108,7 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
   const importLine = (() => {
     if (progress?.line === "queued") return t("state.queued");
     if (progress?.line === "starting") return t("state.starting");
+    if (progress?.line === "sizes") return t("state.sizes");
     if (progress?.line === "running") return t("state.running", { pages: status.importPages, seen: progress.seen });
     if (progress?.line === "runningTotal") {
       return t("state.runningTotal", { seen: progress.seen, total: progress.total });
@@ -258,6 +259,7 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
 function importFieldsOf(shop: AdminShopDetail): AdminShopImportStatus {
   return {
     importState: shop.importState,
+    importPhase: shop.importPhase,
     importStartedAt: shop.importStartedAt,
     importPages: shop.importPages,
     importSeen: shop.importSeen,

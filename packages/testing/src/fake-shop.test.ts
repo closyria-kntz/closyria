@@ -25,6 +25,17 @@ describe("startFakeShop", () => {
     }
   });
 
+  it("builds a dynamic route's answer from the request's address", async () => {
+    const shop = await startFakeShop({
+      "/api": { dynamic: (url) => ({ body: url.searchParams.getAll("parent[]").join(",") }) },
+    });
+    try {
+      expect(await (await fetch(`${shop.origin}/api?parent[]=1&parent[]=2`)).text()).toBe("1,2");
+    } finally {
+      await shop.close();
+    }
+  });
+
   it("prefers a route keyed by the full address and counts requests answered at the same time", async () => {
     const shop = await startFakeShop({
       "/list": { body: "any page", delayMs: 50 },
