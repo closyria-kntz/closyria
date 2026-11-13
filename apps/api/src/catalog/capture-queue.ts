@@ -53,7 +53,8 @@ export function pgBossQueue(boss: {
     },
     async importCatalogue(shopId) {
       await start();
-      const job: CatalogueImportJob = { shopId };
+      // Marked as asked by the admin: resumed after a worker restart even when the nightly import is off.
+      const job: CatalogueImportJob = { shopId, manual: true };
       // pg-boss answers null instead of a job id when the singleton is taken (policy `exclusive`).
       const id = await boss.send(CATALOGUE_IMPORT_QUEUE, job, { singletonKey: shopId });
       return id !== null && id !== undefined;

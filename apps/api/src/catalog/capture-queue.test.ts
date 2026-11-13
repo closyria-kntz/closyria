@@ -47,8 +47,8 @@ describe("pgBossQueue", () => {
     expect(await queue.importCatalogue("s1")).toBe(true);
     expect(await queue.importCatalogue("busy")).toBe(false);
     expect(log.slice(-2)).toEqual([
-      'send catalogue-import {"shopId":"s1"} {"singletonKey":"s1"}',
-      'send catalogue-import {"shopId":"busy"} {"singletonKey":"busy"}',
+      'send catalogue-import {"shopId":"s1","manual":true} {"singletonKey":"s1"}',
+      'send catalogue-import {"shopId":"busy","manual":true} {"singletonKey":"busy"}',
     ]);
   });
 

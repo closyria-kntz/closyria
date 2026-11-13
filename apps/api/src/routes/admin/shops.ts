@@ -1,4 +1,18 @@
-import { and, asc, count, type Database, desc, eq, gte, inArray, isNull, ne, schema, sql } from "@closyria/db";
+import {
+  and,
+  asc,
+  count,
+  type Database,
+  desc,
+  eq,
+  gte,
+  importNotUnderWay,
+  inArray,
+  isNull,
+  ne,
+  schema,
+  sql,
+} from "@closyria/db";
 import {
   adminCatalogErrorSchema,
   adminImportQueuedSchema,
@@ -11,8 +25,6 @@ import {
   adminShopListSchema,
   adminShopPatchSchema,
   adminShopSchema,
-  CATALOGUE_IMPORT_DEAD_MS,
-  CATALOGUE_IMPORT_STALE_MS,
   type CaptureErrorCode,
   type CaptureMode,
   type CaptureStatus,
@@ -244,16 +256,6 @@ function pgCode(error: unknown): string | undefined {
 }
 
 type Outcome = { shop: Shop } | { error: "domain_taken" | "slug_taken" | "not_found" };
-
-/** SQL twin of `liveImportState(…) === null`: no import queued or running, or a dead one. */
-function importNotUnderWay(at: Date) {
-  const queuedSince = new Date(at.getTime() - CATALOGUE_IMPORT_STALE_MS).toISOString();
-  const aliveSince = new Date(at.getTime() - CATALOGUE_IMPORT_DEAD_MS).toISOString();
-  const { importState, importStartedAt, importHeartbeatAt } = schema.shops;
-  return sql`(${importState} is null or ${importStartedAt} is null
-    or (${importState} = 'queued' and ${importStartedAt} < ${queuedSince})
-    or (${importState} = 'running' and coalesce(${importHeartbeatAt}, ${importStartedAt}) < ${aliveSince}))`;
-}
 
 function importStatusShape(shop: Shop, now: Date) {
   return {

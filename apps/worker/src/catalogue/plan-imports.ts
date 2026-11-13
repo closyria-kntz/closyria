@@ -1,5 +1,5 @@
-import { and, type Database, eq, isNull, schema, sql } from "@closyria/db";
-import { CATALOGUE_IMPORT_DEAD_MS, CATALOGUE_IMPORT_QUEUE, CATALOGUE_IMPORT_STALE_MS } from "@closyria/shared";
+import { and, type Database, eq, importNotUnderWay, isNull, schema } from "@closyria/db";
+import { CATALOGUE_IMPORT_QUEUE } from "@closyria/shared";
 
 export type ImportQueue = {
   send(queue: string, data: object, options: { singletonKey: string }): Promise<unknown>;
@@ -48,17 +48,4 @@ export async function planCatalogueImports(db: Database, queue: ImportQueue, now
     }
   }
   return planned;
-}
-
-/**
- * SQL twin of `liveImportState(…) === null` (as the admin's « Importer maintenant »): no import queued or running, or
- * a dead one (queued over 6 h, running without heartbeat for 10 min).
- */
-export function importNotUnderWay(at: Date) {
-  const queuedSince = new Date(at.getTime() - CATALOGUE_IMPORT_STALE_MS).toISOString();
-  const aliveSince = new Date(at.getTime() - CATALOGUE_IMPORT_DEAD_MS).toISOString();
-  const { importState, importStartedAt, importHeartbeatAt } = schema.shops;
-  return sql`(${importState} is null or ${importStartedAt} is null
-    or (${importState} = 'queued' and ${importStartedAt} < ${queuedSince})
-    or (${importState} = 'running' and coalesce(${importHeartbeatAt}, ${importStartedAt}) < ${aliveSince}))`;
 }

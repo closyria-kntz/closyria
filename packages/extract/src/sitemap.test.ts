@@ -53,4 +53,30 @@ describe("extractSitemap", () => {
     expect(extractSitemap('{"products":[]}')).toBeNull();
     expect(extractSitemap("")).toBeNull();
   });
+  it("reads the entries before the first one left unclosed, and stops there", () => {
+    const xml = `<urlset><url><loc>https://a.example/products/x</loc></url><url><loc>https://a.example/products/y</loc><url><loc>https://a.example/products/z</loc></url></urlset>`;
+    expect(extractSitemap(xml)).toEqual({ kind: "urlset", locs: ["https://a.example/products/x"] });
+  });
+
+  it("tells <url> from <urlset> and other names that start alike", () => {
+    const xml = `<urlset><urlextra>no</urlextra><url><loc>https://a.example/products/x</loc></url></urlset>`;
+    expect(extractSitemap(xml)).toEqual({ kind: "urlset", locs: ["https://a.example/products/x"] });
+  });
+
+  it("stays linear on thousands of unclosed entries (a hostile or truncated sitemap)", () => {
+    for (const [root, entry] of [
+      ["urlset", "url"],
+      ["sitemapindex", "sitemap"],
+    ] as const) {
+      const xml = `<${root}>${`<${entry}><loc>https://a.example/products/x</loc>`.repeat(20_000)}</${root}>`;
+      const started = performance.now();
+      expect(extractSitemap(xml)).toEqual({ kind: root === "urlset" ? "urlset" : "index", locs: [] });
+      expect(performance.now() - started).toBeLessThan(200);
+    }
+    // Closed entries whose <loc> never ends: each costs its own length only.
+    const xml = `<urlset>${"<url><loc>https://a.example/products/x</url>".repeat(20_000)}</urlset>`;
+    const started = performance.now();
+    expect(extractSitemap(xml)).toEqual({ kind: "urlset", locs: [] });
+    expect(performance.now() - started).toBeLessThan(200);
+  });
 });

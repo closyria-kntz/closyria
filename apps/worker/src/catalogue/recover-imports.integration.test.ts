@@ -122,6 +122,50 @@ describe("recoverInterruptedImports (worker startup)", () => {
     expect(await states(boss, a.id)).toEqual(["created", "failed"]);
     expect(await states(boss, c.id)).toEqual(["created"]);
   });
+
+  it("resumes a shop with the nightly import off only when the admin launched that import by hand", async () => {
+    const hourAgo = new Date(Date.now() - 3_600_000);
+    const off = { importEnabled: false };
+    // F: « Importer maintenant » on a shop without the nightly import, killed mid-import.
+    const f = await newShop({ ...off, importState: "running", importStartedAt: hourAgo });
+    // G: a nightly import, cut cleanly, then the admin turned the nightly import off: not resumed.
+    const g = await newShop({ ...off, lastImportError: "interrupted" });
+    // H: « Importer maintenant », cut cleanly: resumed.
+    const h = await newShop({ ...off, lastImportError: "interrupted" });
+    // I: left running, but a job of it already waits: nothing new is queued, it stays « En attente ».
+    const i = await newShop({ importState: "running", importStartedAt: hourAgo });
+
+    const dead = await newBoss();
+    // Only this test's jobs: each fetch below takes the job just sent.
+    await dead.deleteQueuedJobs(CATALOGUE_IMPORT_QUEUE);
+    const settled = async (shopId: string, manual: boolean) => {
+      await dead.send(CATALOGUE_IMPORT_QUEUE, { shopId, ...(manual ? { manual } : {}) }, { singletonKey: shopId });
+      const [job] = await dead.fetch(CATALOGUE_IMPORT_QUEUE);
+      if (job) await dead.complete(CATALOGUE_IMPORT_QUEUE, job.id);
+    };
+    await settled(g.id, false);
+    await settled(h.id, true);
+    await dead.send(CATALOGUE_IMPORT_QUEUE, { shopId: f.id, manual: true }, { singletonKey: f.id });
+    await dead.fetch(CATALOGUE_IMPORT_QUEUE);
+    await dead.send(CATALOGUE_IMPORT_QUEUE, { shopId: i.id }, { singletonKey: i.id });
+    await dead.stop({ graceful: false, timeout: 1000 });
+    const boss = await newBoss();
+
+    const log = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const result = await recoverInterruptedImports(handle.db, boss);
+    log.mockRestore();
+
+    expect(new Set(result.requeued)).toEqual(new Set([f.id, h.id]));
+    const created = async (shopId: string) =>
+      (await jobsOf(boss, shopId)).filter((j) => j.state === "created").map((j) => j.data);
+    // Still marked as asked by the admin, for a later restart.
+    expect(await created(f.id)).toEqual([{ shopId: f.id, manual: true }]);
+    expect(await created(h.id)).toEqual([{ shopId: h.id, manual: true }]);
+    expect(await created(g.id)).toEqual([]);
+    expect(await shopRow(g.id)).toMatchObject({ importState: null });
+    expect(await created(i.id)).toEqual([{ shopId: i.id }]);
+    expect(await shopRow(i.id)).toMatchObject({ importState: "queued" });
+  });
 });
 
 describe("graceful stop (deploy)", () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CATALOGUE_IMPORT_DEAD_MS,
+  CATALOGUE_IMPORT_HEARTBEAT_MS,
   catalogDetailSchema,
   catalogQuerySchema,
   isHttpUrl,
@@ -237,6 +238,10 @@ describe("liveImportState", () => {
 
   it("keeps a running import whose heartbeat is recent, however long ago it started", () => {
     expect(liveImportState("running", ago(3 * 3_600_000), ago(min), now)).toBe("running");
+  });
+
+  it("waits for many missed heartbeats before calling an import dead", () => {
+    expect(CATALOGUE_IMPORT_DEAD_MS).toBeGreaterThanOrEqual(10 * CATALOGUE_IMPORT_HEARTBEAT_MS);
   });
 
   it("drops a running import whose heartbeat is over 10 min old (worker stopped or killed)", () => {

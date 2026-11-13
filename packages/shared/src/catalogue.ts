@@ -250,8 +250,11 @@ export function sizeKindsByCategory(
 
 /** pg-boss queue of the Shopify catalogue imports (nightly, or « Importer tout le catalogue » in the admin). */
 export const CATALOGUE_IMPORT_QUEUE = "catalogue-import";
-/** One import job: one shop. A job without data plans the night's imports. */
-export const catalogueImportJobSchema = z.object({ shopId: z.uuid() });
+/**
+ * One import job: one shop. A job without data plans the night's imports. `manual`: asked by the admin (« Importer
+ * maintenant »), so resumed after a restart even when the shop's nightly import is off.
+ */
+export const catalogueImportJobSchema = z.object({ shopId: z.uuid(), manual: z.boolean().optional() });
 export type CatalogueImportJob = z.infer<typeof catalogueImportJobSchema>;
 /**
  * Options of that queue, the same wherever it is created (the first `createQueue` wins): at most one job queued or

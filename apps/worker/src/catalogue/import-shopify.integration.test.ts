@@ -190,6 +190,7 @@ async function wishOn(productId: string) {
 }
 
 describe("importShopifyCatalog", () => {
+  // 252 products written: about 1 s alone, over 5 s under the load of the whole suite (turbo runs it in parallel).
   it("reads two pages with a 1 s pause, one request at a time, and writes classified products like a capture", async () => {
     servePages(
       twoPages([
@@ -255,7 +256,7 @@ describe("importShopifyCatalog", () => {
     const after = await shopRow(s.id);
     expect(after?.lastImportAt).toBeInstanceOf(Date);
     expect(after?.lastImportError).toBeNull();
-  });
+  }, 20_000);
 
   it("writes its progress after each page for the admin, then the counts of the finished import", async () => {
     servePages(twoPages([{ id: 1, title: "Robe" }]));
@@ -676,7 +677,13 @@ describe("importShopifyCatalog", () => {
         },
         {
           "/sitemap.xml": { headers: XML_TYPE, body: index(["/sitemap_products_1.xml"]) },
-          "/sitemap_products_1.xml": { headers: XML_TYPE, body: urlset(["/products/a".padEnd(21 * 1024 * 1024, "a")]) },
+          "/sitemap_products_1.xml": {
+            headers: XML_TYPE,
+            body: urlset(
+              // Over 8 MB of valid entries: past the sitemaps' own cap.
+              Array.from({ length: 160_000 }, (_, n) => `/products/p${n}`),
+            ),
+          },
         },
       ];
       for (const [i, extra] of cases.entries()) {
@@ -687,6 +694,33 @@ describe("importShopifyCatalog", () => {
         expect((await importShopifyCatalog(deps, s.id)).error, `case ${i}`).toBeNull();
         expect(await shopRow(s.id), `case ${i}`).toMatchObject({ importExpected: null, lastImportError: null });
       }
+    });
+
+    it("counts each product once across the language sitemaps (/en/…)", async () => {
+      routes["/sitemap.xml"] = {
+        headers: XML_TYPE,
+        body: index(["/sitemap_products_1.xml", "/en/sitemap_products_1.xml"]),
+      };
+      routes["/sitemap_products_1.xml"] = { headers: XML_TYPE, body: urlset(["/", "/products/a", "/products/b"]) };
+      routes["/en/sitemap_products_1.xml"] = {
+        headers: XML_TYPE,
+        body: urlset(["/en", "/en/products/a", "/en/products/b", "/en/products/c"]),
+      };
+      servePages([[{ id: 31, title: "Robe" }]]);
+      const s = await newShop();
+      await importShopifyCatalog(deps, s.id);
+      expect((await shopRow(s.id))?.importExpected).toBe(3);
+    });
+
+    it("reads no sitemap once the shop has a complete import: its count is the scale", async () => {
+      routes["/sitemap.xml"] = { headers: XML_TYPE, body: index(["/sitemap_products_1.xml"]) };
+      routes["/sitemap_products_1.xml"] = { headers: XML_TYPE, body: urlset(["/products/a"]) };
+      servePages([[{ id: 32, title: "Robe" }]]);
+      const s = await newShop({ lastImportSeen: 40 });
+      await importShopifyCatalog(deps, s.id);
+      expect(shop.hits.filter((hit) => hit.startsWith("/sitemap") || hit.startsWith("/en/"))).toEqual([]);
+      expect(pauses).toEqual([]);
+      expect(await shopRow(s.id)).toMatchObject({ importExpected: null, lastImportSeen: 1 });
     });
 
     it("ignores a products sitemap on another site", async () => {

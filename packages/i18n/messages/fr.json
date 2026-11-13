@@ -647,7 +647,7 @@
           "httpError": "La boutique a répondu par une erreur{status, select, none {} other { (HTTP {status})}}",
           "invalidData": "La réponse de la boutique est illisible",
           "tooManyPages": "Catalogue trop grand : import arrêté",
-          "interrupted": "Import interrompu par un redémarrage du serveur : il reprend tout seul"
+          "interrupted": "Import interrompu par un redémarrage du serveur"
         }
       }
     },

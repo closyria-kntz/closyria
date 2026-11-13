@@ -58,10 +58,14 @@ const REMOVE_CHUNK = 1000;
 const SHRINK_RATIO = 0.5;
 /** A product with the same content is still written in full once this old (new classification rules reach it). */
 const RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
+/** Cap on one sitemap: Shopify's hold 5 000 products each, far below; the parse is synchronous, so it stays small. */
+const SITEMAP_MAX_BYTES = 8 * 1024 * 1024;
 /** Products sitemaps read for the estimate: Shopify lists up to 5 000 products in each. */
 const MAX_PRODUCT_SITEMAPS = 50;
 /** `sitemap_products_1.xml`, possibly under a market prefix (`/en/…`), with Shopify's `?from=…&to=…`. */
 const PRODUCT_SITEMAP = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?sitemap_products_\d+\.xml$/i;
+/** A product page, under a market prefix or not: its handle (`/en/products/robe` and `/products/robe` are one). */
+const PRODUCT_PAGE = /\/products\/([^/]+)\/?$/;
 
 const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -198,8 +202,9 @@ async function run(deps: ImportDeps, shopId: string, result: ImportResult, signa
   const listedIds = new Set<string>();
   let read = 0;
   try {
-    // The bar's scale before any complete import: the products the shop's sitemap lists. Any failure: no estimate.
-    const expected = await estimateProducts(deps, origin, spacing, beat, signal);
+    // The bar's scale before the first complete import (after it, its count is the scale): the products the shop's
+    // sitemap lists. Any failure: no estimate.
+    const expected = shop.lastImportSeen === null ? await estimateProducts(deps, origin, spacing, beat, signal) : null;
     if (expected !== null) {
       await db.update(schema.shops).set({ importExpected: expected }).where(eq(schema.shops.id, shopId));
     }
@@ -301,13 +306,19 @@ async function shopOrigin(db: Database, shop: typeof schema.shops.$inferSelect):
  * One request to the shop through the capture's guard rails: its domain's throttle, robots.txt (a refusal throws
  * `robots_disallowed`), the address policy, the size and time caps; cut short when `signal` is aborted.
  */
-async function fetchShop(deps: ImportDeps, url: string, accept: SafeFetchAccept, signal: AbortSignal) {
+async function fetchShop(
+  deps: ImportDeps,
+  url: string,
+  accept: SafeFetchAccept,
+  signal: AbortSignal,
+  maxBytes = PAGE_MAX_BYTES,
+) {
   await deps.throttle.wait(shopDomain(url));
   if (!(await deps.robots.allows(url))) throw new ImportStop("robots_disallowed");
   return safeFetch(url, {
     accept,
     policy: deps.policy ?? strictPolicy,
-    maxBytes: PAGE_MAX_BYTES,
+    maxBytes,
     timeoutMs: PAGE_TIMEOUT_MS,
     signal,
     ...(deps.lookup ? { lookup: deps.lookup } : {}),
@@ -340,10 +351,10 @@ async function fetchPage(
 
 /**
  * How many products the shop's public sitemap lists: `/sitemap.xml` (an index), then each of its products sitemaps
- * on the same site (at most 50), counting their product addresses (`/products/…`; Shopify also lists the home page).
- * Every request goes like a page's (`spacing`: 1 s apart; same guard rails). An estimate only: any failure (missing,
- * forbidden by robots.txt, blocked, too big, unreadable, no product) gives null and is not an import error. Only an
- * interruption of the import goes through.
+ * on the same site (at most 50), counting distinct product handles (`/products/<handle>`, whatever the market prefix;
+ * Shopify also lists the home page). Every request goes like a page's (`spacing`: 1 s apart; same guard rails, 8 MB
+ * per sitemap). An estimate only: any failure (missing, forbidden by robots.txt, blocked, too big, unreadable, no
+ * product) gives null and is not an import error. Only an interruption of the import goes through.
  */
 async function estimateProducts(
   deps: ImportDeps,
@@ -357,7 +368,7 @@ async function estimateProducts(
     if (!(await deps.robots.allows(url))) return null;
     await spacing();
     await beat();
-    const response = await fetchShop(deps, url, "xml", signal);
+    const response = await fetchShop(deps, url, "xml", signal, SITEMAP_MAX_BYTES);
     return extractSitemap(decodeBody(response.body, response.contentType));
   };
   try {
@@ -371,13 +382,17 @@ async function estimateProducts(
       })
       .slice(0, MAX_PRODUCT_SITEMAPS);
     if (sitemaps.length === 0) return null;
-    let total = 0;
+    // Each product once, though every market sitemap (`/en/…`) lists it again.
+    const handles = new Set<string>();
     for (const loc of sitemaps) {
       const sitemap = await read(loc);
       if (sitemap?.kind !== "urlset") return null;
-      total += sitemap.locs.filter((page) => new URL(page).pathname.includes("/products/")).length;
+      for (const page of sitemap.locs) {
+        const handle = PRODUCT_PAGE.exec(new URL(page).pathname)?.[1];
+        if (handle) handles.add(handle.toLowerCase());
+      }
     }
-    return total > 0 ? total : null;
+    return handles.size > 0 ? handles.size : null;
   } catch (error) {
     if (signal.aborted || (error instanceof ImportStop && error.reason === "interrupted")) {
       throw new ImportStop("interrupted");
