@@ -11,7 +11,18 @@ import { buttonClass, primaryButtonClass } from "../../../ui";
  * « Boutique de la semaine »: puts a published shop forward as the une of « Découvrir » (the one featured most
  * recently is shown), or takes it off.
  */
-export function FeatureShop({ shopId, status, featured }: { shopId: string; status: ShopStatus; featured: boolean }) {
+export function FeatureShop({
+  shopId,
+  status,
+  featured,
+  isMajorBrand,
+}: {
+  shopId: string;
+  status: ShopStatus;
+  featured: boolean;
+  /** A « grande enseigne » never goes in the une: a hint instead of the button. */
+  isMajorBrand: boolean;
+}) {
   const t = useTranslations("Admin.shops.feature");
   const errors = useTranslations("Admin.common.errors");
   const router = useRouter();
@@ -33,8 +44,10 @@ export function FeatureShop({ shopId, status, featured }: { shopId: string; stat
       <h2 id="feature-title" className="font-display text-lead font-strong">
         {t("title")}
       </h2>
-      <p className="text-ink-muted">{featured ? t("on") : status === "published" ? t("off") : t("draft")}</p>
-      {(featured || status === "published") && (
+      <p className="text-ink-muted">
+        {featured ? t("on") : isMajorBrand ? t("majorBrand") : status === "published" ? t("off") : t("draft")}
+      </p>
+      {(featured || (status === "published" && !isMajorBrand)) && (
         <button
           type="button"
           onClick={toggle}

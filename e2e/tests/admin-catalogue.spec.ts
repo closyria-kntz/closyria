@@ -501,9 +501,9 @@ test("une admin voit la plateforme des boutiques, filtre dessus et marque une «
   await expect(page).toHaveURL(/[?&]platform=prestashop(&|$)/);
   const rows = page.getByRole("row").filter({ has: page.getByRole("link", { name: shop.name }) });
   await expect(rows).toHaveCount(1);
-  await expect(rows.getByRole("cell", { name: "PrestaShop", exact: true })).toBeVisible();
+  await expect(rows.getByTestId("shop-platform")).toHaveText("PrestaShop");
   // Every row of the filtered list is on PrestaShop.
-  const platforms = await page.getByRole("table").locator("tbody tr td:nth-child(4)").allTextContents();
+  const platforms = await page.getByRole("table").getByTestId("shop-platform").allTextContents();
   expect(new Set(platforms)).toEqual(new Set(["PrestaShop"]));
   await expect(rows.getByTestId("major-brand-tag")).toHaveCount(0);
   await axeLightAndDark(page);
@@ -520,6 +520,12 @@ test("une admin voit la plateforme des boutiques, filtre dessus et marque une «
   await settings.getByRole("button", { name: "Enregistrer" }).click();
   await expect(settings.getByText("Réglages enregistrés.")).toBeVisible();
   await expect(major).toBeChecked();
+  await expect(page.getByRole("region", { name: "Validation" })).toContainText(
+    "Boutique publiée, grande enseigne : ses articles restent utilisables mais n’apparaissent pas dans « Découvrir ».",
+  );
+  const feature = page.getByRole("region", { name: "Boutique de la semaine" });
+  await expect(feature).toContainText("Grande enseigne : elle ne va jamais en une.");
+  await expect(feature.getByRole("button")).toHaveCount(0);
   const saved = await db.query("select is_major_brand from shops where id = $1", [shop.id]);
   expect(saved.rows).toEqual([{ is_major_brand: true }]);
   // « Articles dans Découvrir » (shown for a Shopify shop only) drops to 0.

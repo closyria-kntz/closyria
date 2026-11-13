@@ -867,11 +867,12 @@ describe("GET /api/catalog/{productId} — live check (« stocks frais »)", () 
     expect(await refreshesOf(failed.id)).toHaveLength(1);
   });
 
-  it("never asks for a hidden or removed article, an unpublished or merged shop, or a shop captured by hand", async () => {
+  it("never asks for a hidden or removed article, an unpublished, merged or big-brand shop, or one captured by hand", async () => {
     const auto = await newShop();
     const manual = await newShop({ captureMode: "manual" });
     const pending = await newShop({ status: "pending" });
     const merged = await newShop({ mergedIntoId: auto.id });
+    const major = await newShop({ isMajorBrand: true });
     const old = { lastCapturedAt: ago(DAY) };
     const products = [
       await newProduct(auto.id, { ...old, hiddenAt: ago(DAY) }),
@@ -879,6 +880,7 @@ describe("GET /api/catalog/{productId} — live check (« stocks frais »)", () 
       await newProduct(manual.id, old),
       await newProduct(pending.id, old),
       await newProduct(merged.id, old),
+      await newProduct(major.id, old),
     ];
     for (const p of products) {
       expect(await ask(p.id, ago(DAY))).toBe(false);

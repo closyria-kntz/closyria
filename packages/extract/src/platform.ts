@@ -1,5 +1,4 @@
 import type { Platform } from "@closyria/shared";
-import { isShopifyPage } from "./shopify";
 
 /** A platform recognised on a page: never `other` nor `unknown` (those are what the shop is without one). */
 export type DetectedPlatform = Exclude<Platform, "other" | "unknown">;
@@ -37,8 +36,15 @@ const attribute = (tag: string, name: string) =>
     .find(Boolean);
 
 /**
+ * Shopify's own markers, strong enough to make a shop Shopify for good (its line, slow-down and import). A bare
+ * `cdn.shopify.com` is not one: any site may show a photo from it; it only makes the capture try the `.js`
+ * (`isShopifyPage`).
+ */
+const SHOPIFY = /\bShopify\.shop\b|\.myshopify\.com\b|\bshopify-section\b/;
+
+/**
  * The e-commerce platform a shop page is built with, from cheap and reliable HTML markers: its generator meta first,
- * then Shopify's own markers (`isShopifyPage`), then the others' asset paths and globals. Null when none is
+ * then the other platforms' asset paths and globals, then Shopify's strong markers (`SHOPIFY`). Null when none is
  * recognised (a plain page, a big brand's own site). Pure: the HTML only, no request.
  */
 export function detectPlatform(html: string): DetectedPlatform | null {
@@ -48,6 +54,7 @@ export function detectPlatform(html: string): DetectedPlatform | null {
     const found = GENERATORS.find(([pattern]) => pattern.test(content));
     if (found) return found[1];
   }
-  if (isShopifyPage(html)) return "shopify";
-  return MARKERS.find(([pattern]) => pattern.test(html))?.[1] ?? null;
+  const found = MARKERS.find(([pattern]) => pattern.test(html));
+  if (found) return found[1];
+  return SHOPIFY.test(html) ? "shopify" : null;
 }

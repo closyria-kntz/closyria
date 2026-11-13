@@ -235,6 +235,32 @@ describe("POST/DELETE /api/admin/shops/{id}/feature", () => {
     ]);
   });
 
+  it("refuses a « grande enseigne » (409 major_brand); ticking it takes a featured shop off the une", async () => {
+    const big = await newShop({ isMajorBrand: true });
+    const res = await call("POST", `/admin/shops/${big.id}/feature`, adminCookie);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "major_brand" });
+    const [row] = await t.db.select().from(schema.shops).where(eq(schema.shops.id, big.id));
+    expect(row?.featuredAt).toBeNull();
+
+    const shop = await newShop({ featuredAt: ago(DAY) });
+    const patch = await t.app.request(`/api/admin/shops/${shop.id}`, {
+      method: "PATCH",
+      headers: { origin: BASE_URL, cookie: adminCookie, "content-type": "application/json" },
+      body: JSON.stringify({ isMajorBrand: true }),
+    });
+    expect(patch.status).toBe(200);
+    const [after] = await t.db.select().from(schema.shops).where(eq(schema.shops.id, shop.id));
+    expect(after).toMatchObject({ isMajorBrand: true, featuredAt: null });
+    // Unticking it does not put it back.
+    await t.app.request(`/api/admin/shops/${shop.id}`, {
+      method: "PATCH",
+      headers: { origin: BASE_URL, cookie: adminCookie, "content-type": "application/json" },
+      body: JSON.stringify({ isMajorBrand: false }),
+    });
+    expect((await t.db.select().from(schema.shops).where(eq(schema.shops.id, shop.id)))[0]?.featuredAt).toBeNull();
+  });
+
   it("refuses a shop that is not published (409) and an unknown or merged one (404)", async () => {
     const draft = await newShop({ status: "draft" });
     const target = await newShop();

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { detectPlatform } from "./index";
+import { detectPlatform, isShopifyPage } from "./index";
 
 const fixture = (file: string) => readFileSync(new URL(`../fixtures/${file}`, import.meta.url), "utf8");
 const page = (head: string, body = "<h1>Robe Lina</h1><p>Une jolie robe portée avec une image/png.</p>") =>
@@ -55,9 +55,25 @@ describe("detectPlatform — page markers", () => {
     ],
     ['<script>require(["mage/cookies"], function () {});</script>', "magento"],
     ["<script>Shopify.shop = 'robe.myshopify.com';</script>", "shopify"],
-    ['<img src="https://cdn.shopify.com/s/files/robe.jpg">', "shopify"],
+    ['<a href="https://robe.myshopify.com/cart">Panier</a>', "shopify"],
+    ['<div id="shopify-section-header" class="shopify-section"></div>', "shopify"],
   ] as const)("%s → %s", (marker, expected) => {
     expect(detectPlatform(page("", marker))).toBe(expected);
+  });
+});
+
+describe("detectPlatform — a photo from Shopify's CDN is no proof", () => {
+  const photo = '<img src="https://cdn.shopify.com/s/files/robe.jpg">';
+
+  it("WooCommerce assets with a cdn.shopify.com photo are WooCommerce", () => {
+    const woo = '<script src="/wp-content/plugins/woocommerce/assets/js/frontend/cart.js"></script>';
+    expect(detectPlatform(page("", `${photo}${woo}`))).toBe("woocommerce");
+  });
+
+  it("a plain page with only a cdn.shopify.com photo is no platform (it still makes the capture try the .js)", () => {
+    const html = page("", photo);
+    expect(detectPlatform(html)).toBeNull();
+    expect(isShopifyPage(html)).toBe(true);
   });
 });
 
@@ -73,9 +89,11 @@ describe("detectPlatform — no false positive", () => {
     expect(detectPlatform(talk)).toBeNull();
   });
 
-  it("recognises the recorded pages: Shopify, WooCommerce, and nothing on Promod or Zalando", () => {
-    for (const file of ["mcb-paris", "easy-clothes", "ohlala", "paolina", "intemporel"]) {
-      expect(detectPlatform(fixture(`real/${file}.html`)), file).toBe("shopify");
+  it("recognises the recorded pages: Shopify by its sections, WooCommerce, and nothing on Promod or Zalando", () => {
+    expect(detectPlatform(fixture("real/paolina.html"))).toBe("shopify");
+    // Recorded without their Shopify globals: only the CDN is left, which is no proof (their .js is).
+    for (const file of ["mcb-paris", "easy-clothes", "ohlala", "intemporel"]) {
+      expect(detectPlatform(fixture(`real/${file}.html`)), file).toBeNull();
     }
     expect(detectPlatform(fixture("real/sahoma.html"))).toBe("woocommerce");
     expect(detectPlatform(fixture("real/promod.html"))).toBeNull();

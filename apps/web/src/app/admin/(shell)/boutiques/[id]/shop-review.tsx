@@ -8,7 +8,16 @@ import { adminRequest, catalogErrorKey } from "@/lib/admin-catalog";
 import { buttonClass, primaryButtonClass } from "../../../ui";
 
 /** « Valider » / « Refuser »: a shop found through a link enters the catalogue only once an admin validates it. */
-export function ShopReview({ shopId, status }: { shopId: string; status: ShopStatus }) {
+export function ShopReview({
+  shopId,
+  status,
+  isMajorBrand,
+}: {
+  shopId: string;
+  status: ShopStatus;
+  /** « Grande enseigne »: published, its articles still never show in « Découvrir ». */
+  isMajorBrand: boolean;
+}) {
   const t = useTranslations("Admin.shops.review");
   const errors = useTranslations("Admin.common.errors");
   const router = useRouter();
@@ -31,7 +40,7 @@ export function ShopReview({ shopId, status }: { shopId: string; status: ShopSta
       <h2 id="review-title" className="font-display text-lead font-strong">
         {t("title")}
       </h2>
-      <p className="text-ink-muted">{t(status)}</p>
+      <p className="text-ink-muted">{status === "published" && isMajorBrand ? t("publishedMajorBrand") : t(status)}</p>
       <div className="flex flex-wrap gap-space-3">
         {status !== "published" && (
           <button

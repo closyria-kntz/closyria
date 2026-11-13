@@ -47,7 +47,7 @@ export default async function AdminShopPage({ params }: Props) {
       {shop.platform === "shopify" && <ShopifySlowdownAlert slowdown={shop.shopifySlowdown} />}
 
       <div className="rounded-card border border-card-border bg-card-bg p-space-4">
-        <ShopReview shopId={shop.id} status={shop.status} />
+        <ShopReview shopId={shop.id} status={shop.status} isMajorBrand={shop.isMajorBrand} />
       </div>
 
       <section
@@ -65,7 +65,7 @@ export default async function AdminShopPage({ params }: Props) {
       </div>
 
       <div className="rounded-card border border-card-border bg-card-bg p-space-4">
-        <FeatureShop shopId={shop.id} status={shop.status} featured={shop.featured} />
+        <FeatureShop shopId={shop.id} status={shop.status} featured={shop.featured} isMajorBrand={shop.isMajorBrand} />
       </div>
 
       <section

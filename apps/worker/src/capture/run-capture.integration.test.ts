@@ -4,7 +4,7 @@ import { createDb, eq, schema } from "@closyria/db";
 import { memoryStore } from "@closyria/storage";
 import { type FakeRoute, type FakeShop, startFakeShop } from "@closyria/testing";
 import { createTestDatabase } from "@closyria/testing/vitest";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AddressPolicy } from "./address-policy";
 import { createRobotsCache, safeRobotsFetcher } from "./robots";
 import { type CaptureDeps, runCapture } from "./run-capture";
@@ -287,6 +287,69 @@ describe("runCapture", () => {
       const [s] = await handle.db.select().from(schema.shops).where(eq(schema.shops.id, t.shop.id));
       expect(s?.platform, platform).toBe(platform);
     }
+  });
+
+  it("a photo from cdn.shopify.com alone never makes a shop Shopify: its .js is tried, fails, nothing stored", async () => {
+    const photo = '<img src="https://cdn.shopify.com/s/files/robe.jpg">';
+    for (const platform of ["unknown", "other"] as const) {
+      servePage("/products/robe", "synthetic/jsonld-simple.html");
+      routes["/products/robe"] = { ...routes["/products/robe"], body: `${routes["/products/robe"]?.body}${photo}` };
+      routes["/products/robe.js"] = { status: 404, headers: { "content-type": "application/json" }, body: "{}" };
+      const t = await setup("/products/robe", { shop: { platform } }, "admin_test");
+
+      await runCapture(t.capture.id, deps);
+
+      expect((await load(t.capture.id, t.product.id)).capture?.status).toBe("succeeded");
+      expect(shop.hits).toContain("/products/robe.js");
+      const [s] = await handle.db.select().from(schema.shops).where(eq(schema.shops.id, t.shop.id));
+      expect(s?.platform, platform).toBe("other");
+    }
+  });
+
+  it("an other shop whose page is Shopify's and whose .js answers becomes Shopify", async () => {
+    servePage("/products/produit-3679", "real/mcb-paris.html");
+    routes["/products/produit-3679"] = {
+      ...routes["/products/produit-3679"],
+      body: `${routes["/products/produit-3679"]?.body}<img src="https://cdn.shopify.com/s/files/robe.jpg">`,
+    };
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const t = await setup("/products/produit-3679", { shop: { platform: "other" } }, "admin_test");
+
+    await runCapture(t.capture.id, deps);
+
+    expect((await load(t.capture.id, t.product.id)).capture?.method).toBe("shopify");
+    const [s] = await handle.db.select().from(schema.shops).where(eq(schema.shops.id, t.shop.id));
+    expect(s?.platform).toBe("shopify");
+  });
+
+  it("a failed platform write never fails the capture", async () => {
+    servePage("/produit/robe", "synthetic/jsonld-simple.html");
+    routes["/produit/robe"] = {
+      ...routes["/produit/robe"],
+      body: `${routes["/produit/robe"]?.body}<img src="https://static.wixstatic.com/media/a.jpg">`,
+    };
+    const t = await setup("/produit/robe", { shop: { platform: "other" } }, "admin_test");
+    const failing = new Proxy(handle.db, {
+      get(target, key, receiver) {
+        if (key !== "update") return Reflect.get(target, key, receiver);
+        return (table: unknown) =>
+          table === schema.shops
+            ? {
+                set: () => ({
+                  where: () => Promise.reject(new Error("db down")),
+                }),
+              }
+            : target.update(table as typeof schema.captures);
+      },
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await runCapture(t.capture.id, { ...deps, db: failing });
+
+    log.mockRestore();
+    expect((await load(t.capture.id, t.product.id)).capture?.status).toBe("succeeded");
+    const [s] = await handle.db.select().from(schema.shops).where(eq(schema.shops.id, t.shop.id));
+    expect(s?.platform).toBe("other");
   });
 
   it("an unknown shop whose page shows no platform becomes other, as before", async () => {

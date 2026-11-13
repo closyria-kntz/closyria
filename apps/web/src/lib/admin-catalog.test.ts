@@ -16,6 +16,7 @@ describe("catalogErrorKey", () => {
     expect(catalogErrorKey(409, { error: "domain_taken" })).toBe("domainTaken");
     expect(catalogErrorKey(409, { error: "capture_active" })).toBe("captureActive");
     expect(catalogErrorKey(409, { error: "not_published" })).toBe("notPublished");
+    expect(catalogErrorKey(409, { error: "major_brand" })).toBe("majorBrand");
     expect(catalogErrorKey(409, { error: "not_shopify" })).toBe("notShopify");
     expect(catalogErrorKey(409, { error: "merged" })).toBe("shopMerged");
     expect(catalogErrorKey(409, { error: "refused" })).toBe("shopRefused");

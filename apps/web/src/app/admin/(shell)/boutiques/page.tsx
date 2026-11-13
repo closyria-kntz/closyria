@@ -147,7 +147,9 @@ export default async function AdminShopsPage({ searchParams }: Props) {
                   </td>
                   <td className={`${cell} break-all`}>{shop.domains.join(", ")}</td>
                   <td className={cell}>{t(`statuses.${shop.status}`)}</td>
-                  <td className={`${cell} whitespace-nowrap`}>{t(`platforms.${shop.platform}`)}</td>
+                  <td data-testid="shop-platform" className={`${cell} whitespace-nowrap`}>
+                    {t(`platforms.${shop.platform}`)}
+                  </td>
                   <td className={cell}>{t(`modes.${shop.captureMode}`)}</td>
                   <td className={cell}>{t(`kinds.${shop.listingKind}`)}</td>
                   <td className={cell}>

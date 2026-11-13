@@ -490,6 +490,7 @@
         "invalidEntry": "Vérifie le nom, la teinte et les mots-clés.",
         "invalidProduct": "Vérifie le nom, la marque, le prix et les choix.",
         "notPublished": "Seules les boutiques publiées peuvent faire la une.",
+        "majorBrand": "Une grande enseigne ne va jamais en une.",
         "notShopify": "Seul le catalogue d’une boutique Shopify peut être importé.",
         "shopMerged": "Cette boutique a été fusionnée : importe plutôt celle qui la remplace.",
         "shopRefused": "Cette boutique est refusée : son catalogue n’est jamais importé."
@@ -610,13 +611,15 @@
         "off": "Mise en avant en une de « Découvrir », pour tout le monde.",
         "add": "Mettre en boutique de la semaine",
         "remove": "Retirer de la une",
-        "draft": "Publie d’abord la boutique : seules les boutiques publiées vont en une."
+        "draft": "Publie d’abord la boutique : seules les boutiques publiées vont en une.",
+        "majorBrand": "Grande enseigne : elle ne va jamais en une."
       },
       "review": {
         "title": "Validation",
         "pending": "Cette boutique est arrivée par un lien collé. Valide-la pour que ses articles apparaissent dans « Découvrir ».",
         "draft": "Cette boutique est en brouillon : ses articles n’apparaissent pas dans « Découvrir ».",
         "published": "Boutique publiée : ses articles complets apparaissent dans « Découvrir ».",
+        "publishedMajorBrand": "Boutique publiée, grande enseigne : ses articles restent utilisables mais n’apparaissent pas dans « Découvrir ».",
         "refused": "Boutique refusée : ses articles n’apparaissent jamais dans « Découvrir ». Les envies qui y pointent restent intactes.",
         "publish": "Valider",
         "refuse": "Refuser",

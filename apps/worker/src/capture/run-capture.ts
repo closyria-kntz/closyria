@@ -120,24 +120,24 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
     if (!shop) throw new Error("shop not found");
     platform = shop.platform;
     const shopId = shop.id;
-    // A shop of unknown platform whose page turns out to be Shopify is one from now on: the Shopify line and the
-    // slow-down apply to it, this capture included.
-    const foundShopify = async () => {
+    // A page that looks like Shopify's (`isShopifyPage`): its `.js` is tried on the Shopify line, and a 429/430 there
+    // slows Shopify down, this capture included. Nothing is stored until a strong sign (`foundPlatform`).
+    const foundShopify = () => {
       platform = "shopify";
-      if (shop.platform !== "unknown") return;
-      await db
-        .update(schema.shops)
-        .set({ platform: "shopify", updatedAt: now() })
-        .where(and(eq(schema.shops.id, shopId), eq(schema.shops.platform, "unknown")));
     };
-    // The platform its page shows (« Plateforme » in the admin): only a shop still `unknown` or `other` takes it, so a
-    // known one is never downgraded (Shopify above all).
+    // The platform its page shows (« Plateforme » in the admin), or `shopify` once its `.js` answered: only a shop
+    // still `unknown` or `other` takes it, so a known one is never downgraded (Shopify above all). Best effort: a
+    // failed write never fails the capture.
     const foundPlatform = async (detected: DetectedPlatform) => {
       if (detected === shop.platform || !VAGUE_PLATFORMS.includes(shop.platform)) return;
-      await db
-        .update(schema.shops)
-        .set({ platform: detected, updatedAt: now() })
-        .where(and(eq(schema.shops.id, shopId), inArray(schema.shops.platform, VAGUE_PLATFORMS)));
+      try {
+        await db
+          .update(schema.shops)
+          .set({ platform: detected, updatedAt: now() })
+          .where(and(eq(schema.shops.id, shopId), inArray(schema.shops.platform, VAGUE_PLATFORMS)));
+      } catch (error) {
+        console.error(`capture ${captureId}: cannot record the platform ${detected}`, error);
+      }
     };
     const outcome = await fetchAndExtract(
       capture.url,
@@ -292,7 +292,7 @@ async function fetchAndExtract(
   platform: string,
   priority: LinePriority,
   deps: CaptureDeps,
-  foundShopify: () => Promise<void>,
+  foundShopify: () => void,
   foundPlatform: (platform: DetectedPlatform) => Promise<void>,
 ): Promise<Outcome> {
   const policy = deps.policy ?? strictPolicy;
@@ -355,12 +355,14 @@ async function fetchAndExtract(
   let result = extract({ url: page.finalUrl, contentType: page.contentType, body: html });
   let status = page.status;
   if (platform !== "shopify" && jsUrl && isShopifyPage(html)) {
-    await foundShopify();
+    foundShopify();
     try {
       const withJs = await fromShopifyJs(jsUrl, pageInfo);
       if (withJs.result.ok) {
         result = withJs.result;
         status = withJs.status;
+        // Its `.js` is a Shopify product: proof enough.
+        await foundPlatform("shopify");
       }
     } catch (error) {
       // Shopify asks us to slow down: it counts like any Shopify shop's.

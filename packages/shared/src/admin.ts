@@ -97,6 +97,7 @@ export const adminCatalogErrorSchema = z.object({
     "cycle",
     "has_children",
     "not_published",
+    "major_brand",
     "not_shopify",
     "merged",
     "refused",

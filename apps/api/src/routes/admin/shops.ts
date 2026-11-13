@@ -174,7 +174,7 @@ const featureRoute = defineAccess(
     responses: {
       204: { description: "Featured" },
       404: errorContent("Unknown or merged shop"),
-      409: errorContent("not_published: only a published shop is shown"),
+      409: errorContent("not_published: only a published shop is shown; major_brand: a big brand never is"),
     },
   }),
   "admin",
@@ -519,7 +519,8 @@ export function adminShopsRoutes(deps: CatalogDeps) {
           }
           const [updated] = await tx
             .update(schema.shops)
-            .set({ ...settings, updatedAt: now() })
+            // A « grande enseigne » never goes in the une: ticking it takes the shop off.
+            .set({ ...settings, ...(settings.isMajorBrand === true ? { featuredAt: null } : {}), updatedAt: now() })
             .where(eq(schema.shops.id, id))
             .returning();
           if (!updated) return { error: "not_found" };
@@ -589,6 +590,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       const shop = await activeShop(db, id);
       if (!shop) return c.json(notFound, 404);
       if (shop.status !== "published") return c.json({ error: "not_published" } as const, 409);
+      if (shop.isMajorBrand) return c.json({ error: "major_brand" } as const, 409);
       await db.update(schema.shops).set({ featuredAt: now() }).where(eq(schema.shops.id, id));
       return c.body(null, 204);
     })

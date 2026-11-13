@@ -13,6 +13,7 @@ export type CatalogErrorKey =
   | "cycle"
   | "hasChildren"
   | "notPublished"
+  | "majorBrand"
   | "notShopify"
   | "shopMerged"
   | "shopRefused"
@@ -26,6 +27,7 @@ export function catalogErrorKey(status: number, body: unknown): CatalogErrorKey 
   if (status === 409 && error === "capture_active") return "captureActive";
   if (status === 409 && error === "kept") return "kept";
   if (status === 409 && error === "not_published") return "notPublished";
+  if (status === 409 && error === "major_brand") return "majorBrand";
   if (status === 409 && error === "not_shopify") return "notShopify";
   if (status === 409 && error === "merged") return "shopMerged";
   if (status === 409 && error === "refused") return "shopRefused";

@@ -5,6 +5,7 @@ import {
   CATALOGUE_SHEET_REFRESHES_PER_MINUTE,
 } from "@closyria/shared";
 import type { CaptureQueue } from "./capture-queue";
+import { shopInCatalogue } from "./catalogue";
 
 const MINUTE_MS = 60_000;
 
@@ -62,7 +63,7 @@ export async function requestSheetRefresh(
         where c.trigger = 'refresh' and c.created_at > ${lastMinute}::timestamptz) as recent_refreshes
     from products p join shops s on s.id = p.shop_id
     where p.id = ${productId} and p.hidden_at is null and p.removed_at is null
-      and s.status = 'published' and s.merged_into_id is null and s.capture_mode = 'auto'`);
+      and ${shopInCatalogue} and s.capture_mode = 'auto'`);
   const row = rows[0];
   if (!row) return nothing;
   const shopify = row.platform === "shopify";
