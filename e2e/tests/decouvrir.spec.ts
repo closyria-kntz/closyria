@@ -76,9 +76,7 @@ test("la grille montre les boutiques publiées avec leur site, et la recherche l
   const draft = await seedShop(db, "Brouillon caché", "draft", 5);
 
   await page.goto("/decouvrir");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Les petites boutiques, d’un seul coup d’œil" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Les pépites des petites boutiques" })).toBeVisible();
   await expect(page.getByRole("main").getByText("Découvrir", { exact: true })).toBeVisible();
 
   const grid = page.getByRole("region", { name: "Toutes les boutiques" });
@@ -117,9 +115,7 @@ test("sans aucune boutique, l’écran explique comment en faire apparaître", a
     route.fulfill({ json: { items: [], nextCursor: null, hasSizes: false } }),
   );
   await page.goto("/decouvrir");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Les petites boutiques, d’un seul coup d’œil" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Les pépites des petites boutiques" })).toBeVisible();
   await expect(
     page.getByText("Aucune boutique pour l’instant. Colle le lien d’un article : sa boutique apparaîtra ici."),
   ).toBeVisible();
@@ -172,9 +168,7 @@ test("une admin met une boutique en boutique de la semaine : elle fait la une de
   await feature.getByRole("button", { name: "Retirer de la une" }).click();
   await expect(feature.getByRole("button", { name: "Mettre en boutique de la semaine" })).toBeVisible();
   await page.goto("/decouvrir");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Les petites boutiques, d’un seul coup d’œil" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Les pépites des petites boutiques" })).toBeVisible();
   await expect(page.getByRole("article", { name: shop.name })).toHaveCount(0);
   const { rows } = await db.query<{ action: string }>(
     "select action from admin_audit_log where target = $1 order by created_at",

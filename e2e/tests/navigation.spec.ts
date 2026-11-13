@@ -200,9 +200,7 @@ test("la bonne place est marquée sur les sous-pages, et Compte mène aux régla
   await expect(menu(page).getByRole("link", { name: "Compte" })).toHaveAttribute("aria-current", "page");
   await page.goto("/decouvrir");
   await expect(menu(page).getByRole("link", { name: "Découvrir" })).toHaveAttribute("aria-current", "page");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Les petites boutiques, d’un seul coup d’œil" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Les pépites des petites boutiques" })).toBeVisible();
 
   await menu(page).getByRole("link", { name: "Compte" }).click();
   await expect(page).toHaveURL(/\/compte$/);

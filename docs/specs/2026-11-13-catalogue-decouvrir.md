@@ -103,6 +103,7 @@ Prises pendant le chantier, en plus des décisions validées du §2 :
 - **Statut « Refusée »** ajouté aux boutiques : une boutique refusée par l'admin n'est pas publiée et ses articles restent hors du catalogue.
 - **« Voir plus d'articles »** au lieu du défilement sans fin (choix de la fondatrice) : pages de 24 ; le retour arrière garde les pages chargées et la position.
 - **« Proche » = ses propres pièces** : « Tu as déjà quelque chose de proche » ne regarde que son dressing, jamais celui d'une autre.
+- **Titre de Découvrir** : « Les pépites des petites boutiques » (choix de la fondatrice).
 - **Recherche plein texte maison**, accents repliés (chercher « ecru » trouve « écru »), sans moteur externe.
 - **« Mes tailles »** : listes proposées en choix (hauts XS…XXL puis 32…48 de 2 en 2 ; bas 24…34 puis 36…48 de 2 en 2 ; chaussures 35…42) et « Une autre taille… » en texte libre (10 caractères au plus) ; vider un champ envoie `null`.
 - Un article dont la page a disparu chez la boutique (erreur 404/410 à la capture) sort du catalogue ; il revient si la page répond de nouveau.
