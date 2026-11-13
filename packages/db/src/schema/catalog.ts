@@ -297,6 +297,11 @@ export const captures = pgTable(
   (t) => [
     index("captures_shop_created_idx").on(t.shopId, t.createdAt),
     index("captures_status_created_idx").on(t.status, t.createdAt),
+    // A sheet's refreshes (« stocks frais »): its active capture and last refresh, read per product on every stale sheet.
+    index("captures_product_created_idx").on(t.productId, t.createdAt),
+    // The refreshes' budget of the minute: partial, so it holds only the refreshes (a sliver of the table) and the
+    // count reads nothing else.
+    index("captures_refresh_created_idx").on(t.createdAt).where(sql`${t.trigger} = 'refresh'`),
     check("captures_trigger_check", oneOf(t.trigger, captureTriggerSchema.options)),
     check("captures_status_check", oneOf(t.status, captureStatusSchema.options)),
     check("captures_method_check", sql`${t.method} IS NULL OR ${oneOf(t.method, captureMethodSchema.options)}`),

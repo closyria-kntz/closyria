@@ -8,4 +8,6 @@ CREATE TABLE "crawl_slowdowns" (
 );
 --> statement-breakpoint
 ALTER TABLE "captures" DROP CONSTRAINT "captures_trigger_check";--> statement-breakpoint
+CREATE INDEX "captures_product_created_idx" ON "captures" USING btree ("product_id","created_at");--> statement-breakpoint
+CREATE INDEX "captures_refresh_created_idx" ON "captures" USING btree ("created_at") WHERE "captures"."trigger" = 'refresh';--> statement-breakpoint
 ALTER TABLE "captures" ADD CONSTRAINT "captures_trigger_check" CHECK ("captures"."trigger" IN ('user', 'admin_test', 'monitor', 'refresh'));

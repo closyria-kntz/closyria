@@ -1,5 +1,5 @@
 {
-  "id": "9d28eda9-f4a7-4f5b-8fd8-2b52651894d9",
+  "id": "d06f773d-3bc2-476d-a37c-1ab9d24a67f3",
   "prevId": "83e73ed7-ba93-4fe0-94f7-eed3605d4f2b",
   "version": "7",
   "dialect": "postgresql",
@@ -818,6 +818,43 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "captures_product_created_idx": {
+          "name": "captures_product_created_idx",
+          "columns": [
+            {
+              "expression": "product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "captures_refresh_created_idx": {
+          "name": "captures_refresh_created_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"captures\".\"trigger\" = 'refresh'",
           "concurrently": false,
           "method": "btree",
           "with": {}

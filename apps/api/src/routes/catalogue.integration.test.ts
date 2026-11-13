@@ -917,6 +917,38 @@ describe("GET /api/catalog/{productId} — live check (« stocks frais »)", () 
     }
   });
 
+  it("reads its captures through the indexes: per product, and the refreshes of the minute", async () => {
+    const shop = await newShop();
+    const p = await newProduct(shop.id, stale);
+    // A captures table of some size: 20 000 rows over 500 products, 1 in 50 a refresh.
+    await t.db.execute(sql`
+      insert into captures (shop_id, product_id, url, trigger, status, created_at)
+      select ${shop.id}, case when g % 500 = 0 then ${p.id}::uuid else null end, 'https://cat.test/x',
+        case when g % 50 = 0 then 'refresh' else 'user' end, 'succeeded', now() - (g || ' seconds')::interval
+      from generate_series(1, 20000) g`);
+    await t.db.execute(sql`analyze captures`);
+    const plan = async (query: ReturnType<typeof sql>) =>
+      (await t.db.execute<{ "QUERY PLAN": string }>(sql`explain ${query}`)).rows.map((r) => r["QUERY PLAN"]).join("\n");
+    const budget = await plan(sql`select count(*)::int from captures c
+      where c.trigger = 'refresh' and c.created_at > now() - interval '1 minute'`);
+    const lastRefresh = await plan(sql`select max(c.created_at) from captures c
+      where c.product_id = ${p.id} and c.trigger = 'refresh'`);
+    const active = await plan(sql`select exists (select 1 from captures c
+      where c.product_id = ${p.id} and c.status in ('queued', 'running'))`);
+    // `askRefresh`, under its lock: this product's active capture or refresh of the window.
+    const blocked = await plan(sql`select exists (select 1 from captures c where c.product_id = ${p.id}
+      and (c.status in ('queued', 'running') or (c.trigger = 'refresh' and c.created_at >= now() - interval '15 minutes')))`);
+    console.info(
+      `EXPLAIN budget:\n${budget}\nEXPLAIN last refresh:\n${lastRefresh}\nEXPLAIN active:\n${active}\nEXPLAIN blocked:\n${blocked}`,
+    );
+    expect(budget).toContain("Index Only Scan using captures_refresh_created_idx");
+    expect(lastRefresh).toContain("captures_product_created_idx");
+    expect(blocked).toContain("captures_product_created_idx");
+    // No queued or running row: the planner may as well take the status index, as cheap.
+    expect(active).toMatch(/captures_(product|status)_created_idx/);
+    expect(`${budget}${lastRefresh}${active}${blocked}`).not.toContain("Seq Scan on captures");
+  });
+
   it("drops its row when the queue already has one for the article, and keeps the sheet when the queue is down", async () => {
     const shop = await newShop();
     const p = await newProduct(shop.id, { lastCapturedAt: ago(DAY) });

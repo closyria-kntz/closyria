@@ -183,6 +183,25 @@ describe("Shopify slow-down", () => {
     );
   });
 
+  it("boundaries: a hit exactly 10 min after the doubled start escalates; exactly 1 h after the last update extends", async () => {
+    const db = handle.db;
+    await recordShopifyRejection(db, NOW);
+    const tenMinutes = new Date(NOW.getTime() + 10 * MIN);
+    expect(await recordShopifyRejection(db, new Date(tenMinutes.getTime() - 1))).toMatchObject({ level: "doubled" });
+    expect(await recordShopifyRejection(db, tenMinutes)).toEqual({
+      level: "nightly",
+      until: new Date(tenMinutes.getTime() + 24 * HOUR),
+    });
+    const hour = new Date(tenMinutes.getTime() + HOUR);
+    expect((await recordShopifyRejection(db, new Date(hour.getTime() - 1))).until).toEqual(
+      new Date(tenMinutes.getTime() + 24 * HOUR),
+    );
+    expect(await recordShopifyRejection(db, hour)).toEqual({
+      level: "nightly",
+      until: new Date(hour.getTime() + 24 * HOUR),
+    });
+  });
+
   it("a 429 after the 6 h are over doubles again rather than going nightly", async () => {
     await recordShopifyRejection(handle.db, NOW);
     const later = new Date(NOW.getTime() + 6 * HOUR + MIN);
