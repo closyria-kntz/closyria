@@ -2171,6 +2171,7 @@
       "signOut": "Se déconnecter",
       "signingOut": "Déconnexion…",
       "signOutFailed": "La déconnexion n’a pas abouti. Réessaie.",
+      "signOutPushCut": "Les notifications de cet appareil ont été coupées.",
       "anonymousTitle": "Tu utilises Closyria sans compte.",
       "anonymousBody": "Tes articles sont liés à ce navigateur. Crée ton compte avec ton e-mail pour les retrouver sur tes autres appareils et ne pas les perdre.",
       "create": "Créer mon compte"

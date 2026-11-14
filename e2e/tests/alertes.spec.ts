@@ -261,7 +261,7 @@ test("une demande fermée sans réponse n'est pas un refus : « Activer » reste
   expect((await db.query("select 1 from push_subscriptions where user_id = $1", [userId])).rowCount).toBe(0);
 });
 
-test("appareil partagé : se déconnecter le retire, et un abonnement sans identifiant passe au compte courant", async ({
+test("appareil partagé : l'abonnement d'une autre est coupé à l'ouverture, se déconnecter retire le sien", async ({
   page,
   db,
   userAgentTag,
@@ -275,41 +275,51 @@ test("appareil partagé : se déconnecter le retire, et un abonnement sans ident
   await expect(device).toContainText("Les notifications sont activées sur cet appareil.");
   const endpoint = await page.evaluate(() => localStorage.getItem("e2e.push.endpoint"));
   expect(endpoint).toMatch(/^https:\/\/fcm\.googleapis\.com\//);
+  expect(JSON.parse((await page.evaluate(() => localStorage.getItem("closyria.push.deviceId"))) ?? "null")).toEqual({
+    id: expect.any(String),
+    userId: first,
+  });
 
-  // Someone else on this device without « Se déconnecter » (her session ended, the stored id was lost): the
-  // browser's subscription goes to the account now signed in, with « cet appareil ».
+  // She leaves without « Se déconnecter » (her session ends; her device id stays in the browser), and someone else
+  // signs in here: on any page, the browser's subscription is dropped, so her notifications stop reaching it.
   await page.context().clearCookies();
-  await page.evaluate(() => localStorage.removeItem("closyria.push.deviceId"));
   await page.goto("/");
   expect(await page.evaluate(() => window.closyriaE2E.ensureSession())).toEqual({ ok: true });
   const second = (await sessionsOf(db, userAgentTag)).at(-1)?.userId ?? "";
   expect(second).not.toBe(first);
   await db.query(`update "user" set is_anonymous = false where id = $1`, [second]);
+  await page.goto("/envies");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("e2e.push.endpoint"))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem("closyria.push.deviceId"))).toBeNull();
   await openNotifications(page);
-  await expect(device).toContainText("Les notifications sont activées sur cet appareil.");
+  await expect(device.getByRole("button", { name: "Activer les notifications" })).toBeVisible();
   const devices = main(page).getByRole("region", { name: "Tes appareils" });
-  await expect(devices.getByRole("listitem")).toHaveCount(1);
-  await expect(devices.getByRole("listitem")).toContainText("cet appareil");
+  await expect(devices).toContainText("Aucun appareil ne reçoit tes notifications pour l’instant.");
+  // She turns them on for herself: a new subscription, hers.
+  await device.getByRole("button", { name: "Activer les notifications" }).click();
+  await expect(device).toContainText("Les notifications sont activées sur cet appareil.");
+  const own = await page.evaluate(() => localStorage.getItem("e2e.push.endpoint"));
+  expect(own).not.toBe(endpoint);
   const owners = await db.query<{ user_id: string }>("select user_id from push_subscriptions where endpoint = $1", [
-    endpoint,
+    own,
   ]);
   expect(owners.rows).toEqual([{ user_id: second }]);
 
-  // « Se déconnecter »: the API forgets this device and the browser drops its subscription.
+  // Another account again, then « Se déconnecter »: the API forgets this device and the browser drops its
+  // subscription.
   await page.context().clearCookies();
   await page.goto("/");
   await signInWithEmailCode(page, request, uniqueEmail());
   await openNotifications(page);
-  // The stored id is the previous account's: not one of hers, so « Activer » (the same subscription moves to her).
   await device.getByRole("button", { name: "Activer les notifications" }).click();
   await expect(device).toContainText("Les notifications sont activées sur cet appareil.");
-  expect(await page.evaluate(() => localStorage.getItem("e2e.push.endpoint"))).toBe(endpoint);
+  const third = await page.evaluate(() => localStorage.getItem("e2e.push.endpoint"));
   await page.goto("/reglages/compte");
   await page.getByRole("button", { name: "Se déconnecter" }).click();
   await expect(page).toHaveURL(/\/connexion$/);
   expect(await page.evaluate(() => localStorage.getItem("e2e.push.endpoint"))).toBeNull();
   expect(await page.evaluate(() => localStorage.getItem("closyria.push.deviceId"))).toBeNull();
-  expect((await db.query("select 1 from push_subscriptions where endpoint = $1", [endpoint])).rowCount).toBe(0);
+  expect((await db.query("select 1 from push_subscriptions where endpoint = $1", [third])).rowCount).toBe(0);
 });
 
 test("sur iPhone hors écran d'accueil, l'aide pour ajouter Closyria ; ailleurs, un message clair", async ({

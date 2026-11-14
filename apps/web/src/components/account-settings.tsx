@@ -19,11 +19,13 @@ export function AccountSettings() {
   const format = useFormatter();
   const account = useAccount();
   const [state, setState] = useState<"idle" | "busy" | "failed">("idle");
+  const [pushCut, setPushCut] = useState(false);
 
   async function signOut() {
     setState("busy");
     // While her session still exists: this device stops receiving her notifications (a shared computer).
-    await forgetThisDevice();
+    // Already done even if the sign-out then fails: she is told.
+    setPushCut(await forgetThisDevice());
     const result = await createAuthClient(window.location.origin)
       .signOut()
       .catch(() => ({ error: true }));
@@ -72,7 +74,12 @@ export function AccountSettings() {
               {state === "busy" ? t("signingOut") : t("signOut")}
             </button>
           </div>
-          {state === "failed" && <p role="alert">{t("signOutFailed")}</p>}
+          {state === "failed" && (
+            <p role="alert">
+              {t("signOutFailed")}
+              {pushCut && ` ${t("signOutPushCut")}`}
+            </p>
+          )}
         </>
       )}
     </section>

@@ -12,7 +12,7 @@ import {
   pushSubscriptionListSchema,
   pushSubscriptionViewSchema,
 } from "@closyria/shared";
-import type { ZodType } from "zod";
+import { type ZodType, z } from "zod";
 import type { ClientDeps } from "./catalog-client";
 import { phoneKind } from "./phone-kind";
 
@@ -153,7 +153,10 @@ export async function isThisDeviceOn(browser: PushBrowser = browserPush): Promis
  * a refusal: « Activer » stays, and asking again works.
  */
 export type EnableError = "denied" | "dismissed" | "account_required" | "failed";
-export type EnableResult = { ok: true; device: PushSubscriptionView } | { ok: false; error: EnableError };
+/** On success, `userId` is the account it was turned on for (kept with the id, see `StoredDevice`). */
+export type EnableResult =
+  | { ok: true; device: PushSubscriptionView; userId: string }
+  | { ok: false; error: EnableError };
 
 /**
  * « Activer les notifications »: the browser's permission first (asked right away, while her tap still counts),
@@ -177,15 +180,16 @@ export async function enableNotifications(
         applicationServerKey: applicationServerKey(publicKey),
       }));
     await deps.ensure();
+    const me = await fetchCurrentUser(deps);
     const response = await postSubscription(subscription, deps);
     if (response.status === 403) {
       // A guest: nothing stays subscribed for an account she does not have yet.
       await subscription.unsubscribe().catch(() => false);
       return { ok: false, error: "account_required" };
     }
-    if (!response.ok) return { ok: false, error: "failed" };
+    if (!response.ok || !me) return { ok: false, error: "failed" };
     const device = pushSubscriptionViewSchema.safeParse(await response.json());
-    return device.success ? { ok: true, device: device.data } : { ok: false, error: "failed" };
+    return device.success ? { ok: true, device: device.data, userId: me.id } : { ok: false, error: "failed" };
   } catch {
     return { ok: false, error: "failed" };
   }
@@ -213,25 +217,64 @@ const localStore = (): StorageLike | null => {
   }
 };
 
-export function readDeviceId(storage: StorageLike | null = localStore()): string | null {
+/**
+ * What this browser remembers of its subscription: the id the API gave it and the account it was turned on for
+ * (`userId` null: unknown, as in the first format, a plain id).
+ */
+export type StoredDevice = { id: string | null; userId: string | null };
+const storedDeviceSchema = z.object({ id: z.string().min(1).nullable(), userId: z.string().min(1).nullable() });
+
+export function readStoredDevice(storage: StorageLike | null = localStore()): StoredDevice | null {
+  let raw: string | null;
   try {
-    return storage?.getItem(DEVICE_ID_KEY) ?? null;
+    raw = storage?.getItem(DEVICE_ID_KEY) ?? null;
   } catch {
     return null;
   }
+  if (!raw) return null;
+  try {
+    const parsed = storedDeviceSchema.safeParse(JSON.parse(raw));
+    if (parsed.success) return parsed.data;
+  } catch {}
+  // The first format: the id alone, its account unknown.
+  return { id: raw, userId: null };
 }
 
-export function writeDeviceId(id: string | null, storage: StorageLike | null = localStore()): void {
+export function writeStoredDevice(value: StoredDevice | null, storage: StorageLike | null = localStore()): void {
   try {
-    if (id) storage?.setItem(DEVICE_ID_KEY, id);
+    if (value) storage?.setItem(DEVICE_ID_KEY, JSON.stringify(value));
     else storage?.removeItem(DEVICE_ID_KEY);
   } catch {}
 }
 
+/** The id of this browser's subscription, whoever it belongs to (null when unknown). */
+export function readDeviceId(storage: StorageLike | null = localStore()): string | null {
+  return readStoredDevice(storage)?.id ?? null;
+}
+
+const sessionSchema = z
+  .object({ user: z.object({ id: z.string().min(1), isAnonymous: z.boolean().nullish() }) })
+  .nullable();
+
 /**
- * This browser is subscribed but does not know its id (another account used it, or the id was lost): the subscription
- * is sent again, the API moves it to her account and answers its id. Null when there is nothing to re-attach or it
- * failed (the page then offers « Activer » again). Never throws.
+ * Who is signed in on this browser: her user id, `guest` for a session without an account, null without a session.
+ * Throws when it cannot be told (offline, server error): nothing is decided on a guess.
+ */
+export async function fetchCurrentUser(deps: ClientDeps = defaultDeps): Promise<{ id: string; guest: boolean } | null> {
+  const response = await deps.fetch("/api/auth/get-session", { cache: "no-store" });
+  if (!response.ok) throw new Error(`session ${response.status}`);
+  const session = sessionSchema.parse(await response.json());
+  return session ? { id: session.user.id, guest: session.user.isAnonymous === true } : null;
+}
+
+async function browserSubscription(browser: PushBrowser): Promise<SubscriptionLike | null> {
+  return (await (await browser.existing())?.pushManager.getSubscription()) ?? null;
+}
+
+/**
+ * This browser is subscribed for her but the API does not know it under the stored id (or no id is stored): the
+ * subscription is sent again, the API keeps it for her account and answers its id. Null when there is nothing to
+ * re-attach or it failed. Never throws.
  */
 export async function reattachThisDevice(
   browser: PushBrowser = browserPush,
@@ -239,7 +282,7 @@ export async function reattachThisDevice(
 ): Promise<PushSubscriptionView | null> {
   try {
     if (browser.permission() !== "granted") return null;
-    const subscription = await (await browser.existing())?.pushManager.getSubscription();
+    const subscription = await browserSubscription(browser);
     if (!subscription) return null;
     await deps.ensure();
     const response = await postSubscription(subscription, deps);
@@ -252,25 +295,87 @@ export async function reattachThisDevice(
 }
 
 /**
+ * `none`: not subscribed. `dropped`: subscribed for someone else (another account, an unknown one, or she is a guest
+ * now), so the browser unsubscribed (the endpoint dies; the API drops it at the push service's next 410).
+ * `kept`: hers and known. `reattached`: hers, sent again. `unknown`: could not tell, nothing changed.
+ */
+export type DeviceCheck = "none" | "dropped" | "kept" | "reattached" | "unknown";
+
+/**
+ * On every page load (the app shell) and before « Notifications » reads her devices: a subscription left by another
+ * account on a shared browser (she left without « Se déconnecter ») stops here, so its notifications never reach the
+ * next person. Never asks the browser's permission. Never throws.
+ */
+export async function checkThisDevice(
+  browser: PushBrowser = browserPush,
+  deps: ClientDeps = defaultDeps,
+  storage: StorageLike | null = localStore(),
+): Promise<DeviceCheck> {
+  let subscription: SubscriptionLike | null;
+  try {
+    subscription = await browserSubscription(browser);
+  } catch {
+    return "unknown";
+  }
+  if (!subscription) return "none";
+  let me: { id: string; guest: boolean } | null;
+  try {
+    me = await fetchCurrentUser(deps);
+  } catch {
+    return "unknown";
+  }
+  const stored = readStoredDevice(storage);
+  if (!me || me.guest || !stored || stored.userId !== me.id) {
+    writeStoredDevice(null, storage);
+    await subscription.unsubscribe().catch(() => false);
+    return "dropped";
+  }
+  if (stored.id) {
+    try {
+      const devices = await fetchDevices(deps);
+      if (devices.some((d) => d.id === stored.id)) return "kept";
+    } catch {
+      return "unknown";
+    }
+  }
+  const view = await reattachThisDevice(browser, deps);
+  if (!view) return "unknown";
+  writeStoredDevice({ id: view.id, userId: me.id }, storage);
+  return "reattached";
+}
+
+let checkedOnce: Promise<DeviceCheck> | null = null;
+
+/** `checkThisDevice` once per page load, shared by the app shell and « Notifications ». */
+export function checkThisDeviceOnce(): Promise<DeviceCheck> {
+  checkedOnce ??= checkThisDevice();
+  return checkedOnce;
+}
+
+/**
  * Before « Se déconnecter » (the session is still there): the API forgets this device when its id is known, and the
- * browser drops its subscription in every case, so the next person on this device gets nothing of hers. Never throws.
+ * browser drops its subscription in every case, so the next person on this device gets nothing of hers. True when
+ * notifications were on here (an id or a subscription). Never throws.
  */
 export async function forgetThisDevice(
   browser: PushBrowser = browserPush,
   deps: ClientDeps = defaultDeps,
   storage: StorageLike | null = localStore(),
-): Promise<void> {
+): Promise<boolean> {
   const id = readDeviceId(storage);
   if (id) {
     try {
       await deps.fetch(`/api/me/push-subscriptions/${encodeURIComponent(id)}`, { method: "DELETE" });
     } catch {}
   }
-  writeDeviceId(null, storage);
+  writeStoredDevice(null, storage);
+  let subscribed = false;
   try {
-    const subscription = await (await browser.existing())?.pushManager.getSubscription();
+    const subscription = await browserSubscription(browser);
+    subscribed = subscription !== null;
     await subscription?.unsubscribe();
   } catch {}
+  return id !== null || subscribed;
 }
 
 // --- the API ---

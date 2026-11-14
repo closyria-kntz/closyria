@@ -7,6 +7,7 @@ import { type ReactNode, useCallback, useEffect, useId, useState } from "react";
 import { useAccount } from "@/lib/profile-context";
 import {
   browserPush,
+  checkThisDeviceOnce,
   deviceOf,
   enableNotifications,
   fetchAlertSettings,
@@ -17,9 +18,8 @@ import {
   pushSupport,
   readDeviceId,
   readPushEnvironment,
-  reattachThisDevice,
   removeDevice,
-  writeDeviceId,
+  writeStoredDevice,
 } from "@/lib/push";
 import { Switch } from "./switch";
 import { Tick } from "./tick";
@@ -47,6 +47,8 @@ type Loaded = { settings: AlertSettings; devices: PushSubscriptionView[]; device
 
 async function loadAll(): Promise<Loaded> {
   const support = pushSupport(readPushEnvironment());
+  // A subscription left by another account goes first; hers is re-attached when its id is unknown.
+  if (support === "supported") await checkThisDeviceOnce();
   const [settings, devices, publicKey] = await Promise.all([fetchAlertSettings(), fetchDevices(), fetchPushKey()]);
   let device: DeviceState;
   if (support === "iphone_home_screen") device = { kind: "iphone" };
@@ -54,22 +56,10 @@ async function loadAll(): Promise<Loaded> {
   else if (publicKey === null) device = { kind: "off" };
   else if (Notification.permission === "denied") device = { kind: "denied" };
   else {
+    // Subscribed in the browser, and one of her devices (she may have removed it from another one).
     const mine = readDeviceId();
-    const subscribed = await isThisDeviceOn();
-    if (subscribed && mine === null) {
-      // Subscribed in the browser but its id is unknown here (someone else used this device, or it was lost): sent
-      // again, the subscription moves to her account and its id comes back.
-      const view = await reattachThisDevice();
-      if (view) {
-        writeDeviceId(view.id);
-        return { settings, devices: [view, ...devices.filter((d) => d.id !== view.id)], device: { kind: "on" } };
-      }
-      device = { kind: "ready", publicKey };
-    } else {
-      // Subscribed in the browser, and still one of her devices (she may have removed it from another one).
-      const on = subscribed && devices.some((d) => d.id === mine);
-      device = on ? { kind: "on" } : { kind: "ready", publicKey };
-    }
+    const on = (await isThisDeviceOn()) && devices.some((d) => d.id === mine);
+    device = on ? { kind: "on" } : { kind: "ready", publicKey };
   }
   return { settings, devices, device };
 }
@@ -183,7 +173,7 @@ export function NotificationSettings() {
     const result = await enableNotifications(device.publicKey);
     setEnabling(false);
     if (result.ok) {
-      writeDeviceId(result.device.id);
+      writeStoredDevice({ id: result.device.id, userId: result.userId });
       setDeviceId(result.device.id);
       update((loaded) => ({
         ...loaded,
@@ -229,7 +219,7 @@ export function NotificationSettings() {
     const mine = view.id === deviceId;
     if (mine) {
       // This browser: it stops receiving, and « Activer les notifications » comes back.
-      writeDeviceId(null);
+      writeStoredDevice(null);
       setDeviceId(null);
       await (await browserPush.existing().catch(() => null))?.pushManager
         .getSubscription()

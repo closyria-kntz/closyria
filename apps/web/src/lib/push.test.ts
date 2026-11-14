@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   applicationServerKey,
+  checkThisDevice,
   deviceOf,
   enableNotifications,
   fetchAlertSettings,
@@ -15,15 +16,28 @@ import {
   patchAlertSettings,
   pushSupport,
   readDeviceId,
+  readStoredDevice,
   reattachThisDevice,
   removeDevice,
-  writeDeviceId,
+  writeStoredDevice,
 } from "./push";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const deps = (response: Response) => ({ fetch: vi.fn(async () => response), ensure: vi.fn(async () => {}) });
+const USER = "user-a";
+const session = (userId: string | null, isAnonymous = false) =>
+  json(userId === null ? null : { session: { id: "s" }, user: { id: userId, isAnonymous } });
+/** `response` for every call, except the session (`/api/auth/get-session`) and her devices when given. */
+const withSession = (response: Response, who: Response = session(USER), devices?: Response) => ({
+  fetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (input === "/api/auth/get-session") return who;
+    if (devices && input === "/api/me/push-subscriptions" && !init?.method) return devices;
+    return response;
+  }),
+  ensure: vi.fn(async () => {}),
+});
 
 const IPHONE =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
@@ -109,8 +123,8 @@ function fakeBrowser(permission: NotificationPermission, answer: NotificationPer
 describe("enableNotifications", () => {
   it("asks the browser, subscribes with the key and keeps the device", async () => {
     const { browser, pushManager } = fakeBrowser("default", "granted");
-    const d = deps(json(device));
-    expect(await enableNotifications("AQID", browser, d)).toEqual({ ok: true, device });
+    const d = withSession(json(device));
+    expect(await enableNotifications("AQID", browser, d)).toEqual({ ok: true, device, userId: USER });
     expect(browser.requestPermission).toHaveBeenCalled();
     expect(pushManager.subscribe).toHaveBeenCalledWith({
       userVisibleOnly: true,
@@ -126,7 +140,11 @@ describe("enableNotifications", () => {
   it("reuses the browser's subscription when there is one", async () => {
     const { browser, pushManager, subscription } = fakeBrowser("granted");
     pushManager.getSubscription.mockResolvedValue(subscription as never);
-    expect(await enableNotifications("AQID", browser, deps(json(device)))).toEqual({ ok: true, device });
+    expect(await enableNotifications("AQID", browser, withSession(json(device)))).toEqual({
+      ok: true,
+      device,
+      userId: USER,
+    });
     expect(browser.requestPermission).not.toHaveBeenCalled();
     expect(pushManager.subscribe).not.toHaveBeenCalled();
   });
@@ -137,7 +155,7 @@ describe("enableNotifications", () => {
       ["denied", "denied"],
     ] as const) {
       const { browser } = fakeBrowser(now, answer);
-      const d = deps(json(device));
+      const d = withSession(json(device));
       expect(await enableNotifications("AQID", browser, d)).toEqual({ ok: false, error: "denied" });
       expect(browser.register).not.toHaveBeenCalled();
       expect(d.fetch).not.toHaveBeenCalled();
@@ -146,7 +164,7 @@ describe("enableNotifications", () => {
 
   it("tells a closed question (still « default ») apart from a refusal", async () => {
     const { browser } = fakeBrowser("default", "default");
-    const d = deps(json(device));
+    const d = withSession(json(device));
     expect(await enableNotifications("AQID", browser, d)).toEqual({ ok: false, error: "dismissed" });
     expect(browser.register).not.toHaveBeenCalled();
     expect(d.fetch).not.toHaveBeenCalled();
@@ -154,23 +172,26 @@ describe("enableNotifications", () => {
 
   it("drops the browser's subscription for a guest", async () => {
     const { browser, subscription } = fakeBrowser("granted");
-    const result = await enableNotifications("AQID", browser, deps(json({ error: "account_required" }, 403)));
+    const result = await enableNotifications("AQID", browser, withSession(json({ error: "account_required" }, 403)));
     expect(result).toEqual({ ok: false, error: "account_required" });
     expect(subscription.unsubscribe).toHaveBeenCalled();
   });
 
   it("fails on a server error, a bad answer or a browser error", async () => {
-    expect(await enableNotifications("AQID", fakeBrowser("granted").browser, deps(json({}, 500)))).toEqual({
+    expect(await enableNotifications("AQID", fakeBrowser("granted").browser, withSession(json({}, 500)))).toEqual({
       ok: false,
       error: "failed",
     });
-    expect(await enableNotifications("AQID", fakeBrowser("granted").browser, deps(json({ id: 1 })))).toEqual({
+    expect(await enableNotifications("AQID", fakeBrowser("granted").browser, withSession(json({ id: 1 })))).toEqual({
       ok: false,
       error: "failed",
     });
     const { browser } = fakeBrowser("granted");
     browser.register.mockRejectedValue(new Error("no worker"));
-    expect(await enableNotifications("AQID", browser, deps(json(device)))).toEqual({ ok: false, error: "failed" });
+    expect(await enableNotifications("AQID", browser, withSession(json(device)))).toEqual({
+      ok: false,
+      error: "failed",
+    });
   });
 });
 
@@ -183,14 +204,16 @@ function memoryStorage() {
   };
 }
 
-describe("this device's id", () => {
-  it("is kept, read and cleared, and a broken storage reads as unknown", () => {
+describe("this device's id and its account", () => {
+  it("is kept with its account, read and cleared, and a broken storage reads as unknown", () => {
     const storage = memoryStorage();
+    expect(readStoredDevice(storage)).toBeNull();
     expect(readDeviceId(storage)).toBeNull();
-    writeDeviceId(id, storage);
+    writeStoredDevice({ id, userId: USER }, storage);
+    expect(readStoredDevice(storage)).toEqual({ id, userId: USER });
     expect(readDeviceId(storage)).toBe(id);
-    writeDeviceId(null, storage);
-    expect(readDeviceId(storage)).toBeNull();
+    writeStoredDevice(null, storage);
+    expect(readStoredDevice(storage)).toBeNull();
     const broken = {
       getItem: () => {
         throw new Error("blocked");
@@ -202,9 +225,107 @@ describe("this device's id", () => {
         throw new Error("blocked");
       },
     };
-    expect(readDeviceId(broken)).toBeNull();
-    expect(() => writeDeviceId(id, broken)).not.toThrow();
-    expect(readDeviceId(null)).toBeNull();
+    expect(readStoredDevice(broken)).toBeNull();
+    expect(() => writeStoredDevice({ id, userId: USER }, broken)).not.toThrow();
+    expect(readStoredDevice(null)).toBeNull();
+  });
+
+  it("reads the first format (the id alone) as an unknown account", () => {
+    const storage = memoryStorage();
+    storage.setItem("closyria.push.deviceId", id);
+    expect(readStoredDevice(storage)).toEqual({ id, userId: null });
+    expect(readDeviceId(storage)).toBe(id);
+    storage.setItem("closyria.push.deviceId", JSON.stringify({ id: 3 }));
+    expect(readStoredDevice(storage)).toEqual({ id: '{"id":3}', userId: null });
+  });
+});
+
+describe("checkThisDevice (every page load)", () => {
+  const subscribed = () => {
+    const fake = fakeBrowser("granted");
+    fake.pushManager.getSubscription.mockResolvedValue(fake.subscription as never);
+    return fake;
+  };
+  const stored = (value: { id: string | null; userId: string | null } | string | null) => {
+    const storage = memoryStorage();
+    if (typeof value === "string") storage.setItem("closyria.push.deviceId", value);
+    else writeStoredDevice(value, storage);
+    return storage;
+  };
+
+  it("does nothing without a subscription, and never asks for the permission", async () => {
+    const { browser } = fakeBrowser("default");
+    const d = withSession(json(device));
+    expect(await checkThisDevice(browser, d, stored({ id, userId: "user-b" }))).toBe("none");
+    expect(d.fetch).not.toHaveBeenCalled();
+    expect(browser.requestPermission).not.toHaveBeenCalled();
+  });
+
+  it("drops a subscription kept for another account, an unknown one, or now a guest or nobody", async () => {
+    for (const [value, who] of [
+      [{ id, userId: "user-b" }, session(USER)],
+      [id, session(USER)],
+      [null, session(USER)],
+      [{ id, userId: USER }, session(USER, true)],
+      [{ id, userId: USER }, session(null)],
+    ] as const) {
+      const { browser, subscription } = subscribed();
+      const storage = stored(value);
+      const d = withSession(json(device), who);
+      expect(await checkThisDevice(browser, d, storage)).toBe("dropped");
+      expect(subscription.unsubscribe).toHaveBeenCalled();
+      expect(readStoredDevice(storage)).toBeNull();
+      expect(d.fetch).toHaveBeenCalledTimes(1);
+      expect(browser.requestPermission).not.toHaveBeenCalled();
+    }
+  });
+
+  it("keeps her own subscription when the API knows it", async () => {
+    const { browser, subscription } = subscribed();
+    const storage = stored({ id, userId: USER });
+    const d = withSession(json({}, 500), session(USER), json({ subscriptions: [device] }));
+    expect(await checkThisDevice(browser, d, storage)).toBe("kept");
+    expect(subscription.unsubscribe).not.toHaveBeenCalled();
+    expect(readStoredDevice(storage)).toEqual({ id, userId: USER });
+  });
+
+  it("sends hers again when its id is unknown to the API or missing, and keeps the new id", async () => {
+    const newer = { ...device, id: "00000000-0000-4000-8000-000000000002" };
+    for (const value of [
+      { id, userId: USER },
+      { id: null, userId: USER },
+    ]) {
+      const { browser, subscription } = subscribed();
+      const storage = stored(value);
+      const d = withSession(json(newer), session(USER), json({ subscriptions: [] }));
+      expect(await checkThisDevice(browser, d, storage)).toBe("reattached");
+      expect(d.fetch).toHaveBeenCalledWith("/api/me/push-subscriptions", expect.objectContaining({ method: "POST" }));
+      expect(subscription.unsubscribe).not.toHaveBeenCalled();
+      expect(readStoredDevice(storage)).toEqual({ id: newer.id, userId: USER });
+    }
+  });
+
+  it("changes nothing when it cannot tell (session or devices unreadable, no service worker)", async () => {
+    const offline = subscribed();
+    const storage = stored({ id, userId: "user-b" });
+    const failing = { fetch: vi.fn(async () => Promise.reject(new Error("offline"))), ensure: vi.fn(async () => {}) };
+    expect(await checkThisDevice(offline.browser, failing, storage)).toBe("unknown");
+    expect(offline.subscription.unsubscribe).not.toHaveBeenCalled();
+    expect(readStoredDevice(storage)).toEqual({ id, userId: "user-b" });
+
+    const down = subscribed();
+    const d = withSession(json({}), json({}, 500));
+    expect(await checkThisDevice(down.browser, d, stored({ id, userId: "user-b" }))).toBe("unknown");
+    expect(down.subscription.unsubscribe).not.toHaveBeenCalled();
+
+    const mine = subscribed();
+    const own = withSession(json({}), session(USER), json({}, 500));
+    expect(await checkThisDevice(mine.browser, own, stored({ id, userId: USER }))).toBe("unknown");
+    expect(mine.subscription.unsubscribe).not.toHaveBeenCalled();
+
+    const broken = fakeBrowser("granted");
+    broken.browser.existing.mockRejectedValue(new Error("no worker"));
+    expect(await checkThisDevice(broken.browser, withSession(json({})), memoryStorage())).toBe("unknown");
   });
 });
 
@@ -213,9 +334,9 @@ describe("forgetThisDevice (sign-out)", () => {
     const { browser, pushManager, subscription } = fakeBrowser("granted");
     pushManager.getSubscription.mockResolvedValue(subscription as never);
     const storage = memoryStorage();
-    writeDeviceId(id, storage);
+    writeStoredDevice({ id, userId: USER }, storage);
     const d = deps(new Response(null, { status: 204 }));
-    await forgetThisDevice(browser, d, storage);
+    expect(await forgetThisDevice(browser, d, storage)).toBe(true);
     expect(d.fetch).toHaveBeenCalledWith(`/api/me/push-subscriptions/${id}`, { method: "DELETE" });
     expect(subscription.unsubscribe).toHaveBeenCalled();
     expect(readDeviceId(storage)).toBeNull();
@@ -232,7 +353,7 @@ describe("forgetThisDevice (sign-out)", () => {
     const down = fakeBrowser("granted");
     down.pushManager.getSubscription.mockResolvedValue(down.subscription as never);
     const storage = memoryStorage();
-    writeDeviceId(id, storage);
+    writeStoredDevice({ id, userId: USER }, storage);
     const failing = { fetch: vi.fn(async () => Promise.reject(new Error("offline"))), ensure: vi.fn(async () => {}) };
     await forgetThisDevice(down.browser, failing, storage);
     expect(down.subscription.unsubscribe).toHaveBeenCalled();
@@ -241,10 +362,10 @@ describe("forgetThisDevice (sign-out)", () => {
 
   it("never throws, with no service worker or no subscription", async () => {
     const none = fakeBrowser("granted");
-    await expect(forgetThisDevice(none.browser, deps(json({})), memoryStorage())).resolves.toBeUndefined();
+    await expect(forgetThisDevice(none.browser, deps(json({})), memoryStorage())).resolves.toBe(false);
     const broken = fakeBrowser("granted");
     broken.browser.existing.mockRejectedValue(new Error("no worker"));
-    await expect(forgetThisDevice(broken.browser, deps(json({})), memoryStorage())).resolves.toBeUndefined();
+    await expect(forgetThisDevice(broken.browser, deps(json({})), memoryStorage())).resolves.toBe(false);
   });
 });
 
