@@ -36,6 +36,10 @@ describe("isActive", () => {
     expect(entry("reports")?.href).toBe("/admin/catalogue/signalements");
   });
 
+  it("lists « Demandes de référencement » (accords en ligne)", () => {
+    expect(entry("listingRequests")?.href).toBe("/admin/referencement");
+  });
+
   it("lists « Soldes » of the alerts", () => {
     expect(entry("sales")?.href).toBe("/admin/soldes");
   });

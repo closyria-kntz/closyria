@@ -14,6 +14,7 @@ describe("catalogErrorKey", () => {
   it("maps the API refusals to a message key", () => {
     expect(catalogErrorKey(409, { error: "slug_taken" })).toBe("slugTaken");
     expect(catalogErrorKey(409, { error: "domain_taken" })).toBe("domainTaken");
+    expect(catalogErrorKey(409, { error: "agreement_signed" })).toBe("agreementSigned");
     expect(catalogErrorKey(409, { error: "capture_active" })).toBe("captureActive");
     expect(catalogErrorKey(409, { error: "not_published" })).toBe("notPublished");
     expect(catalogErrorKey(409, { error: "major_brand" })).toBe("majorBrand");

@@ -9,7 +9,7 @@ import { useLiveRefresh } from "@/lib/live-changes";
 import { useDesktop } from "@/lib/use-desktop";
 import { fetchHome, fetchShopDirectory } from "@/lib/wardrobe-client";
 import { CaptureForm } from "./capture-form";
-import { ShopPhoto, shopSite } from "./discover-screen";
+import { ShopPhoto, shopCountText, shopSite } from "./discover-screen";
 import { HomeNewsList, moreClass, sectionTitleClass } from "./home-news";
 import { HomeUne } from "./home-une";
 import { ItemCard } from "./item-card";
@@ -119,7 +119,12 @@ function Shops({ shops }: { shops: ShopCard[] }) {
               <ShopPhoto shop={shop} className="aspect-square w-full" />
               <span className="flex flex-col px-space-2-5 py-space-2 text-meta">
                 <b className="truncate text-sm">{shop.name}</b>
-                <span className="text-ink-muted">{tDiscover("count", { count: shop.itemCount })}</span>
+                <span className="text-ink-muted">{shopCountText(shop, tDiscover)}</span>
+                {shop.knownCount !== null && (
+                  <span className="pt-space-0-5 font-bold text-accent underline underline-offset-3">
+                    {tDiscover("openShop")}
+                  </span>
+                )}
                 <span className="sr-only">{tDiscover("newTab")}</span>
               </span>
             </a>

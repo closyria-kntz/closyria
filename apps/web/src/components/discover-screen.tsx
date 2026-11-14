@@ -31,6 +31,14 @@ const kickerClass = "text-meta font-bold tracking-wide text-une-ink uppercase";
 /** The shop's site, opened in a new tab. */
 export const shopSite = (shop: ShopCard) => `https://${shop.domain}`;
 
+/**
+ * The count line of a shop: how many articles « Découvrir » shows; for a shop without listing agreement, how many of
+ * its articles Closyria knows (« {n} articles chez elle », imports included), its own catalogue being mostly private.
+ */
+export function shopCountText(shop: ShopCard, t: (key: "count" | "knownCount", values: { count: number }) => string) {
+  return shop.knownCount === null ? t("count", { count: shop.itemCount }) : t("knownCount", { count: shop.knownCount });
+}
+
 /** Lower case, without accents: « Zéphyr » is found by « zephyr », « ZEPHYR »… */
 const fold = (text: string) =>
   text
@@ -77,7 +85,7 @@ function Une({ shop }: { shop: ShopCard }) {
           {shop.name}
         </h2>
         <p className="text-chip">
-          {shop.domain} · {t("count", { count: shop.itemCount })}
+          {shop.domain} · {shopCountText(shop, t)}
         </p>
         <a
           href={shopSite(shop)}
@@ -108,7 +116,10 @@ function ShopTile({ shop }: { shop: ShopCard }) {
         <span className="flex min-w-space-0 flex-col gap-space-0-5 px-space-2-5 py-space-2 text-meta">
           <b className="truncate text-sm">{shop.name}</b>
           <span className="truncate text-ink-muted">{shop.domain}</span>
-          <span className="text-ink-muted">{t("count", { count: shop.itemCount })}</span>
+          <span className="text-ink-muted">{shopCountText(shop, t)}</span>
+          {shop.knownCount !== null && (
+            <span className="pt-space-0-5 font-bold text-accent underline underline-offset-3">{t("openShop")}</span>
+          )}
           <span className="sr-only">{t("newTab")}</span>
         </span>
       </a>
@@ -354,6 +365,15 @@ export function DiscoverScreen() {
         onHasSizes={setHasSizes}
       />
       {shopsBlock}
+      <footer className="flex flex-wrap items-center gap-x-space-2 text-sm text-ink-muted">
+        <span>{t("shopFooter")}</span>
+        <Link
+          href="/referencer-ma-boutique"
+          className={`inline-flex min-h-touch-target items-center text-accent underline ${focusRing}`}
+        >
+          {t("shopFooterLink")}
+        </Link>
+      </footer>
     </div>
   );
 }

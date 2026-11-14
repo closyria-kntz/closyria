@@ -330,7 +330,11 @@
       "gone": "Cet article n’est plus en vente chez la boutique.",
       "photosAt": "Voir les photos chez {shop}",
       "illustrationNote": "Illustration Closyria : les photos de l’article sont chez {shop}."
-    }
+    },
+    "knownCount": "{count, plural, =0 {Aucun article chez elle} one {# article chez elle} other {# articles chez elle}}",
+    "openShop": "Voir la boutique",
+    "shopFooter": "Vous êtes une boutique ?",
+    "shopFooterLink": "Référencer ma boutique"
   },
   "Auth": {
     "email": {
@@ -423,7 +427,8 @@
       "reference": "Listes de référence",
       "unclassified": "À classer",
       "reports": "Signalements",
-      "sales": "Soldes"
+      "sales": "Soldes",
+      "listingRequests": "Demandes de référencement"
     },
     "palette": {
       "open": "Commandes",
@@ -476,7 +481,8 @@
       "none": "—",
       "pagination": "Pagination du journal",
       "next": "Page suivante",
-      "first": "Revenir aux plus récentes"
+      "first": "Revenir aux plus récentes",
+      "byShop": "La boutique (son lien)"
     },
     "passkey": {
       "title": "Connexion par passkey requise",
@@ -543,7 +549,8 @@
         "majorBrand": "Une grande enseigne ne va jamais en une.",
         "notShopify": "Seul le catalogue d’une boutique Shopify ou WooCommerce peut être importé.",
         "shopMerged": "Cette boutique a été fusionnée : importe plutôt celle qui la remplace.",
-        "shopRefused": "Cette boutique est refusée : son catalogue n’est jamais importé."
+        "shopRefused": "Cette boutique est refusée : son catalogue n’est jamais importé.",
+        "agreementSigned": "La boutique a signé son accord en ligne : sa date est celle de la signature et ne se change pas. Pour mettre fin à l’accord, décoche la case."
       },
       "shopifySlowdown": "Shopify nous demande de ralentir : imports espacés jusqu’au {date}"
     },
@@ -726,7 +733,46 @@
       "listingAgreement": "Accord de référencement",
       "listingAgreementHint": "La boutique a accepté d’être référencée : tout son catalogue (imports compris) est public dans Découvrir, avec ses photos et ses textes.",
       "listingAgreementDate": "Date de l’accord",
-      "listingAgreementMissing": "Indique la date de l’accord."
+      "listingAgreementMissing": "Indique la date de l’accord.",
+      "agreement": {
+        "title": "Accord de référencement",
+        "partnerSince": "Référencée depuis le {date}.",
+        "notPartner": "Pas d’accord en cours : son catalogue suit les règles des boutiques sans accord.",
+        "invitationOpen": "Un lien d’invitation est ouvert jusqu’au {date}.",
+        "create": "Créer un lien d’invitation",
+        "recreate": "Créer un nouveau lien",
+        "revoke": "Révoquer le lien",
+        "revoked": "Lien révoqué.",
+        "linkLabel": "Lien d’invitation",
+        "linkHint": "Affiché une seule fois : copie-le maintenant. Il vaut 60 jours et ne sert qu’une fois ; un nouveau lien remplace celui-ci.",
+        "copy": "Copier",
+        "copied": "Copié.",
+        "copyFailed": "Copie impossible : sélectionne le texte.",
+        "emailLabel": "E-mail à envoyer",
+        "copyEmail": "Copier l’e-mail",
+        "emailText": "Bonjour,\n\nJe suis la fondatrice de Closyria (https://closyria.com), un dressing en ligne où les utilisatrices gardent les articles qu’elles aiment et découvrent des boutiques indépendantes.\n\nJ’aimerais présenter {shop} dans « Découvrir », notre catalogue : vos articles y apparaîtraient avec vos photos, vos prix et vos tailles, et chacun renverrait vers votre site. C’est gratuit, sans engagement, et vous pouvez retirer votre boutique à tout moment.\n\nSi vous êtes d’accord, il suffit d’ouvrir ce lien (valable jusqu’au {date}) et de remplir le petit formulaire :\n{url}\n\nBelle journée,\nClosyria",
+        "history": "Historique",
+        "noHistory": "Aucun accord enregistré.",
+        "via": {
+          "invitation": "Lien d’invitation",
+          "request": "Demande acceptée",
+          "admin": "Case cochée par l’admin"
+        },
+        "signedBy": "Accepté le {date} par {name}",
+        "signedByEmail": "Accepté le {date} par {name} ({email})",
+        "conditions": "Conditions {version}",
+        "inForce": "En cours",
+        "ended": {
+          "signer": "Retirée par la boutique le {date}",
+          "admin": "Décochée par l’admin le {date}",
+          "replaced": "Remplacée par un accord plus récent le {date}"
+        },
+        "newManageLink": "Nouveau lien de gestion",
+        "newManageLinkHint": "Si la boutique a perdu son lien privé : l’ancien cesse de fonctionner, le nouveau n’est affiché qu’une fois.",
+        "manageLinkLabel": "Lien privé de gestion",
+        "manageEmailLabel": "E-mail à envoyer avec le lien de gestion",
+        "manageEmailText": "Bonjour {name},\n\nVoici le lien privé qui vous permet de voir le référencement de {shop} sur Closyria et de retirer votre boutique à tout moment, sans justification :\n{url}\n\nGardez-le précieusement : il remplace tout lien envoyé auparavant.\n\nBelle journée,\nClosyria"
+      }
     },
     "captures": {
       "title": "Captures en échec",
@@ -1089,6 +1135,38 @@
       "testerHint": "Elle voit dans Découvrir les articles venus seulement d’un import complet, avec les photos et les textes des boutiques.",
       "testerSaved": "Enregistré.",
       "testerFailed": "Ça n’a pas marché. Réessaie."
+    },
+    "listingRequests": {
+      "title": "Demandes de référencement",
+      "intro": "Les boutiques qui demandent à être référencées depuis le lien en bas de « Découvrir ». Avant d’accepter, vérifie que la personne représente bien la boutique (e-mail sur le domaine du site, réponse depuis l’adresse de contact du site…).",
+      "tabs": {
+        "pending": "En attente",
+        "accepted": "Acceptées",
+        "refused": "Refusées"
+      },
+      "tabsLabel": "Filtrer les demandes",
+      "empty": "Aucune demande ici.",
+      "received": "Reçue le {date}",
+      "decided": "Décidée le {date}",
+      "site": "Site",
+      "person": "Personne",
+      "message": "Message",
+      "conditions": "Conditions acceptées : {version}",
+      "shopKnown": "Boutique connue : {name}",
+      "shopUnknown": "Aucune boutique pour ce site : elle sera créée en brouillon à l’acceptation.",
+      "openShop": "Ouvrir la boutique",
+      "verified": "J’ai vérifié que cette personne représente la boutique",
+      "verifyFirst": "Coche d’abord la vérification.",
+      "accept": "Accepter",
+      "refuse": "Refuser",
+      "busy": "Un instant…",
+      "accepted": "Accord enregistré. Envoie à {name} son lien privé, pour retirer sa boutique quand elle le souhaite :",
+      "copy": "Copier le lien",
+      "copied": "Copié.",
+      "refusedNote": "Refusée : le nom, l’e-mail et le message ont été effacés.",
+      "decidedAlready": "Cette demande a déjà été décidée.",
+      "failed": "L’action a échoué. Réessaie.",
+      "close": "Fermer"
     }
   },
   "Capture": {
@@ -2615,5 +2693,87 @@
     "priceDropDetail": "−{drop} chez {shop}",
     "priceDropNoShop": "−{drop}",
     "action": "Voir"
+  },
+  "Listing": {
+    "brandHome": "Closyria, accueil",
+    "nameLabel": "Votre nom",
+    "emailLabel": "Votre e-mail",
+    "emailHint": "Seulement pour vous écrire au sujet du référencement.",
+    "authorized": "Je suis habilité·e à représenter cette boutique",
+    "accepted": "J’accepte les conditions de référencement (version {version})",
+    "conditionsTitle": "Les conditions de référencement",
+    "busy": "Un instant…",
+    "fixErrors": "Vérifiez les champs signalés.",
+    "errors": {
+      "name": "Indiquez votre nom.",
+      "email": "Indiquez une adresse e-mail valide.",
+      "authorized": "Cochez cette case pour confirmer que vous représentez la boutique.",
+      "accepted": "Cochez cette case pour accepter les conditions.",
+      "tooMany": "Trop d’essais depuis cette connexion : réessayez dans une heure.",
+      "failed": "Ça n’a pas marché. Réessayez dans un instant."
+    },
+    "invitation": {
+      "metadata": "Référencer votre boutique · Closyria",
+      "kicker": "Accord de référencement",
+      "title": "Référencer {shop} sur Closyria",
+      "intro": "Closyria est un dressing en ligne : ses utilisatrices y gardent les articles qu’elles aiment et y découvrent des boutiques. Référencée, votre boutique apparaît dans « Découvrir » avec vos photos, et chaque article renvoie vers votre site.",
+      "site": "Site : {domain}",
+      "formTitle": "Votre accord",
+      "submit": "Référencer ma boutique"
+    },
+    "done": {
+      "title": "Merci ! {shop} est référencée sur Closyria.",
+      "body": "Votre catalogue apparaît dès maintenant dans « Découvrir », avec vos photos.",
+      "keep": "Gardez ce lien privé : il vous permet de retirer votre boutique à tout moment.",
+      "manage": "Gérer ou retirer ma boutique",
+      "copy": "Copier le lien",
+      "copied": "Lien copié.",
+      "copyFailed": "Copie impossible : gardez l’adresse de la page qui s’ouvre avec « Gérer ou retirer ma boutique ».",
+      "linkLabel": "Votre lien privé",
+      "reread": "Relire les conditions acceptées"
+    },
+    "invalid": {
+      "metadata": "Lien plus valable · Closyria",
+      "title": "Ce lien n’est plus valable",
+      "body": "Il a peut-être déjà servi, expiré (un lien d’invitation vaut 60 jours) ou été remplacé par un lien plus récent. Écrivez-nous à bonjour@closyria.com : nous vous en enverrons un nouveau.",
+      "request": "Demander le référencement de ma boutique"
+    },
+    "manage": {
+      "metadata": "Gérer le référencement · Closyria",
+      "kicker": "Votre référencement",
+      "title": "{shop} sur Closyria",
+      "active": "Référencée sur Closyria depuis le {date} (conditions {version}).",
+      "withdrawn": "{shop} n’est plus référencée sur Closyria depuis le {date}.",
+      "withdrawHint": "Le retrait prend effet immédiatement : votre catalogue ne s’affiche plus comme celui d’une boutique référencée, et vos photos quittent le catalogue.",
+      "withdraw": "Retirer ma boutique de Closyria",
+      "confirmTitle": "Retirer {shop} de Closyria ?",
+      "confirmBody": "Vous pourrez la référencer de nouveau plus tard, avec un nouveau lien.",
+      "confirm": "Oui, retirer ma boutique",
+      "cancel": "Annuler",
+      "done": "C’est fait : {shop} n’est plus référencée sur Closyria.",
+      "invalidTitle": "Ce lien n’est pas valable",
+      "invalidBody": "Vérifiez qu’il est complet, ou écrivez-nous à bonjour@closyria.com.",
+      "replaced": "Cet accord a été remplacé le {date} par un accord plus récent : {shop} reste référencée. Pour la retirer, utilisez le lien privé du nouvel accord ou écrivez à bonjour@closyria.com."
+    },
+    "request": {
+      "metadata": "Référencer ma boutique · Closyria",
+      "title": "Référencer ma boutique",
+      "intro": "Vous tenez une boutique en ligne et aimeriez la voir dans « Découvrir », avec vos photos ? Envoyez-nous votre demande : nous vérifions que vous représentez la boutique, puis nous la référençons.",
+      "shopName": "Nom de la boutique",
+      "siteUrl": "Adresse du site",
+      "siteUrlHint": "Par exemple atelier-lune.fr",
+      "message": "Message (facultatif)",
+      "honeypot": "Ne remplissez pas ce champ",
+      "submit": "Envoyer ma demande",
+      "errors": {
+        "shopName": "Indiquez le nom de la boutique.",
+        "siteUrl": "Indiquez l’adresse du site, par exemple atelier-lune.fr.",
+        "tooMany": "Trop de demandes depuis cette connexion : réessayez dans une heure.",
+        "busy": "Trop de demandes en attente, réessayez plus tard."
+      },
+      "doneTitle": "Demande envoyée",
+      "doneBody": "Merci ! Nous revenons vers vous par e-mail après avoir vérifié que vous représentez la boutique.",
+      "back": "Retour à Découvrir"
+    }
   }
 }

@@ -45,6 +45,7 @@ import {
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { defineAccess } from "../../access";
 import { type AdminEnv, noteAudit } from "../../admin-audit";
+import { syncAdminCheckbox } from "../../catalog/agreements";
 import { inCatalogue } from "../../catalog/catalogue";
 import type { CatalogDeps } from "../../catalog/deps";
 import { featuredShopId } from "../../catalog/directory";
@@ -130,7 +131,9 @@ const patchRoute = defineAccess(
       200: { description: "The shop", content: { "application/json": { schema: adminShopSchema } } },
       400: errorContent("Invalid body"),
       404: errorContent("Unknown or merged shop"),
-      409: errorContent("domain_taken or slug_taken"),
+      409: errorContent(
+        "domain_taken or slug_taken; agreement_signed: the day of an agreement signed online cannot move",
+      ),
     },
   }),
   "admin",
@@ -260,7 +263,7 @@ function pgCode(error: unknown): string | undefined {
   return e?.cause?.code ?? e?.code;
 }
 
-type Outcome = { shop: Shop } | { error: "domain_taken" | "slug_taken" | "not_found" };
+type Outcome = { shop: Shop } | { error: "domain_taken" | "slug_taken" | "not_found" | "agreement_signed" };
 
 function importStatusShape(shop: Shop, now: Date) {
   const importState = liveImportState(shop.importState, shop.importStartedAt, shop.importHeartbeatAt, now);
@@ -520,6 +523,27 @@ export function adminShopsRoutes(deps: CatalogDeps) {
             .where(and(eq(schema.shops.id, id), isNull(schema.shops.mergedIntoId)))
             .for("update");
           if (!current) return { error: "not_found" };
+          // The checkbox is an agreement given by the admin: its history follows (shop_agreements, via 'admin').
+          // First, before any write: a refusal (agreement_signed) must leave the shop untouched.
+          // The settings form sends the box's day each time: the same day keeps the exact time of the agreement.
+          const agreementDay = settings.listingAgreementAt;
+          const sameDay =
+            agreementDay instanceof Date &&
+            current.listingAgreementAt?.toISOString().slice(0, 10) === agreementDay.toISOString().slice(0, 10);
+          const written = sameDay ? { ...settings, listingAgreementAt: current.listingAgreementAt } : settings;
+          if (agreementDay !== undefined && !sameDay) {
+            const user = c.var.session?.user;
+            if (!user) throw new Error("session expected on an admin route");
+            const synced = await syncAdminCheckbox(
+              tx,
+              id,
+              agreementDay,
+              { id: user.id, name: user.name, email: user.email },
+              now(),
+            );
+            // The shop signed online: its day is the signature's, the box cannot move it.
+            if (synced === "signed") return { error: "agreement_signed" };
+          }
           if (settings.slug) {
             const [clash] = await tx
               .select({ id: schema.shops.id })
@@ -539,7 +563,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
           const [updated] = await tx
             .update(schema.shops)
             // A « grande enseigne » never goes in the une: ticking it takes the shop off.
-            .set({ ...settings, ...(settings.isMajorBrand === true ? { featuredAt: null } : {}), updatedAt: now() })
+            .set({ ...written, ...(written.isMajorBrand === true ? { featuredAt: null } : {}), updatedAt: now() })
             .where(eq(schema.shops.id, id))
             .returning();
           if (!updated) return { error: "not_found" };

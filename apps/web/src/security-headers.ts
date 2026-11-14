@@ -37,3 +37,12 @@ export const securityHeaders = [
 
 /** A shared list stays out of search engines, whatever the page itself says. */
 export const sharedListHeaders = [{ key: "X-Robots-Tag", value: "noindex" }];
+
+/**
+ * The listing agreement's links (`/referencement/<token>`, `/referencement/gerer/<token>`): the token is the key, so the
+ * address is never sent to another site (no referrer, even to the shop's own site) and never indexed.
+ */
+export const listingLinkHeaders = [
+  { key: "X-Robots-Tag", value: "noindex" },
+  { key: "Referrer-Policy", value: "no-referrer" },
+];

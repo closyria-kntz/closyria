@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
-import { securityHeaders, sharedListHeaders } from "./src/security-headers";
+import { listingLinkHeaders, securityHeaders, sharedListHeaders } from "./src/security-headers";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
@@ -15,6 +15,8 @@ const config: NextConfig = {
   headers: async () => [
     { source: "/:path*", headers: securityHeaders },
     { source: "/l/:path*", headers: sharedListHeaders },
+    // After the baseline: its Referrer-Policy overrides the default one (the last matching header wins).
+    { source: "/referencement/:path*", headers: listingLinkHeaders },
   ],
 };
 

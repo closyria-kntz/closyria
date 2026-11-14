@@ -297,9 +297,10 @@ describe("DELETE /api/admin/users/{id}", () => {
     const account = await session("user", "email-otp");
     const keys = await seedEverything(account.userId, account.email);
     const before = await rowsPointingTo(account.userId);
-    // Every table that can point to a person holds one of her rows, so the check below proves them all. The audit log
-    // only names admins, and an admin cannot be deleted.
-    expect(Object.entries(before).filter(([fk, n]) => n === 0 && fk !== "admin_audit_log.admin_id")).toEqual([]);
+    // Every table that can point to a person holds one of her rows, so the check below proves them all. The audit log,
+    // the listing agreements and invitations only name admins, and an admin cannot be deleted.
+    const adminsOnly = new Set(["admin_audit_log.admin_id", "shop_agreements.admin_id", "shop_invitations.created_by"]);
+    expect(Object.entries(before).filter(([fk, n]) => n === 0 && !adminsOnly.has(fk))).toEqual([]);
 
     expect((await remove(account.userId, "someone-else@example.test", admin.cookie)).status).toBe(400);
     expect(await rowsPointingTo(account.userId)).toEqual(before);

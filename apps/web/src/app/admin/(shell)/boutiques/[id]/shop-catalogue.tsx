@@ -38,7 +38,12 @@ export function ShopCatalogue({ shop }: { shop: AdminShopDetail }) {
   // The import fields live here, from the server props, then from the light status route: a failed read keeps them.
   const [status, setStatus] = useState<AdminShopImportStatus>(() => importFieldsOf(shop));
   useEffect(() => {
-    setStatus(importFieldsOf(shop));
+    // A refresh started before « Importer maintenant » may land after it: its props, older than the import, never
+    // take back a local import under way (the polling follows it until it ends).
+    setStatus((prev) => {
+      const next = importFieldsOf(shop);
+      return prev.importState !== null && next.importState === null ? prev : next;
+    });
     if (!resync.current) return;
     resync.current = false;
     setValues(shop.values);

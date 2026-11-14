@@ -2,6 +2,9 @@ import { type Database, eq, inArray, schema } from "@closyria/db";
 import { domainCandidates, shopDomain } from "@closyria/shared";
 
 export type Shop = typeof schema.shops.$inferSelect;
+type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+/** The pool, or a transaction (its writes then go in savepoints). */
+type Db = Database | Tx;
 
 const MAX_MERGE_HOPS = 10;
 const MAX_SLUG_ATTEMPTS = 50;
@@ -9,7 +12,7 @@ const MAX_SLUG_ATTEMPTS = 50;
 class LostRace extends Error {}
 
 /** The shop owning the most specific known domain of `host`, followed to the shop it was merged into. */
-export async function findShopByHost(db: Database, host: string): Promise<Shop | null> {
+export async function findShopByHost(db: Db, host: string): Promise<Shop | null> {
   const candidates = domainCandidates(host);
   const rows = await db
     .select({ domain: schema.shopDomains.domain, shop: schema.shops })
@@ -74,7 +77,7 @@ export type CreatedShop = { shop: Shop } | { taken: string };
  * A `draft` shop named after the domain of `url` (slug suffixed on collision, like `findOrCreateShop`),
  * or the id of the (surviving) shop that already owns that domain or a parent domain.
  */
-export async function createDraftShop(db: Database, url: string): Promise<CreatedShop> {
+export async function createDraftShop(db: Db, url: string): Promise<CreatedShop> {
   const host = new URL(url).hostname;
   const domain = shopDomain(url);
   const baseSlug = domain.replaceAll(".", "-");

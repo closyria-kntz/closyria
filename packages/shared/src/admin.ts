@@ -113,6 +113,7 @@ export const adminCatalogErrorSchema = z.object({
     "not_shopify",
     "merged",
     "refused",
+    "agreement_signed",
   ]),
   /** With `domain_taken` on shop creation: the shop that owns the domain. */
   shopId: z.uuid().optional(),

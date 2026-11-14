@@ -17,6 +17,10 @@ const NOT_OWNED: Record<string, string> = {
   "passkey.user_id": "Better Auth",
   // R16: the audit log outlives the admin account (ON DELETE SET NULL) and holds no user content.
   "admin_audit_log.admin_id": "R16",
+  // Listing agreements (accords en ligne): the admin who ticked the box, accepted a request or made an invitation;
+  // proof of the agreement that outlives her account (ON DELETE SET NULL), never a user's content.
+  "shop_agreements.admin_id": "listing agreement: admin only, ON DELETE SET NULL",
+  "shop_invitations.created_by": "listing invitation: admin only, ON DELETE SET NULL",
   // Capture log: an operational record that outlives the user (ON DELETE SET NULL) and holds no user content.
   // Catalogue reports: one per person and article (unique), so moving them on linking could collide; an anonymous
   // account's reports are deleted with her (ON DELETE CASCADE), which loses nothing the admin needs.

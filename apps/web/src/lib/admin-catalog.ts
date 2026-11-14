@@ -17,6 +17,7 @@ export type CatalogErrorKey =
   | "notShopify"
   | "shopMerged"
   | "shopRefused"
+  | "agreementSigned"
   | "generic";
 
 /** The message (under `Admin.shops.errors`) for a refusal of the admin catalog API. */
@@ -31,6 +32,7 @@ export function catalogErrorKey(status: number, body: unknown): CatalogErrorKey 
   if (status === 409 && error === "not_shopify") return "notShopify";
   if (status === 409 && error === "merged") return "shopMerged";
   if (status === 409 && error === "refused") return "shopRefused";
+  if (status === 409 && error === "agreement_signed") return "agreementSigned";
   if (status === 400 && error === "invalid_merge") return "invalidMerge";
   if (status === 400 && error === "invalid_url") return "invalidUrl";
   return "generic";
