@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { adminRequest, shopPatchErrorKey } from "@/lib/admin-catalog";
-import { inputClass, primaryButtonClass } from "../../ui";
+import { inputClass, primaryButtonClass, textareaClass } from "../../ui";
 
 const STATUSES = shopStatusSchema.options;
 const MODES = ["auto", "manual"] as const;
@@ -161,7 +161,7 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
           rows={4}
           value={domains}
           onChange={(e) => setDomains(e.target.value)}
-          className={`${inputClass} font-mono`}
+          className={`${textareaClass} font-mono`}
         />
       </label>
       <label className="flex min-h-touch-target items-start gap-space-2 text-sm sm:col-span-2">

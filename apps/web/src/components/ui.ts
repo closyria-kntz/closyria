@@ -8,6 +8,12 @@ export const primaryButtonClass = `inline-flex items-center justify-center gap-s
 
 export const inputClass = `w-full rounded-button border border-line bg-surface-raised px-space-3 py-space-2 text-control text-ink ${focusRing}`;
 
+/**
+ * A multi-line field: the input's look with a soft corner instead of the pill. A pill radius on a box several lines
+ * tall becomes half its height and curves into the first letters of every line.
+ */
+export const textareaClass = inputClass.replace("rounded-button", "rounded-md");
+
 /** A pill that stays pressed (« Prioritaire »): accent border and a soft fill when on. */
 export const toggleButtonClass = `${buttonClass} min-h-touch-target aria-pressed:border-accent aria-pressed:bg-hint aria-pressed:font-strong`;
 

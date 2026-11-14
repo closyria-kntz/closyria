@@ -6,7 +6,7 @@ import { shareLinks } from "@/lib/share-links";
 import { COPIED_FEEDBACK_MS } from "@/lib/timing";
 import { useCoarsePointer } from "@/lib/use-desktop";
 import { Sheet } from "./sheet";
-import { focusRing, inputClass } from "./ui";
+import { focusRing, textareaClass } from "./ui";
 
 type Choice = "copy" | "whatsapp" | "sms" | "email" | "messenger" | "more";
 
@@ -208,7 +208,7 @@ export function ShareSheet({
               rows={3}
               value={copyValue}
               onFocus={(event) => event.currentTarget.select()}
-              className={`${inputClass} resize-none break-all text-sm field-sizing-content`}
+              className={`${textareaClass} resize-none break-all text-sm field-sizing-content`}
             />
           </div>
         )}

@@ -12,13 +12,12 @@ import {
 import { useTranslations } from "next-intl";
 import { useId, useRef, useState } from "react";
 import { Sheet } from "@/components/sheet";
-import { focusRing, inputClass, levelButtonClass, primaryButtonClass } from "@/components/ui";
+import { focusRing, levelButtonClass, primaryButtonClass, textareaClass } from "@/components/ui";
 import type { FriendDevice } from "@/lib/friend-device";
 import { deleteOpinion, type OpinionError, putOpinion } from "@/lib/shared-list";
 import { cleanName, clip, FriendNameStep, NameTakenQuestion, nameFits } from "./friend-name";
 
 /** A multi-line field: the input's look with softer corners (a pill does not suit several lines). */
-const noteClass = inputClass.replace("rounded-button", "rounded-md");
 
 /** The note's counter shows from this many characters (spec §3.2). */
 export const NOTE_COUNTER_FROM = 150;
@@ -255,7 +254,7 @@ export function OpinionSheet({ open, onClose, token, item, listOpinions, levels,
               setNote(clip(event.target.value, OPINION_NOTE_MAX));
               setError(null);
             }}
-            className={`${noteClass} resize-none`}
+            className={`${textareaClass} resize-none`}
           />
           {noteLength >= NOTE_COUNTER_FROM && (
             <p id={counterId} className="self-end text-caption text-ink-muted tabular-nums">

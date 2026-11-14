@@ -12,7 +12,7 @@ import { Dialog } from "./dialog";
 import { groupOrderHref } from "./group-order-banner";
 import { GroupOrderOpenDialog, type ListShop } from "./group-order-open-dialog";
 import { ShareSheet } from "./share-sheet";
-import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
+import { buttonClass, focusRing, inputClass, primaryButtonClass, textareaClass } from "./ui";
 
 const touch = "min-h-touch-target";
 
@@ -187,7 +187,7 @@ export function SharePanel({
             rows={2}
             value={url}
             onFocus={(event) => event.currentTarget.select()}
-            className={`${inputClass} resize-none break-all border-dashed border-selected-line text-sm field-sizing-content`}
+            className={`${textareaClass} resize-none break-all border-dashed border-selected-line text-sm field-sizing-content`}
           />
           <div className="flex flex-wrap gap-space-2">
             <button
