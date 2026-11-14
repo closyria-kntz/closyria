@@ -1,7 +1,7 @@
 import { manifest } from "./manifest";
 
-// Served here rather than by Next's app/manifest.ts, whose <link> fetches it without credentials: behind dev's
-// password (basic auth) that request is refused, and desktop Chrome asks for the password again and again.
+// Served here rather than by Next's app/manifest.ts, whose <link> fetches it without credentials: on dev, Caddy
+// refuses a request without the access cookie (deploy/caddy/dev.closyria.com.caddy).
 export const dynamic = "force-static";
 
 export function GET(): Response {

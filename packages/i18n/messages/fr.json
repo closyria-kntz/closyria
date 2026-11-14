@@ -352,6 +352,19 @@
       "signInFailed": "La connexion n’a pas marché. Réessaie dans un instant."
     }
   },
+  "DevAccess": {
+    "metadataTitle": "Accès au site de test · Closyria",
+    "title": "Accès au site de test",
+    "intro": "Ce site sert aux essais de Closyria. Entre son mot de passe une fois : cet appareil s’en souviendra.",
+    "passwordLabel": "Mot de passe du site de test",
+    "submit": "Entrer",
+    "busy": "Un instant…",
+    "errors": {
+      "wrongPassword": "Mot de passe incorrect.",
+      "tooManyTries": "Trop d’essais : réessaie dans quelques minutes.",
+      "failed": "Ça n’a pas marché. Réessaie dans un instant."
+    }
+  },
   "Media": {
     "viewer": {
       "open": "Agrandir la photo {n}",

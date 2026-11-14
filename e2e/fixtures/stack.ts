@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { migrateTestDatabase, startTestDatabase } from "@closyria/testing";
+import { E2E_DEV_ACCESS_PASSWORD, E2E_DEV_ACCESS_TOKEN } from "./dev-access";
 import { startProxy } from "./proxy";
 
 export const ROOT = join(import.meta.dirname, "../..");
@@ -72,6 +73,9 @@ export async function startStack(logFile: string): Promise<Stack> {
       TEST_STORAGE_DIR: storageDir,
       // Notifications on (chantier 4): the browser's subscription is faked in the journeys (alertes.spec.ts).
       ...vapidKeys(),
+      // The access page of dev.closyria.com (acces-dev.spec.ts).
+      DEV_ACCESS_PASSWORD: E2E_DEV_ACCESS_PASSWORD,
+      DEV_ACCESS_TOKEN: E2E_DEV_ACCESS_TOKEN,
     });
     cleanups.push(() => terminate(apiProcess));
     const webProcess = launch(

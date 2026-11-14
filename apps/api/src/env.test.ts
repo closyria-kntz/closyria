@@ -170,3 +170,55 @@ describe("envSchema VAPID", () => {
     expect(result.error?.issues.map((i) => i.path.join("."))).toContain("VAPID_SUBJECT");
   });
 });
+
+describe("envSchema dev access", () => {
+  const devReady = {
+    ...base,
+    ...s3,
+    APP_ENV: "dev",
+    BETTER_AUTH_URL: "https://dev.closyria.com",
+    MAIL_TRANSPORT: "brevo",
+    BREVO_API_KEY: "key",
+  };
+  const access = { DEV_ACCESS_PASSWORD: "un-mot-de-passe", DEV_ACCESS_TOKEN: "ab".repeat(32) };
+
+  it("starts without them (the route does not exist) or with both", () => {
+    expect(envSchema.parse(devReady).DEV_ACCESS_TOKEN).toBeUndefined();
+    expect(envSchema.parse({ ...devReady, ...access })).toMatchObject(access);
+  });
+
+  it("refuses to start with only one of them, and names the missing one", () => {
+    for (const name of ["DEV_ACCESS_PASSWORD", "DEV_ACCESS_TOKEN"] as const) {
+      const { [name]: _missing, ...partial } = access;
+      const result = envSchema.safeParse({ ...devReady, ...partial });
+      expect(result.success, name).toBe(false);
+      expect(result.error?.issues.map((i) => i.path.join("."))).toContain(name);
+    }
+  });
+
+  it("requires a 64-character hexadecimal token (openssl rand -hex 32) and a password of 8 characters at least", () => {
+    for (const token of ["ab".repeat(31), "AB".repeat(32), `${"ab".repeat(31)}zz`, "ab".repeat(33)]) {
+      expect(envSchema.safeParse({ ...devReady, ...access, DEV_ACCESS_TOKEN: token }).success, token).toBe(false);
+    }
+    expect(envSchema.safeParse({ ...devReady, ...access, DEV_ACCESS_PASSWORD: "court" }).success).toBe(false);
+  });
+
+  it("is refused in prod, which stays open to everyone", () => {
+    const prodReady = { ...prod, MAIL_TRANSPORT: "brevo", BREVO_API_KEY: "key" };
+    const result = envSchema.safeParse({ ...prodReady, ...access });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((i) => i.path.join("."))).toContain("DEV_ACCESS_TOKEN");
+  });
+
+  it("never echoes the password or the token in its messages", () => {
+    const result = envSchema.safeParse({
+      ...devReady,
+      DEV_ACCESS_PASSWORD: "secret-password-x",
+      DEV_ACCESS_TOKEN: "zz",
+    });
+    expect(result.success).toBe(false);
+    const issues = JSON.stringify(result.error?.issues);
+    expect(issues).not.toContain("secret-password-x");
+    expect(issues).not.toContain('"zz"');
+  });
+});

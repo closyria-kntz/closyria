@@ -1,4 +1,4 @@
-import { appEnvObject, vapidEnvIssues, vapidEnvShape } from "@closyria/shared";
+import { allOrNoneIssues, appEnvObject, vapidEnvIssues, vapidEnvShape } from "@closyria/shared";
 import { z } from "zod";
 import { parseShareLinkKey } from "./wardrobe/share-link";
 
@@ -11,6 +11,9 @@ const mailSender = z
     return { name: name.trim(), email: email.trim() };
   })
   .pipe(z.object({ name: z.string().min(1), email: z.email() }));
+
+/** dev.closyria.com's access page (`POST /api/dev-access`): both, or none (the route does not exist). */
+const DEV_ACCESS_VARIABLES = ["DEV_ACCESS_PASSWORD", "DEV_ACCESS_TOKEN"] as const;
 
 const S3_VARIABLES = ["S3_ENDPOINT", "S3_REGION", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const;
 
@@ -51,10 +54,26 @@ export const envSchema = appEnvObject({
   TEST_STORAGE_DIR: z.string().min(1).optional(),
   // Web Push (alerts): all three or none; without them, push is off (`/push/key` answers 404).
   ...vapidEnvShape,
+  // dev.closyria.com only: the password the access page asks, and the cookie value Caddy lets in (the same token
+  // as in /etc/caddy/Caddyfile). Hexadecimal, so it sits in a cookie and in the Caddyfile as is.
+  DEV_ACCESS_PASSWORD: z.string().min(8, "at least 8 characters").max(200).optional(),
+  DEV_ACCESS_TOKEN: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/, "expected 64 lowercase hexadecimal characters (openssl rand -hex 32)")
+    .optional(),
 })
   .superRefine((env, ctx) => {
     for (const issue of vapidEnvIssues(env)) {
       ctx.addIssue({ code: "custom", path: [issue.path], message: issue.message });
+    }
+    for (const issue of allOrNoneIssues(env, DEV_ACCESS_VARIABLES, "required (DEV_ACCESS_* variables go together)")) {
+      ctx.addIssue({ code: "custom", path: [issue.path], message: issue.message });
+    }
+    // Prod is open to everyone: a dev password there would be a mistake (and a route nobody needs).
+    if (env.APP_ENV === "prod") {
+      for (const name of DEV_ACCESS_VARIABLES.filter((n) => env[n])) {
+        ctx.addIssue({ code: "custom", path: [name], message: "only for dev.closyria.com, never with APP_ENV=prod" });
+      }
     }
     // Local development and the browser tests (disposable database, http, codes in memory).
     const local = env.APP_ENV === "development" || env.APP_ENV === "test";

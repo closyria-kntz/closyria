@@ -1,21 +1,46 @@
-# Dev environment: password-protected, never indexed.
-# Put the output of `caddy hash-password` in place of the placeholder below.
+# Dev environment: open only to the devices that entered the dev password, never indexed.
+# Access is a cookie, not a password window: a home-screen web app on iPhone never shows the browser's password
+# window (basic auth), so it got a 401 and a black screen. The page /acces-dev asks the password once; the API
+# (POST /api/dev-access) then sets `closyria_dev_access=<token>` for a year.
+# DEV_ACCESS_TOKEN below is a placeholder: the real token (`openssl rand -hex 32`) lives only in /etc/caddy/Caddyfile
+# and in /etc/closyria/dev.env (DEV_ACCESS_TOKEN). deploy/README.md, « Accès au site de test (dev) », fills both.
 dev.closyria.com {
-	# The password is asked for pages only. Requests a page makes by itself (data, icon, prefetch) carry a
-	# Sec-Fetch-Mode other than "navigate": desktop Chrome sends them without the password, which made the
-	# password window come back again and again. Without the header (curl, bots), the password is asked.
-	@needsPassword not header_regexp Sec-Fetch-Mode ^(cors|no-cors|same-origin)$
-	basic_auth @needsPassword {
-		closyria HASH
-	}
 	header X-Robots-Tag "noindex, nofollow"
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	encode zstd gzip
 
-	handle /api/* {
-		reverse_proxy 127.0.0.1:3101
+	# Always open, cookie or not, and nothing more:
+	# - /acces-dev: the page that asks the password;
+	# - /api/dev-access: where that page sends it (rate-limited by the API, 5 tries per 10 minutes per address);
+	# - /_next/static/*: the page's scripts, styles and fonts (build files, the same for everyone);
+	# - /theme-init.js: the root layout's blocking script (light / dark before the first paint).
+	# Not opened: the manifest, the icons, /sw.js and /favicon.ico. The page works without them (the favicon is
+	# inline, the service worker is only registered from the app, after access).
+	# The token check is a wildcard on the Cookie header: it matches wherever the cookie sits among the others.
+	@locked {
+		not path /acces-dev /api/dev-access /_next/static/* /theme-init.js
+		not header Cookie *closyria_dev_access=DEV_ACCESS_TOKEN*
 	}
-	handle {
-		reverse_proxy 127.0.0.1:3100
+	# Same conditions (the lines of a matcher are AND-ed), plus: the browser is opening a page.
+	@lockedPage {
+		not path /acces-dev /api/dev-access /_next/static/* /theme-init.js
+		not header Cookie *closyria_dev_access=DEV_ACCESS_TOKEN*
+		header Sec-Fetch-Mode navigate
+	}
+
+	# `route` keeps this order (Caddy would otherwise sort `respond` after the `handle` blocks).
+	route {
+		# A page opened without access: to the access page, which comes back here afterwards. {uri} is the
+		# original path and query, sent as is; the page only follows a path of this site.
+		redir @lockedPage /acces-dev?suite={uri} 302
+		# Anything else without access (data, API, curl, bots): refused. No WWW-Authenticate: no password window.
+		respond @locked "Accès réservé." 401
+
+		handle /api/* {
+			reverse_proxy 127.0.0.1:3101
+		}
+		handle {
+			reverse_proxy 127.0.0.1:3100
+		}
 	}
 }

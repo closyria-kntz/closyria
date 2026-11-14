@@ -31,7 +31,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <head>
         {/* Blocking on purpose: her light / dark choice before the first paint. A file, for `script-src 'self'`. */}
         <script src="/theme-init.js" />
-        {/* With credentials: behind dev's password, a manifest fetched without them makes Chrome ask again and again. */}
+        {/* With credentials: on dev, a manifest fetched without the access cookie is refused (401). */}
         <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
         <link rel="icon" type="image/png" sizes="32x32" href={FAVICON_DATA_URL} />
       </head>

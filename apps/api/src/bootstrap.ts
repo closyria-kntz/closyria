@@ -55,6 +55,10 @@ export function bootstrap(env: Env): Api {
     admin: { db },
     wardrobe: { db, shareLinkKey: parseShareLinkKey(env.SHARE_LINK_KEY) },
     push: { publicKey: vapidConfig(env)?.publicKey ?? null },
+    // dev.closyria.com only: env.ts requires both variables together and refuses them in prod.
+    ...(env.DEV_ACCESS_PASSWORD && env.DEV_ACCESS_TOKEN
+      ? { devAccess: { password: env.DEV_ACCESS_PASSWORD, token: env.DEV_ACCESS_TOKEN } }
+      : {}),
     // R18: the browser tests read their codes here; env.ts guarantees the memory mailer with APP_ENV=test.
     ...(env.APP_ENV === "test" && memory ? { testMail: memory } : {}),
   });

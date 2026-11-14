@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { appEnvObject, parseEnv } from "./env";
+import { allOrNoneIssues, appEnvObject, parseEnv } from "./env";
 
 describe("parseEnv", () => {
   const schema = z.object({ PORT: z.coerce.number().int() });
@@ -33,5 +33,22 @@ describe("appEnvObject", () => {
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.path).toEqual(["APP_ENV"]);
     expect(schema.parse({ NODE_ENV: "production", APP_ENV: "prod" }).APP_ENV).toBe("prod");
+  });
+});
+
+describe("allOrNoneIssues", () => {
+  const names = ["A_ONE", "A_TWO", "A_THREE"] as const;
+  const message = "required (all A_* variables go together)";
+
+  it("is happy with all of them or none", () => {
+    expect(allOrNoneIssues({}, names, message)).toEqual([]);
+    expect(allOrNoneIssues({ A_ONE: "1", A_TWO: "2", A_THREE: "3" }, names, message)).toEqual([]);
+  });
+
+  it("names each missing one when only some are set (an empty value counts as missing)", () => {
+    expect(allOrNoneIssues({ A_TWO: "2", A_THREE: "" }, names, message)).toEqual([
+      { path: "A_ONE", message },
+      { path: "A_THREE", message },
+    ]);
   });
 });

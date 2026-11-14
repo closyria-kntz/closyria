@@ -34,3 +34,16 @@ export function appEnvObject<S extends z.ZodRawShape>(shape: S) {
     })
     .transform((env) => ({ ...env, APP_ENV: ((env as { APP_ENV?: AppEnv }).APP_ENV ?? "development") as AppEnv }));
 }
+
+/**
+ * The issues of a group of variables that go together (all set, or none): one per missing variable when only some
+ * are set, none otherwise. An empty value counts as missing.
+ */
+export function allOrNoneIssues<N extends string>(
+  env: { [K in N]?: string | undefined },
+  names: readonly N[],
+  message: string,
+): { path: N; message: string }[] {
+  if (!names.some((name) => env[name])) return [];
+  return names.filter((name) => !env[name]).map((path) => ({ path, message }));
+}

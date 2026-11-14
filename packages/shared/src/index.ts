@@ -5,6 +5,7 @@ export * from "./catalog-url";
 export * from "./catalogue";
 export * from "./classify";
 export * from "./client-address";
+export * from "./dev-access";
 export * from "./discover";
 export * from "./env";
 export * from "./events";

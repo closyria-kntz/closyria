@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { currencySchema } from "./catalog";
 import { sizeMatches } from "./catalogue";
+import { allOrNoneIssues } from "./env";
 
 const dateTimeSchema = z.iso.datetime({ offset: true });
 const centsSchema = z.number().int().nonnegative().max(100_000_000);
@@ -314,11 +315,7 @@ type VapidEnv = { [K in (typeof VAPID_VARIABLES)[number]]?: string | undefined }
 
 /** The issues of a partial VAPID configuration (one per missing variable); none when all three or none are set. */
 export function vapidEnvIssues(env: VapidEnv): { path: string; message: string }[] {
-  if (!VAPID_VARIABLES.some((name) => env[name])) return [];
-  return VAPID_VARIABLES.filter((name) => !env[name]).map((path) => ({
-    path,
-    message: "required (all VAPID_* variables go together)",
-  }));
+  return allOrNoneIssues(env, VAPID_VARIABLES, "required (all VAPID_* variables go together)");
 }
 
 export type VapidConfig = { publicKey: string; privateKey: string; subject: string };

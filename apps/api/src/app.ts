@@ -16,6 +16,7 @@ import { adminShippingOptionsRoutes } from "./routes/admin/shipping-options";
 import { adminShopsRoutes } from "./routes/admin/shops";
 import { capturesRoutes } from "./routes/captures";
 import { catalogueRoutes } from "./routes/catalogue";
+import { type DevAccessDeps, devAccessRoutes } from "./routes/dev-access";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
 import { alertsRoutes, type PushDeps } from "./routes/me/alerts";
 import { budgetsRoutes } from "./routes/me/budgets";
@@ -63,6 +64,8 @@ export type AppDeps = {
   wardrobe: WardrobeDeps;
   /** Web Push (alerts); without it, push is off. */
   push?: PushDeps;
+  /** dev.closyria.com's access page (`POST /api/dev-access`). Never given in prod. */
+  devAccess?: DevAccessDeps;
   /** The memory mailer, exposed to the browser tests. Only ever given with APP_ENV=test (R18). */
   testMail?: TestMailDeps;
 };
@@ -83,6 +86,8 @@ const healthRoute = defineAccess(
 export function createApp(deps: AppDeps) {
   // Fail closed: the e-mail inspection route must never exist outside the browser tests.
   if (deps.testMail && deps.env !== "test") throw new Error("testMail is only available with APP_ENV=test");
+  // Fail closed: prod is open to everyone, the dev access route must never exist there.
+  if (deps.devAccess && deps.env === "prod") throw new Error("devAccess is never available with APP_ENV=prod");
   const app = new OpenAPIHono<AccessEnv>().basePath("/api");
   // Baseline response headers (task 13). The CSP belongs to the pages, HSTS to Caddy.
   app.use(
@@ -174,6 +179,8 @@ export function createApp(deps: AppDeps) {
 
   // Not part of AppType: no client calls it, and it is absent from every real environment.
   if (deps.testMail) app.route("/", testMailRoutes(deps.testMail));
+  // Not part of AppType either: only dev.closyria.com has it (DEV_ACCESS_*), and the page calls it with fetch.
+  if (deps.devAccess) app.route("/", devAccessRoutes(deps.devAccess));
 
   app.doc31("/openapi.json", {
     openapi: "3.1.0",
