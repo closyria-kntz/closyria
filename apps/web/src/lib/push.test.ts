@@ -7,13 +7,17 @@ import {
   fetchAlerts,
   fetchDevices,
   fetchPushKey,
+  forgetThisDevice,
   isThisDeviceOn,
   markAlertsRead,
   type PushBrowser,
   type PushEnvironment,
   patchAlertSettings,
   pushSupport,
+  readDeviceId,
+  reattachThisDevice,
   removeDevice,
+  writeDeviceId,
 } from "./push";
 
 const id = "00000000-0000-4000-8000-000000000001";
@@ -131,7 +135,6 @@ describe("enableNotifications", () => {
     for (const [now, answer] of [
       ["default", "denied"],
       ["denied", "denied"],
-      ["default", "default"],
     ] as const) {
       const { browser } = fakeBrowser(now, answer);
       const d = deps(json(device));
@@ -139,6 +142,14 @@ describe("enableNotifications", () => {
       expect(browser.register).not.toHaveBeenCalled();
       expect(d.fetch).not.toHaveBeenCalled();
     }
+  });
+
+  it("tells a closed question (still « default ») apart from a refusal", async () => {
+    const { browser } = fakeBrowser("default", "default");
+    const d = deps(json(device));
+    expect(await enableNotifications("AQID", browser, d)).toEqual({ ok: false, error: "dismissed" });
+    expect(browser.register).not.toHaveBeenCalled();
+    expect(d.fetch).not.toHaveBeenCalled();
   });
 
   it("drops the browser's subscription for a guest", async () => {
@@ -160,6 +171,110 @@ describe("enableNotifications", () => {
     const { browser } = fakeBrowser("granted");
     browser.register.mockRejectedValue(new Error("no worker"));
     expect(await enableNotifications("AQID", browser, deps(json(device)))).toEqual({ ok: false, error: "failed" });
+  });
+});
+
+function memoryStorage() {
+  const values = new Map<string, string>();
+  return {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => void values.set(key, value),
+    removeItem: (key: string) => void values.delete(key),
+  };
+}
+
+describe("this device's id", () => {
+  it("is kept, read and cleared, and a broken storage reads as unknown", () => {
+    const storage = memoryStorage();
+    expect(readDeviceId(storage)).toBeNull();
+    writeDeviceId(id, storage);
+    expect(readDeviceId(storage)).toBe(id);
+    writeDeviceId(null, storage);
+    expect(readDeviceId(storage)).toBeNull();
+    const broken = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+      removeItem: () => {
+        throw new Error("blocked");
+      },
+    };
+    expect(readDeviceId(broken)).toBeNull();
+    expect(() => writeDeviceId(id, broken)).not.toThrow();
+    expect(readDeviceId(null)).toBeNull();
+  });
+});
+
+describe("forgetThisDevice (sign-out)", () => {
+  it("removes the known device from the API, then unsubscribes the browser", async () => {
+    const { browser, pushManager, subscription } = fakeBrowser("granted");
+    pushManager.getSubscription.mockResolvedValue(subscription as never);
+    const storage = memoryStorage();
+    writeDeviceId(id, storage);
+    const d = deps(new Response(null, { status: 204 }));
+    await forgetThisDevice(browser, d, storage);
+    expect(d.fetch).toHaveBeenCalledWith(`/api/me/push-subscriptions/${id}`, { method: "DELETE" });
+    expect(subscription.unsubscribe).toHaveBeenCalled();
+    expect(readDeviceId(storage)).toBeNull();
+  });
+
+  it("unsubscribes the browser even without a known id, or when the API fails", async () => {
+    const unknown = fakeBrowser("granted");
+    unknown.pushManager.getSubscription.mockResolvedValue(unknown.subscription as never);
+    const d = deps(json({}));
+    await forgetThisDevice(unknown.browser, d, memoryStorage());
+    expect(d.fetch).not.toHaveBeenCalled();
+    expect(unknown.subscription.unsubscribe).toHaveBeenCalled();
+
+    const down = fakeBrowser("granted");
+    down.pushManager.getSubscription.mockResolvedValue(down.subscription as never);
+    const storage = memoryStorage();
+    writeDeviceId(id, storage);
+    const failing = { fetch: vi.fn(async () => Promise.reject(new Error("offline"))), ensure: vi.fn(async () => {}) };
+    await forgetThisDevice(down.browser, failing, storage);
+    expect(down.subscription.unsubscribe).toHaveBeenCalled();
+    expect(readDeviceId(storage)).toBeNull();
+  });
+
+  it("never throws, with no service worker or no subscription", async () => {
+    const none = fakeBrowser("granted");
+    await expect(forgetThisDevice(none.browser, deps(json({})), memoryStorage())).resolves.toBeUndefined();
+    const broken = fakeBrowser("granted");
+    broken.browser.existing.mockRejectedValue(new Error("no worker"));
+    await expect(forgetThisDevice(broken.browser, deps(json({})), memoryStorage())).resolves.toBeUndefined();
+  });
+});
+
+describe("reattachThisDevice", () => {
+  it("sends the browser's subscription again and answers the id the API gives it", async () => {
+    const { browser, pushManager, subscription } = fakeBrowser("granted");
+    pushManager.getSubscription.mockResolvedValue(subscription as never);
+    const d = deps(json(device));
+    expect(await reattachThisDevice(browser, d)).toEqual(device);
+    expect(d.ensure).toHaveBeenCalled();
+    expect(d.fetch).toHaveBeenCalledWith(
+      "/api/me/push-subscriptions",
+      expect.objectContaining({ method: "POST", body: JSON.stringify(subscriptionJson) }),
+    );
+    expect(pushManager.subscribe).not.toHaveBeenCalled();
+  });
+
+  it("is null without a subscription or permission, on a refusal or a bad answer", async () => {
+    const none = fakeBrowser("granted");
+    const d = deps(json(device));
+    expect(await reattachThisDevice(none.browser, d)).toBeNull();
+    expect(d.fetch).not.toHaveBeenCalled();
+    const denied = fakeBrowser("denied");
+    denied.pushManager.getSubscription.mockResolvedValue(denied.subscription as never);
+    expect(await reattachThisDevice(denied.browser, deps(json(device)))).toBeNull();
+    for (const response of [json({ error: "account_required" }, 403), json({}, 500), json({ id: 1 })]) {
+      const on = fakeBrowser("granted");
+      on.pushManager.getSubscription.mockResolvedValue(on.subscription as never);
+      expect(await reattachThisDevice(on.browser, deps(response))).toBeNull();
+    }
   });
 });
 

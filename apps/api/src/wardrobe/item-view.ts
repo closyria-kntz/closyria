@@ -57,6 +57,7 @@ async function loadAlertFacts(db: Database | Tx, userId: string, itemIds: string
       sizesShoes: schema.profiles.sizesShoes,
       sizeBack: schema.alertSettings.sizeBack,
       targetPrice: schema.alertSettings.targetPrice,
+      digest: schema.alertSettings.digest,
       impossible: sql<boolean>`${trackingImpossibleSql}`,
     })
     .from(schema.items)
@@ -81,10 +82,16 @@ async function loadAlertFacts(db: Database | Tx, userId: string, itemIds: string
     const watched = watchedSizes(r.sizeLabel, profileSizes, kind !== undefined);
     const sizeBackOn = r.sizeBack ?? DEFAULT_ALERT_SETTINGS.sizeBack;
     const targetOn = r.targetPriceCents !== null && (r.targetPrice ?? DEFAULT_ALERT_SETTINGS.targetPrice);
+    // Price drops still reach her digest: only with all three off is the item no longer followed.
+    const digestOn = r.digest ?? DEFAULT_ALERT_SETTINGS.digest;
     let state: ItemAlertState | null = null;
     if (r.stage === "spotted" && r.deletedAt === null) {
       // The shop first: she can do nothing about it, while « M'alerter » and the settings are hers to turn back on.
-      state = r.impossible ? "impossible" : !r.alertsEnabled || (!sizeBackOn && !targetOn) ? "paused" : "watching";
+      state = r.impossible
+        ? "impossible"
+        : !r.alertsEnabled || (!sizeBackOn && !targetOn && !digestOn)
+          ? "paused"
+          : "watching";
     }
     facts.set(r.id, { state, watched });
   }

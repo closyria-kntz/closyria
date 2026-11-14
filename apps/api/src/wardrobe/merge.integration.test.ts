@@ -568,6 +568,73 @@ describe("anonymous -> account merge on sign-in", () => {
     ]);
   });
 
+  it("folding the same product keeps her target price unless empty, « M'alerter » only if both, and its alerts", async () => {
+    const email = `alertes-fusion-${randomUUID()}@example.test`;
+    const accountId = await signInWithEmail(email);
+    const accountMoi = await newProfile(accountId, "Moi", day(1));
+    const accountLea = await newProfile(accountId, "Léa", day(1), 1);
+    const [p0, p1] = [(await newProduct()).id, (await newProduct()).id];
+    const kept = await newItem({ userId: accountId, profileId: accountLea.id, productId: p0, targetPriceCents: 4000 });
+    const filled = await newItem({ userId: accountId, profileId: accountMoi.id, productId: p1 });
+    const anonymous = await signInAnonymously();
+    const anonMoi = await newProfile(anonymous.userId, "Moi", day(2));
+    const source0 = await newItem({
+      userId: anonymous.userId,
+      profileId: anonMoi.id,
+      productId: p0,
+      targetPriceCents: 3000,
+    });
+    const source1 = await newItem({
+      userId: anonymous.userId,
+      profileId: anonMoi.id,
+      productId: p1,
+      targetPriceCents: 5000,
+      alertsEnabled: false,
+    });
+    await handle.db.insert(schema.alertEvents).values([
+      { userId: anonymous.userId, profileId: anonMoi.id, itemId: source0.id, productId: p0, kind: "size_back" },
+      {
+        userId: anonymous.userId,
+        profileId: anonMoi.id,
+        itemId: source1.id,
+        productId: p1,
+        kind: "target_price",
+        priceCents: 4500,
+        status: "sent",
+      },
+    ]);
+
+    expect(await signInWithEmail(email, anonymous.cookie)).toBe(accountId);
+
+    await expectNothingLeftOrCrossed(anonymous.userId);
+    const items = await handle.db
+      .select({
+        id: schema.items.id,
+        target: schema.items.targetPriceCents,
+        alerts: schema.items.alertsEnabled,
+      })
+      .from(schema.items)
+      .where(eq(schema.items.userId, accountId))
+      .orderBy(asc(schema.items.createdAt));
+    expect(items).toEqual([
+      { id: kept.id, target: 4000, alerts: true },
+      { id: filled.id, target: 5000, alerts: false },
+    ]);
+    const events = await handle.db
+      .select({
+        kind: schema.alertEvents.kind,
+        itemId: schema.alertEvents.itemId,
+        profileId: schema.alertEvents.profileId,
+      })
+      .from(schema.alertEvents)
+      .where(eq(schema.alertEvents.userId, accountId))
+      .orderBy(asc(schema.alertEvents.kind));
+    expect(events).toEqual([
+      { kind: "size_back", itemId: kept.id, profileId: accountLea.id },
+      { kind: "target_price", itemId: filled.id, profileId: accountMoi.id },
+    ]);
+  });
+
   it("folds into the first profile by position, not the oldest one", async () => {
     const email = `position-${randomUUID()}@example.test`;
     const accountId = await signInWithEmail(email);

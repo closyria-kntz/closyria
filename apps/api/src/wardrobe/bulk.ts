@@ -8,6 +8,7 @@ import {
   type WardrobeErrorCode,
 } from "@closyria/shared";
 import { pgCode } from "../pg-code";
+import { alertsFollowItems } from "./alert-events";
 import type { Tx } from "./events";
 import { clearGiftsRemoved, clearOwnerTook, markGiftsRemoved, unreceiveGifts, untakeUndo } from "./gifts";
 import { AMOUNT_COLUMN, type Item, lockProductOfUser } from "./items";
@@ -214,6 +215,7 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
       const ids = changed.map((item) => item.id);
       // Another profile, out of this profile's order selection (spec §3.6).
       await setItems(tx, ids, { profileId: op.profileId, inOrderDraft: false, updatedAt: now });
+      await alertsFollowItems(tx, ids);
       let eventIds: string[] = [];
       if (options.writeEvents) {
         const rows = await tx

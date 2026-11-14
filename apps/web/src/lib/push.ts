@@ -148,7 +148,11 @@ export async function isThisDeviceOn(browser: PushBrowser = browserPush): Promis
   }
 }
 
-export type EnableError = "denied" | "account_required" | "failed";
+/**
+ * `dismissed`: she closed the browser's question without answering (the permission is still `default`), which is not
+ * a refusal: « Activer » stays, and asking again works.
+ */
+export type EnableError = "denied" | "dismissed" | "account_required" | "failed";
 export type EnableResult = { ok: true; device: PushSubscriptionView } | { ok: false; error: EnableError };
 
 /**
@@ -163,6 +167,7 @@ export async function enableNotifications(
   try {
     let permission = browser.permission();
     if (permission === "default") permission = await browser.requestPermission();
+    if (permission === "default") return { ok: false, error: "dismissed" };
     if (permission !== "granted") return { ok: false, error: "denied" };
     const registration = await browser.register();
     const subscription =
@@ -172,11 +177,7 @@ export async function enableNotifications(
         applicationServerKey: applicationServerKey(publicKey),
       }));
     await deps.ensure();
-    const response = await deps.fetch("/api/me/push-subscriptions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(subscription.toJSON()),
-    });
+    const response = await postSubscription(subscription, deps);
     if (response.status === 403) {
       // A guest: nothing stays subscribed for an account she does not have yet.
       await subscription.unsubscribe().catch(() => false);
@@ -188,6 +189,88 @@ export async function enableNotifications(
   } catch {
     return { ok: false, error: "failed" };
   }
+}
+
+function postSubscription(subscription: SubscriptionLike, deps: ClientDeps): Promise<Response> {
+  return deps.fetch("/api/me/push-subscriptions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(subscription.toJSON()),
+  });
+}
+
+// --- the id the API gave this browser's subscription ---
+
+/** « Cet appareil » in the list; « Retirer » and « Se déconnecter » unsubscribe it. */
+export const DEVICE_ID_KEY = "closyria.push.deviceId";
+
+type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+const localStore = (): StorageLike | null => {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+};
+
+export function readDeviceId(storage: StorageLike | null = localStore()): string | null {
+  try {
+    return storage?.getItem(DEVICE_ID_KEY) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeDeviceId(id: string | null, storage: StorageLike | null = localStore()): void {
+  try {
+    if (id) storage?.setItem(DEVICE_ID_KEY, id);
+    else storage?.removeItem(DEVICE_ID_KEY);
+  } catch {}
+}
+
+/**
+ * This browser is subscribed but does not know its id (another account used it, or the id was lost): the subscription
+ * is sent again, the API moves it to her account and answers its id. Null when there is nothing to re-attach or it
+ * failed (the page then offers « Activer » again). Never throws.
+ */
+export async function reattachThisDevice(
+  browser: PushBrowser = browserPush,
+  deps: ClientDeps = defaultDeps,
+): Promise<PushSubscriptionView | null> {
+  try {
+    if (browser.permission() !== "granted") return null;
+    const subscription = await (await browser.existing())?.pushManager.getSubscription();
+    if (!subscription) return null;
+    await deps.ensure();
+    const response = await postSubscription(subscription, deps);
+    if (!response.ok) return null;
+    const device = pushSubscriptionViewSchema.safeParse(await response.json());
+    return device.success ? device.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Before « Se déconnecter » (the session is still there): the API forgets this device when its id is known, and the
+ * browser drops its subscription in every case, so the next person on this device gets nothing of hers. Never throws.
+ */
+export async function forgetThisDevice(
+  browser: PushBrowser = browserPush,
+  deps: ClientDeps = defaultDeps,
+  storage: StorageLike | null = localStore(),
+): Promise<void> {
+  const id = readDeviceId(storage);
+  if (id) {
+    try {
+      await deps.fetch(`/api/me/push-subscriptions/${encodeURIComponent(id)}`, { method: "DELETE" });
+    } catch {}
+  }
+  writeDeviceId(null, storage);
+  try {
+    const subscription = await (await browser.existing())?.pushManager.getSubscription();
+    await subscription?.unsubscribe();
+  } catch {}
 }
 
 // --- the API ---

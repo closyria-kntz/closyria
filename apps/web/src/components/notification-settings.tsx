@@ -15,36 +15,23 @@ import {
   isThisDeviceOn,
   patchAlertSettings,
   pushSupport,
+  readDeviceId,
   readPushEnvironment,
+  reattachThisDevice,
   removeDevice,
+  writeDeviceId,
 } from "@/lib/push";
 import { Switch } from "./switch";
 import { Tick } from "./tick";
 import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
 
 const HERE = "/reglages/notifications";
-/** The id the API gave this browser's subscription: « Cet appareil » in the list, and « Retirer » unsubscribes it. */
-const DEVICE_KEY = "closyria.push.deviceId";
 const HOURS = Array.from({ length: DIGEST_HOUR_MAX - DIGEST_HOUR_MIN + 1 }, (_, i) => DIGEST_HOUR_MIN + i);
 const SWITCHES = ["sizeBack", "targetPrice", "digest"] as const;
 
 const cardClass = "flex flex-col gap-space-3 rounded-card border border-line bg-surface-raised p-space-4";
 const subTitleClass = "font-display text-lead font-strong";
 const linkClass = `inline-flex min-h-touch-target items-center self-start rounded-button text-sm font-strong text-accent underline underline-offset-4 ${focusRing}`;
-
-function readDeviceId(): string | null {
-  try {
-    return window.localStorage.getItem(DEVICE_KEY);
-  } catch {
-    return null;
-  }
-}
-function writeDeviceId(id: string | null): void {
-  try {
-    if (id) window.localStorage.setItem(DEVICE_KEY, id);
-    else window.localStorage.removeItem(DEVICE_KEY);
-  } catch {}
-}
 
 /** This browser: what it can do, and whether it already receives her notifications. */
 type DeviceState =
@@ -68,9 +55,21 @@ async function loadAll(): Promise<Loaded> {
   else if (Notification.permission === "denied") device = { kind: "denied" };
   else {
     const mine = readDeviceId();
-    // Subscribed in the browser, and still one of her devices (she may have removed it from another one).
-    const on = (await isThisDeviceOn()) && (mine === null || devices.some((d) => d.id === mine));
-    device = on ? { kind: "on" } : { kind: "ready", publicKey };
+    const subscribed = await isThisDeviceOn();
+    if (subscribed && mine === null) {
+      // Subscribed in the browser but its id is unknown here (someone else used this device, or it was lost): sent
+      // again, the subscription moves to her account and its id comes back.
+      const view = await reattachThisDevice();
+      if (view) {
+        writeDeviceId(view.id);
+        return { settings, devices: [view, ...devices.filter((d) => d.id !== view.id)], device: { kind: "on" } };
+      }
+      device = { kind: "ready", publicKey };
+    } else {
+      // Subscribed in the browser, and still one of her devices (she may have removed it from another one).
+      const on = subscribed && devices.some((d) => d.id === mine);
+      device = on ? { kind: "on" } : { kind: "ready", publicKey };
+    }
   }
   return { settings, devices, device };
 }
@@ -101,7 +100,7 @@ export function NotificationSettings() {
   const [data, setData] = useState<Loaded | "loading" | "failed">("loading");
   const [attempt, setAttempt] = useState(0);
   const [enabling, setEnabling] = useState(false);
-  const [deviceError, setDeviceError] = useState<"failed" | "accountRequired" | null>(null);
+  const [deviceError, setDeviceError] = useState<"failed" | "accountRequired" | "dismissed" | null>(null);
   const [settingsError, setSettingsError] = useState(false);
   const [status, setStatus] = useState("");
   const [deviceId, setDeviceId] = useState<string | null>(null);
@@ -112,9 +111,12 @@ export function NotificationSettings() {
     if (account === null || guest) return;
     let alive = true;
     setData("loading");
-    setDeviceId(readDeviceId());
     loadAll().then(
-      (loaded) => alive && setData(loaded),
+      (loaded) => {
+        if (!alive) return;
+        setDeviceId(readDeviceId());
+        setData(loaded);
+      },
       () => alive && setData("failed"),
     );
     return () => {
@@ -191,7 +193,7 @@ export function NotificationSettings() {
       return;
     }
     if (result.error === "denied") update((loaded) => ({ ...loaded, device: { kind: "denied" } }));
-    else setDeviceError(result.error === "account_required" ? "accountRequired" : "failed");
+    else setDeviceError(result.error === "account_required" ? "accountRequired" : result.error);
   };
 
   const change = async (patch: Partial<AlertSettings>) => {

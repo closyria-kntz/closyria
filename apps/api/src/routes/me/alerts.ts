@@ -176,7 +176,7 @@ async function isGuest(db: Database, userId: string): Promise<boolean> {
     .select({ isAnonymous: schema.user.isAnonymous })
     .from(schema.user)
     .where(eq(schema.user.id, userId));
-  return row?.isAnonymous !== false;
+  return row?.isAnonymous === true;
 }
 
 const settingsColumns = {

@@ -10,6 +10,7 @@ import {
   type WardrobeErrorCode,
 } from "@closyria/shared";
 import { pgCode } from "../pg-code";
+import { alertsFollowItems } from "./alert-events";
 import { recordEvent, type Tx } from "./events";
 import { clearOwnerTook, untakeUndo } from "./gifts";
 import { mergeItemInto } from "./merge-items";
@@ -288,6 +289,7 @@ async function moveItemIn(tx: Tx, userId: string, itemId: string, input: ItemMov
     .update(schema.items)
     .set({ profileId: target.id, inOrderDraft: false, updatedAt: now })
     .where(eq(schema.items.id, item.id));
+  await alertsFollowItems(tx, [item.id]);
   const eventId = await recordEvent(tx, item, {
     type: "profile",
     fromProfileId: item.profileId,

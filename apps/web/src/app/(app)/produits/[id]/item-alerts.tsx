@@ -109,7 +109,11 @@ export function ItemAlerts({
       return;
     }
     const cents = parsed.cents ?? null;
-    if (cents === item.targetPriceCents) return;
+    if (cents === item.targetPriceCents) {
+      // Nothing to save: an error from an earlier attempt no longer holds.
+      setError(null);
+      return;
+    }
     void save(
       { targetPriceCents: cents },
       cents === null ? t("toast.targetCleared") : t("toast.target", { price: money(cents) }),

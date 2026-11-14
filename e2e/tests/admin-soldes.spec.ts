@@ -78,7 +78,7 @@ test("le tableau de bord donne la ligne des notifications sur 7 jours", async ({
   await signInAsAdmin(page, request, db, userAgentTag);
   await page.goto("/admin");
   await expect(page.getByTestId("notifications-line")).toHaveText(
-    /^Notifications : \d+ envoyées?, \d+ en échec \(7 j\) · \d+ appareils?$/,
+    /^Notifications : \d+ envois?, \d+ en échec \(7 j\) · \d+ appareils?$/,
   );
   await axeLightAndDark(page);
 });

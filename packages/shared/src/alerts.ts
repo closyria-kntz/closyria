@@ -34,6 +34,10 @@ export const DIGEST_WAITING_STATUSES = ["pending", "digest"] as const satisfies 
 export const alertStatusSchema = z.enum(["pending", "sent", "digest", "skipped"]);
 export type AlertStatus = z.infer<typeof alertStatusSchema>;
 
+/** « Nouvelles » shows 30 days: alerts done with (not waiting) go after 35 days, the dashboard's sends after 30. */
+export const ALERT_EVENT_RETENTION_DAYS = 35;
+export const ALERT_SEND_RETENTION_DAYS = 30;
+
 /** Whether `nextCents` is a real drop from `previousCents`: at least 5 % or 5 € under it. */
 export function isRealDrop(previousCents: number, nextCents: number): boolean {
   const drop = previousCents - nextCents;

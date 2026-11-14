@@ -143,7 +143,10 @@ clés VAPID **propre à chaque environnement**. Trois variables, dans `/etc/clos
 Les clés se génèrent avec `npx web-push generate-vapid-keys` (outil de la bibliothèque `web-push`, déjà utilisée par
 le worker). Pour qu'elles ne s'affichent jamais à l'écran, on les génère et on les ajoute au fichier d'un seul geste :
 **une seule commande par environnement**, à lancer une fois depuis le compte avec sudo. Elle s'arrête sans rien écrire
-si le fichier contient déjà des clés VAPID, ajoute les trois lignes, puis redémarre l'API et le worker.
+si le fichier contient déjà des clés VAPID, et sans rien écrire si la génération échoue (`npx` ou `node` en erreur, ou
+résultat vide : elle le dit) ; sinon elle ajoute les trois lignes (précédées d'un saut de ligne, pour ne pas coller la
+première à une dernière ligne qui n'en aurait pas), puis redémarre l'API et le worker. Les clés ne passent que par une
+variable du shell, effacée à la fin.
 
 **Toute commande à lancer une seule fois se donne dans UN SEUL message** : la commande entière, d'un bloc, prête à
 copier ; jamais en morceaux répartis sur plusieurs messages (une moitié collée sans l'autre laisserait un fichier à
@@ -152,13 +155,13 @@ moitié rempli, que l'API refuserait au démarrage).
 Dev :
 
 ```bash
-sudo grep -q '^VAPID_' /etc/closyria/dev.env && echo "Clés VAPID déjà présentes : rien n'est changé." || { npx --yes web-push@4.0.0 generate-vapid-keys --json | node -e 'const k=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write(`VAPID_PUBLIC_KEY=${k.publicKey}\nVAPID_PRIVATE_KEY=${k.privateKey}\nVAPID_SUBJECT=https://closyria.com\n`)' | sudo tee -a /etc/closyria/dev.env >/dev/null && sudo systemctl restart closyria-dev-api closyria-dev-worker && echo "Clés VAPID ajoutées, API et worker redémarrés."; }
+F=/etc/closyria/dev.env; if sudo grep -q '^VAPID_' "$F"; then echo "Clés VAPID déjà présentes : rien n'est changé."; elif ! K="$(set -o pipefail; npx --yes web-push@4.0.0 generate-vapid-keys --json | node -e 'const k=JSON.parse(require("fs").readFileSync(0,"utf8"));if(!k.publicKey||!k.privateKey)process.exit(1);process.stdout.write(`VAPID_PUBLIC_KEY=${k.publicKey}\nVAPID_PRIVATE_KEY=${k.privateKey}\nVAPID_SUBJECT=https://closyria.com`)')" || [ -z "$K" ]; then echo "Échec : les clés VAPID n'ont pas été générées (npx ou node) ; rien n'est écrit." >&2; else printf '\n%s\n' "$K" | sudo tee -a "$F" >/dev/null && sudo systemctl restart closyria-dev-api closyria-dev-worker && echo "Clés VAPID ajoutées, API et worker redémarrés."; fi; unset K F
 ```
 
 Prod (même commande, avec `prod`) :
 
 ```bash
-sudo grep -q '^VAPID_' /etc/closyria/prod.env && echo "Clés VAPID déjà présentes : rien n'est changé." || { npx --yes web-push@4.0.0 generate-vapid-keys --json | node -e 'const k=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write(`VAPID_PUBLIC_KEY=${k.publicKey}\nVAPID_PRIVATE_KEY=${k.privateKey}\nVAPID_SUBJECT=https://closyria.com\n`)' | sudo tee -a /etc/closyria/prod.env >/dev/null && sudo systemctl restart closyria-prod-api closyria-prod-worker && echo "Clés VAPID ajoutées, API et worker redémarrés."; }
+F=/etc/closyria/prod.env; if sudo grep -q '^VAPID_' "$F"; then echo "Clés VAPID déjà présentes : rien n'est changé."; elif ! K="$(set -o pipefail; npx --yes web-push@4.0.0 generate-vapid-keys --json | node -e 'const k=JSON.parse(require("fs").readFileSync(0,"utf8"));if(!k.publicKey||!k.privateKey)process.exit(1);process.stdout.write(`VAPID_PUBLIC_KEY=${k.publicKey}\nVAPID_PRIVATE_KEY=${k.privateKey}\nVAPID_SUBJECT=https://closyria.com`)')" || [ -z "$K" ]; then echo "Échec : les clés VAPID n'ont pas été générées (npx ou node) ; rien n'est écrit." >&2; else printf '\n%s\n' "$K" | sudo tee -a "$F" >/dev/null && sudo systemctl restart closyria-prod-api closyria-prod-worker && echo "Clés VAPID ajoutées, API et worker redémarrés."; fi; unset K F
 ```
 
 Vérifier ensuite (la clé publique seule, jamais la privée) :

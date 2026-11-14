@@ -434,7 +434,7 @@
         "woocommerce": "WooCommerce"
       },
       "rereadLate": "Relecture en retard : {count, plural, one {# boutique attend} other {# boutiques attendent}} depuis plus de deux fois leur intervalle.",
-      "notifications": "Notifications : {sent, plural, one {# envoyée} other {# envoyées}}, {failed, plural, one {# en échec} other {# en échec}} (7 j) · {devices, plural, one {# appareil} other {# appareils}}"
+      "notifications": "Notifications : {sent, plural, one {# envoi} other {# envois}}, {failed, plural, one {# en échec} other {# en échec}} (7 j) · {devices, plural, one {# appareil} other {# appareils}}"
     },
     "audit": {
       "title": "Journal d’audit",
@@ -1285,7 +1285,7 @@
       "notChecked": "pas encore vérifié",
       "paused": "Suivi en pause",
       "pausedItem": "Rallume « M’alerter » pour reprendre le suivi.",
-      "pausedSettings": "Tes alertes « Ta taille est revenue » et « Prix visé atteint » sont coupées dans tes réglages.",
+      "pausedSettings": "Tes alertes « Ta taille est revenue », « Prix visé atteint » et « Résumé du jour » sont coupées dans tes réglages.",
       "pausedSettingsLink": "Réglages des notifications",
       "impossible": "Suivi impossible pour cette boutique",
       "impossibleHint": "Cette boutique bloque les visites automatiques : Closyria ne peut pas vérifier ses tailles ni ses prix.",
@@ -2189,7 +2189,7 @@
     "homeScreen": {
       "1": "Dans Safari, sur Closyria, touche le bouton Partager (le carré avec une flèche vers le haut).",
       "2": "Choisis « Sur l’écran d’accueil », puis « Ajouter ».",
-      "3": "Ouvre Closyria depuis sa nouvelle icône, puis va dans Compte → Notifications et touche « Activer les notifications »."
+      "3": "Ouvre Closyria depuis sa nouvelle icône, connecte-toi si on te le demande, puis va dans Compte → Notifications et touche « Activer les notifications »."
     },
     "homeScreenBack": "Aller aux notifications",
     "androidSection": "Sur Android",
@@ -2441,6 +2441,7 @@
       "unsupported": "Ce navigateur ne peut pas recevoir de notifications.",
       "off": "Les notifications ne sont pas encore disponibles.",
       "failed": "L’activation n’a pas marché. Réessaie dans un instant.",
+      "dismissed": "Tu n’as pas répondu à la demande : réessaie.",
       "accountRequired": "Crée d’abord ton compte pour recevoir tes alertes.",
       "keepNews": "Tes nouvelles restent sur l’Accueil et dans « Nouvelles ».",
       "iphoneTitle": "Sur iPhone, ajoute d’abord Closyria à ton écran d’accueil",

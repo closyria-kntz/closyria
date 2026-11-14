@@ -18,13 +18,14 @@ const KEPT_UNLESS_EMPTY = [
   "colorId",
   "coverMediaId",
   "why",
+  "targetPriceCents",
 ] as const satisfies (keyof Item)[];
 
 /**
  * Merges `source` into `target`, two items of the same user for the same product (spec §3 « Fusion », G2): the most
  * advanced stage (`ITEM_STAGE_ORDER`, the target's on a tie), the highest level (none lowest), priority if either has
  * it, the order selection if either has it and the merged item is still « Repéré », the target's own fields (opinion
- * included) unless empty, and the union of photos, lists, tags, history and photo imports; then deletes `source`.
+ * and target price included) unless empty, « M'alerter » only if both have it, and the union of photos, lists, tags, history and photo imports; then deletes `source`.
  * Nothing is lost: the merged item may hold more than 10 photos (the cap is checked on upload only). Runs inside the
  * caller's transaction.
  */
@@ -38,6 +39,8 @@ export async function mergeItemInto(tx: Tx, source: Item, target: Item, now: Dat
     priority: source.priority || target.priority,
     // The order selection only holds wishes still « Repéré » (spec §3.6).
     inOrderDraft: (source.inOrderDraft || target.inOrderDraft) && stage === "spotted",
+    // « M'alerter » stays on only if both had it: she switched it off on one of them.
+    alertsEnabled: source.alertsEnabled && target.alertsEnabled,
     updatedAt: now,
   };
   for (const field of KEPT_UNLESS_EMPTY) {
@@ -66,6 +69,11 @@ export async function mergeItemInto(tx: Tx, source: Item, target: Item, now: Dat
     .update(schema.photoImports)
     .set({ itemId: target.id, updatedAt: now })
     .where(eq(schema.photoImports.itemId, source.id));
+  // Her alerts (« Nouvelles », pending sends) follow, in the target's profile: they would otherwise go with the source.
+  await tx
+    .update(schema.alertEvents)
+    .set({ itemId: target.id, profileId: target.profileId })
+    .where(eq(schema.alertEvents.itemId, source.id));
   // Lists, tags and remaining duplicate photos of the source go with it (cascade).
   await tx.delete(schema.items).where(eq(schema.items.id, source.id));
   await tx.update(schema.items).set(patch).where(eq(schema.items.id, target.id));

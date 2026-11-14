@@ -2,6 +2,7 @@ import type { Database } from "@closyria/db";
 import { PHOTO_IMPORT_QUEUE, photoImportJobSchema } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import type { PgBoss } from "pg-boss";
+import { purgeAlerts } from "../alerts/purge";
 import { runPhotoImport } from "./photo-import";
 import { purgeTransient } from "./purge-transient";
 import { purgeTrash } from "./purge-trash";
@@ -62,6 +63,9 @@ export async function registerWardrobeQueues(boss: PgBoss, deps: { db: Database;
       const { recents, imports } = await purgeTransient(deps.db, now, deps.store);
       if (recents + imports > 0)
         console.log(`transient purge: ${recents} recent link(s), ${imports} photo import(s) deleted`);
+      const alerts = await purgeAlerts(deps.db, now);
+      if (alerts.events + alerts.sends > 0)
+        console.log(`alerts purge: ${alerts.events} alert(s), ${alerts.sends} send record(s) deleted`);
       return purgeTrash(deps.db, now, deps.store);
     }),
   );

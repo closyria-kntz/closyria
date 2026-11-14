@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { sessionsOf } from "../fixtures/auth";
+import { sessionsOf, signInWithEmailCode, uniqueEmail } from "../fixtures/auth";
 import { AUTO_SHOP, autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
@@ -249,6 +249,69 @@ test("un refus du navigateur est expliqué, et le reste marche", async ({ page, 
   await axeLightAndDark(page);
 });
 
+test("une demande fermée sans réponse n'est pas un refus : « Activer » reste", async ({ page, db, userAgentTag }) => {
+  await fakePush(page, { answer: "default" });
+  const userId = await account(page, db, userAgentTag);
+  await openNotifications(page);
+  const device = main(page).getByRole("region", { name: "Sur cet appareil" });
+  await device.getByRole("button", { name: "Activer les notifications" }).click();
+  await expect(device.getByRole("alert")).toHaveText("Tu n’as pas répondu à la demande : réessaie.");
+  await expect(device.getByRole("button", { name: "Activer les notifications" })).toBeEnabled();
+  await expect(device).not.toContainText("Tu as refusé");
+  expect((await db.query("select 1 from push_subscriptions where user_id = $1", [userId])).rowCount).toBe(0);
+});
+
+test("appareil partagé : se déconnecter le retire, et un abonnement sans identifiant passe au compte courant", async ({
+  page,
+  db,
+  userAgentTag,
+  request,
+}) => {
+  await fakePush(page);
+  const first = await account(page, db, userAgentTag);
+  await openNotifications(page);
+  const device = main(page).getByRole("region", { name: "Sur cet appareil" });
+  await device.getByRole("button", { name: "Activer les notifications" }).click();
+  await expect(device).toContainText("Les notifications sont activées sur cet appareil.");
+  const endpoint = await page.evaluate(() => localStorage.getItem("e2e.push.endpoint"));
+  expect(endpoint).toMatch(/^https:\/\/fcm\.googleapis\.com\//);
+
+  // Someone else on this device without « Se déconnecter » (her session ended, the stored id was lost): the
+  // browser's subscription goes to the account now signed in, with « cet appareil ».
+  await page.context().clearCookies();
+  await page.evaluate(() => localStorage.removeItem("closyria.push.deviceId"));
+  await page.goto("/");
+  expect(await page.evaluate(() => window.closyriaE2E.ensureSession())).toEqual({ ok: true });
+  const second = (await sessionsOf(db, userAgentTag)).at(-1)?.userId ?? "";
+  expect(second).not.toBe(first);
+  await db.query(`update "user" set is_anonymous = false where id = $1`, [second]);
+  await openNotifications(page);
+  await expect(device).toContainText("Les notifications sont activées sur cet appareil.");
+  const devices = main(page).getByRole("region", { name: "Tes appareils" });
+  await expect(devices.getByRole("listitem")).toHaveCount(1);
+  await expect(devices.getByRole("listitem")).toContainText("cet appareil");
+  const owners = await db.query<{ user_id: string }>("select user_id from push_subscriptions where endpoint = $1", [
+    endpoint,
+  ]);
+  expect(owners.rows).toEqual([{ user_id: second }]);
+
+  // « Se déconnecter »: the API forgets this device and the browser drops its subscription.
+  await page.context().clearCookies();
+  await page.goto("/");
+  await signInWithEmailCode(page, request, uniqueEmail());
+  await openNotifications(page);
+  // The stored id is the previous account's: not one of hers, so « Activer » (the same subscription moves to her).
+  await device.getByRole("button", { name: "Activer les notifications" }).click();
+  await expect(device).toContainText("Les notifications sont activées sur cet appareil.");
+  expect(await page.evaluate(() => localStorage.getItem("e2e.push.endpoint"))).toBe(endpoint);
+  await page.goto("/reglages/compte");
+  await page.getByRole("button", { name: "Se déconnecter" }).click();
+  await expect(page).toHaveURL(/\/connexion$/);
+  expect(await page.evaluate(() => localStorage.getItem("e2e.push.endpoint"))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem("closyria.push.deviceId"))).toBeNull();
+  expect((await db.query("select 1 from push_subscriptions where endpoint = $1", [endpoint])).rowCount).toBe(0);
+});
+
 test("sur iPhone hors écran d'accueil, l'aide pour ajouter Closyria ; ailleurs, un message clair", async ({
   page,
   db,
@@ -312,6 +375,10 @@ test("sur la fiche d'une envie : « M'alerter », « Préviens-moi sous … € 
   await target.fill("abc");
   await alerts.getByRole("button", { name: "Enregistrer le prix visé" }).click();
   await expect(alerts.getByRole("alert")).toHaveText("Écris un montant, par exemple 59 ou 59,90.");
+  // Nothing to change (still no target): the earlier error goes.
+  await target.fill("");
+  await alerts.getByRole("button", { name: "Enregistrer le prix visé" }).click();
+  await expect(alerts.getByRole("alert")).toHaveCount(0);
   await target.fill("19,90");
   await alerts.getByRole("button", { name: "Enregistrer le prix visé" }).click();
   await expect(alerts).toContainText("Tu seras prévenue dès qu’il passe sous 19,90 €.");

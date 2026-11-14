@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { useAccount } from "@/lib/profile-context";
+import { forgetThisDevice } from "@/lib/push";
 import { buttonClass, primaryButtonClass } from "./ui";
 
 const HERE = "/reglages/compte";
@@ -21,6 +22,8 @@ export function AccountSettings() {
 
   async function signOut() {
     setState("busy");
+    // While her session still exists: this device stops receiving her notifications (a shared computer).
+    await forgetThisDevice();
     const result = await createAuthClient(window.location.origin)
       .signOut()
       .catch(() => ({ error: true }));

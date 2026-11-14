@@ -404,12 +404,17 @@ describe("item alert fields", () => {
     await call("PATCH", "/api/me/alert-settings", a.cookie, { sizeBack: false });
     const read = async () =>
       ((await (await call("GET", `/api/me/items/${item.id}`, a.cookie)).json()) as ItemView).alertState;
+    // Its price drops still go into her digest.
+    expect(await read()).toBe("watching");
+    await call("PATCH", "/api/me/alert-settings", a.cookie, { digest: false });
     expect(await read()).toBe("paused");
     // A target price still watched: she will hear of it.
     await patch(a.cookie, item.id, { targetPriceCents: 5000 });
     expect(await read()).toBe("watching");
     await call("PATCH", "/api/me/alert-settings", a.cookie, { targetPrice: false });
     expect(await read()).toBe("paused");
+    await call("PATCH", "/api/me/alert-settings", a.cookie, { digest: true });
+    expect(await read()).toBe("watching");
   });
 
   it("is impossible for a shop that blocks us, in lists too", async () => {

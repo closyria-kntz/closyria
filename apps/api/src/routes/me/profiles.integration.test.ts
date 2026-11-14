@@ -233,6 +233,70 @@ describe("PATCH, DELETE and order", () => {
     expect(await restored.json()).toMatchObject({ item: { id: kept.item.id, profileId: moi.id, deletedAt: null } });
   });
 
+  it("keeps her alerts when their items change profile, then their old profile is deleted", async () => {
+    const { cookie, userId } = await t.signIn();
+    const moi = ((await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] })
+      .profiles[0] as ProfileJson;
+    const lea = (await (
+      await call("POST", "/api/me/profiles", cookie, { name: "Léa", audience: "women", color: "rose" })
+    ).json()) as ProfileJson;
+    const items: { id: string; productId: string }[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      const product = await newProduct();
+      const res = await call("POST", "/api/me/items", cookie, {
+        productId: product.id,
+        profileId: lea.id,
+        action: "wish",
+      });
+      items.push({ id: ((await res.json()) as { item: { id: string } }).item.id, productId: product.id });
+    }
+    const [one, two, three, trashed] = items as [
+      (typeof items)[0],
+      (typeof items)[0],
+      (typeof items)[0],
+      (typeof items)[0],
+    ];
+    await t.db.insert(schema.alertEvents).values(
+      items.map((item) => ({
+        userId,
+        profileId: lea.id,
+        itemId: item.id,
+        productId: item.productId,
+        kind: "size_back",
+        sizeLabel: "M",
+      })),
+    );
+
+    expect((await call("POST", `/api/me/items/${one.id}/move`, cookie, { profileId: moi.id })).status).toBe(200);
+    const bulk = await call("POST", "/api/me/items/bulk", cookie, { op: "move", ids: [two.id], profileId: moi.id });
+    expect(bulk.status).toBe(200);
+    // Moved before this rule existed: its alert still names « Léa ».
+    await t.db.update(schema.items).set({ profileId: moi.id }).where(eq(schema.items.id, three.id));
+    expect((await call("DELETE", `/api/me/items/${trashed.id}`, cookie)).status).toBe(200);
+    const afterMoves = await t.db
+      .select({ itemId: schema.alertEvents.itemId, profileId: schema.alertEvents.profileId })
+      .from(schema.alertEvents)
+      .where(eq(schema.alertEvents.userId, userId));
+    expect(Object.fromEntries(afterMoves.map((e) => [e.itemId, e.profileId]))).toEqual({
+      [one.id]: moi.id,
+      [two.id]: moi.id,
+      [three.id]: lea.id,
+      [trashed.id]: lea.id,
+    });
+
+    expect((await call("DELETE", `/api/me/profiles/${lea.id}`, cookie)).status).toBe(204);
+    const events = await t.db
+      .select({ itemId: schema.alertEvents.itemId, profileId: schema.alertEvents.profileId })
+      .from(schema.alertEvents)
+      .where(eq(schema.alertEvents.userId, userId));
+    expect(Object.fromEntries(events.map((e) => [e.itemId, e.profileId]))).toEqual({
+      [one.id]: moi.id,
+      [two.id]: moi.id,
+      [three.id]: moi.id,
+      [trashed.id]: moi.id,
+    });
+  });
+
   it("recreates « Moi » for the trashed items of her last profile", async () => {
     const { cookie } = await t.signIn();
     const moi = ((await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] })
