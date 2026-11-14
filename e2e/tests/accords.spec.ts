@@ -125,7 +125,7 @@ test("une boutique invitée donne son accord en ligne, puis le retire avec son l
   await expect(page.getByRole("heading", { level: 1, name: `Référencer ${shop.name} sur Closyria` })).toBeVisible();
   await expect(page.getByText(`Site : ${shop.domain}`)).toBeVisible();
   await expect(page.getByTestId("listing-conditions")).toContainText("Projet — à faire valider par un avocat");
-  await expect(page.getByRole("heading", { name: "Les conditions (version v1)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Les conditions de référencement" })).toBeVisible();
   await axeLightAndDark(page, { testInfo, name: "invitation" });
 
   const submit = page.getByRole("button", { name: "Référencer ma boutique" });
@@ -164,8 +164,27 @@ test("une boutique invitée donne son accord en ligne, puis le retire avec son l
   await expect(page.getByText(shop.name)).toHaveCount(0);
   await axeLightAndDark(page);
 
-  // Withdrawal.
+  // The admin cannot move the day of a signed agreement; she makes a new private link for a signer who lost hers.
+  await page.goto(`/admin/boutiques/${shop.id}`);
+  const settings = page.getByRole("region", { name: "Réglages" });
+  await settings.getByLabel("Date de l’accord").fill("2026-11-01");
+  await settings.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(settings.getByText(/a signé son accord en ligne : sa date est celle de la signature/)).toBeVisible();
+  const agreementBlock = page.getByRole("region", { name: "Accord de référencement" });
+  await agreementBlock.getByRole("button", { name: "Nouveau lien de gestion" }).click();
+  const newLink = agreementBlock.getByLabel("Lien privé de gestion");
+  await expect(newLink).toHaveValue(/\/referencement\/gerer\/[A-Za-z0-9_-]{43}$/);
+  await expect(agreementBlock.getByLabel("E-mail à envoyer avec le lien de gestion")).toHaveValue(
+    new RegExp(`^Bonjour Léa Martin,[\\s\\S]*${shop.name}`),
+  );
+  await axeLightAndDark(page);
+  const newManagePath = new URL(await newLink.inputValue()).pathname;
+  // The lost link no longer works.
   await page.goto(manageHref);
+  await expect(page.getByRole("heading", { level: 1, name: "Ce lien n’est pas valable" })).toBeVisible();
+
+  // Withdrawal.
+  await page.goto(newManagePath);
   await expect(page.getByRole("heading", { level: 1, name: `${shop.name} sur Closyria` })).toBeVisible();
   await expect(page.getByText(/Référencée sur Closyria depuis le/)).toBeVisible();
   await page.getByRole("button", { name: "Retirer ma boutique de Closyria" }).click();
@@ -232,7 +251,8 @@ test("une boutique non invitée demande son référencement, l’admin vérifie 
   await item.getByRole("button", { name: `Accepter ${shopName}` }).click();
   const accepted = item.getByTestId("request-accepted");
   await expect(accepted).toContainText("Accord enregistré. Envoie à Inès Roy son lien privé");
-  await expect(accepted.getByRole("textbox")).toHaveValue(/\/referencement\/gerer\/[A-Za-z0-9_-]{43}$/);
+  await expect(accepted.getByLabel("Lien privé de gestion")).toHaveValue(/\/referencement\/gerer\/[A-Za-z0-9_-]{43}$/);
+  await expect(accepted.getByLabel("E-mail à envoyer avec le lien de gestion")).toHaveValue(/^Bonjour Inès Roy,/);
   await axeLightAndDark(page);
 
   const { rows } = await db.query<{ status: string; via: string; signer_name: string; partner: boolean }>(

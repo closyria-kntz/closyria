@@ -5,7 +5,13 @@ import { useTranslations } from "next-intl";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { ConsentFields, type ConsentValues, FieldError } from "@/components/consent-fields";
 import { focusRing, inputClass, primaryButtonClass, textareaClass } from "@/components/ui";
-import { type ConsentField, type RequestField, requestErrors, sendListingRequest } from "@/lib/listing";
+import {
+  type ConsentField,
+  type RequestError,
+  type RequestField,
+  requestErrors,
+  sendListingRequest,
+} from "@/lib/listing";
 
 type Values = ConsentValues & { shopName: string; siteUrl: string; message: string; website: string };
 
@@ -23,7 +29,7 @@ export function RequestForm({ version }: { version: string }) {
     accepted: false,
   });
   const [errors, setErrors] = useState<RequestField[]>([]);
-  const [sendError, setSendError] = useState<"tooMany" | "failed" | null>(null);
+  const [sendError, setSendError] = useState<RequestError | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const doneTitle = useRef<HTMLHeadingElement>(null);
@@ -53,7 +59,7 @@ export function RequestForm({ version }: { version: string }) {
     setBusy(true);
     const result = await sendListingRequest(input);
     setBusy(false);
-    if (!result.ok) return setSendError(result.error === "tooMany" ? "tooMany" : "failed");
+    if (!result.ok) return setSendError(result.error);
     setDone(true);
   };
 
@@ -158,7 +164,7 @@ export function RequestForm({ version }: { version: string }) {
         />
       </div>
       <p role="alert" className="text-danger empty:hidden">
-        {sendError === "tooMany" ? t("request.errors.tooMany") : sendError ? t("errors.failed") : ""}
+        {sendError === "failed" ? t("errors.failed") : sendError ? t(`request.errors.${sendError}`) : ""}
       </p>
       <button type="submit" disabled={busy} className={`${primaryButtonClass} min-h-touch-target`}>
         {busy ? t("busy") : t("request.submit")}

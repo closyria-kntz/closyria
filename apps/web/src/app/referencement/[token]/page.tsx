@@ -11,7 +11,7 @@ import {
 } from "@/components/listing-page";
 import { internalApiFor } from "@/lib/admin-api";
 import { fetchInvitation } from "@/lib/listing";
-import { InvitationForm } from "./invitation-form";
+import { InvitationFlow } from "./invitation-form";
 
 // « Référencer ma boutique » from the admin's invitation link: public, no account, never indexed, no referrer sent
 // (next.config.ts). A link that is no longer good shows the same message whatever the reason, without the shop.
@@ -28,18 +28,22 @@ export default async function InvitationPage({ params }: { params: Promise<{ tok
   const { shop } = result.data;
   return (
     <ListingShell>
-      <div className="flex flex-col gap-space-2">
-        <span className={listingKickerClass}>{t("kicker")}</span>
-        <h1 className={listingTitleClass}>{t("title", { shop: shop.name })}</h1>
-        {shop.domain && <p className="text-chip text-ink-muted">{t("site", { domain: shop.domain })}</p>}
-      </div>
-      <p>{t("intro")}</p>
-      <ConditionsText
-        markdown={LISTING_CONDITIONS.markdown}
+      <InvitationFlow
+        token={token}
+        shopName={shop.name}
         version={LISTING_CONDITIONS.version}
-        titleId="conditions"
+        intro={
+          <>
+            <div className="flex flex-col gap-space-2">
+              <span className={listingKickerClass}>{t("kicker")}</span>
+              <h1 className={listingTitleClass}>{t("title", { shop: shop.name })}</h1>
+              {shop.domain && <p className="text-chip text-ink-muted">{t("site", { domain: shop.domain })}</p>}
+            </div>
+            <p>{t("intro")}</p>
+          </>
+        }
+        conditions={<ConditionsText markdown={LISTING_CONDITIONS.markdown} titleId="conditions" />}
       />
-      <InvitationForm token={token} shopName={shop.name} version={LISTING_CONDITIONS.version} />
     </ListingShell>
   );
 }

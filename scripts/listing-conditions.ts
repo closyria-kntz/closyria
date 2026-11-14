@@ -1,6 +1,7 @@
 // Bundles docs/legal/conditions-referencement.md into packages/shared (accords en ligne, 2026-11-14): the API records
 // the version and the SHA-256 of exactly the text the page shows. Run `node scripts/listing-conditions.ts` after
-// editing the conditions; scripts/listing-conditions.test.ts fails while the bundled copy is stale.
+// editing the conditions; scripts/listing-conditions.test.ts fails while the bundled copy is stale. A new text is a
+// new version: copy it to docs/legal/archive/conditions-referencement-vN.md too (archives are never edited).
 // Runs under Node's native type stripping: keep explicit .ts imports and no TS-only runtime syntax.
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";

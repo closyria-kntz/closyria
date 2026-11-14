@@ -53,11 +53,16 @@ export function WithdrawPanel({ token, initial }: { token: string; initial: List
         >
           {justDone
             ? t("manage.done", { shop: view.shopName })
-            : t("manage.withdrawn", { shop: view.shopName, date: day(view.withdrawnAt) })}
+            : view.endedBy === "replaced"
+              ? t("manage.replaced", { shop: view.shopName, date: day(view.withdrawnAt) })
+              : t("manage.withdrawn", { shop: view.shopName, date: day(view.withdrawnAt) })}
         </p>
-        <Link href="/referencer-ma-boutique" className={`self-start text-accent underline ${focusRing}`}>
-          {t("invalid.request")}
-        </Link>
+        {/* Replaced: the shop is still listed, there is nothing to ask for. */}
+        {view.endedBy !== "replaced" && (
+          <Link href="/referencer-ma-boutique" className={`self-start text-accent underline ${focusRing}`}>
+            {t("invalid.request")}
+          </Link>
+        )}
       </div>
     );
   }

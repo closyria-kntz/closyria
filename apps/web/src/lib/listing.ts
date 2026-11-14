@@ -37,6 +37,7 @@ export async function fetchManage(api: InternalApi, token: string): Promise<Admi
 export type ConsentField = "name" | "email" | "authorized" | "accepted";
 export type RequestField = ConsentField | "shopName" | "siteUrl";
 export type SendError = "invalid" | "tooMany" | "failed";
+export type RequestError = "tooMany" | "busy" | "failed";
 
 /** The fields a schema refuses, in the form's order (the first one gets the focus). */
 function fieldsOf<F extends string>(issues: readonly { path: readonly PropertyKey[] }[], order: readonly F[]): F[] {
@@ -124,9 +125,10 @@ export async function withdrawShop(
 export async function sendListingRequest(
   input: RequestFormInput,
   fetcher: typeof fetch = fetch,
-): Promise<{ ok: true } | { ok: false; error: SendError }> {
+): Promise<{ ok: true } | { ok: false; error: RequestError }> {
   const res = await post("/api/listing/requests", requestBody(input), fetcher);
   if (!res) return { ok: false, error: "failed" };
   if (res.status === 202) return { ok: true };
-  return { ok: false, error: res.status === 429 ? "tooMany" : "failed" };
+  // 503: too many requests wait for the admin, for everyone.
+  return { ok: false, error: res.status === 429 ? "tooMany" : res.status === 503 ? "busy" : "failed" };
 }

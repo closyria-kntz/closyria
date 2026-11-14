@@ -1,13 +1,13 @@
 "use client";
 
 import type { AdminShopAgreements } from "@closyria/shared";
-import { adminInvitationCreatedSchema } from "@closyria/shared";
+import { adminInvitationCreatedSchema, adminManageLinkSchema } from "@closyria/shared";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { CopySentence } from "@/components/copy-sentence";
 import { adminRequest } from "@/lib/admin-catalog";
-import { invitationUrl } from "@/lib/listing";
+import { invitationUrl, manageUrl } from "@/lib/listing";
 import { buttonClass, primaryButtonClass } from "../../../ui";
 
 /**
@@ -35,6 +35,21 @@ export function ShopAgreement({
   const [created, setCreated] = useState<{ url: string; expiresAt: string } | null>(null);
   const day = (iso: string) => format.dateTime(new Date(iso), { dateStyle: "long", timeZone: "Europe/Paris" });
   const open = created ?? initial.invitation;
+  const inForce = initial.agreements.find((a) => a.withdrawnAt === null) ?? null;
+  const [manageLink, setManageLink] = useState<string | null>(null);
+
+  // « Nouveau lien de gestion »: the signer lost her private link; the old one stops working.
+  const newManageLink = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    const res = await adminRequest("POST", `/api/admin/shops/${shopId}/agreements/current/manage-link`);
+    setBusy(false);
+    const parsed = adminManageLinkSchema.safeParse(res.body);
+    if (!res.ok || !parsed.success) return setError(errors("generic"));
+    setManageLink(manageUrl(window.location.origin, parsed.data.token));
+  };
 
   const act = async (method: "POST" | "DELETE") => {
     if (busy) return;
@@ -106,6 +121,24 @@ export function ShopAgreement({
           />
         </div>
       )}
+      {inForce && (
+        <div className="flex flex-col gap-space-2">
+          <button
+            type="button"
+            onClick={() => void newManageLink()}
+            disabled={busy}
+            className={`${buttonClass} min-h-touch-target self-start`}
+          >
+            {t("newManageLink")}
+          </button>
+          <p className="text-sm text-ink-muted">{t("newManageLinkHint")}</p>
+        </div>
+      )}
+      {manageLink && inForce && (
+        <div data-testid="manage-link" className="flex flex-col gap-space-3 rounded-card bg-surface-sunken p-space-3">
+          <ManageLinkMail url={manageLink} shopName={shopName} signerName={inForce.signerName} />
+        </div>
+      )}
       <p role="status" className="text-sm empty:hidden">
         {notice ?? ""}
       </p>
@@ -136,5 +169,28 @@ export function ShopAgreement({
         </ul>
       )}
     </section>
+  );
+}
+
+/** A private management link, shown once, and the ready-to-send e-mail that carries it (also after a request). */
+export function ManageLinkMail({ url, shopName, signerName }: { url: string; shopName: string; signerName: string }) {
+  const t = useTranslations("Admin.shops.agreement");
+  return (
+    <>
+      <CopySentence
+        label={t("manageLinkLabel")}
+        text={url}
+        copyLabel={t("copy")}
+        copiedLabel={t("copied")}
+        failedLabel={t("copyFailed")}
+      />
+      <CopySentence
+        label={t("manageEmailLabel")}
+        text={t("manageEmailText", { name: signerName, shop: shopName, url })}
+        copyLabel={t("copyEmail")}
+        copiedLabel={t("copied")}
+        failedLabel={t("copyFailed")}
+      />
+    </>
   );
 }

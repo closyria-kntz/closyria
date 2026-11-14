@@ -32,17 +32,9 @@ export const listingTitleClass = "font-title text-page-title leading-tight font-
 
 /**
  * The conditions exactly as bundled (their SHA-256 is recorded with each acceptance), as plain text blocks: the
- * document's own title is left out, the page gives its heading.
+ * document's own title is left out, the page gives its heading (the version is in the text and on the box).
  */
-export async function ConditionsText({
-  markdown,
-  version,
-  titleId,
-}: {
-  markdown: string;
-  version: string;
-  titleId: string;
-}) {
+export async function ConditionsText({ markdown, titleId }: { markdown: string; titleId: string }) {
   const t = await getTranslations("Listing");
   const blocks = conditionsBlocks(markdown).filter((b) => b.kind !== "title");
   return (
@@ -52,7 +44,7 @@ export async function ConditionsText({
       className="flex flex-col gap-space-3 rounded-card bg-surface-sunken p-space-4 text-sm md:p-space-5"
     >
       <h2 id={titleId} className="font-title text-section-title leading-tight font-regular">
-        {t("conditionsTitle", { version })}
+        {t("conditionsTitle")}
       </h2>
       {blocks.map((block, i) => {
         const key = `${block.kind}-${i}`;

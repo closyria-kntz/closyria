@@ -65,7 +65,10 @@ function vouvoie(message: string): boolean {
  * founder wrote them.
  */
 const toShops = (key: string) =>
-  key.startsWith("Listing.") || key === "Discover.shopFooter" || key === "Admin.shops.agreement.emailText";
+  key.startsWith("Listing.") ||
+  key === "Discover.shopFooter" ||
+  key === "Admin.shops.agreement.emailText" ||
+  key === "Admin.shops.agreement.manageEmailText";
 
 describe("French tone", () => {
   it("detects vouvoiement", () => {

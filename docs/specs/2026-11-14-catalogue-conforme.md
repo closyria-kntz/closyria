@@ -146,8 +146,11 @@ boutiques sans accord affichent un compte global. Les conditions sont un **proje
 
 - Texte : `docs/legal/conditions-referencement.md`, « v1 — 2026-11-14 ». `node scripts/listing-conditions.ts` le
   copie dans `packages/shared/src/listing-conditions.generated.ts` (version, date, SHA-256 du texte exact) ; un test
-  échoue tant que la copie n'est pas à jour.
-- Les pages affichent ce texte (titres, paragraphes, listes ; jamais de HTML) ; chaque accord enregistre la version
+  échoue tant que la copie n'est pas à jour. Chaque version acceptée est gardée telle quelle dans
+  `docs/legal/archive/conditions-referencement-vN.md` ; un test vérifie que l'empreinte embarquée est celle de
+  l'archive. Une nouvelle version : nouveau numéro, nouvelle archive, l'ancienne n'est jamais modifiée.
+- Les pages affichent ce texte sous « Les conditions de référencement » (titres, paragraphes, listes ; jamais de
+  HTML) ; chaque accord enregistre la version
   et le SHA-256 du texte affiché. Le formulaire envoie la version lue : une version périmée est refusée (400).
 
 ### 6.2 Données (migration 0036)
@@ -160,11 +163,14 @@ boutiques sans accord affichent un compte global. Les conditions sont un **proje
 
 - `shops.listing_agreement_at` reste la seule source du statut partenaire (`partnerShop`) : il vaut `accepted_at` de
   l'accord en cours, et redevient nul au retrait (le catalogue repasse aux règles sans accord immédiatement).
-- La migration reprend chaque case déjà cochée comme un premier accord `admin` (« Case cochée par l'admin », e-mail
-  vide, conditions « avant v1 »).
+- La migration reprend chaque case déjà cochée comme un premier accord `admin` (« Accord recueilli hors ligne »,
+  e-mail vide, conditions « avant v1 »).
+- `recordAgreement` verrouille d'abord la ligne de la boutique (`select … for update`).
 - **Aucune adresse IP n'est conservée** (conception V1 §9 et §10) : les limites de requêtes ne gardent qu'une empreinte
   salée en mémoire, le temps d'une fenêtre. Du signataire on garde son nom, son e-mail, la date et les conditions.
 - Une demande refusée efface nom, e-mail et message (minimisation).
+- Au plus 50 demandes en attente : au-delà, le formulaire répond 503 `too_many_pending` à tout le monde (« Trop de
+  demandes en attente, réessayez plus tard. »).
 
 ### 6.3 Jetons
 
@@ -177,6 +183,11 @@ boutiques sans accord affichent un compte global. Les conditions sont un **proje
 - Lien de gestion (`/referencement/gerer/<jeton>`) : un second jeton, distinct, haché pareil ; donné à l'acceptation
   (invitation) ou à l'admin qui accepte une demande (à transmettre). Il reste valable pour voir l'état ; le retrait est
   sans effet une seconde fois.
+- Lien perdu : « Nouveau lien de gestion » sur la fiche admin (`POST /api/admin/shops/{id}/agreements/current/manage-link`)
+  remplace l'empreinte de l'accord en cours (l'ancien lien cesse de marcher) et rend le jeton une fois, avec un e-mail
+  prêt à copier ; journalisé `shop.agreement.manage_link`, sans le jeton.
+- Accord remplacé par un plus récent : son lien dit « Cet accord a été remplacé le {date} par un accord plus récent :
+  {boutique} reste référencée. … » (`endedBy = 'replaced'`), sans proposer de demander le référencement.
 - Pages `/referencement/*` : `Referrer-Policy: no-referrer` et `X-Robots-Tag: noindex` (le jeton ne part jamais vers un
   autre site), réponses de l'API en `Cache-Control: no-store`.
 - Limites par adresse : lecture 60 / 10 min, acceptation 10 / h, retrait 10 / h, demande 5 / h.
@@ -185,24 +196,29 @@ boutiques sans accord affichent un compte global. Les conditions sont un **proje
 
 - **Admin, fiche boutique** : bloc « Accord de référencement » (statut, « Créer un lien d'invitation », adresse
   `https://<hôte>/referencement/<jeton>` avec « Copier », e-mail prêt à envoyer, « Révoquer le lien », historique :
-  par qui, quand, comment, retiré par qui).
+  par qui, quand, comment, retiré par qui ; « Nouveau lien de gestion » quand un accord est en cours).
 - **Page d'invitation** (publique, sans compte, hors de l'application) : nom et domaine de la boutique, conditions,
   « Votre nom », « Votre e-mail », « Je suis habilité·e à représenter cette boutique », « J'accepte les conditions de
-  référencement (version v1) », « Référencer ma boutique ». Succès : « Merci ! {Boutique} est référencée sur
-  Closyria. » et le lien privé « Gérer ou retirer ma boutique » (à garder : l'invitation est consommée).
+  référencement (version v1) », « Référencer ma boutique ». Succès : toute la page devient « Merci ! {Boutique} est
+  référencée sur Closyria. » avec le lien privé « Gérer ou retirer ma boutique » (à garder : l'invitation est
+  consommée) et « Relire les conditions acceptées », replié.
 - **Retrait** : « Retirer ma boutique de Closyria », confirmation « Oui, retirer ma boutique », puis « C'est fait ».
 - **Demande** (`/referencer-ma-boutique`, lien « Vous êtes une boutique ? » en bas de « Découvrir ») : nom de la
   boutique, adresse du site, nom, e-mail, message, les deux cases, un champ piège caché (rempli : réponse identique,
   rien d'enregistré). Admin « Demandes de référencement » (`/admin/referencement`) : en attente / acceptées / refusées,
-  la boutique du domaine si Closyria la connaît ; « Accepter » exige « J'ai vérifié que cette personne représente la
-  boutique », crée la boutique en brouillon si besoin et enregistre l'accord (`via = 'request'`) ; « Refuser ».
-- **Case admin** (réglages) : la cocher enregistre un accord `admin` signé par l'admin ; changer la date déplace un
-  accord admin ; la décocher termine l'accord en cours (`withdrawn_by = 'admin'`). Enregistrer les réglages sans
-  changer le jour garde l'heure exacte d'un accord signé.
+  la boutique du domaine si Closyria la connaît (une seule requête pour la liste) ; « Accepter » exige « J'ai vérifié
+  que cette personne représente la boutique » ; dans une seule transaction, la demande verrouillée et encore en
+  attente, il crée la boutique en brouillon si besoin et enregistre l'accord (`via = 'request'`) ; l'admin reçoit le
+  lien de gestion et l'e-mail à envoyer ; « Refuser ».
+- **Case admin** (réglages) : la cocher enregistre un accord `admin` signé par l'admin ; une autre date termine
+  l'accord admin (`replaced`) et en enregistre un nouveau (un `accepted_at` n'est jamais réécrit) ; la décocher
+  termine l'accord en cours (`withdrawn_by = 'admin'`). Un accord signé en ligne (invitation, demande) garde sa
+  date : une autre date répond 409 `agreement_signed` et le formulaire l'explique ; enregistrer sans changer le jour
+  garde l'heure exacte, et `shops.listing_agreement_at` reste égal à son `accepted_at`.
 - **Trace** : `shop.agreement.accept` et `shop.agreement.withdraw` dans le journal d'audit, sans admin (« La boutique
   (son lien) ») et sans donnée personnelle ; côté admin `shop.invitation.create`, `shop.invitation.revoke`,
   `listing_request.accept`, `listing_request.refuse`.
-- **Ton** : ces pages et l'e-mail s'adressent à une boutique et disent « vous » (seule exception au tutoiement, bornée
+- **Ton** : ces pages et les e-mails s'adressent à une boutique et disent « vous » (seule exception au tutoiement, bornée
   dans le test du ton).
 
 ### 6.5 Vignettes
@@ -216,7 +232,8 @@ boutiques sans accord affichent un compte global. Les conditions sont un **proje
 
 - Intégration (`apps/api/src/routes/listing.integration.test.ts`) : cycle du jeton (création, hachage seul, 60 jours,
   révocation, nouveau lien, acceptation unique et simultanée), statut partenaire et visibilité qui basculent, retrait,
-  demande (pot de miel, Zod, 5 / h), acceptation et refus admin, case admin, même 404 sans fuite, vignettes.
+  demande (pot de miel, Zod, 5 / h, 50 en attente), acceptation et refus admin, case admin (date déplacée, accord
+  signé 409), nouveau lien de gestion, accord remplacé, même 404 sans fuite, vignettes.
 - E2E (`e2e/tests/accords.spec.ts`, 3 appareils, axe clair et sombre) : invitation acceptée puis retirée, demande
   publique acceptée par l'admin, compte des vignettes.
 
@@ -226,6 +243,4 @@ boutiques sans accord affichent un compte global. Les conditions sont un **proje
   version + empreinte).
 - Aucun e-mail n'est envoyé (ni à la boutique ni à la fondatrice) : l'admin copie le lien ; une demande n'est pas
   signalée autrement que par la page admin.
-- Un signataire dont l'accord a été remplacé garde un lien de gestion qui montre « plus référencée » à la date du
-  remplacement.
 - Retour arrière de 0036 : supprimer `listing_requests`, `shop_invitations`, `shop_agreements`.

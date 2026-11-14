@@ -68,6 +68,9 @@ describe("sending", () => {
     expect(await acceptInvitation(TOKEN, ok, answer(404))).toEqual({ ok: false, error: "invalid" });
     expect(await acceptInvitation(TOKEN, ok, answer(429))).toEqual({ ok: false, error: "tooMany" });
     expect(await withdrawShop(TOKEN, answer(500))).toEqual({ ok: false, error: "failed" });
+    const request = { ...ok, shopName: "L", siteUrl: "l.fr", message: "", website: "" };
+    expect(await sendListingRequest(request, answer(503))).toEqual({ ok: false, error: "busy" });
+    expect(await sendListingRequest(request, answer(429))).toEqual({ ok: false, error: "tooMany" });
     const offline = vi.fn(async () => {
       throw new TypeError("offline");
     });

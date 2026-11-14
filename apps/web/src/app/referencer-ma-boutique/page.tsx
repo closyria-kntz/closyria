@@ -17,11 +17,7 @@ export default async function RequestPage() {
     <ListingShell>
       <h1 className={listingTitleClass}>{t("title")}</h1>
       <p>{t("intro")}</p>
-      <ConditionsText
-        markdown={LISTING_CONDITIONS.markdown}
-        version={LISTING_CONDITIONS.version}
-        titleId="conditions"
-      />
+      <ConditionsText markdown={LISTING_CONDITIONS.markdown} titleId="conditions" />
       <RequestForm version={LISTING_CONDITIONS.version} />
     </ListingShell>
   );

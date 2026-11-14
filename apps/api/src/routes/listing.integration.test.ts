@@ -4,6 +4,7 @@ import {
   adminInvitationCreatedSchema,
   adminListingRequestAcceptedSchema,
   adminListingRequestListSchema,
+  adminManageLinkSchema,
   adminShopAgreementsSchema,
   catalogPageSchema,
   LISTING_CONDITIONS,
@@ -315,10 +316,18 @@ describe("partner status and catalogue", () => {
 
   it("a newer agreement replaces the one in force (one per shop)", async () => {
     const shop = await newShop();
-    await accept((await invite(shop.id)).token);
+    const first = listingAcceptedSchema.parse(await (await accept((await invite(shop.id)).token)).json());
+    clock = new Date(START.getTime() + DAY);
     const second = listingAcceptedSchema.parse(await (await accept((await invite(shop.id)).token)).json());
     const rows = await t.db.select().from(schema.shopAgreements).orderBy(schema.shopAgreements.createdAt);
     expect(rows.map((r) => r.withdrawnBy)).toEqual(["replaced", null]);
+    expect((await isPartner(shop.id))?.toISOString()).toBe(clock.toISOString());
+    // The first signer's link says her agreement was replaced (the shop is still listed), and withdraws nothing.
+    const replaced = listingManageViewSchema.parse(
+      await (await call("GET", `/listing/manage/${first.manageToken}`, "")).json(),
+    );
+    expect(replaced).toMatchObject({ endedBy: "replaced", withdrawnAt: clock.toISOString() });
+    await call("POST", `/listing/manage/${first.manageToken}/withdraw`, "");
     expect(await isPartner(shop.id)).not.toBeNull();
     await call("POST", `/listing/manage/${second.manageToken}/withdraw`, "");
     expect(await isPartner(shop.id)).toBeNull();
@@ -341,13 +350,18 @@ describe("partner status and catalogue", () => {
         withdrawnAt: null,
       }),
     ]);
-    // Moving the day moves her agreement; the same day changes nothing.
+    // Another day ends her agreement and records a new one (an accepted_at is never rewritten); the same day changes
+    // nothing.
     await call("PATCH", `/admin/shops/${shop.id}`, admin.cookie, { listingAgreementAt: "2026-11-11" });
     await call("PATCH", `/admin/shops/${shop.id}`, admin.cookie, { listingAgreementAt: "2026-11-11" });
     view = adminShopAgreementsSchema.parse(
       await (await call("GET", `/admin/shops/${shop.id}/agreements`, admin.cookie)).json(),
     );
-    expect(view.agreements.map((a) => a.acceptedAt)).toEqual(["2026-11-11T00:00:00.000Z"]);
+    expect(view.agreements.map((a) => [a.acceptedAt, a.withdrawnBy])).toEqual([
+      ["2026-11-11T00:00:00.000Z", null],
+      ["2026-11-10T00:00:00.000Z", "replaced"],
+    ]);
+    expect(view.agreements[1]?.withdrawnAt).toBe(START.toISOString());
 
     await call("PATCH", `/admin/shops/${shop.id}`, admin.cookie, { listingAgreementAt: null });
     expect(await isPartner(shop.id)).toBeNull();
@@ -368,6 +382,55 @@ describe("partner status and catalogue", () => {
     expect((await isPartner(shop.id))?.toISOString()).toBe("2026-11-14T15:42:00.000Z");
     const rows = await t.db.select().from(schema.shopAgreements);
     expect(rows.map((r) => [r.via, r.withdrawnAt])).toEqual([["invitation", null]]);
+  });
+});
+
+describe("signed agreements and lost links", () => {
+  it("the box cannot move the day of an agreement the shop signed (409 agreement_signed)", async () => {
+    const shop = await newShop();
+    clock = new Date("2026-11-14T15:42:00Z");
+    await accept((await invite(shop.id)).token);
+    const res = await call("PATCH", `/admin/shops/${shop.id}`, admin.cookie, { listingAgreementAt: "2026-11-01" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "agreement_signed" });
+    expect((await isPartner(shop.id))?.toISOString()).toBe("2026-11-14T15:42:00.000Z");
+    const rows = await t.db.select().from(schema.shopAgreements);
+    expect(rows.map((r) => [r.via, r.withdrawnAt])).toEqual([["invitation", null]]);
+    // Unticking still ends it.
+    expect((await call("PATCH", `/admin/shops/${shop.id}`, admin.cookie, { listingAgreementAt: null })).status).toBe(
+      200,
+    );
+    expect(await isPartner(shop.id)).toBeNull();
+  });
+
+  it("« Nouveau lien de gestion » replaces the signer's lost link, once, and is journalled without the token", async () => {
+    const shop = await newShop();
+    const path = `/admin/shops/${shop.id}/agreements/current/manage-link`;
+    expect((await call("POST", path, admin.cookie)).status).toBe(404);
+    const { manageToken: lost } = listingAcceptedSchema.parse(
+      await (await accept((await invite(shop.id)).token)).json(),
+    );
+    expect((await call("POST", path, pub.cookie)).status).toBe(403);
+    const res = await call("POST", path, admin.cookie);
+    expect(res.status).toBe(201);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const { token } = adminManageLinkSchema.parse(await res.json());
+    expect(token).not.toBe(lost);
+    expect((await call("GET", `/listing/manage/${lost}`, "")).status).toBe(404);
+    expect((await call("GET", `/listing/manage/${token}`, "")).status).toBe(200);
+    const [agreement] = await t.db.select().from(schema.shopAgreements);
+    expect(agreement?.manageTokenHash).toBe(createHash("sha256").update(token).digest("hex"));
+    const audit = await t.db
+      .select()
+      .from(schema.adminAuditLog)
+      .where(eq(schema.adminAuditLog.action, "shop.agreement.manage_link"));
+    // The 404 before any agreement, then this one.
+    expect(audit.map((a) => a.details.status).sort()).toEqual([201, 404]);
+    expect(JSON.stringify(audit)).not.toContain(token);
+    // It withdraws.
+    await call("POST", `/listing/manage/${token}/withdraw`, "");
+    expect(await isPartner(shop.id)).toBeNull();
+    expect((await call("POST", path, admin.cookie)).status).toBe(404);
   });
 });
 
@@ -415,6 +478,24 @@ describe("« Référencer ma boutique »", () => {
       expect((await call("POST", "/listing/requests", "", body)).status, JSON.stringify(body)).toBe(400);
     }
     expect(await t.db.select().from(schema.listingRequests)).toHaveLength(0);
+  });
+
+  it("closes for everyone while 50 requests wait for the admin", async () => {
+    await t.db.insert(schema.listingRequests).values(
+      Array.from({ length: 50 }, (_, i) => ({
+        shopName: `Boutique ${i}`,
+        siteUrl: `https://b${i}.test`,
+        signerName: "X",
+        signerEmail: "x@b.test",
+        conditionsVersion: "v1",
+        conditionsSha256: "x",
+      })),
+    );
+    const res = await call("POST", "/listing/requests", "", request);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "too_many_pending" });
+    await t.db.update(schema.listingRequests).set({ status: "refused", signerName: null, signerEmail: null });
+    expect((await call("POST", "/listing/requests", "", request)).status).toBe(202);
   });
 
   it("is limited to 5 an hour per address", async () => {

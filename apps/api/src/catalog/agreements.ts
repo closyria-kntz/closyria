@@ -105,6 +105,8 @@ export type NewAgreement = {
   conditions?: { version: string; sha256: string };
   /** A private management link (withdrawal) for the signer: invitations and requests, never the admin's checkbox. */
   withManageLink: boolean;
+  /** When it is recorded (the end of the previous one, `created_at`): `acceptedAt` unless given (the admin's day). */
+  at?: Date;
 };
 
 /**
@@ -115,7 +117,10 @@ export async function recordAgreement(
   tx: Tx,
   input: NewAgreement,
 ): Promise<{ id: string; manageToken: string | null }> {
-  await endAgreement(tx, input.shopId, "replaced", input.acceptedAt);
+  // The shop row first: two agreements of one shop (an invitation and a request, say) run one after the other.
+  await tx.execute(sql`select id from shops where id = ${input.shopId} for update`);
+  const at = input.at ?? input.acceptedAt;
+  await endAgreement(tx, input.shopId, "replaced", at);
   const manage = input.withManageLink ? newListingToken() : null;
   const conditions = input.conditions ?? LISTING_CONDITIONS;
   const [row] = await tx
@@ -130,13 +135,13 @@ export async function recordAgreement(
       conditionsSha256: conditions.sha256,
       manageTokenHash: manage?.hash ?? null,
       adminId: input.adminId ?? null,
-      createdAt: input.acceptedAt,
+      createdAt: at,
     })
     .returning({ id: schema.shopAgreements.id });
   if (!row) throw new Error("agreement not recorded");
   await tx
     .update(schema.shops)
-    .set({ listingAgreementAt: input.acceptedAt, updatedAt: input.acceptedAt })
+    .set({ listingAgreementAt: input.acceptedAt, updatedAt: at })
     .where(eq(schema.shops.id, input.shopId));
   return { id: row.id, manageToken: manage?.token ?? null };
 }
@@ -159,8 +164,10 @@ export async function traceAgreement(
 
 /**
  * The admin's checkbox (« Accord de référencement » in the shop's settings): ticking it records an agreement given by
- * the admin (she is the signer), changing its day moves an agreement of hers, unticking it ends the one in force.
- * Called in the PATCH's transaction, before the shop row is written (the PATCH writes `listing_agreement_at`).
+ * the admin (she is the signer); another day for an agreement of hers ends it (`replaced`) and records a new one, so an
+ * `accepted_at` is never rewritten; unticking it ends the one in force. An agreement the shop signed keeps its day:
+ * `signed` (the PATCH answers 409 `agreement_signed`). Called in the PATCH's transaction, before the shop row is
+ * written (the PATCH writes `listing_agreement_at`).
  */
 export async function syncAdminCheckbox(
   tx: Tx,
@@ -168,28 +175,42 @@ export async function syncAdminCheckbox(
   day: Date | null,
   admin: { id: string; name: string; email: string },
   at: Date,
-): Promise<void> {
+): Promise<"ok" | "signed"> {
   const [inForce] = await tx
     .select()
     .from(schema.shopAgreements)
     .where(and(eq(schema.shopAgreements.shopId, shopId), isNull(schema.shopAgreements.withdrawnAt)));
   if (day === null) {
     if (inForce) await endAgreement(tx, shopId, "admin", at);
-    return;
+    return "ok";
   }
-  if (!inForce) {
-    await recordAgreement(tx, {
-      shopId,
-      via: "admin",
-      signerName: admin.name || admin.email,
-      signerEmail: admin.email,
-      acceptedAt: day,
-      adminId: admin.id,
-      withManageLink: false,
-    });
-  } else if (inForce.via === "admin" && inForce.acceptedAt.getTime() !== day.getTime()) {
-    await tx.update(schema.shopAgreements).set({ acceptedAt: day }).where(eq(schema.shopAgreements.id, inForce.id));
-  }
+  if (inForce && inForce.via !== "admin") return "signed";
+  if (inForce && inForce.acceptedAt.getTime() === day.getTime()) return "ok";
+  await recordAgreement(tx, {
+    shopId,
+    via: "admin",
+    signerName: admin.name || admin.email,
+    signerEmail: admin.email,
+    acceptedAt: day,
+    adminId: admin.id,
+    withManageLink: false,
+    at,
+  });
+  return "ok";
+}
+
+/**
+ * A new private management link for the agreement in force (the signer lost hers): the old hash is replaced, the token
+ * is returned once. Null when the shop has no agreement in force.
+ */
+export async function rotateManageLink(db: Database, shopId: string): Promise<string | null> {
+  const { token, hash } = newListingToken();
+  const rotated = await db
+    .update(schema.shopAgreements)
+    .set({ manageTokenHash: hash })
+    .where(and(eq(schema.shopAgreements.shopId, shopId), isNull(schema.shopAgreements.withdrawnAt)))
+    .returning({ id: schema.shopAgreements.id });
+  return rotated.length > 0 ? token : null;
 }
 
 /** The shop's agreements, newest first. */

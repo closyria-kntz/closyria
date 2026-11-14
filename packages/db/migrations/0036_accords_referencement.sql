@@ -62,5 +62,5 @@ CREATE UNIQUE INDEX "shop_invitations_open_idx" ON "shop_invitations" USING btre
 -- Added by hand: the agreements ticked by the admin before this migration become the shops' first history line
 -- (via 'admin', signer unknown, conditions before v1).
 INSERT INTO "shop_agreements" ("shop_id", "accepted_at", "signer_name", "signer_email", "conditions_version", "conditions_sha256", "via")
-SELECT "id", "listing_agreement_at", 'Case cochée par l’admin', '', 'avant v1', '', 'admin'
+SELECT "id", "listing_agreement_at", 'Accord recueilli hors ligne', '', 'avant v1', '', 'admin'
 FROM "shops" WHERE "listing_agreement_at" IS NOT NULL;

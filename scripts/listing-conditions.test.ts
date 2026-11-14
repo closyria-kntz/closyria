@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { LISTING_CONDITIONS } from "../packages/shared/src/listing-conditions.generated.ts";
 import { conditionsModule, SOURCE, TARGET } from "./listing-conditions.ts";
 
 describe("listing conditions bundle", () => {
@@ -22,5 +24,14 @@ describe("listing conditions bundle", () => {
 
   it("marks the draft as to be validated by a lawyer", () => {
     expect(readFileSync(SOURCE, "utf8")).toContain("Projet — à faire valider par un avocat");
+  });
+
+  it("archives every bundled version as it was accepted (docs/legal/archive), byte for byte", () => {
+    const archive = fileURLToPath(
+      new URL(`../docs/legal/archive/conditions-referencement-${LISTING_CONDITIONS.version}.md`, import.meta.url),
+    );
+    expect(existsSync(archive), archive).toBe(true);
+    const sha = createHash("sha256").update(readFileSync(archive, "utf8"), "utf8").digest("hex");
+    expect(sha).toBe(LISTING_CONDITIONS.sha256);
   });
 });

@@ -1,5 +1,6 @@
-import { and, eq, isNull, schema } from "@closyria/db";
+import { and, count, eq, isNull, schema } from "@closyria/db";
 import {
+  type AgreementEndedBy,
   LISTING_CONDITIONS,
   listingAcceptedSchema,
   listingAcceptInputSchema,
@@ -36,6 +37,9 @@ export const LISTING_LIMITS = {
   withdraw: { max: 10, windowMs: HOUR_MS },
   request: { max: 5, windowMs: HOUR_MS },
 } as const;
+
+/** Beyond this many requests waiting for the admin, the form is closed for everyone (a flood from many addresses). */
+export const MAX_PENDING_REQUESTS = 50;
 
 const invalidLink = { error: "invalid_link" } as const;
 const invalid = { error: "invalid_request" } as const;
@@ -130,7 +134,8 @@ export function listingRoutes(deps: CatalogDeps, clock?: () => number) {
       responses: {
         202: { description: "Received", content: { "application/json": { schema: z.object({}) } } },
         400: errorContent("Invalid fields"),
-        429: errorContent("Too many requests from this address"),
+        429: errorContent("Too many requests from this address (rate_limited)"),
+        503: errorContent(`${MAX_PENDING_REQUESTS} requests already wait for the admin (too_many_pending)`),
       },
     }),
     "public",
@@ -153,6 +158,7 @@ export function listingRoutes(deps: CatalogDeps, clock?: () => number) {
     shopName: row.shopName,
     acceptedAt: row.agreement.acceptedAt.toISOString(),
     withdrawnAt: row.agreement.withdrawnAt?.toISOString() ?? null,
+    endedBy: (row.agreement.withdrawnBy as AgreementEndedBy | null) ?? null,
     conditionsVersion: row.agreement.conditionsVersion,
   });
 
@@ -239,6 +245,11 @@ export function listingRoutes(deps: CatalogDeps, clock?: () => number) {
       const input = c.req.valid("json");
       // A robot filled the hidden field: the same answer, nothing kept.
       if (input.website) return c.json({}, 202);
+      const [pending] = await db
+        .select({ n: count() })
+        .from(schema.listingRequests)
+        .where(eq(schema.listingRequests.status, "pending"));
+      if ((pending?.n ?? 0) >= MAX_PENDING_REQUESTS) return c.json({ error: "too_many_pending" }, 503);
       await db.insert(schema.listingRequests).values({
         shopName: input.shopName,
         siteUrl: input.siteUrl,

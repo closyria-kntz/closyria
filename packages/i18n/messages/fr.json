@@ -549,7 +549,8 @@
         "majorBrand": "Une grande enseigne ne va jamais en une.",
         "notShopify": "Seul le catalogue d’une boutique Shopify ou WooCommerce peut être importé.",
         "shopMerged": "Cette boutique a été fusionnée : importe plutôt celle qui la remplace.",
-        "shopRefused": "Cette boutique est refusée : son catalogue n’est jamais importé."
+        "shopRefused": "Cette boutique est refusée : son catalogue n’est jamais importé.",
+        "agreementSigned": "La boutique a signé son accord en ligne : sa date est celle de la signature et ne se change pas. Pour mettre fin à l’accord, décoche la case."
       },
       "shopifySlowdown": "Shopify nous demande de ralentir : imports espacés jusqu’au {date}"
     },
@@ -765,7 +766,12 @@
           "signer": "Retirée par la boutique le {date}",
           "admin": "Décochée par l’admin le {date}",
           "replaced": "Remplacée par un accord plus récent le {date}"
-        }
+        },
+        "newManageLink": "Nouveau lien de gestion",
+        "newManageLinkHint": "Si la boutique a perdu son lien privé : l’ancien cesse de fonctionner, le nouveau n’est affiché qu’une fois.",
+        "manageLinkLabel": "Lien privé de gestion",
+        "manageEmailLabel": "E-mail à envoyer avec le lien de gestion",
+        "manageEmailText": "Bonjour {name},\n\nVoici le lien privé qui vous permet de voir le référencement de {shop} sur Closyria et de retirer votre boutique à tout moment, sans justification :\n{url}\n\nGardez-le précieusement : il remplace tout lien envoyé auparavant.\n\nBelle journée,\nClosyria"
       }
     },
     "captures": {
@@ -2695,8 +2701,7 @@
     "emailHint": "Seulement pour vous écrire au sujet du référencement.",
     "authorized": "Je suis habilité·e à représenter cette boutique",
     "accepted": "J’accepte les conditions de référencement (version {version})",
-    "conditionsTitle": "Les conditions (version {version})",
-    "conditionsDraft": "Version du {date}",
+    "conditionsTitle": "Les conditions de référencement",
     "busy": "Un instant…",
     "fixErrors": "Vérifiez les champs signalés.",
     "errors": {
@@ -2724,7 +2729,8 @@
       "copy": "Copier le lien",
       "copied": "Lien copié.",
       "copyFailed": "Copie impossible : gardez l’adresse de la page qui s’ouvre avec « Gérer ou retirer ma boutique ».",
-      "linkLabel": "Votre lien privé"
+      "linkLabel": "Votre lien privé",
+      "reread": "Relire les conditions acceptées"
     },
     "invalid": {
       "metadata": "Lien plus valable · Closyria",
@@ -2746,7 +2752,8 @@
       "cancel": "Annuler",
       "done": "C’est fait : {shop} n’est plus référencée sur Closyria.",
       "invalidTitle": "Ce lien n’est pas valable",
-      "invalidBody": "Vérifiez qu’il est complet, ou écrivez-nous à bonjour@closyria.com."
+      "invalidBody": "Vérifiez qu’il est complet, ou écrivez-nous à bonjour@closyria.com.",
+      "replaced": "Cet accord a été remplacé le {date} par un accord plus récent : {shop} reste référencée. Pour la retirer, utilisez le lien privé du nouvel accord ou écrivez à bonjour@closyria.com."
     },
     "request": {
       "metadata": "Référencer ma boutique · Closyria",
@@ -2761,7 +2768,8 @@
       "errors": {
         "shopName": "Indiquez le nom de la boutique.",
         "siteUrl": "Indiquez l’adresse du site, par exemple atelier-lune.fr.",
-        "tooMany": "Trop de demandes depuis cette connexion : réessayez dans une heure."
+        "tooMany": "Trop de demandes depuis cette connexion : réessayez dans une heure.",
+        "busy": "Trop de demandes en attente, réessayez plus tard."
       },
       "doneTitle": "Demande envoyée",
       "doneBody": "Merci ! Nous revenons vers vous par e-mail après avoir vérifié que vous représentez la boutique.",

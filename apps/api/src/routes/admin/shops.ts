@@ -131,7 +131,9 @@ const patchRoute = defineAccess(
       200: { description: "The shop", content: { "application/json": { schema: adminShopSchema } } },
       400: errorContent("Invalid body"),
       404: errorContent("Unknown or merged shop"),
-      409: errorContent("domain_taken or slug_taken"),
+      409: errorContent(
+        "domain_taken or slug_taken; agreement_signed: the day of an agreement signed online cannot move",
+      ),
     },
   }),
   "admin",
@@ -261,7 +263,7 @@ function pgCode(error: unknown): string | undefined {
   return e?.cause?.code ?? e?.code;
 }
 
-type Outcome = { shop: Shop } | { error: "domain_taken" | "slug_taken" | "not_found" };
+type Outcome = { shop: Shop } | { error: "domain_taken" | "slug_taken" | "not_found" | "agreement_signed" };
 
 function importStatusShape(shop: Shop, now: Date) {
   const importState = liveImportState(shop.importState, shop.importStartedAt, shop.importHeartbeatAt, now);
@@ -547,7 +549,15 @@ export function adminShopsRoutes(deps: CatalogDeps) {
           if (agreementDay !== undefined && !sameDay) {
             const user = c.var.session?.user;
             if (!user) throw new Error("session expected on an admin route");
-            await syncAdminCheckbox(tx, id, agreementDay, { id: user.id, name: user.name, email: user.email }, now());
+            const synced = await syncAdminCheckbox(
+              tx,
+              id,
+              agreementDay,
+              { id: user.id, name: user.name, email: user.email },
+              now(),
+            );
+            // The shop signed online: its day is the signature's, the box cannot move it.
+            if (synced === "signed") return { error: "agreement_signed" };
           }
           const [updated] = await tx
             .update(schema.shops)

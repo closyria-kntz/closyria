@@ -4,10 +4,10 @@ import { adminListingRequestAcceptedSchema } from "@closyria/shared";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
-import { CopySentence } from "@/components/copy-sentence";
 import { adminRequest } from "@/lib/admin-catalog";
 import { manageUrl } from "@/lib/listing";
 import { buttonClass, primaryButtonClass } from "../../ui";
+import { ManageLinkMail } from "../boutiques/[id]/shop-agreement";
 
 /**
  * « Accepter » (after « J'ai vérifié que cette personne représente la boutique ») or « Refuser ». An accepted request
@@ -58,13 +58,7 @@ export function RequestActions({
         <p role="status" className="font-strong">
           {t("accepted", { name: signerName })}
         </p>
-        <CopySentence
-          label={t("copy")}
-          text={link}
-          copyLabel={t("copy")}
-          copiedLabel={t("copied")}
-          failedLabel={t("failed")}
-        />
+        <ManageLinkMail url={link} shopName={shopName} signerName={signerName} />
         <button
           type="button"
           onClick={() => router.refresh()}

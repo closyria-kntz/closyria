@@ -54,6 +54,8 @@ export const listingManageViewSchema = z.object({
   shopName: z.string(),
   acceptedAt: isoDate,
   withdrawnAt: isoDate.nullable(),
+  /** Who ended it: `replaced` means a newer agreement of the same shop is in force. */
+  endedBy: agreementEndedBySchema.nullable(),
   conditionsVersion: z.string(),
 });
 export type ListingManageView = z.infer<typeof listingManageViewSchema>;
@@ -102,6 +104,9 @@ export type AdminShopAgreements = z.infer<typeof adminShopAgreementsSchema>;
 /** `POST /api/admin/shops/{id}/invitations`: the token, given once (only its hash is stored). */
 export const adminInvitationCreatedSchema = z.object({ token: listingTokenSchema, expiresAt: isoDate });
 export type AdminInvitationCreated = z.infer<typeof adminInvitationCreatedSchema>;
+
+/** `POST /api/admin/shops/{id}/agreements/current/manage-link`: the new token, given once. */
+export const adminManageLinkSchema = z.object({ token: listingTokenSchema });
 
 /** A request of « Demandes de référencement ». Refused ones keep no personal data. */
 export const adminListingRequestSchema = z.object({
