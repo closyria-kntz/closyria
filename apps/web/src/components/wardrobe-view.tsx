@@ -145,14 +145,16 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     setWishesError(false);
     void reloadToken;
     void scopeToken;
+    const changes = ticks.current?.changes();
     fetchWishlists().then(
       (items) => !stale && setLists({ status: "ready", items }),
       () => !stale && setLists((previous) => ({ ...previous, status: "ready" })),
     );
     fetchAllWishes({ stage: "spotted" }).then(
-      // A tick still being saved would be put back by this read: kept as it is, the next change reads it again.
+      // A tick still being saved, or saved since the read started, would be put back by this read: kept as it is,
+      // the next change reads it again.
       (items) => {
-        if (stale || ticks.current?.busy()) return;
+        if (stale || ticks.current?.busy() || ticks.current?.changes() !== changes) return;
         setWishes(items);
         setWishesReady(true);
       },
@@ -262,6 +264,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     moreController.current?.abort();
     dispatchMore({ type: "reset", generation: mine });
     const wanted = loadedCount.current;
+    const changes = ticks.current?.changes();
     const items: ItemView[] = [];
     let cursor: string | null = null;
     try {
@@ -271,8 +274,8 @@ export function WardrobeView({ view }: { view: ViewKey }) {
         items.push(...page.items);
         cursor = page.nextCursor;
       } while (cursor && items.length < wanted);
-      // A tick saved meanwhile: this read may predate it, the next change reads again.
-      if (ticks.current?.busy()) return;
+      // A tick being saved, or saved meanwhile: this read may predate it, the next change reads again.
+      if (ticks.current?.busy() || ticks.current?.changes() !== changes) return;
       setData({ items, nextCursor: cursor, status: "ready" });
     } catch {
       // Kept as it is: the next change tries again.

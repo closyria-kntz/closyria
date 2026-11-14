@@ -13,6 +13,12 @@ export type TickQueue = {
   idle(): Promise<void>;
   /** True while a tick or an untick is being saved. */
   busy(): boolean;
+  /**
+   * Grows with every tick or untick asked for. A read of the items that started before (`changes()` then differs)
+   * may predate a save, even one already finished: its answer would put the old tick back, so it is dropped (the
+   * save's own change event reads again).
+   */
+  changes(): number;
 };
 
 export function createTickQueue<T>(
@@ -21,8 +27,10 @@ export function createTickQueue<T>(
   onBusyChange?: (busy: boolean) => void,
 ): TickQueue {
   const active = new Map<string, { wanted: boolean; promise: Promise<void> }>();
+  let changes = 0;
   return {
     set(id, wanted, before) {
+      changes++;
       const running = active.get(id);
       if (running) {
         running.wanted = wanted;
@@ -50,6 +58,9 @@ export function createTickQueue<T>(
     },
     busy() {
       return active.size > 0;
+    },
+    changes() {
+      return changes;
     },
   };
 }

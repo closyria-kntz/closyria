@@ -10,6 +10,24 @@ const deferred = () => {
 };
 
 describe("createTickQueue", () => {
+  it("counts every tick asked for, so a read started before one (even one already saved) can tell", async () => {
+    const queue = createTickQueue<null>(
+      async () => ({ ok: true, value: null }),
+      () => {},
+    );
+    const atRead = queue.changes();
+    queue.set("a", true, false);
+    await queue.idle();
+    // The save is over (nothing busy), yet the read started before it.
+    expect(queue.busy()).toBe(false);
+    expect(queue.changes()).not.toBe(atRead);
+    const later = queue.changes();
+    queue.set("a", false, true);
+    queue.set("a", true, false);
+    expect(queue.changes()).toBe(later + 2);
+    await queue.idle();
+  });
+
   it("sends the last wanted state after the first save, one request at a time", async () => {
     const sent: boolean[] = [];
     const gate = deferred();

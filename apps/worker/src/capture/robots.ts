@@ -103,16 +103,26 @@ export type RobotsFetch = { kind: "text"; text: string } | { kind: "absent" } | 
 
 const FAILURE_CACHE_MS = 60 * 60 * 1000;
 export const MAX_CACHED_ORIGINS = 10_000;
+/** The sweep of expired origins walks the whole cache: at most once a minute, not on every new origin. */
+const PRUNE_INTERVAL_MS = 60 * 1000;
 
 type Entry = { expires: number; allows: Promise<(path: string) => boolean> };
 
 /**
  * Cache per origin: 24 h for content or a 404/410, 1 h after a failure (allow-all meanwhile).
  * Concurrent calls on a cold origin share one fetch. Bounded: expired entries are pruned when a
- * new origin is fetched, and the oldest are evicted beyond 10 000.
+ * new origin is fetched (at most once a minute, so a burst of new origins stays linear), and the
+ * oldest are evicted beyond 10 000.
  */
 export function createRobotsCache(fetchText: (url: string) => Promise<RobotsFetch>, now: () => number): RobotsCache {
   const entries = new Map<string, Entry>();
+  let nextPrune = Number.NEGATIVE_INFINITY;
+
+  function pruneExpired(time: number) {
+    if (time < nextPrune) return;
+    nextPrune = time + PRUNE_INTERVAL_MS;
+    for (const [key, other] of entries) if (other.expires <= time) entries.delete(key);
+  }
 
   async function load(origin: string, entry: Entry, resolve: (allows: (path: string) => boolean) => void) {
     let result: RobotsFetch;
@@ -130,8 +140,9 @@ export function createRobotsCache(fetchText: (url: string) => Promise<RobotsFetc
       const url = new URL(rawUrl);
       const origin = url.origin;
       let entry = entries.get(origin);
-      if (!entry || entry.expires <= now()) {
-        for (const [key, other] of entries) if (other.expires <= now()) entries.delete(key);
+      const time = now();
+      if (!entry || entry.expires <= time) {
+        pruneExpired(time);
         let resolve: (allows: (path: string) => boolean) => void = () => {};
         const allows = new Promise<(path: string) => boolean>((done) => {
           resolve = done;

@@ -1,11 +1,17 @@
 import AxeBuilder from "@axe-core/playwright";
-import type { Page } from "@playwright/test";
+import type { Page, Request } from "@playwright/test";
 import { keepWish, manualProductUrl } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
 // Envies chaleureuses, task 10: « Préparer une commande » with the budget of the profile or of a list (spec §3.6, §3.7).
 
 const toast = (page: Page) => page.getByRole("status", { name: "Notifications" });
+
+/** The save of a tick (`wanted` true) or an untick of the order (`PATCH /api/me/items/:id`, `inOrderDraft`). */
+function isTickSave(request: Request, wanted: boolean): boolean {
+  if (request.method() !== "PATCH" || !/\/api\/me\/items\/[0-9a-f-]{36}$/.test(request.url())) return false;
+  return (request.postDataJSON() as { inOrderDraft?: boolean } | null)?.inOrderDraft === wanted;
+}
 const axe = async (page: Page) => {
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
@@ -669,10 +675,16 @@ test("Mes envies : décocher puis commander aussitôt, l’envie décochée n’
   await expect(toast(page)).toContainText("1 article passé en Commandé");
   await expect(page.getByTestId("item-card")).toHaveCount(1);
   await expect(page.getByTestId("item-card")).toContainText("Gilet Brume");
-  // Untick then tick again quickly: the last tap wins.
-  await page.getByTestId("item-card").getByTestId("card-take").click();
-  await page.getByTestId("item-card").getByTestId("card-take").click();
-  await expect(page.getByTestId("item-card").getByTestId("card-take")).toHaveAttribute("aria-pressed", "false");
+  // Tick then untick while the tick is still being saved: the last tap wins. The reload waits for the untick to be
+  // saved (both saves are slow here): a reload cuts what is still on its way, as it would for her.
+  const take = page.getByTestId("item-card").getByTestId("card-take");
+  const tickSent = page.waitForRequest((request) => isTickSave(request, true));
+  await take.click();
+  await tickSent;
+  const untickSaved = page.waitForResponse((response) => isTickSave(response.request(), false));
+  await take.click();
+  await expect(take).toHaveAttribute("aria-pressed", "false");
+  expect((await untickSaved).ok()).toBe(true);
   await page.reload();
   await expect(page.getByTestId("item-card").getByTestId("card-take")).toHaveAttribute("aria-pressed", "false");
 });

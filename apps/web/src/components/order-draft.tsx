@@ -90,6 +90,7 @@ export function OrderDraft() {
       return;
     }
     void loadBudget(scope);
+    const changes = ticks.current?.changes();
     try {
       let listName: string | null = null;
       if ("wishlistId" in scope) {
@@ -105,8 +106,8 @@ export function OrderDraft() {
           ? { stage: "spotted", wishlist: scope.wishlistId }
           : { stage: "spotted", profile: scope.profileId, sort: "love" };
       const wishes = sortForOrder(await fetchAllWishes(query));
-      // A tick saved meanwhile: this read may predate it (the next change reads again).
-      if (mine === generation.current && ticks.current?.busy()) return;
+      // A tick being saved, or saved meanwhile: this read may predate it (the next change reads again).
+      if (mine === generation.current && (ticks.current?.busy() || ticks.current?.changes() !== changes)) return;
       if (mine === generation.current) setItems({ status: "ready", items: wishes, listName });
     } catch {
       if (mine === generation.current) setItems((previous) => ({ ...previous, status: "error" }));

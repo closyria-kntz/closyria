@@ -63,7 +63,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             });
           } catch (error) {
             // The page went on (a redirect, the next goto) while this read was on its way: nothing to answer. Any
-            // other failure is the test's.
+            // other failure is the test's (the end of the test is handled after `use`, below).
             if (/disposed|closed/i.test(String(error))) return;
             throw error;
           }
@@ -72,6 +72,9 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     }
     const violations = await collectCspViolations(context);
     await use(context);
+    // The test is over, the page may still be reading (the product page asks for the preferences as it opens): its
+    // handlers are let go before the context closes, or the read still on its way fails the test with « Test ended ».
+    await context.unrouteAll({ behavior: "ignoreErrors" });
     expect(outside, "requests outside the test stack").toEqual([]);
     const record: CspRecord = { test: testInfo.titlePath.join(" › "), project: testInfo.project.name, violations };
     const file = `${testInfo.testId}-${testInfo.repeatEachIndex}-${testInfo.retry}.json`;
