@@ -106,7 +106,13 @@ test("la zone « Colle son lien ici » capture comme avant ; ses envies, ses bou
   userAgentTag,
 }) => {
   await firstWish(page, db, userAgentTag);
+  // The shops this page is given (the database is shared by the whole suite: other tests' shops may rank first).
+  const directoryRead = page.waitForResponse((r) => new URL(r.url()).pathname === "/api/shops" && r.ok());
   await page.goto("/");
+  const directory = (await (await directoryRead).json()) as {
+    featured: { name: string; domain: string; itemCount: number } | null;
+    shops: { name: string; domain: string; itemCount: number }[];
+  };
   await expect(page.getByRole("heading", { level: 1, name: "Rien de neuf pour l’instant" })).toBeVisible();
 
   const wishes = page.getByRole("region", { name: "Tes envies du moment" });
@@ -117,8 +123,17 @@ test("la zone « Colle son lien ici » capture comme avant ; ses envies, ses bou
   await expect(shops.getByRole("link", { name: "Toutes" })).toHaveAttribute("href", "/decouvrir");
   // The shops of « Découvrir » (the boutique de la semaine first, four at most), each opening its site.
   expect(await shops.getByRole("listitem").count()).toBeLessThanOrEqual(4);
-  const shop = shops.getByRole("link", { name: new RegExp(AUTO_SHOP.name) });
-  await expect(shop).toHaveAttribute("href", `https://${AUTO_SHOP.domain}`);
+  // Her link's shop is one of « Découvrir », with her article counted.
+  const all = [...(directory.featured ? [directory.featured] : []), ...directory.shops];
+  expect(all.find((one) => one.name === AUTO_SHOP.name)?.itemCount ?? 0).toBeGreaterThanOrEqual(1);
+  // The first of them (the boutique de la semaine, else the most articles) leads the row: its name, its count, its site.
+  const first = all[0];
+  if (!first) throw new Error("no shop in « Découvrir »");
+  const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const count = first.itemCount === 1 ? "1 article" : `${first.itemCount} articles`;
+  const shop = shops.getByRole("listitem").first().getByRole("link");
+  await expect(shop).toHaveAccessibleName(new RegExp(`^${literal(first.name)} ${count}`));
+  await expect(shop).toHaveAttribute("href", `https://${first.domain}`);
   await expect(shop).toHaveAttribute("target", "_blank");
 
   const tip = page.getByRole("complementary", { name: "Astuce" });
