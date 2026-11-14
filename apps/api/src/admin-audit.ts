@@ -10,6 +10,11 @@ export type AuditNote = {
   /** What was acted on, e.g. `user:<id>`. */
   target?: string;
   details?: AuditDetails;
+  /**
+   * The handler already wrote its audit row inside its own transaction (account deletion): the middleware writes none,
+   * so there is exactly one row and it can never outlive a rolled-back action.
+   */
+  recordedInTransaction?: true;
 };
 
 /** Hono environment of admin routes: the access variables plus the handler's audit note. */
@@ -36,6 +41,7 @@ export function auditMiddleware(db: Database) {
     if (access?.level !== "admin" || !MUTATIONS.has(c.req.method)) return;
     const adminId = c.get("session")?.user.id ?? null;
     const note = c.get("audit");
+    if (note?.recordedInTransaction) return;
     const details = { ...note?.details, method: c.req.method, path: c.req.path, status: c.res.status };
     // A failed write fails the request: an admin action must not go unrecorded silently.
     await db.insert(schema.adminAuditLog).values({

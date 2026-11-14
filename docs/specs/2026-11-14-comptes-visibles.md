@@ -11,8 +11,11 @@ se connecter » ; « en partie admin, on ne voit aucun compte, pour un SaaS c'es
   création de compte existante (`/connexion`), qui ramène à la page d'où elle vient (`next`).
 - Une invitée qui a déjà plusieurs profils (possible sans compte) garde le sélecteur, « Se connecter » à côté : sinon
   elle ne pourrait plus changer de profil.
-- **Compte** : le sélecteur de profil reste. Tant que la barre ne sait pas encore (première lecture), le sélecteur
-  s'affiche comme avant ; une lecture échouée ne change rien.
+- **Compte** : le sélecteur de profil reste.
+- **Premier rendu** : le serveur voit si la requête porte un cookie de session. Sans cookie, c'est une invitée :
+  « Se connecter » est là dès le premier rendu. Avec un cookie, une pastille neutre (sans texte) attend la lecture du
+  résumé, qui dit invitée ou compte ; une lecture échouée ne change rien. Les pages de l'app sont donc rendues à la
+  demande (elles lisent les cookies).
 - **Accueil, invitée seulement** : bandeau discret « Crée ton compte pour garder tes articles sur tous tes appareils » +
   « Créer mon compte », avec une croix « Fermer ». Fermé, il ne revient pas avant 30 jours dans ce navigateur
   (`localStorage`, lectures et écritures protégées). Il s'efface si la proposition de compte G6 s'affiche déjà.
@@ -44,5 +47,11 @@ se connecter » ; « en partie admin, on ne voit aucun compte, pour un SaaS c'es
   `user` : toutes les tables qui pointent vers elle sont en `ON DELETE CASCADE` (vérifié par `owned-tables.test.ts`),
   sauf le journal d'audit et le journal des captures, qui la perdent (`SET NULL`). Ses codes de connexion en attente
   partent aussi. Ses photos stockées (médias, imports prêts) sont effacées du stockage après la validation ; un échec
-  du stockage est journalisé et laisse un fichier orphelin, sans annuler la suppression.
+  du stockage est journalisé et laisse un fichier orphelin, sans annuler la suppression (8 effacements à la fois).
+- La ligne du journal d'audit est écrite dans la même transaction que la suppression : pas de suppression sans trace,
+  pas de trace d'une suppression annulée. Le rôle admin est revérifié sous le verrou de la ligne.
+- Reste après elle, sans lien : `email_rate_limit`, le compteur d'envois de codes par e-mail. Il est pseudonyme (HMAC de
+  l'adresse avec le secret d'auth, jamais l'adresse) et de courte durée (fenêtre d'une heure, purgé 24 h après).
+- « Dernière activité » lit ses événements par l'index `events(user_id, occurred_at)` (migration 0034, qui remplace
+  l'index sur `user_id` seul).
 - Formules et consommation : chantier abonnements ; la fiche garde la place d'un bloc à côté de « Usage ».

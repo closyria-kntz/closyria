@@ -8,8 +8,19 @@ import { ADMIN_PATH_HEADER } from "./lib/sign-in";
  */
 export function proxy(request: NextRequest) {
   const headers = new Headers(request.headers);
-  headers.set(ADMIN_PATH_HEADER, `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  headers.set(ADMIN_PATH_HEADER, adminPathOf(request.nextUrl));
   return NextResponse.next({ request: { headers } });
+}
+
+/**
+ * The address to come back to: path and query, without `_rsc`, the cache-busting parameter Next adds to the requests
+ * of a client-side navigation (it would end up in the sign-in page's `next`).
+ */
+export function adminPathOf(url: URL): string {
+  const params = new URLSearchParams(url.search);
+  params.delete("_rsc");
+  const query = params.toString();
+  return query ? `${url.pathname}?${query}` : url.pathname;
 }
 
 export const config = { matcher: ["/admin", "/admin/:path*"] };

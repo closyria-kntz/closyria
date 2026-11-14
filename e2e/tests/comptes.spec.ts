@@ -63,6 +63,37 @@ test("une invitée voit « Se connecter » dans la barre, se connecte et revient
   await expect(band.getByLabel("Profil").locator("option", { hasText: "Léa" })).toHaveCount(1);
 });
 
+test("« Se connecter » est là dès le premier rendu sans session ; avec une session, une pastille neutre", async ({
+  page,
+  request,
+}) => {
+  // The server's HTML, before any script: a visitor without a session cookie is a guest for sure.
+  const guestHtml = await (await page.context().request.get("/articles")).text();
+  expect(guestHtml).toContain('data-testid="band-sign-in"');
+  expect(guestHtml).not.toContain('data-testid="band-pending"');
+
+  // With a session (here an account), the band waits for the summary: neither « Se connecter » nor a wrong switcher.
+  await page.goto("/articles");
+  await page.locator("header").getByRole("link", { name: "Se connecter", exact: true }).click();
+  await signInOnPage(page, request, uniqueEmail());
+  await page.waitForURL((url) => url.pathname === "/articles");
+  const accountHtml = await (await page.context().request.get("/articles")).text();
+  expect(accountHtml).toContain('data-testid="band-pending"');
+  expect(accountHtml).not.toContain('data-testid="band-sign-in"');
+  await expect(page.locator("header").getByLabel("Profil")).toBeVisible();
+});
+
+test("une navigation dans l’app vers /admin?x=1 mène à la connexion, sans `_rsc` dans le retour", async ({ page }) => {
+  await page.goto("/articles");
+  await expect(page.locator("header").getByRole("link", { name: "Se connecter", exact: true })).toBeVisible();
+  await page.evaluate(() =>
+    (window as unknown as { next: { router: { push: (href: string) => void } } }).next.router.push("/admin?x=1"),
+  );
+  await page.waitForURL((url) => url.pathname === "/connexion");
+  expect(new URL(page.url()).searchParams.get("next")).toBe("/admin?x=1");
+  expect(page.url()).not.toContain("_rsc");
+});
+
 test("l’accueil propose un compte à une invitée, et se tait 30 jours une fois fermé", async ({ page, request }) => {
   await page.goto("/");
   const banner = page.getByRole("region", { name: "Créer un compte" });

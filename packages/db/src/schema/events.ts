@@ -22,7 +22,8 @@ export const events = pgTable(
   },
   (t) => [
     index("events_name_occurred_at_idx").on(t.name, t.occurredAt),
-    index("events_user_id_idx").on(t.userId),
+    // Her events, latest first (« Dernière activité » in the admin): also serves every lookup by user.
+    index("events_user_id_occurred_at_idx").on(t.userId, t.occurredAt),
     check("events_device_check", sql`${t.device} IS NULL OR ${t.device} IN ('mobile', 'desktop', 'tablet')`),
   ],
 );

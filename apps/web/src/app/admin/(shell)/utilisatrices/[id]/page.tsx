@@ -19,7 +19,13 @@ export default async function AdminUserPage({ params }: Props) {
   const { id } = await params;
   const t = await getTranslations("Admin.users");
   const format = await getFormatter();
-  const read = await adminCall((api) => fetchAdminUser(api, decodeURIComponent(id)));
+  let userId: string;
+  try {
+    userId = decodeURIComponent(id);
+  } catch {
+    notFound(); // a malformed escape (`%E0%A4%A`): no such person
+  }
+  const read = await adminCall((api) => fetchAdminUser(api, userId));
   // Only an unknown person is a 404; any other refusal is an error page, never a missing person.
   if (!read.ok && read.status === 404) notFound();
   if (!read.ok) throw new Error(`The admin person answered ${read.status}`);

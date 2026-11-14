@@ -10,6 +10,7 @@ import { memoryStore, type ObjectStore } from "@closyria/storage";
 import type { TestDatabase } from "@closyria/testing";
 import { createTestDatabase } from "@closyria/testing/vitest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { deleteUserAccount } from "../../account-deletion";
 import { createApp } from "../../app";
 import { registerOwnedTables } from "../../owned-tables";
 import { decodeUserCursor, encodeUserCursor } from "./users";
@@ -321,6 +322,10 @@ describe("DELETE /api/admin/users/{id}", () => {
     const audit = adminAuditPageSchema.parse(await (await get("/api/admin/audit", admin.cookie)).json());
     const entry = audit.entries.find((e) => e.target === `user:${account.userId}` && e.details.status === 204);
     expect(entry).toMatchObject({ action: "user.delete", adminId: admin.userId, details: { guest: false } });
+    // One row for the deletion, written with it (the middleware writes none of its own).
+    expect(audit.entries.filter((e) => e.target === `user:${account.userId}` && e.details.status === 204)).toHaveLength(
+      1,
+    );
     expect(JSON.stringify(audit.entries)).not.toContain(account.email);
 
     expect((await remove(account.userId, account.email, admin.cookie)).status).toBe(404);
@@ -333,6 +338,29 @@ describe("DELETE /api/admin/users/{id}", () => {
     expect(await handle.db.select().from(schema.user).where(eq(schema.user.id, guest.userId))).toEqual([]);
     // Her session is gone: she is a stranger now.
     expect((await get("/api/me/summary", guest.cookie)).status).toBe(401);
+  });
+
+  it("rolls the deletion back when its audit row cannot be written", async () => {
+    const account = await session("user", "email-otp");
+    const keys = await seedEverything(account.userId, account.email);
+    const before = await rowsPointingTo(account.userId);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    // An admin id that does not exist: the audit insert breaks its foreign key, inside the transaction.
+    await expect(
+      deleteUserAccount(handle.db, store, account.userId, { adminId: "no-such-admin", method: "DELETE", path: "/x" }),
+    ).rejects.toThrow();
+    error.mockRestore();
+    expect(await handle.db.select().from(schema.user).where(eq(schema.user.id, account.userId))).toHaveLength(1);
+    expect(await rowsPointingTo(account.userId)).toEqual(before);
+    for (const key of keys) await expect(store.get(key)).resolves.toBeInstanceOf(Buffer);
+  });
+
+  it("never deletes an admin, checked again under the row lock", async () => {
+    const other = await session("admin", "passkey");
+    expect(
+      await deleteUserAccount(handle.db, store, other.userId, { adminId: admin.userId, method: "DELETE", path: "/x" }),
+    ).toBe("admin");
+    expect(await handle.db.select().from(schema.user).where(eq(schema.user.id, other.userId))).toHaveLength(1);
   });
 
   it("refuses to delete herself or another admin", async () => {

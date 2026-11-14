@@ -239,6 +239,13 @@
       "when": 1794654116766,
       "tag": "0033_alertes_revisite",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1794674435925,
+      "tag": "0034_events_user_occurred",
+      "breakpoints": true
     }
   ]
 }

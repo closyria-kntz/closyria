@@ -238,12 +238,17 @@ export function adminUsersRoutes(deps: AdminUsersDeps) {
       const expected = target.isAnonymous ? GUEST_DELETE_CONFIRMATION : target.email.toLowerCase();
       const typed = target.isAnonymous ? confirmation : confirmation.toLowerCase();
       if (typed !== expected) return c.json({ error: "confirmation_mismatch" } as const, 400);
-      noteAudit(c, {
-        action: "user.delete",
-        target: `user:${id}`,
-        details: { guest: target.isAnonymous },
+      const adminId = c.var.session?.user.id;
+      if (!adminId) throw new Error("admin route reached without a session");
+      const outcome = await deleteUserAccount(db, deps.store, id, {
+        adminId,
+        method: c.req.method,
+        path: c.req.path,
       });
-      if (!(await deleteUserAccount(db, deps.store, id))) return c.json(notFound, 404);
+      if (outcome === "not_found") return c.json(notFound, 404);
+      if (outcome === "admin") return c.json({ error: "admin" } as const, 409);
+      // Its audit row was written with the deletion, in the same transaction.
+      noteAudit(c, { action: "user.delete", target: `user:${id}`, recordedInTransaction: true });
       return c.body(null, 204);
     });
 }

@@ -28,6 +28,7 @@ import {
   withSeenTip,
 } from "@/lib/preferences";
 import { ProfilesContext, profileHref, useCurrentProfile } from "@/lib/profile-context";
+import { initialGuest } from "@/lib/session-cookie";
 import { fetchLoveLevels, fetchPreferences, savePreferences } from "@/lib/wardrobe-client";
 import { AccountPrompt } from "./account-prompt";
 import { AddSheet } from "./add-sheet";
@@ -187,7 +188,7 @@ function BandSearch() {
  * guest (comptes visibles 2026-11-14); one menu, at the bottom on a phone (with the raised +), in the band from a tablet up (with « + Ajouter »).
  * Content grows up to `container.app`.
  */
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, hasSession }: { children: ReactNode; hasSession: boolean }) {
   const t = useTranslations("Shell");
   const tNav = useTranslations("Nav");
   const pathname = usePathname();
@@ -199,7 +200,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [pathname]);
   const [profiles, setProfiles] = useState<readonly ProfileView[]>([]);
   const [account, setAccount] = useState<SummaryView["account"] | null>(null);
-  const [guest, setGuest] = useState<boolean | null>(null);
+  const [guest, setGuest] = useState<boolean | null>(() => initialGuest(hasSession));
   const [ready, setReady] = useState(false);
   const [adding, setAdding] = useState(false);
   const openAdd = useCallback(() => setAdding(true), []);
@@ -313,9 +314,20 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <span className="sr-only">{tNav("addLabel")}</span>
                   </button>
                   <Suspense>
-                    {/* A guest: « Se connecter » in place of the switcher, beside it once she has profiles to choose. */}
-                    {!guest || profiles.length > 1 ? <ProfileSwitcher /> : null}
-                    {guest ? <SignInButton /> : null}
+                    {/* A guest: « Se connecter » in place of the switcher, beside it once she has profiles to choose.
+                        Unknown yet (a session cookie, summary not read): a quiet empty pill, never a wrong control. */}
+                    {guest === null ? (
+                      <span
+                        aria-hidden="true"
+                        data-testid="band-pending"
+                        className="inline-block h-control-xs w-space-8 shrink-0 rounded-pill bg-band-field"
+                      />
+                    ) : (
+                      <>
+                        {!guest || profiles.length > 1 ? <ProfileSwitcher /> : null}
+                        {guest ? <SignInButton /> : null}
+                      </>
+                    )}
                   </Suspense>
                 </div>
               </header>
