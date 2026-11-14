@@ -575,7 +575,7 @@ describe("anonymous -> account merge on sign-in", () => {
     ]);
   });
 
-  it("keeps her orders (« Après la commande »): those of her « Moi » follow it, an address stays the only active one", async () => {
+  it("keeps her orders (« Après la commande »): those of her « Moi » follow it, lines follow a folded item, an address stays the only active one", async () => {
     const email = `commandes-${randomUUID()}@example.test`;
     const accountId = await signInWithEmail(email);
     const accountMoi = await newProfile(accountId, "Moi", day(1));
@@ -609,8 +609,33 @@ describe("anonymous -> account merge on sign-in", () => {
     await handle.db
       .insert(schema.parcels)
       .values({ orderId: moiOrder?.id ?? "", trackingNumber: "6A18537412398", checkUntil: day(30) });
+    // The same product on both sides: her item (delivered, with its return deadline) folds into the account's.
+    const product = await newProduct();
+    const accountItem = await newItem({ userId: accountId, profileId: accountMoi.id, productId: product.id });
+    const anonItem = await newItem({
+      userId: anonymous.userId,
+      profileId: anonMoi.id,
+      productId: product.id,
+      stage: "owned",
+      returnDeadline: "2026-11-20",
+    });
+    const [line] = await handle.db
+      .insert(schema.orderLines)
+      .values({ orderId: moiOrder?.id ?? "", itemId: anonItem.id, name: "Robe", quantity: 1 })
+      .returning();
 
     expect(await signInWithEmail(email, anonymous.cookie)).toBe(accountId);
+
+    const [lineAfter] = await handle.db
+      .select({ itemId: schema.orderLines.itemId })
+      .from(schema.orderLines)
+      .where(eq(schema.orderLines.id, line?.id ?? ""));
+    expect(lineAfter?.itemId).toBe(accountItem.id);
+    const [merged] = await handle.db
+      .select({ returnDeadline: schema.items.returnDeadline })
+      .from(schema.items)
+      .where(eq(schema.items.id, accountItem.id));
+    expect(merged?.returnDeadline).toBe("2026-11-20");
 
     await expectNothingLeftOrCrossed(anonymous.userId);
     const orders = await handle.db

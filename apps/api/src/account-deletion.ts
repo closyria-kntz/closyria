@@ -42,7 +42,13 @@ export async function deleteUserAccount(
       .select({ key: schema.photoImports.mediaKey })
       .from(schema.photoImports)
       .where(sql`${schema.photoImports.userId} = ${userId} and ${schema.photoImports.status} = 'ready'`);
-    // Raw e-mails received on her addresses, ignored ones included (they have no user, only her inbox).
+    // Raw e-mails received on her addresses, ignored ones included (they have no user, only her inbox). Her addresses
+    // are locked first, so no e-mail is filed on them (and its object stored) between this read and the delete.
+    await tx
+      .select({ id: schema.orderInboxes.id })
+      .from(schema.orderInboxes)
+      .where(eq(schema.orderInboxes.userId, userId))
+      .for("update");
     const emails = await tx
       .select({ key: schema.inboundEmails.rawObjectKey })
       .from(schema.inboundEmails)

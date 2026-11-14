@@ -71,7 +71,8 @@ export const orderInboxes = pgTable(
 /**
  * E-mails received on one of her addresses. `user_id` is set only once the sender was accepted (her verified address,
  * authentication passed); an ignored one keeps only the inbox (deleted with it). The raw message lives in private
- * storage (`raw_object_key`) until `purge_after` (30 days), then the key is cleared.
+ * storage (`raw_object_key`) until `purge_after` (30 days); then `inboundEmailPurge` decides: ignored rows, and failed
+ * ones no order points to, are deleted; the others lose their raw message.
  */
 export const inboundEmails = pgTable(
   "inbound_emails",
@@ -92,7 +93,7 @@ export const inboundEmails = pgTable(
   (t) => [
     index("inbound_emails_inbox_id_idx").on(t.inboxId),
     index("inbound_emails_user_id_idx").on(t.userId),
-    index("inbound_emails_purge_idx").on(t.purgeAfter).where(sql`${t.rawObjectKey} IS NOT NULL`),
+    index("inbound_emails_purge_after_idx").on(t.purgeAfter),
     check("inbound_emails_status_check", oneOf(t.status, inboundEmailStatusSchema.options)),
     check("inbound_emails_from_check", sql`char_length(${t.fromAddress}) BETWEEN 1 AND 320`),
   ],
@@ -104,10 +105,10 @@ export const orders = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: owner(),
-    /** Deleted with its profile, which can only be deleted once it holds no item (her merge re-points it first). */
+    /** No action, like `items.profile_id`: deleting a profile moves its orders to another one first. */
     profileId: uuid("profile_id")
       .notNull()
-      .references(() => profiles.id, { onDelete: "cascade" }),
+      .references(() => profiles.id),
     shopId: uuid("shop_id").references(() => shops.id, { onDelete: "set null" }),
     /** The shop's order number (« #1042 »): with the shop, finds the order a second e-mail completes. */
     externalRef: text("external_ref"),

@@ -1,5 +1,5 @@
 {
-  "id": "e452351a-d3ca-492e-a0aa-7bd173378f40",
+  "id": "79e4cdb1-b3a2-4d65-bdfc-4293695d0682",
   "prevId": "9bc47030-b967-4ddf-8ea3-2d2ce05e38f8",
   "version": "7",
   "dialect": "postgresql",
@@ -3923,8 +3923,8 @@
           "method": "btree",
           "with": {}
         },
-        "inbound_emails_purge_idx": {
-          "name": "inbound_emails_purge_idx",
+        "inbound_emails_purge_after_idx": {
+          "name": "inbound_emails_purge_after_idx",
           "columns": [
             {
               "expression": "purge_after",
@@ -3934,7 +3934,6 @@
             }
           ],
           "isUnique": false,
-          "where": "\"inbound_emails\".\"raw_object_key\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -4451,7 +4450,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "no action",
           "onUpdate": "no action"
         },
         "orders_shop_id_shops_id_fk": {

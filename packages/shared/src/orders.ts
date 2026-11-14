@@ -95,10 +95,13 @@ function upsCheckDigit(body: string): number {
  * - La Poste, domestic (13 characters: digit, letter, 11 digits): 1K/1L Lettre suivie, 6–9 + letter Colissimo.
  * - La Poste, international (UPU S10 « CB123456785FR », check digit verified, FR only): C Colissimo, L Lettre suivie,
  *   E (EMS) Chronopost.
- * - Mondial Relay: 8 digits (« numéro d'expédition »). GLS: 11 digits. DPD: 14 digits.
  * - UPS: « 1Z » + 16 characters, check digit verified. DHL eCommerce: « JJD » + 18 digits, « JVGL » + 16 to 20 digits.
+ * These carry their own signature and are recognised whatever `hint` says.
+ *
+ * Bare digits carry none (Mondial Relay 8, GLS 11 or 12, DPD 14 could be anything): they are accepted only to confirm
+ * the carrier she picked (`hint`), when the number has that carrier's shape; otherwise null.
  */
-export function detectCarrier(trackingNumber: string): Carrier | null {
+export function detectCarrier(trackingNumber: string, hint?: Carrier | null): Carrier | null {
   const n = normalizeTrackingNumber(trackingNumber);
   if (n.length < MIN_TRACKING_NUMBER || n.length > MAX_TRACKING_NUMBER || !/^[0-9A-Z]+$/.test(n)) return null;
 
@@ -125,13 +128,16 @@ export function detectCarrier(trackingNumber: string): Carrier | null {
 
   if (/^JJD\d{18}$/.test(n) || /^JVGL\d{16,20}$/.test(n)) return "dhl";
 
-  if (/^\d+$/.test(n)) {
-    if (n.length === 8) return "mondial_relay";
-    if (n.length === 11) return "gls";
-    if (n.length === 14) return "dpd";
-  }
+  if (hint && /^\d+$/.test(n) && DIGITS_ONLY_LENGTHS[hint]?.includes(n.length)) return hint;
   return null;
 }
+
+/** Lengths of the digits-only numbers each carrier uses, confirmed only by her choice of carrier. */
+const DIGITS_ONLY_LENGTHS: Partial<Record<Carrier, readonly number[]>> = {
+  mondial_relay: [8],
+  gls: [11, 12],
+  dpd: [14],
+};
 
 // --- Dates and rhythm --------------------------------------------------------------------------------------------
 
@@ -169,12 +175,51 @@ export function nextParcelCheck(status: ParcelStatus, now: Date): Date | null {
   }
 }
 
+/**
+ * `nextParcelCheck`, never past the end of the tracking (`check_until`): the last check happens at `checkUntil`; null
+ * once delivered or when the tracking is over.
+ */
+export function nextParcelCheckClamped(status: ParcelStatus, now: Date, checkUntil: Date): Date | null {
+  const next = nextParcelCheck(status, now);
+  if (!next || checkUntil.getTime() <= now.getTime()) return null;
+  return next.getTime() > checkUntil.getTime() ? checkUntil : next;
+}
+
+/**
+ * What the purge does with a received e-mail once past `purge_after`: an ignored one, or a failed one no order points
+ * to, is deleted; the others keep their row (an order's origin, the admin's reading stats) and lose their raw message.
+ */
+export function inboundEmailPurge(status: InboundEmailStatus, referencedByOrder: boolean): "delete" | "clear_raw" {
+  if (status === "ignored") return "delete";
+  if (status === "failed" && !referencedByOrder) return "delete";
+  return "clear_raw";
+}
+
 /** The end of a parcel's tracking (`parcels.check_until`), started at `start`. */
 export function parcelCheckUntil(start: Date): Date {
   return new Date(start.getTime() + PARCEL_CHECK_DAYS * 24 * HOUR_MS);
 }
 
 // --- Inputs ------------------------------------------------------------------------------------------------------
+
+/** A text field she may empty: blank reads as null. */
+const optionalText = (max: number) =>
+  z
+    .preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+      z.string().trim().min(1).max(max).nullable(),
+    )
+    .optional();
+
+const EARLIEST_ORDER = Date.UTC(2000, 0, 1);
+/** When she ordered: from 2000 to tomorrow at most (time zones, a clock a little ahead). */
+const orderedAtSchema = dateTimeSchema.refine(
+  (v) => {
+    const at = Date.parse(v);
+    return at >= EARLIEST_ORDER && at <= Date.now() + 24 * HOUR_MS;
+  },
+  { message: "order date out of range" },
+);
 
 const trackingNumberSchema = z
   .string()
@@ -199,8 +244,8 @@ export type TrackingInput = z.infer<typeof trackingInputSchema>;
 export const orderLineInputSchema = z
   .object({
     name: z.string().trim().min(1).max(MAX_ORDER_LINE_NAME),
-    sizeLabel: z.string().trim().min(1).max(MAX_SIZE_LABEL).nullable().optional(),
-    color: z.string().trim().min(1).max(MAX_ORDER_LINE_COLOR).nullable().optional(),
+    sizeLabel: optionalText(MAX_SIZE_LABEL),
+    color: optionalText(MAX_ORDER_LINE_COLOR),
     quantity: z.number().int().min(1).max(MAX_ORDER_LINE_QUANTITY),
     priceCents: centsSchema.nullable().optional(),
     currency: currencySchema.nullable().optional(),
@@ -215,24 +260,29 @@ export type OrderLineInput = z.infer<typeof orderLineInputSchema>;
 export const orderPatchSchema = z.object({
   profileId: uuidSchema.optional(),
   shopName: z.string().trim().min(1).max(MAX_SHOP_NAME).optional(),
-  externalRef: z.string().trim().min(1).max(MAX_EXTERNAL_REF).nullable().optional(),
-  orderedAt: dateTimeSchema.nullable().optional(),
+  externalRef: optionalText(MAX_EXTERNAL_REF),
+  orderedAt: orderedAtSchema.nullable().optional(),
   lines: z.array(orderLineInputSchema).min(1).max(MAX_ORDER_LINES).optional(),
 });
 export type OrderPatch = z.infer<typeof orderPatchSchema>;
 
-/** Manual entry (« On n'a pas su lire cet e-mail », or typed from scratch). */
-export const manualOrderInputSchema = z.object({
-  profileId: uuidSchema,
-  shopName: z.string().trim().min(1).max(MAX_SHOP_NAME),
-  externalRef: z.string().trim().min(1).max(MAX_EXTERNAL_REF).nullable().optional(),
-  orderedAt: dateTimeSchema.nullable().optional(),
-  lines: z.array(orderLineInputSchema).min(1).max(MAX_ORDER_LINES),
-  trackingNumber: trackingNumberSchema.optional(),
-  carrier: carrierSchema.optional(),
-  /** The unreadable e-mail this entry replaces, if any. */
-  inboundEmailId: uuidSchema.optional(),
-});
+/** Manual entry (« On n'a pas su lire cet e-mail », or typed from scratch). A carrier needs its tracking number. */
+export const manualOrderInputSchema = z
+  .object({
+    profileId: uuidSchema,
+    shopName: z.string().trim().min(1).max(MAX_SHOP_NAME),
+    externalRef: optionalText(MAX_EXTERNAL_REF),
+    orderedAt: orderedAtSchema.nullable().optional(),
+    lines: z.array(orderLineInputSchema).min(1).max(MAX_ORDER_LINES),
+    trackingNumber: trackingNumberSchema.optional(),
+    carrier: carrierSchema.optional(),
+    /** The unreadable e-mail this entry replaces, if any. */
+    inboundEmailId: uuidSchema.optional(),
+  })
+  .refine((o) => o.carrier === undefined || o.trackingNumber !== undefined, {
+    message: "trackingNumber required with a carrier",
+    path: ["trackingNumber"],
+  });
 export type ManualOrderInput = z.infer<typeof manualOrderInputSchema>;
 
 // --- Views -------------------------------------------------------------------------------------------------------
@@ -266,7 +316,9 @@ export type ParcelView = z.infer<typeof parcelViewSchema>;
 export const orderViewSchema = z.object({
   id: uuidSchema,
   profileId: uuidSchema,
-  shop: z.object({ id: uuidSchema, name: z.string(), returnsUrl: z.string().nullable() }).nullable(),
+  shop: z
+    .object({ id: uuidSchema, name: z.string(), returnsUrl: z.url({ protocol: /^https?$/ }).nullable() })
+    .nullable(),
   externalRef: z.string().nullable(),
   orderedAt: dateTimeSchema.nullable(),
   status: orderStatusSchema,

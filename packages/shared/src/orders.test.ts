@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   carrierSchema,
   detectCarrier,
+  inboundEmailPurge,
   manualOrderInputSchema,
   nextParcelCheck,
+  nextParcelCheckClamped,
   normalizeTrackingNumber,
   orderInboxViewSchema,
+  orderLineInputSchema,
   orderPatchSchema,
   orderViewSchema,
   PARCEL_CHECK_DAYS,
@@ -40,10 +43,25 @@ describe("detectCarrier", () => {
     expect(detectCarrier("RR123456785FR")).toBeNull();
   });
 
-  it("reads Mondial Relay (8 digits), GLS (11 digits) and DPD (14 digits)", () => {
-    expect(detectCarrier("48210937")).toBe("mondial_relay");
-    expect(detectCarrier("50938172041")).toBe("gls");
-    expect(detectCarrier("25012345678901")).toBe("dpd");
+  it("reads digits-only shapes only with a matching carrier hint (Mondial Relay 8, GLS 11 or 12, DPD 14)", () => {
+    // Bare digits carry no signature: without her choice of carrier, no guess.
+    expect(detectCarrier("48210937")).toBeNull();
+    expect(detectCarrier("50938172041")).toBeNull();
+    expect(detectCarrier("25012345678901")).toBeNull();
+    expect(detectCarrier("48210937", "mondial_relay")).toBe("mondial_relay");
+    expect(detectCarrier("50938172041", "gls")).toBe("gls");
+    expect(detectCarrier("509381720412", "gls")).toBe("gls");
+    expect(detectCarrier("25012345678901", "dpd")).toBe("dpd");
+    // A hint whose shape does not fit.
+    expect(detectCarrier("48210937", "dpd")).toBeNull();
+    expect(detectCarrier("25012345678901", "mondial_relay")).toBeNull();
+    expect(detectCarrier("48210937", "colis_prive")).toBeNull();
+    expect(detectCarrier("48210937", null)).toBeNull();
+  });
+
+  it("keeps self-checking formats whatever the hint", () => {
+    expect(detectCarrier("6A18537412398", "dpd")).toBe("colissimo");
+    expect(detectCarrier("1Z999AA10123456784", "gls")).toBe("ups");
   });
 
   it("reads UPS (1Z + 16 characters, valid check digit)", () => {
@@ -78,7 +96,7 @@ describe("detectCarrier", () => {
   });
 
   it("only returns known carriers", () => {
-    for (const n of ["6A18537412398", "1K36275770836", "EE730192643FR", "48210937", "1Z999AA10123456784"]) {
+    for (const n of ["6A18537412398", "1K36275770836", "EE730192643FR", "1Z999AA10123456784"]) {
       expect(carrierSchema.options).toContain(detectCarrier(n));
     }
   });
@@ -138,9 +156,32 @@ describe("nextParcelCheck", () => {
     for (const status of parcelStatusSchema.options) expect(() => nextParcelCheck(status, now)).not.toThrow();
   });
 
+  it("never schedules past the end of the tracking", () => {
+    const until = new Date("2026-11-14T13:00:00Z");
+    expect(nextParcelCheckClamped("out_for_delivery", now, until)?.toISOString()).toBe("2026-11-14T12:00:00.000Z");
+    // 6 h later would be past `until`: one last check at `until`.
+    expect(nextParcelCheckClamped("in_transit", now, until)?.toISOString()).toBe(until.toISOString());
+    // Already over, or delivered: no more checks.
+    expect(nextParcelCheckClamped("in_transit", now, now)).toBeNull();
+    expect(nextParcelCheckClamped("in_transit", now, new Date("2026-11-14T09:00:00Z"))).toBeNull();
+    expect(nextParcelCheckClamped("delivered", now, until)).toBeNull();
+  });
+
   it("stops after 30 days", () => {
     expect(PARCEL_CHECK_DAYS).toBe(30);
     expect(parcelCheckUntil(now).toISOString()).toBe("2026-12-14T10:00:00.000Z");
+  });
+});
+
+describe("inboundEmailPurge", () => {
+  it("deletes ignored e-mails and failed ones no order points to, clears the raw message of the others", () => {
+    expect(inboundEmailPurge("ignored", false)).toBe("delete");
+    expect(inboundEmailPurge("failed", false)).toBe("delete");
+    expect(inboundEmailPurge("failed", true)).toBe("clear_raw");
+    expect(inboundEmailPurge("parsed", false)).toBe("clear_raw");
+    expect(inboundEmailPurge("parsed", true)).toBe("clear_raw");
+    // Still waiting for its reading: the raw message goes, the row tells the admin it was never read.
+    expect(inboundEmailPurge("queued", false)).toBe("clear_raw");
   });
 });
 
@@ -164,6 +205,33 @@ describe("order schemas", () => {
     expect(manualOrderInputSchema.safeParse({ profileId: id, shopName: "S", lines: [line] }).success).toBe(false);
     const priced = { name: "Robe", quantity: 1, priceCents: -1, currency: "EUR" };
     expect(manualOrderInputSchema.safeParse({ profileId: id, shopName: "S", lines: [priced] }).success).toBe(false);
+  });
+
+  it("asks for a tracking number with a carrier", () => {
+    const lines = [{ name: "Robe", quantity: 1 }];
+    expect(manualOrderInputSchema.safeParse({ profileId: id, shopName: "S", lines, carrier: "dpd" }).success).toBe(
+      false,
+    );
+    const both = { profileId: id, shopName: "S", lines, carrier: "dpd", trackingNumber: "25012345678901" };
+    expect(manualOrderInputSchema.safeParse(both).success).toBe(true);
+  });
+
+  it("keeps the order date between 2000 and tomorrow", () => {
+    const lines = [{ name: "Robe", quantity: 1 }];
+    const at = (orderedAt: string) =>
+      manualOrderInputSchema.safeParse({ profileId: id, shopName: "S", lines, orderedAt });
+    expect(at("2026-11-02T10:00:00Z").success).toBe(true);
+    expect(at("1999-12-31T23:00:00Z").success).toBe(false);
+    expect(at(new Date(Date.now() + 2 * 86_400_000).toISOString()).success).toBe(false);
+    expect(orderPatchSchema.safeParse({ orderedAt: "1990-01-01T00:00:00Z" }).success).toBe(false);
+    expect(orderPatchSchema.parse({ orderedAt: null }).orderedAt).toBeNull();
+  });
+
+  it("reads an emptied text field as null", () => {
+    expect(orderPatchSchema.parse({ externalRef: "" }).externalRef).toBeNull();
+    expect(orderPatchSchema.parse({ externalRef: "   " }).externalRef).toBeNull();
+    const line = orderLineInputSchema.parse({ name: "Robe", quantity: 1, sizeLabel: "", color: " " });
+    expect(line).toMatchObject({ sizeLabel: null, color: null });
   });
 
   it("asks for a currency with a price", () => {
@@ -225,6 +293,15 @@ describe("order schemas", () => {
       createdAt: "2026-11-02T10:05:00.000Z",
     });
     expect(view.parcels[0]?.carrier).toBe("colissimo");
+  });
+
+  it("refuses a returns page that is not a web address", () => {
+    const shop = (returnsUrl: string | null) =>
+      orderViewSchema.shape.shop.safeParse({ id, name: "S", returnsUrl }).success;
+    expect(shop("https://maison-lumiere.test/retours")).toBe(true);
+    expect(shop(null)).toBe(true);
+    expect(shop("javascript:alert(1)")).toBe(false);
+    expect(shop("retours")).toBe(false);
   });
 
   it("describes her order address", () => {

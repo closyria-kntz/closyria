@@ -54,6 +54,19 @@ async function newProduct() {
   return product;
 }
 
+/** An order of hers in `profileId`, with a parcel. */
+async function newOrder(userId: string, profileId: string) {
+  const [order] = await t.db
+    .insert(schema.orders)
+    .values({ userId, profileId, source: "tracking", parseMethod: "manual", status: "confirmed" })
+    .returning();
+  if (!order) throw new Error("no order");
+  await t.db
+    .insert(schema.parcels)
+    .values({ orderId: order.id, trackingNumber: "6A18537412398", checkUntil: new Date(Date.now() + 86_400_000) });
+  return order;
+}
+
 describe("GET /api/me/profiles", () => {
   it("answers 401 without a session", async () => {
     expect((await call("GET", "/api/me/profiles", undefined)).status).toBe(401);
@@ -315,6 +328,38 @@ describe("PATCH, DELETE and order", () => {
     expect(fallback.id).not.toBe(moi.id);
     const [row] = await t.db.select().from(schema.items).where(eq(schema.items.id, kept.item.id));
     expect(row?.profileId).toBe(fallback.id);
+  });
+
+  it("moves her orders and their parcels to her first other profile (« Après la commande »)", async () => {
+    const { cookie, userId } = await t.signIn();
+    const moi = ((await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] })
+      .profiles[0] as ProfileJson;
+    const lea = (await (
+      await call("POST", "/api/me/profiles", cookie, { name: "Léa", audience: "women", color: "rose" })
+    ).json()) as ProfileJson;
+    const order = await newOrder(userId, lea.id);
+
+    expect((await call("DELETE", `/api/me/profiles/${lea.id}`, cookie)).status).toBe(204);
+    const [row] = await t.db.select().from(schema.orders).where(eq(schema.orders.id, order.id));
+    expect(row?.profileId).toBe(moi.id);
+    expect(await t.db.select().from(schema.parcels).where(eq(schema.parcels.orderId, order.id))).toHaveLength(1);
+  });
+
+  it("recreates « Moi » for the orders of her last profile", async () => {
+    const { cookie, userId } = await t.signIn();
+    const moi = ((await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] })
+      .profiles[0] as ProfileJson;
+    const order = await newOrder(userId, moi.id);
+
+    expect((await call("DELETE", `/api/me/profiles/${moi.id}`, cookie)).status).toBe(204);
+    const list = (await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] };
+    expect(list.profiles).toHaveLength(1);
+    const fallback = list.profiles[0] as ProfileJson;
+    expect(fallback).toMatchObject({ name: "Moi" });
+    expect(fallback.id).not.toBe(moi.id);
+    const [row] = await t.db.select().from(schema.orders).where(eq(schema.orders.id, order.id));
+    expect(row?.profileId).toBe(fallback.id);
+    expect(await t.db.select().from(schema.parcels).where(eq(schema.parcels.orderId, order.id))).toHaveLength(1);
   });
 
   it("reorders the profiles", async () => {

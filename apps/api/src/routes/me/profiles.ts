@@ -88,8 +88,8 @@ const deleteProfileRoute = defineAccess(
     path: "/me/profiles/{id}",
     summary: "Delete an empty profile",
     description:
-      "Refused while it holds active items. Its trashed items move to her first other profile (« Moi » is created " +
-      "when it was her last one).",
+      "Refused while it holds active items. Its trashed items and its orders move to her first other profile (« Moi » " +
+      "is created when it was her last one).",
     request: { params: idParams },
     responses: {
       204: { description: "Deleted" },
@@ -220,9 +220,10 @@ export function profilesRoutes(deps: WardrobeDeps) {
             .where(and(eq(schema.items.profileId, id), isNull(schema.items.deletedAt)));
           if ((active?.n ?? 0) > 0) return "profile_not_empty" as const;
           // Items in the trash go to her first other profile (« Moi » is created when there is none), so that
-          // they can still be restored.
+          // they can still be restored; her orders too (« Après la commande »), with their parcels.
           const [trashed] = await tx.select({ n: count() }).from(schema.items).where(eq(schema.items.profileId, id));
-          if ((trashed?.n ?? 0) > 0) {
+          const [ordered] = await tx.select({ n: count() }).from(schema.orders).where(eq(schema.orders.profileId, id));
+          if ((trashed?.n ?? 0) > 0 || (ordered?.n ?? 0) > 0) {
             const [other] = await tx
               .select()
               .from(schema.profiles)
@@ -231,6 +232,7 @@ export function profilesRoutes(deps: WardrobeDeps) {
               .limit(1);
             const fallback = other ?? (await insertDefaultProfile(tx, userId));
             await tx.update(schema.items).set({ profileId: fallback.id }).where(eq(schema.items.profileId, id));
+            await tx.update(schema.orders).set({ profileId: fallback.id }).where(eq(schema.orders.profileId, id));
           }
           // Her alerts of items now in another profile stay (the delete would cascade them away).
           await alertsLeaveProfile(tx, id);
@@ -241,7 +243,7 @@ export function profilesRoutes(deps: WardrobeDeps) {
         if (outcome === "profile_not_empty") return c.json({ error: outcome }, 409);
         return c.body(null, 204);
       } catch (error) {
-        // An item kept into the profile meanwhile: the foreign key (no action) refuses the deletion.
+        // An item kept or an order filed into the profile meanwhile: the foreign key (no action) refuses the deletion.
         if (pgCode(error) === "23503") return c.json({ error: "profile_not_empty" } as const, 409);
         throw error;
       }
