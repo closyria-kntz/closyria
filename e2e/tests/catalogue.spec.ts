@@ -43,9 +43,11 @@ type ShopValue = "made_in_france" | "second_hand" | "eco" | "free_returns";
 /** A published shop of its own, with its domain (« Découvrir » lists the shops by their domain). */
 async function seedShop(db: pg.Pool, tag: string, label: string, values: ShopValue[] = []) {
   const slug = `e2e-catalogue-${label.toLowerCase().replace(/\W+/g, "-")}-${tag}`;
+  // A partner shop (« Accord de référencement »): « Découvrir » shows it as before the catalogue conforme
+  // (catalogue-legal.spec.ts covers the shops without an agreement).
   const { rows } = await db.query<{ id: string }>(
-    `insert into shops (name, slug, status, platform, capture_mode, values)
-     values ($1, $2, 'published', 'shopify', 'manual', $3::text[]) returning id`,
+    `insert into shops (name, slug, status, platform, capture_mode, values, listing_agreement_at)
+     values ($1, $2, 'published', 'shopify', 'manual', $3::text[], now()) returning id`,
     [`${label} ${tag}`, slug, values],
   );
   const id = rows[0]?.id ?? "";

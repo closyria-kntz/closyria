@@ -44,8 +44,11 @@ async function seedShop(db: pg.Pool, name: string, status: "published" | "draft"
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")}-${tag}.e2e.test`;
+  // A partner shop (« Accord de référencement »): « Découvrir » shows it as before the catalogue conforme
+  // (catalogue-legal.spec.ts covers the shops without an agreement).
   const { rows } = await db.query<{ id: string }>(
-    `insert into shops (name, slug, status, platform, capture_mode) values ($1, $2, $3, 'other', 'manual') returning id`,
+    `insert into shops (name, slug, status, platform, capture_mode, listing_agreement_at)
+     values ($1, $2, $3, 'other', 'manual', now()) returning id`,
     [`${name} ${tag}`, `e2e-decouvrir-${tag}`, status],
   );
   const id = rows[0]?.id ?? "";

@@ -38,7 +38,9 @@ const tagAt = (page: Page, x: number, y: number) =>
 async function seedShop(db: pg.Pool, status: "pending" | "published") {
   const tag = randomUUID().slice(0, 8);
   const { rows } = await db.query<{ id: string }>(
-    `insert into shops (name, slug, status, platform) values ($1, $2, $3, 'shopify') returning id`,
+    // A partner shop: what « Découvrir » shows of it is unchanged by the catalogue conforme.
+    `insert into shops (name, slug, status, platform, listing_agreement_at)
+     values ($1, $2, $3, 'shopify', now()) returning id`,
     [`Boutique e2e ${tag}`, `e2e-admin-catalogue-${tag}`, status],
   );
   return { id: rows[0]?.id ?? "", name: `Boutique e2e ${tag}`, tag };
