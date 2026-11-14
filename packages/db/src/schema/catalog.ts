@@ -7,7 +7,9 @@ import {
   captureTriggerSchema,
   childDetailSchema,
   classifiedBySchema,
+  DEFAULT_RETURN_DAYS,
   listingKindSchema,
+  MAX_RETURN_DAYS,
   platformSchema,
   productCaptureStatusSchema,
   productSourceSchema,
@@ -100,6 +102,10 @@ export const shops = pgTable(
      * WooCommerce that refuses `type=variation`).
      */
     importHints: jsonb("import_hints").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    /** « Après la commande »: days she has to send an item back, from its delivery (set in the admin). */
+    returnDays: integer("return_days").notNull().default(DEFAULT_RETURN_DAYS),
+    /** The shop's returns page, shown next to « Retour possible jusqu'au … ». */
+    returnsUrl: text("returns_url"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -108,6 +114,7 @@ export const shops = pgTable(
     check("shops_platform_check", oneOf(t.platform, platformSchema.options)),
     check("shops_capture_mode_check", oneOf(t.captureMode, captureModeSchema.options)),
     check("shops_listing_kind_check", oneOf(t.listingKind, listingKindSchema.options)),
+    check("shops_return_days_check", sql`${t.returnDays} BETWEEN 0 AND ${sql.raw(String(MAX_RETURN_DAYS))}`),
     check("shops_import_state_check", sql`${t.importState} IS NULL OR ${t.importState} IN ('queued', 'running')`),
     check("shops_import_phase_check", sql`${t.importPhase} IS NULL OR ${t.importPhase} IN ('sizes')`),
     check(

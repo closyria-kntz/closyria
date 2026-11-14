@@ -12,14 +12,15 @@ export type DeletionOutcome = "deleted" | "not_found" | "admin";
 /**
  * Deletes a person and everything she owns (RGPD, « Supprimer ce compte »). One transaction removes the `user` row;
  * every table holding her data has a foreign key to `user(id)` ON DELETE CASCADE (the owned tables registry checks it,
- * owned-tables.test.ts), so her rows go with it: wardrobe, photos, lists, alerts, events, sessions, sign-in methods.
+ * owned-tables.test.ts), so her rows go with it: wardrobe, photos, lists, alerts, events, sessions, sign-in methods,
+ * order addresses, e-mails, orders (their lines, parcels and steps cascade from them).
  * Records that outlive her keep no link (audit log, capture log: ON DELETE SET NULL). Her pending sign-in codes go too.
  *
  * The admin audit row (`user.delete`, `user:<id>`, `{ guest }`, never her e-mail) is written in the same transaction:
  * no deletion without its record, no record of a deletion that did not happen. An admin account is never deleted
  * (checked again under the row lock).
  *
- * Her stored photos (`media`, and photo imports nobody attached yet) are deleted from object storage after the commit,
+ * Her stored photos (`media`, and photo imports nobody attached yet) and raw e-mails are deleted from object storage after the commit,
  * a few at a time, so a storage failure (logged, never thrown) cannot undo the deletion; it only leaves an orphan file.
  */
 export async function deleteUserAccount(
@@ -41,6 +42,12 @@ export async function deleteUserAccount(
       .select({ key: schema.photoImports.mediaKey })
       .from(schema.photoImports)
       .where(sql`${schema.photoImports.userId} = ${userId} and ${schema.photoImports.status} = 'ready'`);
+    // Raw e-mails received on her addresses, ignored ones included (they have no user, only her inbox).
+    const emails = await tx
+      .select({ key: schema.inboundEmails.rawObjectKey })
+      .from(schema.inboundEmails)
+      .innerJoin(schema.orderInboxes, sql`${schema.orderInboxes.id} = ${schema.inboundEmails.inboxId}`)
+      .where(sql`${schema.orderInboxes.userId} = ${userId} and ${schema.inboundEmails.rawObjectKey} is not null`);
     // Better Auth's sign-in codes are keyed `<type>-otp-<email>`, not linked to the user row.
     await tx.execute(
       sql`delete from ${schema.verification} where right(${schema.verification.identifier}, ${found.email.length + 5}) = ${`-otp-${found.email.toLowerCase()}`}`,
@@ -52,7 +59,13 @@ export async function deleteUserAccount(
       target: `user:${userId}`,
       details: { guest: found.isAnonymous === true, method: audit.method, path: audit.path, status: 204 },
     });
-    return [...new Set([...media.map((m) => m.key), ...imports.flatMap((i) => (i.key ? [i.key] : []))])];
+    return [
+      ...new Set([
+        ...media.map((m) => m.key),
+        ...imports.flatMap((i) => (i.key ? [i.key] : [])),
+        ...emails.flatMap((e) => (e.key ? [e.key] : [])),
+      ]),
+    ];
   });
   if (!Array.isArray(outcome)) return outcome;
   await deleteObjects(store, outcome);

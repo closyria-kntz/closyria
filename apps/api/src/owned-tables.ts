@@ -1,6 +1,7 @@
 import { registerAccountMerge, registerOwnedTable } from "@closyria/auth";
 import { schema } from "@closyria/db";
 import { registerEntitlementsOwnedTables } from "@closyria/entitlements";
+import { mergeOrderInboxes } from "./orders/merge";
 import {
   mergeItems,
   mergeLoveLevels,
@@ -38,6 +39,12 @@ export function registerOwnedTables(): void {
   // re-pointed to the account's « Moi » by mergeProfiles; those of an item folded into one of the account's same
   // product were deleted with it by mergeItems (ON DELETE CASCADE on item_id, an accepted loss).
   registerOwnedTable(schema.alertEvents, schema.alertEvents.userId);
+  // « Après la commande »: addresses (one active per account), then their e-mails, then orders (after profiles: those
+  // of her « Moi » were re-pointed to the account's by mergeProfiles). Lines, parcels and their steps have no user
+  // column: they hang from an order (cascade) and follow it.
+  registerOwnedTable(schema.orderInboxes, schema.orderInboxes.userId, mergeOrderInboxes);
+  registerOwnedTable(schema.inboundEmails, schema.inboundEmails.userId);
+  registerOwnedTable(schema.orders, schema.orders.userId);
   // On the user row itself: the discovery seen and the closed tips (task 7).
   registerAccountMerge(mergePreferences);
 }

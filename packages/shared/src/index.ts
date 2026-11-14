@@ -18,5 +18,6 @@ export * from "./listing";
 export * from "./love-level";
 export * from "./media";
 export * from "./opinions";
+export * from "./orders";
 export * from "./preferences";
 export * from "./wardrobe";

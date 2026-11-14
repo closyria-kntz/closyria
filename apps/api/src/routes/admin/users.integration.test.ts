@@ -116,7 +116,34 @@ async function rowsPointingTo(userId: string): Promise<Record<string, number>> {
   return counts;
 }
 
-/** Gives `userId` a row in every table that can hold her data, and two stored photos. Returns the photos' keys. */
+type OrderIds = { inboxes: string[]; orders: string[]; parcels: string[] };
+
+/** Her order addresses, orders and parcels, by id (to look for their rows once she is gone). */
+async function orderIdsOf(userId: string): Promise<OrderIds> {
+  const ids = async (query: ReturnType<typeof sql>) =>
+    (await handle.db.execute<{ id: string }>(query)).rows.map((r) => r.id);
+  return {
+    inboxes: await ids(sql`select id from order_inboxes where user_id = ${userId}`),
+    orders: await ids(sql`select id from orders where user_id = ${userId}`),
+    parcels: await ids(sql`select p.id from parcels p join orders o on o.id = p.order_id where o.user_id = ${userId}`),
+  };
+}
+
+/** The rows still hanging from those ids: addresses, e-mails (ignored ones included), lines, parcels, steps. */
+async function orderRowsOf(ids: OrderIds): Promise<Record<string, number>> {
+  const list = (values: string[]) =>
+    sql`array[${sql.join(values.length ? values.map((v) => sql`${v}`) : [sql`null`], sql`, `)}]::uuid[]`;
+  const result = await handle.db.execute<Record<string, number>>(sql`select
+    (select count(*)::int from order_inboxes where id = any (${list(ids.inboxes)})) as inboxes,
+    (select count(*)::int from inbound_emails where inbox_id = any (${list(ids.inboxes)})) as emails,
+    (select count(*)::int from order_lines where order_id = any (${list(ids.orders)})) as lines,
+    (select count(*)::int from parcels where order_id = any (${list(ids.orders)})) as parcels,
+    (select count(*)::int from parcel_events where parcel_id = any (${list(ids.parcels)})) as steps`);
+  return result.rows[0] ?? {};
+}
+
+/** Gives `userId` a row in every table that can hold her data, and two stored photos. Returns the stored objects' keys
+ * (photos, raw e-mails). */
 async function seedEverything(userId: string, email: string): Promise<string[]> {
   const n = ++counter;
   const run = (query: ReturnType<typeof sql>) => handle.db.execute(query);
@@ -175,6 +202,62 @@ async function seedEverything(userId: string, email: string): Promise<string[]> 
     .values({ userId, endpoint: `https://push.test/${n}`, p256dh: "k", auth: "a" });
   await handle.db.insert(schema.alertSettings).values({ userId });
   await handle.db.insert(schema.alertSends).values({ userId, ok: true });
+  // « Après la commande »: her address, an accepted e-mail (raw message stored) and one ignored (no user yet), an
+  // order with a line, a parcel and its step.
+  const [inbox] = await handle.db
+    .insert(schema.orderInboxes)
+    .values({ userId, localPart: `marie-u${n}` })
+    .returning();
+  if (!inbox) throw new Error("no inbox");
+  const rawKey = `inbound/${userId}/e-${n}.eml`;
+  keys.push(rawKey);
+  await store.put(rawKey, Buffer.from("From: x"), "message/rfc822");
+  const purgeAfter = new Date(Date.now() + 30 * 86_400_000);
+  const [inbound] = await handle.db
+    .insert(schema.inboundEmails)
+    .values({
+      userId,
+      inboxId: inbox.id,
+      fromAddress: email,
+      authOk: true,
+      status: "parsed",
+      rawObjectKey: rawKey,
+      purgeAfter,
+    })
+    .returning();
+  // Ignored (another sender): no user, but its raw message is hers to delete too.
+  const ignoredKey = `inbound/${userId}/ignored-${n}.eml`;
+  keys.push(ignoredKey);
+  await store.put(ignoredKey, Buffer.from("From: y"), "message/rfc822");
+  await handle.db.insert(schema.inboundEmails).values({
+    inboxId: inbox.id,
+    fromAddress: "someone@example.test",
+    authOk: false,
+    status: "ignored",
+    rawObjectKey: ignoredKey,
+    purgeAfter,
+  });
+  const [order] = await handle.db
+    .insert(schema.orders)
+    .values({
+      userId,
+      profileId: profile.id,
+      shopId: shop.id,
+      source: "email",
+      parseMethod: "known",
+      inboundEmailId: inbound?.id,
+    })
+    .returning();
+  if (!order) throw new Error("no order");
+  await handle.db.insert(schema.orderLines).values({ orderId: order.id, itemId: item.id, name: "Robe", quantity: 1 });
+  const [parcel] = await handle.db
+    .insert(schema.parcels)
+    .values({ orderId: order.id, trackingNumber: "6A18537412398", carrier: "colissimo", checkUntil: purgeAfter })
+    .returning();
+  if (!parcel) throw new Error("no parcel");
+  await handle.db
+    .insert(schema.parcelEvents)
+    .values({ parcelId: parcel.id, at: new Date(), status: "in_transit", label: "Pris en charge" });
   await handle.db
     .insert(schema.captures)
     .values({ shopId: shop.id, url: `https://admin-users-${n}.test/p`, trigger: "user", requestedBy: userId });
@@ -297,6 +380,8 @@ describe("DELETE /api/admin/users/{id}", () => {
     const account = await session("user", "email-otp");
     const keys = await seedEverything(account.userId, account.email);
     const before = await rowsPointingTo(account.userId);
+    const theirs = await orderIdsOf(account.userId);
+    expect(await orderRowsOf(theirs)).toEqual({ inboxes: 1, emails: 2, lines: 1, parcels: 1, steps: 1 });
     // Every table that can point to a person holds one of her rows, so the check below proves them all. The audit log,
     // the listing agreements and invitations only name admins, and an admin cannot be deleted.
     const adminsOnly = new Set(["admin_audit_log.admin_id", "shop_agreements.admin_id", "shop_invitations.created_by"]);
@@ -309,6 +394,8 @@ describe("DELETE /api/admin/users/{id}", () => {
     expect(res.status).toBe(204);
     expect(Object.entries(await rowsPointingTo(account.userId)).filter(([, n]) => n > 0)).toEqual([]);
     expect(await handle.db.select().from(schema.user).where(eq(schema.user.id, account.userId))).toEqual([]);
+    // Tables without a user column go with her order or her address (cascade).
+    expect(await orderRowsOf(theirs)).toEqual({ inboxes: 0, emails: 0, lines: 0, parcels: 0, steps: 0 });
     const codes = await handle.db.execute<{ n: number }>(
       sql`select count(*)::int as n from verification where identifier = ${`sign-in-otp-${account.email}`}`,
     );

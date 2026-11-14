@@ -159,6 +159,9 @@ async function expectNothingLeftOrCrossed(anonymousId: string) {
     "love_levels",
     "budgets",
     "alert_events",
+    "orders",
+    "order_inboxes",
+    "inbound_emails",
   ]) {
     expect(
       await count(sql`select count(*)::int as n from ${sql.identifier(table)} where user_id = ${anonymousId}`),
@@ -167,6 +170,10 @@ async function expectNothingLeftOrCrossed(anonymousId: string) {
   expect(
     await count(sql`select count(*)::int as n from items i join profiles p on p.id = i.profile_id
       where p.user_id <> i.user_id`),
+  ).toBe(0);
+  expect(
+    await count(sql`select count(*)::int as n from orders o join profiles p on p.id = o.profile_id
+      where p.user_id <> o.user_id`),
   ).toBe(0);
   expect(
     await count(sql`select count(*)::int as n from item_tags it join items i on i.id = it.item_id
@@ -565,6 +572,66 @@ describe("anonymous -> account merge on sign-in", () => {
       { kind: "price_drop", profileId: anonLea.id, itemId: leaItem.id },
       { kind: "sale_period", profileId: null, itemId: null },
       { kind: "size_back", profileId: accountMoi.id, itemId: moiItem.id },
+    ]);
+  });
+
+  it("keeps her orders (« Après la commande »): those of her « Moi » follow it, an address stays the only active one", async () => {
+    const email = `commandes-${randomUUID()}@example.test`;
+    const accountId = await signInWithEmail(email);
+    const accountMoi = await newProfile(accountId, "Moi", day(1));
+    const n = ++counter;
+    await handle.db.insert(schema.orderInboxes).values({ userId: accountId, localPart: `compte-m${n}` });
+    const anonymous = await signInAnonymously();
+    const anonMoi = await newProfile(anonymous.userId, "Moi", day(2), 0);
+    const anonLea = await newProfile(anonymous.userId, "Léa", day(2), 1);
+    const [inbox] = await handle.db
+      .insert(schema.orderInboxes)
+      .values({ userId: anonymous.userId, localPart: `invitee-m${n}` })
+      .returning();
+    await handle.db.insert(schema.inboundEmails).values({
+      userId: anonymous.userId,
+      inboxId: inbox?.id ?? "",
+      fromAddress: "her@example.test",
+      authOk: true,
+      status: "parsed",
+      purgeAfter: day(30),
+    });
+    const order = (profileId: string) => ({
+      userId: anonymous.userId,
+      profileId,
+      source: "tracking" as const,
+      parseMethod: "manual" as const,
+    });
+    const [moiOrder, leaOrder] = await handle.db
+      .insert(schema.orders)
+      .values([order(anonMoi.id), order(anonLea.id)])
+      .returning();
+    await handle.db
+      .insert(schema.parcels)
+      .values({ orderId: moiOrder?.id ?? "", trackingNumber: "6A18537412398", checkUntil: day(30) });
+
+    expect(await signInWithEmail(email, anonymous.cookie)).toBe(accountId);
+
+    await expectNothingLeftOrCrossed(anonymous.userId);
+    const orders = await handle.db
+      .select({ id: schema.orders.id, profileId: schema.orders.profileId })
+      .from(schema.orders)
+      .where(eq(schema.orders.userId, accountId));
+    expect(new Map(orders.map((o) => [o.id, o.profileId]))).toEqual(
+      new Map([
+        [moiOrder?.id, accountMoi.id],
+        [leaOrder?.id, anonLea.id],
+      ]),
+    );
+    expect(await count(sql`select count(*)::int as n from parcels where order_id = ${moiOrder?.id ?? ""}`)).toBe(1);
+    const inboxes = await handle.db
+      .select({ localPart: schema.orderInboxes.localPart, active: schema.orderInboxes.active })
+      .from(schema.orderInboxes)
+      .where(eq(schema.orderInboxes.userId, accountId))
+      .orderBy(asc(schema.orderInboxes.localPart));
+    expect(inboxes).toEqual([
+      { localPart: `compte-m${n}`, active: true },
+      { localPart: `invitee-m${n}`, active: false },
     ]);
   });
 

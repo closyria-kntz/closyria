@@ -134,6 +134,8 @@ export const items = pgTable(
     alertsEnabled: boolean("alerts_enabled").notNull().default(true),
     /** « Préviens-moi sous … € »: null = no target. */
     targetPriceCents: integer("target_price_cents"),
+    /** « Retour possible jusqu'au … »: Paris day set at the delivery (`returnDeadline`), null otherwise. */
+    returnDeadline: date("return_deadline", { mode: "string" }),
     /** Trash: set when deleted, purged after 30 days. */
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: createdAt(),
