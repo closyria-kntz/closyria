@@ -39,6 +39,7 @@ import {
   whyOrNull,
 } from "@/lib/wardrobe-client";
 import { itemStep } from "@/lib/wardrobe-view";
+import { ItemAlerts } from "./item-alerts";
 import { StageDialog } from "./stage-dialog";
 
 const STAGES = Object.keys(ITEM_STAGE_ORDER) as ItemStage[];
@@ -59,7 +60,7 @@ type Props = {
 
 /**
  * HER item as blocks of the sheet (refonte Boudoir): `top` (sizes, « Que veux-tu faire ? »), « Avis des amies »,
- * « Ton envie » (level, priority, why), « Mon article » (stages, size and amounts, notes, lists, tags), the shop sheet,
+ * « Ton envie » (level, priority, why), « Alertes » (a wish's watch), « Mon article » (stages, size and amounts, notes, lists, tags), the shop sheet,
  * « Autres actions » (the rare ones: profile, delete). Photos live in the gallery column.
  */
 export function ItemPanel({ item, onChange, onGone, reload, top, shop }: Props) {
@@ -379,6 +380,8 @@ export function ItemPanel({ item, onChange, onGone, reload, top, shop }: Props) 
           </button>
         )}
       </section>
+
+      <ItemAlerts item={item} onChange={onChange} reload={reload} />
 
       <section
         aria-labelledby="mine-title"

@@ -1,6 +1,7 @@
 import { and, asc, type Database, desc, eq, gte, inArray, isNull, lt, ne, or, schema, sql } from "@closyria/db";
 import {
   ALERTS_PAGE_HREF,
+  alertItemHref,
   HOME_NEWS_DAYS,
   HOME_NEWS_LIMIT,
   HOME_WISHES_LIMIT,
@@ -22,6 +23,7 @@ const EMPTY_FACTS = {
   priceCents: null,
   previousPriceCents: null,
   currency: null,
+  targetPriceCents: null,
   sizeLabel: null,
   authorName: null,
   count: null,
@@ -242,14 +244,18 @@ async function listNews(db: Database, userId: string, now: Date): Promise<Draft[
 }
 
 /**
- * Her sales and shop promo alerts of the last HOME_NEWS_DAYS days (whatever became of their push): one news per sales
- * period and per shop, the newest.
+ * Her alerts of the last HOME_NEWS_DAYS days (whatever became of their push): her target prices reached (one news per
+ * item, the newest, on her item's sheet), the sales and the shop promos (one news per sales period and per shop).
  */
 async function alertNews(db: Database, userId: string, since: Date): Promise<Draft[]> {
   const rows = await db
     .select({
       kind: schema.alertEvents.kind,
       createdAt: schema.alertEvents.createdAt,
+      itemId: schema.alertEvents.itemId,
+      priceCents: schema.alertEvents.priceCents,
+      productId: schema.items.productId,
+      profileId: schema.items.profileId,
       shopId: schema.alertEvents.shopId,
       shopName: schema.shops.name,
       salePeriodId: schema.alertEvents.salePeriodId,
@@ -257,18 +263,36 @@ async function alertNews(db: Database, userId: string, since: Date): Promise<Dra
       startsOn: schema.salePeriods.startsOn,
     })
     .from(schema.alertEvents)
+    // Her item only, in its profile of now (never another person's).
+    .leftJoin(
+      schema.items,
+      and(eq(schema.items.id, schema.alertEvents.itemId), eq(schema.items.userId, schema.alertEvents.userId)),
+    )
     .leftJoin(schema.shops, eq(schema.shops.id, schema.alertEvents.shopId))
     .leftJoin(schema.salePeriods, eq(schema.salePeriods.id, schema.alertEvents.salePeriodId))
     .where(
       and(
         eq(schema.alertEvents.userId, userId),
-        inArray(schema.alertEvents.kind, ["sale_period", "shop_promo"]),
+        inArray(schema.alertEvents.kind, ["target_price", "sale_period", "shop_promo"]),
         gte(schema.alertEvents.createdAt, since),
       ),
     )
     .orderBy(desc(schema.alertEvents.createdAt), desc(schema.alertEvents.id));
   const byKey = new Map<string, Draft>();
   for (const row of rows) {
+    if (row.kind === "target_price") {
+      const key = `target:${row.itemId}`;
+      if (!row.itemId || !row.productId || !row.profileId || row.priceCents === null || byKey.has(key)) continue;
+      byKey.set(key, {
+        ...EMPTY_FACTS,
+        kind: "target_price",
+        itemId: row.itemId,
+        href: alertItemHref(row.productId, row.profileId),
+        at: row.createdAt.toISOString(),
+        priceCents: row.priceCents,
+      });
+      continue;
+    }
     const sale = row.kind === "sale_period";
     const title = sale ? row.salePeriodName : row.shopName;
     const key = sale ? `sale:${row.salePeriodId}` : `shop:${row.shopId}`;
@@ -307,7 +331,7 @@ const newestFirst = (a: HomeNews, b: HomeNews) => b.at.localeCompare(a.at) || a.
 /**
  * What « Accueil » shows (refonte Boudoir, spec R3), from data the app already keeps: price drops and sizes back on
  * her wishes (last HOME_NEWS_DAYS days), friends' opinions she has not seen, her running group orders, the gift
- * reminders that are due, and her sales and shop promo alerts (last HOME_NEWS_DAYS days). The « une » is the newest news with a photo; with it, at most HOME_NEWS_LIMIT news.
+ * reminders that are due, and her target price, sales and shop promo alerts (last HOME_NEWS_DAYS days). The « une » is the newest news with a photo; with it, at most HOME_NEWS_LIMIT news.
  */
 export async function homeView(db: Database, userId: string, now: Date): Promise<HomeView> {
   const since = new Date(now.getTime() - HOME_NEWS_DAYS * 86_400_000);
@@ -335,7 +359,12 @@ export async function homeView(db: Database, userId: string, now: Date): Promise
       if (!draft.itemId) return [{ ...draft, title: draft.title ?? "", detail: draft.detail ?? null, photoUrl: null }];
       const item = views.get(draft.itemId);
       if (!item) return [];
-      const facts = draft.kind === "price_drop" ? { currency: item.product.currency } : ({} as Partial<HomeNews>);
+      const facts: Partial<HomeNews> =
+        draft.kind === "price_drop"
+          ? { currency: item.product.currency }
+          : draft.kind === "target_price"
+            ? { currency: item.product.currency, targetPriceCents: item.targetPriceCents }
+            : {};
       return [
         {
           ...draft,

@@ -9,9 +9,9 @@ import { useNewsWords } from "./home-news";
 import { primaryButtonClass } from "./ui";
 
 /** The kinds a une can be: those that come with an item's photo. */
-type UneKind = "price_drop" | "size_back" | "opinion";
+type UneKind = "price_drop" | "size_back" | "target_price" | "opinion";
 const isUneKind = (kind: HomeNews["kind"]): kind is UneKind =>
-  kind === "price_drop" || kind === "size_back" || kind === "opinion";
+  kind === "price_drop" || kind === "size_back" || kind === "target_price" || kind === "opinion";
 
 /**
  * The « une » of « Accueil » (mockup .une): the newest news with a photo, the photo on the left (42 %), on the right a
@@ -25,19 +25,23 @@ export function HomeUne({ news }: { news: HomeNews }) {
   if (!isUneKind(news.kind) || !news.photoUrl) return null;
   const kind = news.kind;
   const { detail } = words(news, (chunks) => chunks);
+  const price = (cents: number | null) => (cents === null ? "" : formatPrice(locale, cents, news.currency ?? "EUR"));
   const sentence =
-    kind === "price_drop"
-      ? t("une.price_drop", {
-          name: news.title,
-          price: news.priceCents === null ? "" : formatPrice(locale, news.priceCents, news.currency ?? "EUR"),
-        })
-      : kind === "size_back"
-        ? t("une.size_back", { name: news.title, size: news.sizeLabel ?? "" })
-        : t("une.opinion", {
-            author: news.authorName ?? "",
-            others: Math.max(0, (news.count ?? 1) - 1),
+    kind === "price_drop" || (kind === "target_price" && news.targetPriceCents === null)
+      ? t("une.price_drop", { name: news.title, price: price(news.priceCents) })
+      : kind === "target_price" && news.targetPriceCents !== null
+        ? t("une.target_price", {
             name: news.title,
-          });
+            price: price(news.priceCents),
+            target: price(news.targetPriceCents),
+          })
+        : kind === "size_back"
+          ? t("une.size_back", { name: news.title, size: news.sizeLabel ?? "" })
+          : t("une.opinion", {
+              author: news.authorName ?? "",
+              others: Math.max(0, (news.count ?? 1) - 1),
+              name: news.title,
+            });
   return (
     <article
       aria-labelledby={titleId}

@@ -75,6 +75,11 @@ export function AccountHub() {
       </div>
 
       <Section title={t("settings.title")}>
+        <Row
+          href={href("/reglages/notifications")}
+          label={t("settings.notifications")}
+          hint={t("settings.notificationsHint")}
+        />
         <Row href={href("/reglages/niveaux")} label={tSettings("levels")} />
         <Row href={href("/reglages/tailles")} label={tSettings("sizes")} />
         <Row href={href("/reglages/etiquettes")} label={tSettings("tags")} />

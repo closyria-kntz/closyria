@@ -40,12 +40,45 @@ function PasteSteps({ t, id, title }: { t: Translate; id: string; title: string 
   );
 }
 
+/**
+ * Adding Closyria to the iPhone's home screen (chantier 4 « Alertes »): notifications only reach an iPhone from there.
+ * « Compte → Notifications » sends her here from a Safari tab, and this sends her back.
+ */
+function HomeScreenSteps({ t }: { t: Translate }) {
+  return (
+    <section id="ecran-accueil" aria-labelledby="iphone-home-screen" className={`${sectionClass} scroll-mt-space-4`}>
+      <h3 id="iphone-home-screen" className="font-display text-lead font-strong">
+        {t("homeScreenTitle")}
+      </h3>
+      <p className="text-ink-muted">{t("homeScreenIntro")}</p>
+      <ol aria-label={t("homeScreenLabel")} className="flex flex-col gap-space-3">
+        {([1, 2, 3] as const).map((index) => (
+          <li key={index} className="flex gap-space-3">
+            <span aria-hidden="true" className={numberClass}>
+              {index}
+            </span>
+            <p>{t(`homeScreen.${index}`)}</p>
+          </li>
+        ))}
+      </ol>
+      <Link
+        href="/reglages/notifications"
+        className={`inline-flex min-h-touch-target items-center self-start rounded-button text-sm font-strong text-accent underline underline-offset-4 ${focusRing}`}
+      >
+        {t("homeScreenBack")}
+      </Link>
+    </section>
+  );
+}
+
 function IphonePart({ t }: { t: Translate }) {
   return (
     <section id="iphone" aria-labelledby="iphone-title" className={partClass}>
       <h2 id="iphone-title" className="font-display text-title font-strong">
         {t("iphoneSection")}
       </h2>
+      {/* First: « /aide/iphone » lands here from « Compte → Notifications ». */}
+      <HomeScreenSteps t={t} />
       <p>{t("iphoneIntro")}</p>
 
       {IOS_SHORTCUT_URL && (

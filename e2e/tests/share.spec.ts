@@ -379,6 +379,7 @@ test("l'aide du téléphone, partie iPhone : le raccourci, la phrase pour l'IA, 
   await page.goto("/aide/telephone");
   const iphone = page.locator("section#iphone");
   await expect(iphone.getByRole("heading", { level: 3 })).toHaveText([
+    "Ajouter Closyria à l’écran d’accueil",
     "Closyria dans le menu Partager",
     "Ou demande à l’IA de ton iPhone",
     "Ou : Coller le lien copié",

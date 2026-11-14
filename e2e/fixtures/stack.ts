@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { createWriteStream, existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -70,6 +70,8 @@ export async function startStack(logFile: string): Promise<Stack> {
       BETTER_AUTH_URL: proxy.url,
       MAIL_TRANSPORT: "memory",
       TEST_STORAGE_DIR: storageDir,
+      // Notifications on (chantier 4): the browser's subscription is faked in the journeys (alertes.spec.ts).
+      ...vapidKeys(),
     });
     cleanups.push(() => terminate(apiProcess));
     const webProcess = launch(
@@ -149,4 +151,21 @@ async function freePort(): Promise<number> {
     });
     if (port && !RESERVED_PORTS.has(port)) return port;
   }
+}
+
+/** A throwaway VAPID key pair (P-256): the public key as an uncompressed point, both in unpadded base64url. */
+function vapidKeys() {
+  const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const pub = publicKey.export({ format: "jwk" });
+  const priv = privateKey.export({ format: "jwk" });
+  const point = Buffer.concat([
+    Buffer.from([4]),
+    Buffer.from(pub.x ?? "", "base64url"),
+    Buffer.from(pub.y ?? "", "base64url"),
+  ]);
+  return {
+    VAPID_PUBLIC_KEY: point.toString("base64url"),
+    VAPID_PRIVATE_KEY: priv.d ?? "",
+    VAPID_SUBJECT: "https://closyria.com",
+  };
 }

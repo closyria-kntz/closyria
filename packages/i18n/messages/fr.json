@@ -21,6 +21,7 @@
     "kind": {
       "price_drop": "Baisse de prix",
       "size_back": "Ta taille est revenue",
+      "target_price": "Prix visé",
       "opinion": "Avis d’une amie",
       "group_order": "Commande groupée",
       "gift_reminder": "Rappel des cadeaux",
@@ -30,10 +31,12 @@
     "une": {
       "price_drop": "{name} passe à {price}",
       "size_back": "{name} : ta taille {size} est revenue",
+      "target_price": "{name} : {price} (tu visais {target})",
       "opinion": "{others, plural, =0 {{author} a donné son avis sur {name}} one {{author} et une autre amie ont donné leur avis sur {name}} other {{author} et # autres amies ont donné leur avis sur {name}}}",
       "open": {
         "price_drop": "Voir l’article",
         "size_back": "Voir l’article",
+        "target_price": "Voir l’article",
         "opinion": "Lire l’avis"
       }
     },
@@ -41,10 +44,13 @@
       "title": "Ce qui a changé",
       "all": "Tout voir",
       "fewer": "Voir moins",
+      "allNews": "Toutes mes nouvelles",
       "price_drop": "<b>{name}</b> passe à {price}",
       "priceDropDetail": "−{drop} chez {shop}",
       "size_back": "<b>{name}</b> : ta taille {size} est revenue",
       "sizeBackDetail": "Chez {shop}",
+      "target_price": "<b>{name}</b> : {price} (tu visais {target})",
+      "targetPriceDetail": "Chez {shop}",
       "opinion": "{others, plural, =0 {<b>{author}</b> a donné son avis sur {name}} one {<b>{author}</b> et une autre amie ont donné leur avis sur {name}} other {<b>{author}</b> et # autres amies ont donné leur avis sur {name}}}",
       "opinionNote": "« {note} »",
       "group_order": "<b>Commande groupée {shop}</b>",
@@ -54,10 +60,13 @@
       "giftOccasion": "{occasion} est passé",
       "giftDate": "La date est passée",
       "sale_period": "<b>Les soldes commencent {day}</b>",
+      "sale_periodStarted": "<b>Les soldes ont commencé {day}</b>",
+      "saleDate": "le {date}",
       "shop_promo": "<b>{shop}</b> est en promo",
       "action": {
         "price_drop": "Voir",
         "size_back": "Voir",
+        "target_price": "Voir",
         "opinion": "Lire",
         "group_order": "Ouvrir",
         "gift_reminder": "Ouvrir",
@@ -123,7 +132,9 @@
       "row": "Gérer les profils"
     },
     "settings": {
-      "title": "Réglages"
+      "title": "Réglages",
+      "notifications": "Notifications",
+      "notificationsHint": "Ta taille revenue, ton prix visé, le résumé du jour"
     },
     "help": {
       "title": "Aide",
@@ -1220,7 +1231,39 @@
       "addPhoto": "Ajouter une photo",
       "listsTitle": "Ajouter à une liste"
     },
-    "back": "← Mes articles"
+    "back": "← Mes articles",
+    "alerts": {
+      "title": "Alertes",
+      "switch": "M’alerter",
+      "switchHint": "Une notification quand ta taille revient ou que l’article passe sous ton prix visé.",
+      "target": "Préviens-moi sous … €",
+      "targetHint": "Facultatif : écris le prix qui te déciderait, par exemple 59 ou 59,90.",
+      "targetNow": "Tu seras prévenue dès qu’il passe sous {price}.",
+      "targetSave": "Enregistrer le prix visé",
+      "targetClear": "Retirer le prix visé",
+      "targetInvalid": "Écris un montant, par exemple 59 ou 59,90.",
+      "saveFailed": "Ce n’est pas enregistré. Réessaie dans un instant.",
+      "size": "taille {size}",
+      "sizes": "tailles {sizes}",
+      "sizesJoin": " ou ",
+      "any": "retour en stock",
+      "watching": "Suivi : {what} · {checked}",
+      "checked": "vérifié {when}",
+      "notChecked": "pas encore vérifié",
+      "paused": "Suivi en pause",
+      "pausedItem": "Rallume « M’alerter » pour reprendre le suivi.",
+      "pausedSettings": "Tes alertes « Ta taille est revenue » et « Prix visé atteint » sont coupées dans tes réglages.",
+      "pausedSettingsLink": "Réglages des notifications",
+      "impossible": "Suivi impossible pour cette boutique",
+      "impossibleHint": "Cette boutique bloque les visites automatiques : Closyria ne peut pas vérifier ses tailles ni ses prix.",
+      "enableLink": "Active les notifications pour être prévenue",
+      "toast": {
+        "on": "Alertes rallumées pour cet article",
+        "off": "Alertes coupées pour cet article",
+        "target": "Prix visé : {price}",
+        "targetCleared": "Prix visé retiré"
+      }
+    }
   },
   "Views": {
     "title": {
@@ -1929,6 +1972,7 @@
       "levels": "Mes niveaux",
       "sizes": "Mes tailles",
       "appearance": "Apparence",
+      "notifications": "Notifications",
       "trash": "Corbeille",
       "account": "Mon compte",
       "phone": "Ajouter depuis le téléphone"
@@ -2106,6 +2150,15 @@
     "intro": "Depuis une boutique, un article arrive dans Closyria en deux gestes. Choisis ton téléphone.",
     "iphoneSection": "Sur iPhone",
     "iphoneIntro": "Installe une fois le raccourci « Envoyer à Closyria » : il ajoute Closyria au menu Partager de l’iPhone.",
+    "homeScreenTitle": "Ajouter Closyria à l’écran d’accueil",
+    "homeScreenIntro": "Sur iPhone, les notifications de Closyria arrivent seulement quand il est sur ton écran d’accueil.",
+    "homeScreenLabel": "Les 3 gestes",
+    "homeScreen": {
+      "1": "Dans Safari, sur Closyria, touche le bouton Partager (le carré avec une flèche vers le haut).",
+      "2": "Choisis « Sur l’écran d’accueil », puis « Ajouter ».",
+      "3": "Ouvre Closyria depuis sa nouvelle icône, puis va dans Compte → Notifications et touche « Activer les notifications »."
+    },
+    "homeScreenBack": "Aller aux notifications",
     "androidSection": "Sur Android",
     "androidIntro": "Une fois Closyria installé depuis Chrome, il apparaît dans le menu Partager d’Android.",
     "androidInstallTitle": "Installe Closyria",
@@ -2334,5 +2387,100 @@
       "tag1": "Dans mon dressing",
       "tag2": "À vendre"
     }
+  },
+  "Notifications": {
+    "metadata": "Notifications",
+    "title": "Notifications",
+    "intro": "Closyria te prévient quand ta taille revient sur une de tes envies, quand un article passe sous ton prix visé, et une fois par jour des baisses de prix, des soldes et des promos.",
+    "loading": "Chargement…",
+    "loadFailed": "Tes réglages ne se sont pas affichés. Réessaie dans un instant.",
+    "retry": "Réessayer",
+    "guestTitle": "Les notifications demandent un compte",
+    "guestBody": "Avec un compte (Google, Apple ou e-mail), tu reçois tes alertes sur ton téléphone ou ton ordinateur. Tout ce que tu as déjà gardé reste avec toi.",
+    "createAccount": "Crée ton compte pour recevoir tes alertes",
+    "device": {
+      "title": "Sur cet appareil",
+      "enable": "Activer les notifications",
+      "enabling": "Activation…",
+      "enableHint": "Ton navigateur va te demander l’autorisation : touche « Autoriser ».",
+      "on": "Les notifications sont activées sur cet appareil.",
+      "denied": "Tu as refusé les notifications pour Closyria dans ce navigateur. Pour les recevoir, autorise-les dans les réglages du navigateur (souvent le cadenas à côté de l’adresse), puis reviens ici.",
+      "unsupported": "Ce navigateur ne peut pas recevoir de notifications.",
+      "off": "Les notifications ne sont pas encore disponibles.",
+      "failed": "L’activation n’a pas marché. Réessaie dans un instant.",
+      "accountRequired": "Crée d’abord ton compte pour recevoir tes alertes.",
+      "keepNews": "Tes nouvelles restent sur l’Accueil et dans « Nouvelles ».",
+      "iphoneTitle": "Sur iPhone, ajoute d’abord Closyria à ton écran d’accueil",
+      "iphoneBody": "Les notifications arrivent quand tu ouvres Closyria depuis son icône, pas depuis un onglet de Safari. Ajoute-le, ouvre-le depuis l’icône, puis reviens ici.",
+      "iphoneLink": "Voir comment ajouter Closyria à l’écran d’accueil"
+    },
+    "what": {
+      "title": "Ce que tu reçois",
+      "sizeBack": "Ta taille est revenue",
+      "sizeBackHint": "Tout de suite, sauf entre 22 h et 8 h : elle t’attend alors à 8 h.",
+      "targetPrice": "Prix visé atteint",
+      "targetPriceHint": "Tout de suite quand un article passe sous le prix que tu as choisi sur sa fiche.",
+      "digest": "Résumé du jour",
+      "digestHint": "Une seule notification par jour pour les baisses de prix de tes envies, les soldes et les promos.",
+      "digestHour": "Heure du résumé",
+      "hour": "{hour} h",
+      "saved": "Réglage enregistré",
+      "saveFailed": "Le réglage n’a pas été enregistré. Réessaie."
+    },
+    "devices": {
+      "title": "Tes appareils",
+      "intro": "Les téléphones et ordinateurs qui reçoivent tes notifications.",
+      "empty": "Aucun appareil ne reçoit tes notifications pour l’instant.",
+      "name": "{browser} sur {device}",
+      "unknown": "Appareil inconnu",
+      "this": "cet appareil",
+      "added": "Ajouté le {date}",
+      "remove": "Retirer",
+      "removeLabel": "Retirer {name}",
+      "removed": "{name} ne recevra plus tes notifications.",
+      "removeFailed": "L’appareil n’a pas été retiré. Réessaie.",
+      "kind": {
+        "iphone": "iPhone",
+        "ipad": "iPad",
+        "android": "Android",
+        "mac": "Mac",
+        "windows": "Windows",
+        "linux": "Linux"
+      },
+      "browser": {
+        "safari": "Safari",
+        "chrome": "Chrome",
+        "firefox": "Firefox",
+        "edge": "Edge",
+        "samsung": "Samsung Internet"
+      }
+    },
+    "news": "Voir toutes mes nouvelles"
+  },
+  "News": {
+    "metadata": "Nouvelles",
+    "title": "Nouvelles",
+    "intro": "Ce qui a changé sur tes envies ces 30 derniers jours, la plus récente en haut.",
+    "loading": "Chargement de tes nouvelles…",
+    "failed": "Tes nouvelles ne se sont pas affichées. Réessaie dans un instant.",
+    "retry": "Réessayer",
+    "emptyTitle": "Rien de neuf pour l’instant",
+    "emptyBody": "Quand ta taille revient, qu’un prix baisse ou que les soldes approchent, tu le verras ici.",
+    "settings": "Réglages des notifications",
+    "more": "Voir plus de nouvelles",
+    "unread": "Nouveau",
+    "today": "Aujourd’hui",
+    "yesterday": "Hier",
+    "unnamed": "Ton article",
+    "size_back": "{name} : de retour en {size} chez {shop}",
+    "size_backNoShop": "{name} : de retour en {size}",
+    "size_backNoSize": "{name} : de retour en stock chez {shop}",
+    "size_backNothing": "{name} : de retour en stock",
+    "target_price": "{name} : {price} (tu visais {target})",
+    "target_priceNoTarget": "{name} : {price}",
+    "price_drop": "{name} passe à {price}",
+    "priceDropDetail": "−{drop} chez {shop}",
+    "priceDropNoShop": "−{drop}",
+    "action": "Voir"
   }
 }

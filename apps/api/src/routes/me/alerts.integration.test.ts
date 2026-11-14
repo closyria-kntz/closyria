@@ -494,3 +494,41 @@ describe("« Accueil »: sales and shop promo", () => {
     ]);
   });
 });
+
+describe("« Accueil »: target price reached", () => {
+  it("makes her target price the une, on her item's sheet, once per item", async () => {
+    const a = await account();
+    const item = await wish(a.cookie);
+    await t.db.insert(schema.productImages).values({
+      productId: item.product.id,
+      position: 0,
+      key: `products/${item.product.id}/0.webp`,
+      width: 600,
+      height: 800,
+      sourceHash: `hash-${item.id}`,
+    });
+    expect((await call("PATCH", `/api/me/items/${item.id}`, a.cookie, { targetPriceCents: 6000 })).status).toBe(200);
+    const now = Date.now();
+    await itemEvent(item, a.userId, { kind: "target_price", priceCents: 6200, createdAt: new Date(now - 60_000) });
+    await itemEvent(item, a.userId, { kind: "target_price", priceCents: 5900, createdAt: new Date(now - 1000) });
+    // Another person's target price never shows here.
+    const other = await account();
+    const theirs = await wish(other.cookie);
+    await itemEvent(theirs, other.userId, { kind: "target_price", priceCents: 100 });
+
+    const res = await call("GET", "/api/me/home", a.cookie);
+    expect(res.status).toBe(200);
+    const home = (await res.json()) as HomeView;
+    expect(home.une).toMatchObject({
+      kind: "target_price",
+      itemId: item.id,
+      title: item.name,
+      href: `/produits/${item.product.id}?profil=${item.profileId}`,
+      priceCents: 5900,
+      targetPriceCents: 6000,
+      currency: "EUR",
+      photoUrl: expect.stringContaining("/api/catalog-images/"),
+    });
+    expect(home.news.filter((n) => n.kind === "target_price")).toEqual([]);
+  });
+});

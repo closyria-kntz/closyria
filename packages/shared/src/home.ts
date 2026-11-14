@@ -16,6 +16,7 @@ export const HOME_WISHES_LIMIT = 4;
 export const homeNewsKindSchema = z.enum([
   "price_drop",
   "size_back",
+  "target_price",
   "opinion",
   "group_order",
   "gift_reminder",
@@ -25,7 +26,7 @@ export const homeNewsKindSchema = z.enum([
 export type HomeNewsKind = z.infer<typeof homeNewsKindSchema>;
 
 /**
- * Something that changed for her (`sale_period`, `shop_promo`: her alerts of the last HOME_NEWS_DAYS days, `title`
+ * Something that changed for her (`target_price`, `sale_period`, `shop_promo`: her alerts of the last HOME_NEWS_DAYS days, `title`
  * being the sales' name or the shop's), built only from data the app already keeps (refonte Boudoir, spec R3). The API
  * gives facts, never sentences: the page words them. `title` is what it is about (the item's name, or the list's
  * name for list news), `detail` its second line as data (the shop, a friend's note, the occasion).
@@ -40,10 +41,12 @@ export const homeNewsSchema = z.object({
   at: dateTimeSchema,
   /** The item's photo, when there is one (the « une » is the newest news with a photo). */
   photoUrl: z.string().nullable(),
-  /** price_drop: the new price, the one before and their currency. */
+  /** price_drop: the new price, the one before and their currency (target_price: the price reached). */
   priceCents: centsSchema.nullable(),
   previousPriceCents: centsSchema.nullable(),
   currency: currencySchema.nullable(),
+  /** target_price: the price she aimed at (`priceCents` is the price reached). */
+  targetPriceCents: centsSchema.nullable(),
   /** size_back: her size, in stock again. */
   sizeLabel: z.string().nullable(),
   /** opinion: the newest author, and how many new opinions on that item. */

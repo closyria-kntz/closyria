@@ -12,7 +12,8 @@ import { Dialog } from "./dialog";
 import { groupOrderHref } from "./group-order-banner";
 import { GroupOrderOpenDialog, type ListShop } from "./group-order-open-dialog";
 import { ShareSheet } from "./share-sheet";
-import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
+import { Switch } from "./switch";
+import { buttonClass, inputClass, primaryButtonClass } from "./ui";
 
 const touch = "min-h-touch-target";
 
@@ -465,28 +466,5 @@ function GiftFields({
         </p>
       )}
     </div>
-  );
-}
-
-/** An on / off setting: the whole row is the switch, its label its name. */
-function Switch({ label, on, onToggle }: { label: string; on: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      onClick={onToggle}
-      className={`flex w-full items-center justify-between gap-space-3 rounded-button py-space-1 text-left text-sm text-ink ${touch} ${focusRing}`}
-    >
-      <span>{label}</span>
-      <span
-        aria-hidden="true"
-        className={`relative h-space-5 w-space-7 shrink-0 rounded-full transition-colors duration-fast ${on ? "bg-accent" : "bg-ink-muted"}`}
-      >
-        <span
-          className={`absolute top-space-1 left-space-1 size-space-4 rounded-full transition-transform duration-fast ${on ? "translate-x-space-5 bg-accent-ink" : "bg-surface-raised"}`}
-        />
-      </span>
-    </button>
   );
 }

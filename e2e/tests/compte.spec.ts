@@ -56,6 +56,7 @@ test("« Compte » : profil, profils, apparence, réglages, aide — et aucun ar
   const rows: [string | RegExp, RegExp][] = [
     [/^Prénom, e-mail et connexion/, /\/reglages\/compte$/],
     [/^Gérer les profils/, /\/reglages\/profils$/],
+    [/^Notifications/, /\/reglages\/notifications$/],
     ["Mes niveaux", /\/reglages\/niveaux$/],
     ["Mes tailles", /\/reglages\/tailles$/],
     ["Étiquettes", /\/reglages\/etiquettes$/],
