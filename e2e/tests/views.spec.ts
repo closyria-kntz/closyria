@@ -32,6 +32,9 @@ const tokenColor = (page: Page, token: string) =>
     return color;
   }, token);
 const axe = async (page: Page) => {
+  // A filter or the preview is a soft navigation (`router.push`): Next takes the <title> down while the new page's
+  // metadata is on its way from the server, and puts it back when it arrives. Audit the page once it is back.
+  await expect(page).toHaveTitle(/\S/);
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
 };
@@ -164,6 +167,9 @@ test("Sélectionner : deux articles passent En feu, Annuler ; filtres par niveau
   await expect(page).toHaveURL(/prioritaire=1/);
   await expect(cards).toHaveCount(1);
   await levels.getByRole("button", { name: "J’aime" }).click();
+  // The same card either way: the address says when the page is the new one.
+  await expect(page).not.toHaveURL(/niveau=/);
+  await expect(page).toHaveURL(/prioritaire=1/);
   await expect(cards).toHaveCount(1);
   await expect(cards.first()).toContainText("Prioritaire");
   await axe(page);

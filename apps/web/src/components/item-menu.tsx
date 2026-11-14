@@ -26,7 +26,7 @@ import {
   undoWith,
 } from "@/lib/wardrobe-client";
 import { Dialog } from "./dialog";
-import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
+import { buttonClass, focusRing, primaryButtonClass, textareaClass } from "./ui";
 
 type Choice = "why" | "list" | "profile" | "tags";
 /** The `md` breakpoint (48rem): from there the menu opens under « … », below it a sheet from the bottom. */
@@ -312,7 +312,7 @@ function WhyForm({
         value={why}
         aria-describedby={hintId}
         onChange={(event) => setWhy(event.target.value)}
-        className={inputClass}
+        className={textareaClass}
       />
       <p id={hintId} className="text-sm text-ink-muted">
         {t("whyHint")}

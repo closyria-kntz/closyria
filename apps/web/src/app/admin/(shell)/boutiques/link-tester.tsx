@@ -8,18 +8,21 @@ import { inputClass, primaryButtonClass } from "../../ui";
 import { CaptureOutcome } from "./capture-outcome";
 import { useCaptureFollow } from "./use-capture-follow";
 
-/** "Tester un lien": an admin_test capture, followed until it finishes. Creates no product. */
+/**
+ * "Tester un lien": an admin_test capture, followed until it finishes. Creates no product. The address is read from the
+ * field when the form is sent (not kept in state): one typed before the page finished loading is sent as it is shown.
+ */
 export function LinkTester({ initialUrl }: { initialUrl?: string | null }) {
   const t = useTranslations("Admin.shops.tester");
   const errors = useTranslations("Admin.common.errors");
-  const [url, setUrl] = useState(initialUrl ?? "");
   const [error, setError] = useState<string | null>(null);
   const { state, follow, reset } = useCaptureFollow();
   const [posting, setPosting] = useState(false);
   const busy = posting || state.phase === "running";
 
-  const submit = async (event: React.FormEvent) => {
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const url = String(new FormData(event.currentTarget).get("url") ?? "");
     setError(null);
     reset();
     setPosting(true);
@@ -41,9 +44,9 @@ export function LinkTester({ initialUrl }: { initialUrl?: string | null }) {
           {t("url")}
           <input
             type="url"
+            name="url"
             required
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            defaultValue={initialUrl ?? ""}
             className={inputClass}
             autoComplete="off"
           />

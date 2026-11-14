@@ -300,9 +300,9 @@ body {
   }
 }
 
-/* The admin shell keeps its menu row (phone) or its bar (computer) in view: anchors and focus land below them. */
+/* The admin shell keeps its bar, and on a phone the menu row under it, in view: anchors and focus land below them. */
 html:has([data-admin-shell]) {
-  scroll-padding-top: calc(var(--spacing-touch-target) + var(--spacing-space-5));
+  scroll-padding-top: calc(var(--spacing-space-8) + var(--spacing-touch-target) + var(--spacing-space-5));
 
   @media (width >= 48rem) {
     scroll-padding-top: calc(var(--spacing-space-8) + var(--spacing-space-4));

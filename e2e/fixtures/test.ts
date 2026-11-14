@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { test as base, devices, expect } from "@playwright/test";
+import { test as base, devices, expect, type Route } from "@playwright/test";
 import pg from "pg";
 import { type CspRecord, collectCspViolations } from "./csp";
 import { BROWSER_AUTH_BUNDLE, CSP_DIR, setupValue } from "./paths";
@@ -47,31 +47,39 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
       },
     );
     await context.addInitScript({ content: browserAuthScript });
+    const isPreferences = (url: URL) => url.origin === origin && url.pathname === "/api/me/preferences";
+    let preferences: ((route: Route) => Promise<void>) | null = null;
+    // Set once the test is over: a read still on its way then ends with « Test ended », nothing to answer.
+    let ended = false;
     if (!discovery) {
-      await context.route(
-        (url) => url.origin === origin && url.pathname === "/api/me/preferences",
-        async (route) => {
-          if (route.request().method() !== "GET") return route.continue();
-          const seen = { seenTips: [] as string[], onboardedAt: "2026-01-01T00:00:00.000Z" };
-          try {
-            const response = await route.fetch();
-            if (response.status() === 401) return await route.fulfill({ status: 200, json: seen });
-            const body = (await response.json()) as { seenTips: string[]; onboardedAt: string | null };
-            return await route.fulfill({
-              response,
-              json: { ...body, onboardedAt: body.onboardedAt ?? seen.onboardedAt },
-            });
-          } catch (error) {
-            // The page went on (a redirect, the next goto) while this read was on its way: nothing to answer. Any
-            // other failure is the test's.
-            if (/disposed|closed/i.test(String(error))) return;
-            throw error;
-          }
-        },
-      );
+      preferences = async (route: Route) => {
+        if (route.request().method() !== "GET") return route.continue();
+        const seen = { seenTips: [] as string[], onboardedAt: "2026-01-01T00:00:00.000Z" };
+        try {
+          const response = await route.fetch();
+          if (response.status() === 401) return await route.fulfill({ status: 200, json: seen });
+          const body = (await response.json()) as { seenTips: string[]; onboardedAt: string | null };
+          return await route.fulfill({
+            response,
+            json: { ...body, onboardedAt: body.onboardedAt ?? seen.onboardedAt },
+          });
+        } catch (error) {
+          // The page went on (a redirect, the next goto) while this read was on its way: nothing to answer. Any
+          // other failure is the test's (the end of the test is handled after `use`, below).
+          if (ended || /disposed|closed/i.test(String(error))) return;
+          throw error;
+        }
+      };
+      await context.route(isPreferences, preferences);
     }
     const violations = await collectCspViolations(context);
     await use(context);
+    // The test is over, the page may still be reading (the product page asks for the preferences as it opens): that
+    // handler takes no new read, and the one still on its way is let go when the context closes with « Test ended »
+    // (Playwright's `unroute` has no per-route `ignoreErrors`, hence `ended`). The « no Internet » route stays until
+    // the context closes.
+    ended = true;
+    if (preferences) await context.unroute(isPreferences, preferences);
     expect(outside, "requests outside the test stack").toEqual([]);
     const record: CspRecord = { test: testInfo.titlePath.join(" › "), project: testInfo.project.name, violations };
     const file = `${testInfo.testId}-${testInfo.repeatEachIndex}-${testInfo.retry}.json`;

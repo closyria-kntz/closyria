@@ -38,7 +38,15 @@ import {
 import { GroupOrderOrderedDialog } from "./group-order-ordered-dialog";
 import { ProgressBar } from "./progress-bar";
 import { ShareSheet } from "./share-sheet";
-import { buttonClass, focusRing, initialClass, inputClass, moreButtonClass, primaryButtonClass } from "./ui";
+import {
+  buttonClass,
+  focusRing,
+  initialClass,
+  inputClass,
+  moreButtonClass,
+  primaryButtonClass,
+  textareaClass,
+} from "./ui";
 
 const touch = "min-h-touch-target";
 /** The summary's kicker (mockup .k) and its two buttons (mockup .btn.pri and .btn, 44 px). */
@@ -1050,7 +1058,7 @@ function CopyButton({ label, labelSuffix, text }: { label: string; labelSuffix?:
             rows={3}
             value={text}
             onFocus={(event) => event.target.select()}
-            className={`${inputClass} w-full resize-none`}
+            className={`${textareaClass} w-full resize-none`}
           />
         </div>
       )}

@@ -19,7 +19,15 @@ import { Dialog } from "@/components/dialog";
 import { ItemOpinionsSection } from "@/components/item-opinions-section";
 import { LoveLevelPicker } from "@/components/love-level-picker";
 import { Tick } from "@/components/tick";
-import { blockClass, blockTitleClass, buttonClass, focusRing, inputClass, primaryButtonClass } from "@/components/ui";
+import {
+  blockClass,
+  blockTitleClass,
+  buttonClass,
+  focusRing,
+  inputClass,
+  primaryButtonClass,
+  textareaClass,
+} from "@/components/ui";
 import { canReceiveAsGift } from "@/lib/gift-check";
 import { levelOf } from "@/lib/love-levels";
 import { formatPrice } from "@/lib/price";
@@ -502,7 +510,7 @@ export function ItemPanel({ item, onChange, onGone, reload, top, shop }: Props) 
             value={notes}
             maxLength={MAX_NOTES}
             onChange={(e) => setNotes(e.target.value)}
-            className={inputClass}
+            className={textareaClass}
           />
           <button type="submit" disabled={busy} className={`${primaryButtonClass} ${touch} self-start`}>
             {t("panel.save")}

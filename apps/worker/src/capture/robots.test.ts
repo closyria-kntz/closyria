@@ -231,6 +231,21 @@ describe("createRobotsCache robustness", () => {
     expect(calls).toEqual(["https://d0.fr/robots.txt"]);
   });
 
+  it("sweeps the expired origins at most once a minute, so new origins cost the same however full the cache", async () => {
+    const now = 0;
+    let clockReads = 0;
+    const cache = createRobotsCache(
+      async () => ({ kind: "absent" }),
+      () => {
+        clockReads++;
+        return now;
+      },
+    );
+    for (let i = 0; i < 2_000; i++) await cache.allows(`https://d${i}.fr/`);
+    // A few reads per new origin (lookup, expiry), never one per cached origin.
+    expect(clockReads).toBeLessThan(2_000 * 4);
+  });
+
   it("prunes expired origins when a new one is fetched", async () => {
     let now = 0;
     const calls: string[] = [];

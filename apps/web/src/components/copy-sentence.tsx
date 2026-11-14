@@ -57,7 +57,7 @@ export function CopySentence({
         rows={3}
         value={text}
         onFocus={(event) => event.currentTarget.select()}
-        className={`w-full resize-none rounded-button border border-dashed border-selected-line bg-surface-sunken px-space-3 py-space-2 text-sm text-ink field-sizing-content ${focusRing}`}
+        className={`w-full resize-none rounded-md border border-dashed border-selected-line bg-surface-sunken px-space-3 py-space-2 text-sm text-ink field-sizing-content ${focusRing}`}
       />
       <button type="button" onClick={() => void copy()} className={`${buttonClass} min-h-touch-target self-start`}>
         {copied ? copiedLabel : copyLabel}

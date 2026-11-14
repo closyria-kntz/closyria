@@ -1,11 +1,13 @@
 # Déploiement
 
 1. **Construire** (compte développeur, sans privilège) : `deploy/build.sh origin/dev` → affiche l'identifiant de version.
-2. **Déployer** : `sudo closyria-deploy dev <id>` (sans mot de passe pour la dev) ou `sudo closyria-deploy prod <id>` (mot de passe requis).
-3. **Revenir en arrière** : `sudo closyria-deploy <env> rollback`. Les migrations de base ne sont pas annulées.
-4. **Lister** : `sudo closyria-deploy <env> list`.
+2. **Essayer les migrations sur une copie de la prod** (avant toute mise en prod qui apporte des migrations) :
+   `sudo bash deploy/dry-run-prod-migrations.sh <id>`, voir [plus bas](#essai-des-migrations-sur-une-copie-de-la-prod).
+3. **Déployer** : `sudo closyria-deploy dev <id>` (sans mot de passe pour la dev) ou `sudo closyria-deploy prod <id>` (mot de passe requis).
+4. **Revenir en arrière** : `sudo closyria-deploy <env> rollback`. Les migrations de base ne sont pas annulées.
+5. **Lister** : `sudo closyria-deploy <env> list`.
 
-Le script applique les migrations, bascule le lien `current`, redémarre `closyria-<env>.target` et vérifie
+`closyria-deploy` applique les migrations, bascule le lien `current`, redémarre `closyria-<env>.target` et vérifie
 `/api/health` et la page d'accueil. Si la nouvelle version ne répond pas sous 30 s, il restaure la précédente.
 
 | Fichier | Installé dans |
@@ -200,6 +202,33 @@ Vérification du droit de créer (doit répondre `t`) :
 sudo -u postgres psql -d closyria -Atc "SELECT has_schema_privilege('closyria', 'public', 'CREATE');"
 sudo -u postgres psql -d closyria_dev -Atc "SELECT has_schema_privilege('closyria-dev', 'public', 'CREATE');"
 ```
+
+## Essai des migrations sur une copie de la prod
+
+À lancer **avant chaque mise en prod qui apporte des migrations**, depuis le dépôt, avec un compte qui a sudo :
+
+```bash
+sudo bash deploy/dry-run-prod-migrations.sh <release-id>
+```
+
+`<release-id>` est l'identifiant affiché par `deploy/build.sh` ; l'archive
+`/home/mystery/closyria-artifacts/<release-id>.tar.gz` doit exister.
+
+Ce que fait le script :
+
+1. il affiche à qui appartiennent la base `closyria` et son schéma `public`, et si `closyria` peut y créer des
+   objets (une migration qui crée une fonction en a besoin, voir la section précédente) ;
+2. il copie la prod dans une base jetable `closyria_dryrun` (`pg_dump` puis `pg_restore` ; les extensions, qui
+   demandent un superutilisateur et ne servent pas aux migrations, sont laissées de côté) ;
+3. il compte les lignes des tables principales (comptes, profils, boutiques, fiches, articles) ;
+4. il applique à la copie les migrations de la version, avec le même programme que le déploiement
+   (`api/migrate.mjs`), et affiche leur durée ;
+5. il recompte les lignes, puis supprime la copie et ses fichiers temporaires, même en cas d'échec.
+
+Il **ne modifie jamais la prod** : sur la base `closyria`, il ne fait que lire (le `pg_dump` et les requêtes de
+vérification). Le résultat attendu se termine par `DRY RUN OK`. Une erreur (une migration qui échoue, un droit qui
+manque) arrête le script : la corriger avant de déployer. Les nombres de lignes avant et après doivent être les mêmes,
+sauf si une migration en supprime volontairement.
 
 ## HSTS dans le Caddyfile en service
 
