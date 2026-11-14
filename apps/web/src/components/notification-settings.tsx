@@ -9,6 +9,7 @@ import {
   browserPush,
   checkThisDeviceOnce,
   deviceOf,
+  dropThisDevice,
   enableNotifications,
   fetchAlertSettings,
   fetchDevices,
@@ -47,7 +48,7 @@ type Loaded = { settings: AlertSettings; devices: PushSubscriptionView[]; device
 
 async function loadAll(): Promise<Loaded> {
   const support = pushSupport(readPushEnvironment());
-  // A subscription left by another account goes first; hers is re-attached when its id is unknown.
+  // A subscription left by another account (or removed from another device) goes first.
   if (support === "supported") await checkThisDeviceOnce();
   const [settings, devices, publicKey] = await Promise.all([fetchAlertSettings(), fetchDevices(), fetchPushKey()]);
   let device: DeviceState;
@@ -56,9 +57,12 @@ async function loadAll(): Promise<Loaded> {
   else if (publicKey === null) device = { kind: "off" };
   else if (Notification.permission === "denied") device = { kind: "denied" };
   else {
-    // Subscribed in the browser, and one of her devices (she may have removed it from another one).
+    // Subscribed in the browser, and still one of her devices. Removed from another device (her devices were
+    // checked earlier in this browser session): it stops here too, « Activer » turns it back on.
     const mine = readDeviceId();
-    const on = (await isThisDeviceOn()) && devices.some((d) => d.id === mine);
+    const subscribed = await isThisDeviceOn();
+    const on = subscribed && devices.some((d) => d.id === mine);
+    if (subscribed && !on) await dropThisDevice();
     device = on ? { kind: "on" } : { kind: "ready", publicKey };
   }
   return { settings, devices, device };

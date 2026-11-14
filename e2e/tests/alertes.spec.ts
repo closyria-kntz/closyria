@@ -261,6 +261,31 @@ test("une demande fermée sans réponse n'est pas un refus : « Activer » reste
   expect((await db.query("select 1 from push_subscriptions where user_id = $1", [userId])).rowCount).toBe(0);
 });
 
+test("retiré depuis un autre appareil : celui-ci est désabonné au rechargement et propose « Activer »", async ({
+  page,
+  db,
+  userAgentTag,
+}) => {
+  await fakePush(page);
+  const userId = await account(page, db, userAgentTag);
+  await openNotifications(page);
+  const device = main(page).getByRole("region", { name: "Sur cet appareil" });
+  await device.getByRole("button", { name: "Activer les notifications" }).click();
+  await expect(device).toContainText("Les notifications sont activées sur cet appareil.");
+  // Her other device is on « Notifications » too: its page reads her devices once per browser session.
+  await page.reload();
+  await expect(device).toContainText("Les notifications sont activées sur cet appareil.");
+
+  // « Retirer » from her other device (same account, another browser): its row is gone.
+  expect((await db.query("delete from push_subscriptions where user_id = $1", [userId])).rowCount).toBe(1);
+  await page.reload();
+  await expect(device.getByRole("button", { name: "Activer les notifications" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("e2e.push.endpoint"))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem("closyria.push.deviceId"))).toBeNull();
+  // Not sent again behind her back.
+  expect((await db.query("select 1 from push_subscriptions where user_id = $1", [userId])).rowCount).toBe(0);
+});
+
 test("appareil partagé : l'abonnement d'une autre est coupé à l'ouverture, se déconnecter retire le sien", async ({
   page,
   db,
