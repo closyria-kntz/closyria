@@ -501,15 +501,19 @@ test("la barre et le menu de l’admin restent visibles quand la page défile", 
   const linkBox = await link.boundingBox();
   expect(linkBox?.height ?? 0).toBeGreaterThanOrEqual(44);
   expect(await tagAt(page, (linkBox?.x ?? 0) + 4, (linkBox?.y ?? 0) + (linkBox?.height ?? 0) / 2)).toBe("NAV");
-  if ((page.viewportSize()?.width ?? 0) >= 768) {
-    // Computer: the bar stays at the top, the menu's list right under it, never under it.
-    const headerBox = await header.boundingBox();
-    expect(headerBox?.y).toBe(0);
-    expect(linkBox?.y ?? 0).toBeGreaterThanOrEqual(headerBox?.height ?? 0);
-    expect(await tagAt(page, (headerBox?.width ?? 0) / 2, (headerBox?.height ?? 0) / 2)).toBe("HEADER");
-  } else {
-    // Phone: the menu row is pinned at the top of the window.
-    expect(Math.round((await nav.boundingBox())?.y ?? -1)).toBe(0);
+  // Everywhere: the bar, one line high (its theme switch is an icon, its words only its name), stays at the top and
+  // the menu right under it, never under it.
+  const headerBox = await header.boundingBox();
+  expect(headerBox?.y).toBe(0);
+  expect(headerBox?.height ?? 0).toBeLessThanOrEqual(65);
+  expect(linkBox?.y ?? 0).toBeGreaterThanOrEqual(headerBox?.height ?? 0);
+  expect(await tagAt(page, (headerBox?.width ?? 0) / 2, (headerBox?.height ?? 0) / 2)).toBe("HEADER");
+  const theme = header.getByRole("button", { name: /^Thème : .*Changer de thème$/ });
+  await expect(theme).toBeVisible();
+  await expect(theme).not.toContainText("Thème");
+  if ((page.viewportSize()?.width ?? 0) < 768) {
+    // Phone: the menu row is pinned right under the bar.
+    expect(Math.round((await nav.boundingBox())?.y ?? -1)).toBe(Math.round(headerBox?.height ?? 0));
   }
   await nav.getByRole("link", { name: "Boutiques" }).click();
   await expect(page).toHaveURL(/\/admin\/boutiques$/);
