@@ -10,6 +10,7 @@ import {
   inArray,
   isNull,
   ne,
+  notInArray,
   schema,
   sql,
 } from "@closyria/db";
@@ -420,12 +421,12 @@ export function adminShopsRoutes(deps: CatalogDeps) {
         db
           .select()
           .from(schema.captures)
-          // A sheet's refresh is not the shop's health (« stocks frais »).
+          // A sheet's refresh (« stocks frais ») or a revisit (alerts) is not the shop's health.
           .where(
             and(
               eq(schema.captures.shopId, id),
               eq(schema.captures.status, "failed"),
-              ne(schema.captures.trigger, "refresh"),
+              notInArray(schema.captures.trigger, ["refresh", "revisit"]),
             ),
           )
           .orderBy(sql`${schema.captures.createdAt} desc`)

@@ -2,19 +2,13 @@ import {
   and,
   type Database,
   eq,
+  importCoversShop,
   importNotUnderWay,
-  inArray,
-  isNull,
   readShopifySlowdown,
   schema,
   sql,
 } from "@closyria/db";
-import {
-  CATALOGUE_IMPORT_LARGE_SHOP,
-  CATALOGUE_IMPORT_PLATFORMS,
-  CATALOGUE_IMPORT_QUEUE,
-  catalogueImportIntervals,
-} from "@closyria/shared";
+import { CATALOGUE_IMPORT_LARGE_SHOP, CATALOGUE_IMPORT_QUEUE, catalogueImportIntervals } from "@closyria/shared";
 
 export type ImportQueue = {
   send(queue: string, data: object, options: { singletonKey: string }): Promise<unknown>;
@@ -85,12 +79,8 @@ export async function planCatalogueImports(db: Database, queue: ImportQueue, now
     .from(schema.shops)
     .where(
       and(
-        eq(schema.shops.importEnabled, true),
-        eq(schema.shops.status, "published"),
-        inArray(schema.shops.platform, [...CATALOGUE_IMPORT_PLATFORMS]),
-        // A « grande enseigne » is never imported by the planner.
-        eq(schema.shops.isMajorBrand, false),
-        isNull(schema.shops.mergedIntoId),
+        // A « grande enseigne » is never imported by the planner (the revisits share the rule).
+        importCoversShop,
         sql`(${startedAt} is null or ${startedAt} < ${startedBefore})`,
         importNotUnderWay(now),
       ),

@@ -416,6 +416,14 @@ describe("registerCaptureQueues", () => {
     expect(created).toContainEqual({ name: "capture-refresh" });
     expect(worked).toContainEqual({ name: "capture-refresh", options: { localConcurrency: 1 } });
     expect(worked).toContainEqual({ name: "capture-user", options: { localConcurrency: 4 } });
+    // Revisits of followed products (« suivi »): their own queue, one at a time, planned every 15 min.
+    expect(created).toContainEqual({ name: "capture-revisit" });
+    expect(worked).toContainEqual({ name: "capture-revisit", options: { localConcurrency: 1 } });
+    expect(scheduled).toContainEqual({
+      name: "capture-revisit",
+      cron: "*/15 * * * *",
+      options: { key: "plan-revisits" },
+    });
     expect(scheduled).toContainEqual({
       name: "catalogue-import",
       cron: "*/15 * * * *",

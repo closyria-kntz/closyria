@@ -48,12 +48,16 @@ function isGone(error: unknown): boolean {
   );
 }
 
+/** Triggers that write the product they speak for (a person's capture, a sheet's refresh, a followed product's revisit). */
+const writesProduct = (trigger: string): boolean =>
+  trigger === "user" || trigger === "refresh" || trigger === "revisit";
+
 /**
- * The product a capture speaks for: the user's (or a sheet refresh's) product, or for a monitor the product known at
+ * The product a capture speaks for: the user's (or a sheet refresh's, or a revisit's) product, or for a monitor the product known at
  * its test address (`canonical_url` is unique). An admin test speaks for none.
  */
 async function productOf(db: Database, capture: typeof schema.captures.$inferSelect): Promise<string | null> {
-  if (capture.trigger === "user" || capture.trigger === "refresh") return capture.productId;
+  if (writesProduct(capture.trigger)) return capture.productId;
   if (capture.trigger !== "monitor") return null;
   if (capture.productId) return capture.productId;
   const [product] = await db
@@ -65,13 +69,14 @@ async function productOf(db: Database, capture: typeof schema.captures.$inferSel
 
 /**
  * Its place on the Shopify line: a link someone pasted (or an admin test) first, then a sheet's refresh, then the
- * monitors (with the catalogue pages).
+ * monitors and the revisits of followed products (with the catalogue pages).
  */
 const LINE_PRIORITY: Record<CaptureTrigger, LinePriority> = {
   user: "high",
   admin_test: "high",
   refresh: "medium",
   monitor: "low",
+  revisit: "low",
 };
 
 /** Platforms a page read may make more precise (`detectPlatform`). */
@@ -143,9 +148,7 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
     // An imported WooCommerce product, read again for her or for a sheet: the Store API, like the import (the
     // per-size stock included); the page when it cannot say.
     const fromStore =
-      shop.platform === "woocommerce" &&
-      capture.productId &&
-      (capture.trigger === "refresh" || capture.trigger === "user")
+      shop.platform === "woocommerce" && capture.productId && writesProduct(capture.trigger)
         ? await readWooStore(capture.url, capture.productId, shop, {
             db,
             policy: deps.policy ?? strictPolicy,
@@ -168,8 +171,8 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
     const { product } = outcome;
 
     // A sheet's refresh (« stocks frais ») writes like her capture, but the history only on a change: it may run
-    // every 15 minutes.
-    if (capture.trigger === "user" || capture.trigger === "refresh") {
+    // every 15 minutes. A revisit (alerts) too: its new history points are what create the alerts.
+    if (writesProduct(capture.trigger)) {
       if (!capture.productId) throw new Error(`${capture.trigger} capture without a product`);
       const productId = capture.productId;
       const at = now();
@@ -234,7 +237,7 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
         httpStatus: outcome.httpStatus,
         durationMs: finishedAt.getTime() - startedAt.getTime(),
         finishedAt,
-        ...(capture.trigger === "user" || capture.trigger === "refresh" ? {} : { result: product }),
+        ...(writesProduct(capture.trigger) ? {} : { result: product }),
       })
       // Not when the sweep already failed it (timeout): a late success must not undo that.
       .where(and(eq(schema.captures.id, captureId), eq(schema.captures.status, "running")));
@@ -279,7 +282,7 @@ async function recordFailure(
         })
         // Only while running: a capture already swept to failed/timeout keeps its error code.
         .where(and(eq(schema.captures.id, capture.id), eq(schema.captures.status, "running")));
-      if ((capture.trigger === "user" || capture.trigger === "refresh") && capture.productId) {
+      if (writesProduct(capture.trigger) && capture.productId) {
         await tx
           .update(schema.products)
           .set({ captureStatus: "failed", updatedAt: finishedAt })

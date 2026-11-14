@@ -102,7 +102,7 @@ async function setup(
     shop?: Partial<typeof schema.shops.$inferInsert>;
     product?: Partial<typeof schema.products.$inferInsert>;
   } = {},
-  trigger: "user" | "admin_test" | "monitor" | "refresh" = "user",
+  trigger: "user" | "admin_test" | "monitor" | "refresh" | "revisit" = "user",
 ) {
   const n = ++counter;
   const [s] = await handle.db
@@ -131,7 +131,7 @@ async function newCapture(
   shopId: string,
   productId: string | null,
   url: string,
-  trigger: "user" | "admin_test" | "monitor" | "refresh",
+  trigger: "user" | "admin_test" | "monitor" | "refresh" | "revisit",
 ) {
   const [c] = await handle.db.insert(schema.captures).values({ shopId, productId, url, trigger }).returning();
   if (!c) throw new Error("no capture");
@@ -533,6 +533,48 @@ describe("runCapture", () => {
     expect(second.product?.lastCapturedAt?.getTime()).toBeGreaterThanOrEqual(
       first.product?.lastCapturedAt?.getTime() ?? 0,
     );
+  });
+
+  it("a revisit (« suivi ») writes like a refresh: history only on a change, never dropped for waiting, low slot", async () => {
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const waits: unknown[] = [];
+    const throttle = deps.throttle;
+    deps.throttle = {
+      wait: async (domain, options) => {
+        waits.push(options?.shopify ?? null);
+        await throttle.wait(domain, options);
+      },
+    };
+    const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } }, "revisit");
+    // Queued behind others for a minute: a revisit still runs (only a sheet's refresh is dropped after 30 s).
+    await handle.db
+      .update(schema.captures)
+      .set({ createdAt: new Date(Date.now() - 60_000) })
+      .where(eq(schema.captures.id, t.capture.id));
+
+    await runCapture(t.capture.id, deps);
+    const first = await load(t.capture.id, t.product.id);
+    expect(first.capture).toMatchObject({ status: "succeeded", dataReady: true, result: null });
+    expect(first.product).toMatchObject({ name: "PANTALON LEONIE", captureStatus: "ok" });
+    expect(first.history).toHaveLength(1);
+    expect(waits[0]).toBe("low");
+
+    const again = await newCapture(t.shop.id, t.product.id, t.url, "revisit");
+    await runCapture(again.id, deps);
+    expect((await load(again.id, t.product.id)).history).toHaveLength(1);
+  });
+
+  it("a failed revisit marks a never-captured product failed, like a refresh", async () => {
+    routes["/gone-revisit"] = { status: 403, headers: { "content-type": "text/html" }, body: "non" };
+    const t = await setup(
+      "/gone-revisit",
+      { shop: { platform: "other" }, product: { captureStatus: "pending" } },
+      "revisit",
+    );
+    await runCapture(t.capture.id, deps);
+    const r = await load(t.capture.id, t.product.id);
+    expect(r.capture).toMatchObject({ status: "failed", errorCode: "blocked" });
+    expect(r.product?.captureStatus).toBe("failed");
   });
 
   it("a Shopify 429/430 on the .js stops the capture (no HTML fallback) and slows Shopify imports down", async () => {

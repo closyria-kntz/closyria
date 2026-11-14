@@ -125,8 +125,8 @@ export function overviewRoutes(deps: AdminDeps) {
           (count(*) filter (where status = 'succeeded' and method = 'woocommerce'))::int as woocommerce,
           (percentile_cont(0.5) within group (order by duration_ms) filter (where status = 'succeeded' and ${REAL_ATTEMPT}))::float8 as median
         from captures
-        -- Sheet refreshes (« stocks frais ») are not counted: automatic, many, and dropped when late.
-        where created_at >= ${since7d}::timestamptz and trigger <> 'refresh'`),
+        -- Sheet refreshes (« stocks frais ») and revisits (alerts) are not counted: automatic and many.
+        where created_at >= ${since7d}::timestamptz and trigger not in ('refresh', 'revisit')`),
       deps.db
         .select({ pending: count() })
         .from(schema.shops)

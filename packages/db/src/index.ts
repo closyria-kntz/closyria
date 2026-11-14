@@ -51,6 +51,7 @@ export { importNotUnderWay } from "./import-state";
 export type { AuditDetails } from "./schema/audit";
 export { type ActiveSlowdown, readShopifySlowdown, recordShopifyRejection } from "./slowdown";
 export { type TrackedEvent, trackServer } from "./track";
+export { importCoversShop, shopRevisitBlocked, trackingImpossible, trackingImpossibleSql } from "./tracking";
 export { schema };
 
 /** Applies pending SQL migrations from `migrationsFolder` in a single connection. */

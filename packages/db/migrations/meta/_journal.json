@@ -232,6 +232,13 @@
       "when": 1794652607485,
       "tag": "0032_alertes",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1794654116766,
+      "tag": "0033_alertes_revisite",
+      "breakpoints": true
     }
   ]
 }

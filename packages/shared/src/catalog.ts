@@ -22,7 +22,11 @@ export const platformSchema = z.enum([
   "unknown",
 ]);
 /** `refresh`: the live check of a catalogue sheet (« stocks frais »), asked by nobody in particular. */
-export const captureTriggerSchema = z.enum(["user", "admin_test", "monitor", "refresh"]);
+/**
+ * `revisit`: a followed product of a shop the hourly import does not read, checked again every 6 h (alerts). It writes
+ * like `refresh`, at the monitors' place on the Shopify line.
+ */
+export const captureTriggerSchema = z.enum(["user", "admin_test", "monitor", "refresh", "revisit"]);
 export const captureStatusSchema = z.enum(["queued", "running", "succeeded", "failed", "skipped_manual"]);
 /** How a capture read the product: `woocommerce` is the shop's Store API (an imported WooCommerce product's refresh). */
 export const captureMethodSchema = z.enum(["shopify", "jsonld", "opengraph", "woocommerce"]);
@@ -207,6 +211,8 @@ export const CAPTURE_QUEUES = {
    * links people paste (`user`).
    */
   refresh: "capture-refresh",
+  /** Revisits of followed products (alerts): planned every 15 min, one at a time, off the refreshes' slot. */
+  revisit: "capture-revisit",
 } as const;
 
 /** Data of a capture job on the pg-boss queues. */

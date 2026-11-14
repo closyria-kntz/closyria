@@ -469,7 +469,8 @@
         "user": "Utilisatrice",
         "admin_test": "Test admin",
         "monitor": "Surveillance",
-        "refresh": "Vérification de fiche"
+        "refresh": "Vérification de fiche",
+        "revisit": "Suivi d’un article"
       },
       "health": {
         "ok": "OK",

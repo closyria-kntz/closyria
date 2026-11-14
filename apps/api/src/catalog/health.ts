@@ -15,11 +15,12 @@ export type HealthInput = {
 
 /**
  * SQL condition keeping only real fetch attempts that speak for the shop: not a 24 h reuse (succeeded without a
- * method), not a `queue_unavailable` failure (nothing was fetched), and not a sheet's refresh (« stocks frais »: many,
- * automatic, dropped when late; they would drown the shop's health and the dashboard's figures).
+ * method), not a `queue_unavailable` failure (nothing was fetched), and not a sheet's refresh (« stocks frais ») or a
+ * followed product's revisit (alerts): many and automatic, they would drown the shop's health and the dashboard's
+ * figures.
  */
 export const REAL_ATTEMPT = sql`not (status = 'succeeded' and method is null)
-  and coalesce(error_code, '') <> 'queue_unavailable' and trigger <> 'refresh'`;
+  and coalesce(error_code, '') <> 'queue_unavailable' and trigger not in ('refresh', 'revisit')`;
 
 /** Only a published shop captured automatically is monitored. */
 export function shopHealth(input: HealthInput): ShopHealth {

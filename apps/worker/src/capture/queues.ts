@@ -9,6 +9,7 @@ import {
 } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import type { PgBoss } from "pg-boss";
+import { revisitHandler } from "../alerts/revisit";
 import { importCatalog } from "../catalogue/import-catalog";
 import type { ImportDeps } from "../catalogue/import-core";
 import { type ImportQueue, planCatalogueImports } from "../catalogue/plan-imports";
@@ -99,7 +100,8 @@ export type CaptureQueueDeps = {
 
 /**
  * Creates the capture queues (same default options as the API, which creates them too), processes them and
- * schedules the daily monitor (04:00) and the 5-minute sweep of stuck captures. Also the Shopify catalogue imports
+ * schedules the daily monitor (04:00), the 5-minute sweep of stuck captures and the 15-minute plan of the revisits of
+ * followed products (alerts). Also the Shopify catalogue imports
  * (« stocks frais »): planned every 15 minutes (each shop every hour, 3 h for big ones, slower when Shopify asks), one
  * shop at a time; at start, the imports a previous process left under way are queued again (one worker process only).
  */
@@ -116,6 +118,7 @@ export async function registerCaptureQueues(boss: PgBoss, deps: CaptureQueueDeps
     CAPTURE_QUEUES.admin,
     CAPTURE_QUEUES.monitor,
     CAPTURE_QUEUES.refresh,
+    CAPTURE_QUEUES.revisit,
     SWEEP_QUEUE,
   ]) {
     await boss.createQueue(name);
@@ -134,6 +137,13 @@ export async function registerCaptureQueues(boss: PgBoss, deps: CaptureQueueDeps
   await boss.work(CAPTURE_QUEUES.refresh, { localConcurrency: 1 }, captureHandler(captureDeps, CAPTURE_QUEUES.refresh));
   // The schedule sends a job without data: it plans the day's monitor captures, which come back here.
   await boss.work(CAPTURE_QUEUES.monitor, { localConcurrency: 1 }, monitorHandler(captureDeps, boss));
+  // Revisits of followed products (alerts): their own queue, one at a time, so they never take the refreshes' slot
+  // nor hold up the daily monitor; the schedule's job without data plans them, their captures come back here.
+  await boss.work(
+    CAPTURE_QUEUES.revisit,
+    { localConcurrency: 1 },
+    revisitHandler(db, boss, (captureId) => runCapture(captureId, captureDeps)),
+  );
   // One job at a time: one shop imported at a time, and never two imports of the same shop.
   await boss.work(
     CATALOGUE_IMPORT_QUEUE,
@@ -147,6 +157,7 @@ export async function registerCaptureQueues(boss: PgBoss, deps: CaptureQueueDeps
 
   await boss.schedule(CAPTURE_QUEUES.monitor, "0 4 * * *", undefined, { key: "daily-monitor" });
   await boss.schedule(SWEEP_QUEUE, "*/5 * * * *");
+  await boss.schedule(CAPTURE_QUEUES.revisit, "*/15 * * * *", undefined, { key: "plan-revisits" });
   // « Stocks frais » replaced the nightly plan (03:00): its schedule, kept by pg-boss, goes.
   await boss.unschedule(CATALOGUE_IMPORT_QUEUE, "nightly-import");
   await boss.schedule(CATALOGUE_IMPORT_QUEUE, "*/15 * * * *", undefined, { key: "plan-imports" });
