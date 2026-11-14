@@ -4,6 +4,7 @@ import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
+import { ManifestLink } from "@/components/manifest-link";
 import { PageViewTracker } from "@/components/page-view-tracker";
 import { FAVICON_DATA_URL } from "./favicon-data";
 import "./globals.css";
@@ -31,8 +32,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <head>
         {/* Blocking on purpose: her light / dark choice before the first paint. A file, for `script-src 'self'`. */}
         <script src="/theme-init.js" />
-        {/* With credentials: on dev, a manifest fetched without the access cookie is refused (401). */}
-        <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
+        <ManifestLink />
         <link rel="icon" type="image/png" sizes="32x32" href={FAVICON_DATA_URL} />
       </head>
       <body className="min-h-dvh bg-surface text-ink antialiased">

@@ -16,13 +16,19 @@ async function tryPassword(page: Page, password: string) {
   return answer;
 }
 
-test("la page d'accès s'affiche sans session, en clair comme en sombre, sans rien demander à /api/me", async ({
+test("la page d'accès s'affiche sans session, en clair comme en sombre, sans rien demander à l'API", async ({
   page,
 }, testInfo) => {
+  // Before access, Caddy refuses every /api/* but /api/dev-access: the page must not need any (no session, no
+  // audience event), nor the manifest (refused too). A request is the access page's when that page is its referrer
+  // (the audience beacon sent as the page is left included).
   const called: string[] = [];
   page.on("request", (req) => {
     const path = new URL(req.url()).pathname;
-    if (path.startsWith("/api/me") || path.startsWith("/api/auth")) called.push(path);
+    const referer = req.headers().referer;
+    const fromAccessPage = referer !== undefined && new URL(referer).pathname === "/acces-dev";
+    const refused = (path.startsWith("/api/") && path !== "/api/dev-access") || path === "/manifest.webmanifest";
+    if (fromAccessPage && refused) called.push(path);
   });
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
@@ -30,6 +36,7 @@ test("la page d'accès s'affiche sans session, en clair comme en sombre, sans ri
     await expect(page.getByRole("heading", { level: 1, name: "Accès au site de test" })).toBeVisible();
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
     await expect(page.getByText("Closyria", { exact: true })).toBeVisible();
+    await expect(page.locator('link[rel="manifest"]')).toHaveCount(0);
     await expect(field(page)).toHaveAttribute("type", "password");
     await expect(field(page)).toHaveAttribute("autocomplete", "current-password");
     // A finger-wide field and button (44 px).
@@ -41,8 +48,16 @@ test("la page d'accès s'affiche sans session, en clair comme en sombre, sans ri
       testInfo.annotations.push({ type: `axe ${colorScheme} (${v.impact})`, description: v.id });
     expect(violations, colorScheme).toEqual([]);
   }
-  // Nothing on this page needs a session: Caddy refuses /api/me/* until the access cookie exists.
+  // The audience tracker would send its batch 2 s after the page view (lib/track.ts): stay past that, then leave
+  // through the form. (A beacon sent while a page unloads is not always seen by Playwright: the timer is.)
+  await page.goto("/acces-dev?suite=/");
+  await page.waitForTimeout(2_500);
+  await field(page).fill(E2E_DEV_ACCESS_PASSWORD);
+  await enter(page).click();
+  await page.waitForURL((url) => url.pathname === "/");
   expect(called).toEqual([]);
+  // Every other page keeps its manifest link.
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("crossorigin", "use-credentials");
 });
 
 test("un mauvais mot de passe le dit, le bon ouvre la page demandée (chemin et paramètres)", async ({ page }) => {

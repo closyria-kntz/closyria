@@ -11,3 +11,10 @@ describe("tracksPageViews", () => {
     }
   });
 });
+
+describe("tracksPageViews on the dev access page", () => {
+  it("never counts /acces-dev: before access, Caddy refuses /api/events there anyway", () => {
+    expect(tracksPageViews("/acces-dev")).toBe(false);
+    expect(tracksPageViews("/acces-dev-bis")).toBe(true);
+  });
+});

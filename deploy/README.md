@@ -78,7 +78,7 @@ fixés par les unités systemd : ne pas les mettre dans ces fichiers.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Facultatif : connexion avec Google. Les deux ensemble, ou aucune. | (Google Cloud) | (Google Cloud) |
 | `APPLE_CLIENT_ID`, `APPLE_CLIENT_SECRET` | Facultatif : connexion avec Apple. Les deux ensemble, ou aucune. | (Apple Developer) | (Apple Developer) |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Facultatif : notifications des alertes (Web Push). Les trois ensemble, ou aucune (sans elles, pas de notification). Voir « Clés des notifications (VAPID) ». | (clés prod), `https://closyria.com` | (clés dev, une autre paire), `https://closyria.com` |
-| `DEV_ACCESS_PASSWORD`, `DEV_ACCESS_TOKEN` | **Dev seulement** : le mot de passe de la page « Accès au site de test » et le jeton du cookie que Caddy laisse passer. Les deux ensemble, ou aucune ; refusées en prod. Voir « Accès au site de test (dev) ». | (jamais) | (secrets) |
+| `DEV_ACCESS_PASSWORD`, `DEV_ACCESS_TOKEN` | **Dev seulement** : le mot de passe de la page « Accès au site de test » et le jeton du cookie que Caddy laisse passer (Caddy le lit dans `/etc/caddy/closyria-dev.env`, jamais dans le Caddyfile). Les deux ensemble, ou aucune ; refusées en prod. Voir « Accès au site de test (dev) ». | (jamais) | (secrets) |
 
 Exemple de `/etc/closyria/prod.env` (systemd ne comprend pas les commentaires en fin de ligne : un `# …` après une
 valeur ferait partie de la valeur ; `BETTER_AUTH_SECRET` se génère avec `openssl rand -base64 48`) :
@@ -188,80 +188,103 @@ Comment ça marche :
 - Caddy laisse passer les requêtes qui portent ce cookie avec le bon jeton. Sans lui : une page est renvoyée vers
   `/acces-dev`, tout le reste (données, API, curl) reçoit 401. Restent ouverts sans cookie : `/acces-dev`,
   `/api/dev-access`, `/_next/static/*` (scripts, styles, polices de la page) et `/theme-init.js` (clair / sombre) ;
-- le jeton n'est que dans `/etc/caddy/Caddyfile` et `/etc/closyria/dev.env`. Dans le dépôt,
-  `caddy/dev.closyria.com.caddy` porte `DEV_ACCESS_TOKEN` à sa place ;
+- **le jeton n'est jamais dans la configuration de Caddy** : `/etc/caddy/Caddyfile` est lisible par tous les comptes
+  de la machine, et l'API d'administration de Caddy (`127.0.0.1:2019/config/`) répond sans mot de passe. Le bloc dit
+  `{env.DEV_ACCESS_TOKEN}`, que Caddy lit dans son environnement à chaque requête. Le jeton est dans
+  `/etc/caddy/closyria-dev.env` (root:root 600), chargé par le drop-in systemd
+  `/etc/systemd/system/caddy.service.d/closyria-dev.conf` ; et, pour l'API, dans `/etc/closyria/dev.env`. Si le
+  jeton manque à Caddy, le site reste fermé à tous (jamais ouvert) ;
 - la prod n'est pas concernée : sans ces variables (refusées avec `APP_ENV=prod`), la route n'existe pas (404),
   la page non plus, et le bloc Caddy de la prod ne change pas.
 
 **Avant** : déployer en dev la version qui contient la page (`sudo closyria-deploy dev <id>`), puis mettre à jour le
 dépôt (branche `dev`) d'où la commande est lancée. Pendant ce temps, l'ancien mot de passe du navigateur reste en place.
 
-**La commande, une seule fois, d'un bloc** (depuis la racine du dépôt, avec le compte qui a sudo). Elle :
+**La commande, une seule fois, d'un bloc** (depuis la racine du dépôt, avec le compte qui a sudo). **Le serveur web
+redémarre à la fin : environ une seconde de coupure pour tous les sites de la machine** (un redémarrage, pas un
+rechargement : Caddy ne relit son environnement qu'au démarrage). Elle :
 
 1. vérifie avant tout que le dépôt est à jour, que `/etc/closyria/dev.env` n'a pas déjà de `DEV_ACCESS_*`, que
-   `/etc/caddy/Caddyfile` a exactement un bloc `dev.closyria.com {` et que la page `/acces-dev` est déployée ;
+   `/etc/caddy/closyria-dev.env` et le drop-in n'existent pas, que `/etc/caddy/Caddyfile` a exactement un bloc
+   `dev.closyria.com {` et que la page `/acces-dev` est déployée ;
 2. demande le mot de passe deux fois avec `read -rs` (pas affiché, pas dans l'historique). 8 caractères au moins ;
    ni espace, ni guillemet, ni `\` (systemd les lirait autrement) ;
 3. tire le jeton (`openssl rand -hex 32`), prépare le nouveau Caddyfile dans un fichier temporaire (le bloc
-   `dev.closyria.com` remplacé par celui du dépôt, jeton compris) et le fait vérifier par `caddy validate`. Un
-   refus arrête tout, sans rien changer ;
+   `dev.closyria.com` remplacé par celui du dépôt, sans jeton), le fait vérifier par `caddy validate` et garde une
+   copie de l'actuel (`/etc/caddy/Caddyfile.avant-acces-dev.<date>`). Un refus arrête tout, sans rien changer ;
 4. ajoute `DEV_ACCESS_PASSWORD` et `DEV_ACCESS_TOKEN` à `/etc/closyria/dev.env` (précédées d'un saut de ligne),
    redémarre `closyria-dev-api` et vérifie que la route répond. Sinon, elle s'arrête **avant** de toucher à Caddy :
    le site garde l'ancien mot de passe ;
-5. garde une copie de `/etc/caddy/Caddyfile` (`/etc/caddy/Caddyfile.avant-acces-dev.<date>`), installe le nouveau et
-   recharge Caddy. Si Caddy refuse, l'ancien fichier est remis et rechargé.
+5. écrit le jeton dans `/etc/caddy/closyria-dev.env` (600, par l'entrée standard), le drop-in, le nouveau Caddyfile,
+   `systemctl daemon-reload`, puis **un seul** `systemctl restart caddy`, et contrôle par Caddy lui-même :
+   `/api/health` sans cookie doit répondre 401, avec le cookie 200. Si le redémarrage ou le contrôle échoue, elle
+   revient en arrière : ancien Caddyfile, drop-in et fichier du jeton retirés, `daemon-reload`, redémarrage.
 
-Le jeton et le mot de passe ne passent que par des variables du shell (jamais en argument de commande, visible des
-autres comptes), dans un sous-shell qui disparaît à la fin.
+Le jeton et le mot de passe ne passent que par des variables du shell et l'entrée standard, jamais en argument de
+commande (visible des autres comptes), dans un sous-shell qui disparaît à la fin.
 
 ```bash
 (
 set -uo pipefail
 R=deploy/caddy/dev.closyria.com.caddy; E=/etc/closyria/dev.env; C=/etc/caddy/Caddyfile
+K=/etc/caddy/closyria-dev.env; D=/etc/systemd/system/caddy.service.d/closyria-dev.conf
 stop() { echo "$1" >&2; exit 1; }
-# Vérifications, avant toute question et tout changement.
+# 1. Vérifications, avant toute question et tout changement.
 [ -f "$R" ] || stop "Lancer depuis le dépôt Closyria à jour (branche dev) : $R introuvable. Rien n'est changé."
-grep -q 'redir @lockedPage /acces-dev' "$R" || stop "$R n'est pas la version avec la page d'accès : mettre le dépôt à jour. Rien n'est changé."
+grep -q '{env.DEV_ACCESS_TOKEN}' "$R" || stop "$R n'est pas la bonne version : mettre le dépôt à jour. Rien n'est changé."
 sudo grep -q '^DEV_ACCESS_' "$E" && stop "DEV_ACCESS_* déjà présentes dans $E : rien n'est changé."
+sudo test -e "$K" && stop "$K existe déjà : rien n'est changé."
+sudo test -e "$D" && stop "$D existe déjà : rien n'est changé."
 [ "$(sudo grep -c '^dev\.closyria\.com {$' "$C")" = 1 ] || stop "Il faut exactement une ligne « dev.closyria.com { » dans $C : rien n'est changé."
 [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/acces-dev)" = 200 ] || stop "La page /acces-dev ne répond pas : déployer d'abord la version qui la contient (sudo closyria-deploy dev <id>). Rien n'est changé."
-# Le mot de passe : ni affiché, ni dans l'historique.
+echo "À la fin, le serveur web redémarre : environ une seconde de coupure pour tous les sites de la machine."
+# 2. Le mot de passe : ni affiché, ni dans l'historique.
 IFS= read -rsp "Mot de passe du site de test (8 caractères au moins ; ni espace, ni guillemet, ni \\) : " P; echo
 IFS= read -rsp "Encore une fois : " P2; echo
 [ "$P" = "$P2" ] || stop "Les deux saisies diffèrent : rien n'est changé."
 [ "${#P}" -ge 8 ] && [ "${#P}" -le 200 ] || stop "Il faut entre 8 et 200 caractères : rien n'est changé."
 case "$P" in *[[:space:]\"\'\\]*) stop "Ni espace, ni guillemet, ni \\ (le fichier d'environnement les lirait autrement) : rien n'est changé." ;; esac
+# 3. Le jeton, et le nouveau Caddyfile (sans jeton : Caddy le lit dans son environnement), vérifié avant tout changement.
 T="$(openssl rand -hex 32)" && [ "${#T}" = 64 ] || stop "openssl n'a pas donné de jeton : rien n'est changé."
-# Le nouveau Caddyfile, dans un fichier temporaire (600) : le bloc dev.closyria.com remplacé par celui du dépôt, jeton
-# compris (passé par l'environnement d'awk, jamais en argument de commande visible des autres comptes).
-W="$(mktemp)"; trap 'rm -f "$W"' EXIT
-sudo cat "$C" | T="$T" awk -v repo="$R" '
+W="$(mktemp)"; H="$(mktemp)"; trap 'rm -f "$W" "$H"' EXIT
+sudo cat "$C" | awk -v repo="$R" '
   /^dev\.closyria\.com \{$/ { inblock = 1; seen = 1
-    while ((getline line < repo) > 0) { if (line ~ /^dev\.closyria\.com \{$/) copy = 1; if (copy) { gsub(/DEV_ACCESS_TOKEN/, ENVIRON["T"], line); print line } }
+    while ((getline line < repo) > 0) { if (line ~ /^dev\.closyria\.com \{$/) copy = 1; if (copy) print line }
     next }
   inblock && /^\}$/ { inblock = 0; next }
   !inblock { print }
   END { if (!seen || inblock) exit 3 }' > "$W" || stop "Le bloc dev.closyria.com de $C n'a pas pu être remplacé (accolade fermante introuvable ?) : rien n'est changé."
-[ "$(T="$T" awk 'index($0, "closyria_dev_access=" ENVIRON["T"]) { n++ } END { print n + 0 }' "$W")" = 2 ] && ! grep -q 'DEV_ACCESS_TOKEN' "$W" || stop "Le nouveau Caddyfile n'a pas le jeton là où il faut : rien n'est changé."
+[ "$(grep -c 'closyria_dev_access={env.DEV_ACCESS_TOKEN}' "$W")" = 3 ] || stop "Le nouveau Caddyfile n'a pas le bon bloc dev.closyria.com : rien n'est changé."
 sudo caddy validate --config "$W" --adapter caddyfile >/dev/null 2>&1 || stop "caddy validate refuse le nouveau Caddyfile : rien n'est changé (détail : sudo caddy validate --config $C)."
-# 1. L'API apprend le mot de passe et le jeton.
+B="$C.avant-acces-dev.$(date +%Y%m%d-%H%M%S)"
+sudo cp -p "$C" "$B" || stop "Copie de sûreté de $C impossible : rien n'est changé."
+# 4. L'API apprend le mot de passe et le jeton.
 printf '\nDEV_ACCESS_PASSWORD=%s\nDEV_ACCESS_TOKEN=%s\n' "$P" "$T" | sudo tee -a "$E" >/dev/null || stop "Écriture dans $E impossible : Caddy n'est pas changé."
 unset P P2
 sudo systemctl restart closyria-dev-api || stop "closyria-dev-api ne redémarre pas (sudo journalctl -u closyria-dev-api -n 50) : Caddy n'est pas changé, le site garde l'ancien mot de passe."
-for _ in $(seq 30); do S="$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' http://127.0.0.1:3101/api/dev-access)"; [ "$S" = 400 ] && break; sleep 1; done
+S=000; for _ in $(seq 30); do S="$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' http://127.0.0.1:3101/api/dev-access)"; [ "$S" = 400 ] && break; sleep 1; done
 [ "$S" = 400 ] || stop "L'API ne propose pas /api/dev-access (réponse $S ; sudo journalctl -u closyria-dev-api -n 50) : Caddy n'est pas changé, le site garde l'ancien mot de passe."
-# 2. Caddy : copie de sûreté, nouveau fichier, rechargement ; en cas d'échec, l'ancien revient.
-B="$C.avant-acces-dev.$(date +%Y%m%d-%H%M%S)"
-sudo cp -p "$C" "$B" || stop "Copie de sûreté de $C impossible : Caddy n'est pas changé."
-sudo cp "$W" "$C" || stop "Écriture de $C impossible : Caddy n'est pas changé."
-if sudo systemctl reload caddy; then
-  echo "C'est fait. Sur chaque appareil, ouvrir https://dev.closyria.com : la page « Accès au site de test » demande le mot de passe, une fois."
-  echo "iPhone : une fois dans Safari, puis une fois dans l'app de l'écran d'accueil (elle garde ses propres cookies)."
-  echo "Ancien Caddyfile gardé dans $B."
-else
-  sudo cp -p "$B" "$C" && sudo systemctl reload caddy
-  stop "Caddy n'a pas accepté le nouveau fichier : l'ancien est remis (sudo journalctl -u caddy -n 50)."
-fi
+# 5. Caddy : le jeton dans un fichier root 600 (par l'entrée standard, jamais en argument), le drop-in qui le charge,
+#    le nouveau Caddyfile, un seul redémarrage (le fichier d'environnement de Caddy change : un rechargement ne le lit pas).
+undo() {
+  echo "Retour en arrière : ancien Caddyfile, drop-in et fichier du jeton retirés, redémarrage de Caddy." >&2
+  sudo cp -p "$B" "$C"; sudo rm -f "$D" "$K"; sudo systemctl daemon-reload; sudo systemctl restart caddy
+  stop "$1"
+}
+printf 'DEV_ACCESS_TOKEN=%s\n' "$T" | (umask 077; sudo tee "$K" >/dev/null) && sudo chown root:root "$K" && sudo chmod 600 "$K" || undo "Écriture de $K impossible."
+sudo mkdir -p "${D%/*}" && printf '[Service]\nEnvironmentFile=%s\n' "$K" | sudo tee "$D" >/dev/null || undo "Écriture de $D impossible."
+sudo cp "$W" "$C" || undo "Écriture de $C impossible."
+sudo systemctl daemon-reload || undo "systemctl daemon-reload a échoué."
+echo "Redémarrage du serveur web…"
+sudo systemctl restart caddy || undo "Caddy ne redémarre pas avec le nouveau fichier (sudo journalctl -u caddy -n 50)."
+# Contrôle par Caddy : sans cookie, l'API est refusée ; avec le cookie (lu dans un fichier 600, jamais en argument), elle répond.
+printf 'Cookie: closyria_dev_access=%s\n' "$T" > "$H"; unset T
+for _ in $(seq 15); do A="$(curl -s -o /dev/null -w '%{http_code}' https://dev.closyria.com/api/health)"; [ "$A" = 401 ] && break; sleep 1; done
+G="$(curl -s -o /dev/null -w '%{http_code}' -H @"$H" https://dev.closyria.com/api/health)"
+[ "$A" = 401 ] && [ "$G" = 200 ] || undo "Contrôle raté (sans cookie : $A au lieu de 401 ; avec : $G au lieu de 200)."
+echo "C'est fait. Sur chaque appareil, ouvrir https://dev.closyria.com : la page « Accès au site de test » demande le mot de passe, une fois."
+echo "iPhone : une fois dans Safari, puis une fois dans l'app de l'écran d'accueil (elle garde ses propres cookies)."
+echo "Ancien Caddyfile gardé dans $B."
 )
 ```
 
@@ -269,26 +292,40 @@ Après :
 
 - sur chaque appareil, ouvrir `https://dev.closyria.com` et donner le mot de passe une fois. **iPhone** : une fois dans
   Safari, puis une fois dans l'app de l'écran d'accueil (elle a ses propres cookies) ;
-- contrôle depuis n'importe quelle machine (sans cookie) : une page est renvoyée vers l'accès, le reste est refusé,
-  et la page d'accès s'ouvre :
+- contrôle (sans cookie) : une page est renvoyée vers l'accès, le reste est refusé, la page d'accès s'ouvre, et la
+  configuration en service ne contient pas le jeton :
 
   ```bash
   curl -sI -H 'Sec-Fetch-Mode: navigate' https://dev.closyria.com/articles | grep -iE '^(HTTP|location)'   # 302, /acces-dev?suite=/articles
   curl -s -o /dev/null -w '%{http_code}\n' https://dev.closyria.com/api/health                            # 401
   curl -s -o /dev/null -w '%{http_code}\n' https://dev.closyria.com/acces-dev                             # 200
+  curl -s 127.0.0.1:2019/config/ | grep -o 'closyria_dev_access=[^*]*' | sort -u                          # {env.DEV_ACCESS_TOKEN} seulement
   ```
 
 - l'ancien commentaire « password-protected » au-dessus du bloc dans `/etc/caddy/Caddyfile` peut être retiré à la
   main ; il ne change rien.
 
-Si la commande s'est arrêtée à l'étape 4 (API), corriger d'après le journal, retirer les deux lignes `DEV_ACCESS_*` de
-`/etc/closyria/dev.env` (`sudo nano /etc/closyria/dev.env`), puis la relancer.
+**Si la commande s'est arrêtée** :
+
+- aux étapes 1 à 3 : rien n'a changé ; corriger ce qu'elle dit et la relancer ;
+- à l'étape 4 (API) : Caddy n'a pas changé. Corriger d'après le journal, retirer les deux lignes ajoutées
+  (`sudo sed -i '/^DEV_ACCESS_/d' /etc/closyria/dev.env`), puis la relancer ;
+- à l'étape 5 (Caddy) : elle est revenue en arrière d'elle-même, le site garde l'ancien mot de passe. Lire
+  `sudo journalctl -u caddy -n 50`, retirer les deux lignes de `/etc/closyria/dev.env` comme ci-dessus, puis la
+  relancer. Si le retour en arrière lui-même a échoué (Caddy arrêté), le faire à la main :
+
+  ```bash
+  ls /etc/caddy/Caddyfile.avant-acces-dev.*        # la copie la plus récente
+  sudo cp -p /etc/caddy/Caddyfile.avant-acces-dev.<date> /etc/caddy/Caddyfile
+  sudo rm -f /etc/systemd/system/caddy.service.d/closyria-dev.conf /etc/caddy/closyria-dev.env
+  sudo systemctl daemon-reload && sudo systemctl restart caddy && systemctl is-active caddy
+  ```
 
 **Changer le mot de passe** : remplacer la valeur de `DEV_ACCESS_PASSWORD` dans `/etc/closyria/dev.env`, puis
 `sudo systemctl restart closyria-dev-api`. Les appareils déjà entrés le restent. **Fermer l'accès à tous les
-appareils** : changer aussi le jeton, le même dans les deux fichiers (`DEV_ACCESS_TOKEN` et les deux lignes
-`closyria_dev_access=…` du Caddyfile), puis `sudo caddy validate --config /etc/caddy/Caddyfile`,
-`sudo systemctl reload caddy` et le redémarrage de l'API.
+appareils** : changer le jeton (`openssl rand -hex 32`), le même dans `/etc/caddy/closyria-dev.env` et dans
+`DEV_ACCESS_TOKEN` de `/etc/closyria/dev.env`, puis `sudo systemctl restart caddy closyria-dev-api` (environ une
+seconde de coupure pour tous les sites de la machine).
 
 ## Premières migrations : droits sur la base
 

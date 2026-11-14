@@ -1,3 +1,4 @@
+import { appEnvSchema } from "@closyria/shared";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
@@ -18,7 +19,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function DevAccessPage() {
   // Read at request time (not at build time): prod's web server has APP_ENV=prod, and prod has no such page.
   await connection();
-  if (process.env.APP_ENV === "prod") notFound();
+  if (appEnvSchema.safeParse(process.env.APP_ENV).data === "prod") notFound();
   const t = await getTranslations("DevAccess");
   const tShell = await getTranslations("Shell");
   return (

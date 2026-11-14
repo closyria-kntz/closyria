@@ -2,8 +2,12 @@
 # Access is a cookie, not a password window: a home-screen web app on iPhone never shows the browser's password
 # window (basic auth), so it got a 401 and a black screen. The page /acces-dev asks the password once; the API
 # (POST /api/dev-access) then sets `closyria_dev_access=<token>` for a year.
-# DEV_ACCESS_TOKEN below is a placeholder: the real token (`openssl rand -hex 32`) lives only in /etc/caddy/Caddyfile
-# and in /etc/closyria/dev.env (DEV_ACCESS_TOKEN). deploy/README.md, « Accès au site de test (dev) », fills both.
+# The token is never written here: {env.DEV_ACCESS_TOKEN} is read when a request comes in, from Caddy's environment,
+# which systemd loads from /etc/caddy/closyria-dev.env (root:root 600) through the drop-in
+# /etc/systemd/system/caddy.service.d/closyria-dev.conf. /etc/caddy/Caddyfile (readable by every account) and Caddy's
+# admin API (/config/) only ever show the placeholder. Never write it {$DEV_ACCESS_TOKEN}: that form is replaced when
+# the file is loaded, and the token would then be in the configuration. deploy/README.md, « Accès au site de test
+# (dev) », sets it all up.
 dev.closyria.com {
 	header X-Robots-Tag "noindex, nofollow"
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -15,25 +19,52 @@ dev.closyria.com {
 	# - /_next/static/*: the page's scripts, styles and fonts (build files, the same for everyone);
 	# - /theme-init.js: the root layout's blocking script (light / dark before the first paint).
 	# Not opened: the manifest, the icons, /sw.js and /favicon.ico. The page works without them (the favicon is
-	# inline, the service worker is only registered from the app, after access).
-	# The token check is a wildcard on the Cookie header: it matches wherever the cookie sits among the others.
-	@locked {
-		not path /acces-dev /api/dev-access /_next/static/* /theme-init.js
-		not header Cookie *closyria_dev_access=DEV_ACCESS_TOKEN*
-	}
-	# Same conditions (the lines of a matcher are AND-ed), plus: the browser is opening a page.
+	# inline, no manifest link on that page, the service worker is only registered from the app, after access).
+	#
+	# Access is granted (the inner `not { … }` block, whose two lines are AND-ed) when:
+	# - the Cookie header holds `closyria_dev_access=<token>`. The wildcards are loose on purpose (the cookie may sit
+	#   anywhere among the others), but the whole 64-character token must be there: a guess is no easier for it;
+	# - and the token in Caddy's environment is well formed (64 hexadecimal characters). Without that line, a missing
+	#   or empty DEV_ACCESS_TOKEN would turn the pattern into `*closyria_dev_access=*`, and any value would get in:
+	#   with it, a missing token closes the site instead (checked with a throwaway `caddy run`).
+	# The three matchers repeat the same conditions: the lines of a matcher are AND-ed, and Caddy has no way to name
+	# one matcher inside another.
+
+	# A page opened without access (the browser says it is navigating).
 	@lockedPage {
 		not path /acces-dev /api/dev-access /_next/static/* /theme-init.js
-		not header Cookie *closyria_dev_access=DEV_ACCESS_TOKEN*
+		not {
+			header Cookie *closyria_dev_access={env.DEV_ACCESS_TOKEN}*
+			expression `{env.DEV_ACCESS_TOKEN}.matches("^[0-9a-f]{64}$")`
+		}
 		header Sec-Fetch-Mode navigate
+	}
+	# The same from a browser without Sec-Fetch-Mode (Safari before 16.4) that asks for a page.
+	@lockedHtml {
+		not path /acces-dev /api/dev-access /_next/static/* /theme-init.js
+		not {
+			header Cookie *closyria_dev_access={env.DEV_ACCESS_TOKEN}*
+			expression `{env.DEV_ACCESS_TOKEN}.matches("^[0-9a-f]{64}$")`
+		}
+		not header Sec-Fetch-Mode *
+		header Accept *text/html*
+	}
+	# Anything else without access.
+	@locked {
+		not path /acces-dev /api/dev-access /_next/static/* /theme-init.js
+		not {
+			header Cookie *closyria_dev_access={env.DEV_ACCESS_TOKEN}*
+			expression `{env.DEV_ACCESS_TOKEN}.matches("^[0-9a-f]{64}$")`
+		}
 	}
 
 	# `route` keeps this order (Caddy would otherwise sort `respond` after the `handle` blocks).
 	route {
-		# A page opened without access: to the access page, which comes back here afterwards. {uri} is the
-		# original path and query, sent as is; the page only follows a path of this site.
+		# To the access page, which comes back here afterwards. {uri} is the original path and query, sent as is;
+		# the page only follows a path of this site.
 		redir @lockedPage /acces-dev?suite={uri} 302
-		# Anything else without access (data, API, curl, bots): refused. No WWW-Authenticate: no password window.
+		redir @lockedHtml /acces-dev?suite={uri} 302
+		# Data, API, curl, bots: refused. No WWW-Authenticate: no password window.
 		respond @locked "Accès réservé." 401
 
 		handle /api/* {
