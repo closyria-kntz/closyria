@@ -17,6 +17,7 @@ import { type AccessEnv, defineAccess } from "../access";
 import {
   endAgreement,
   hashListingToken,
+  lockShop,
   mainDomain,
   openInvitation,
   recordAgreement,
@@ -183,7 +184,11 @@ export function listingRoutes(deps: CatalogDeps, clock?: () => number) {
       if (!validToken(token)) return c.json(invalidLink, 404);
       const at = now();
       const outcome = await db.transaction(async (tx) => {
-        // Locked: two acceptances of one link run one after the other, and the second finds it used.
+        // Shop first, then the invitation: two acceptances of one link run one after the other, and the second
+        // finds it used.
+        const seen = await openInvitation(tx, token, at);
+        if (!seen) return null;
+        await lockShop(tx, seen.shop.id);
         const found = await openInvitation(tx, token, at, true);
         if (!found) return null;
         const agreement = await recordAgreement(tx, {
@@ -223,16 +228,18 @@ export function listingRoutes(deps: CatalogDeps, clock?: () => number) {
       if (!validToken(token)) return c.json(invalidLink, 404);
       const at = now();
       await db.transaction(async (tx) => {
-        const [agreement] = await tx
-          .select()
+        const inForce = and(
+          eq(schema.shopAgreements.manageTokenHash, hashListingToken(token)),
+          isNull(schema.shopAgreements.withdrawnAt),
+        );
+        // Shop first, then the agreement (the lock order of every agreement write).
+        const [found] = await tx
+          .select({ shopId: schema.shopAgreements.shopId })
           .from(schema.shopAgreements)
-          .where(
-            and(
-              eq(schema.shopAgreements.manageTokenHash, hashListingToken(token)),
-              isNull(schema.shopAgreements.withdrawnAt),
-            ),
-          )
-          .for("update");
+          .where(inForce);
+        if (!found) return;
+        await lockShop(tx, found.shopId);
+        const [agreement] = await tx.select().from(schema.shopAgreements).where(inForce).for("update");
         if (!agreement) return;
         await endAgreement(tx, agreement.shopId, "signer", at);
         await traceAgreement(tx, "shop.agreement.withdraw", agreement.shopId, { agreementId: agreement.id }, at);

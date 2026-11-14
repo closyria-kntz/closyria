@@ -85,6 +85,7 @@ const manageLinkRoute = defineAccess(
     responses: {
       201: { description: "Made", content: { "application/json": { schema: adminManageLinkSchema } } },
       404: errorContent("Unknown or merged shop, or no agreement in force (no_agreement)"),
+      409: errorContent("The agreement in force is the admin's checkbox: no signer, no link (admin_agreement)"),
     },
   }),
   "admin",
@@ -321,10 +322,14 @@ export function adminListingRoutes(deps: CatalogDeps) {
       // Never the token in the journal: only that a new link was made.
       noteAudit(c, { action: "shop.agreement.manage_link", target: `shop:${id}` });
       if (!(await activeShop(id))) return c.json(notFound, 404);
-      const token = await rotateManageLink(db, id);
-      if (!token) return c.json({ error: "no_agreement" }, 404);
+      const rotated = await rotateManageLink(db, id);
+      if ("error" in rotated) {
+        return rotated.error === "none"
+          ? c.json({ error: "no_agreement" }, 404)
+          : c.json({ error: "admin_agreement" }, 409);
+      }
       c.header("Cache-Control", "no-store");
-      return c.json({ token }, 201);
+      return c.json({ token: rotated.token }, 201);
     })
     .openapi(refuseRequestRoute, async (c) => {
       const { id } = c.req.valid("param");

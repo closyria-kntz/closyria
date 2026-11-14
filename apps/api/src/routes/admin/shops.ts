@@ -523,23 +523,8 @@ export function adminShopsRoutes(deps: CatalogDeps) {
             .where(and(eq(schema.shops.id, id), isNull(schema.shops.mergedIntoId)))
             .for("update");
           if (!current) return { error: "not_found" };
-          if (settings.slug) {
-            const [clash] = await tx
-              .select({ id: schema.shops.id })
-              .from(schema.shops)
-              .where(and(eq(schema.shops.slug, settings.slug), ne(schema.shops.id, id)));
-            if (clash) return { error: "slug_taken" };
-          }
-          if (domains) {
-            const taken = await tx
-              .select({ domain: schema.shopDomains.domain })
-              .from(schema.shopDomains)
-              .where(and(inArray(schema.shopDomains.domain, domains), ne(schema.shopDomains.shopId, id)));
-            if (taken.length > 0) return { error: "domain_taken" };
-            await tx.delete(schema.shopDomains).where(eq(schema.shopDomains.shopId, id));
-            await tx.insert(schema.shopDomains).values(domains.map((domain) => ({ domain, shopId: id })));
-          }
           // The checkbox is an agreement given by the admin: its history follows (shop_agreements, via 'admin').
+          // First, before any write: a refusal (agreement_signed) must leave the shop untouched.
           // The settings form sends the box's day each time: the same day keeps the exact time of the agreement.
           const agreementDay = settings.listingAgreementAt;
           const sameDay =
@@ -558,6 +543,22 @@ export function adminShopsRoutes(deps: CatalogDeps) {
             );
             // The shop signed online: its day is the signature's, the box cannot move it.
             if (synced === "signed") return { error: "agreement_signed" };
+          }
+          if (settings.slug) {
+            const [clash] = await tx
+              .select({ id: schema.shops.id })
+              .from(schema.shops)
+              .where(and(eq(schema.shops.slug, settings.slug), ne(schema.shops.id, id)));
+            if (clash) return { error: "slug_taken" };
+          }
+          if (domains) {
+            const taken = await tx
+              .select({ domain: schema.shopDomains.domain })
+              .from(schema.shopDomains)
+              .where(and(inArray(schema.shopDomains.domain, domains), ne(schema.shopDomains.shopId, id)));
+            if (taken.length > 0) return { error: "domain_taken" };
+            await tx.delete(schema.shopDomains).where(eq(schema.shopDomains.shopId, id));
+            await tx.insert(schema.shopDomains).values(domains.map((domain) => ({ domain, shopId: id })));
           }
           const [updated] = await tx
             .update(schema.shops)

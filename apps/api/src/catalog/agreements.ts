@@ -26,6 +26,14 @@ export function newListingToken(): { token: string; hash: string } {
   return { token, hash: hashListingToken(token) };
 }
 
+/**
+ * Locks the shop row. Lock order everywhere: the shop first, then its invitation or agreement rows, so two writers of
+ * one shop never wait on each other in opposite orders.
+ */
+export async function lockShop(tx: Tx, shopId: string): Promise<void> {
+  await tx.execute(sql`select id from shops where id = ${shopId} for update`);
+}
+
 export const invitationExpiry = (from: Date) => new Date(from.getTime() + INVITATION_LIFETIME_DAYS * DAY_MS);
 
 /** The shop's main domain (the shortest), as the directory shows it; null without one. */
@@ -118,7 +126,7 @@ export async function recordAgreement(
   input: NewAgreement,
 ): Promise<{ id: string; manageToken: string | null }> {
   // The shop row first: two agreements of one shop (an invitation and a request, say) run one after the other.
-  await tx.execute(sql`select id from shops where id = ${input.shopId} for update`);
+  await lockShop(tx, input.shopId);
   const at = input.at ?? input.acceptedAt;
   await endAgreement(tx, input.shopId, "replaced", at);
   const manage = input.withManageLink ? newListingToken() : null;
@@ -201,16 +209,28 @@ export async function syncAdminCheckbox(
 
 /**
  * A new private management link for the agreement in force (the signer lost hers): the old hash is replaced, the token
- * is returned once. Null when the shop has no agreement in force.
+ * is returned once. `none` without an agreement in force; `admin` for the admin's checkbox (no signer to send it to).
  */
-export async function rotateManageLink(db: Database, shopId: string): Promise<string | null> {
+export async function rotateManageLink(
+  db: Database,
+  shopId: string,
+): Promise<{ token: string } | { error: "none" | "admin" }> {
   const { token, hash } = newListingToken();
-  const rotated = await db
-    .update(schema.shopAgreements)
-    .set({ manageTokenHash: hash })
-    .where(and(eq(schema.shopAgreements.shopId, shopId), isNull(schema.shopAgreements.withdrawnAt)))
-    .returning({ id: schema.shopAgreements.id });
-  return rotated.length > 0 ? token : null;
+  return db.transaction(async (tx) => {
+    await lockShop(tx, shopId);
+    const [inForce] = await tx
+      .select({ id: schema.shopAgreements.id, via: schema.shopAgreements.via })
+      .from(schema.shopAgreements)
+      .where(and(eq(schema.shopAgreements.shopId, shopId), isNull(schema.shopAgreements.withdrawnAt)))
+      .for("update");
+    if (!inForce) return { error: "none" as const };
+    if (inForce.via === "admin") return { error: "admin" as const };
+    await tx
+      .update(schema.shopAgreements)
+      .set({ manageTokenHash: hash })
+      .where(eq(schema.shopAgreements.id, inForce.id));
+    return { token };
+  });
 }
 
 /** The shop's agreements, newest first. */

@@ -35,7 +35,8 @@ export function ShopAgreement({
   const [created, setCreated] = useState<{ url: string; expiresAt: string } | null>(null);
   const day = (iso: string) => format.dateTime(new Date(iso), { dateStyle: "long", timeZone: "Europe/Paris" });
   const open = created ?? initial.invitation;
-  const inForce = initial.agreements.find((a) => a.withdrawnAt === null) ?? null;
+  // A signer to send a new private link to: not for the admin's own checkbox.
+  const inForce = initial.agreements.find((a) => a.withdrawnAt === null && a.via !== "admin") ?? null;
   const [manageLink, setManageLink] = useState<string | null>(null);
 
   // « Nouveau lien de gestion »: the signer lost her private link; the old one stops working.

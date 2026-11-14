@@ -396,6 +396,17 @@ describe("signed agreements and lost links", () => {
     expect((await isPartner(shop.id))?.toISOString()).toBe("2026-11-14T15:42:00.000Z");
     const rows = await t.db.select().from(schema.shopAgreements);
     expect(rows.map((r) => [r.via, r.withdrawnAt])).toEqual([["invitation", null]]);
+    // Refused as a whole: nothing else of the PATCH is written either.
+    const refused = await call("PATCH", `/admin/shops/${shop.id}`, admin.cookie, {
+      listingAgreementAt: "2026-11-01",
+      domains: ["autre-domaine.test"],
+      name: "Renommée",
+    });
+    expect(refused.status).toBe(409);
+    const domains = await t.db.select().from(schema.shopDomains).where(eq(schema.shopDomains.shopId, shop.id));
+    expect(domains.map((d) => d.domain)).toEqual([shop.domain]);
+    const [after] = await t.db.select().from(schema.shops).where(eq(schema.shops.id, shop.id));
+    expect(after?.name).toBe(shop.name);
     // Unticking still ends it.
     expect((await call("PATCH", `/admin/shops/${shop.id}`, admin.cookie, { listingAgreementAt: null })).status).toBe(
       200,
@@ -431,6 +442,16 @@ describe("signed agreements and lost links", () => {
     await call("POST", `/listing/manage/${token}/withdraw`, "");
     expect(await isPartner(shop.id)).toBeNull();
     expect((await call("POST", path, admin.cookie)).status).toBe(404);
+  });
+
+  it("gives no new link for the admin's own checkbox (409 admin_agreement)", async () => {
+    const shop = await newShop();
+    await call("PATCH", `/admin/shops/${shop.id}`, admin.cookie, { listingAgreementAt: "2026-11-10" });
+    const res = await call("POST", `/admin/shops/${shop.id}/agreements/current/manage-link`, admin.cookie);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "admin_agreement" });
+    const [agreement] = await t.db.select().from(schema.shopAgreements);
+    expect(agreement?.manageTokenHash).toBeNull();
   });
 });
 
