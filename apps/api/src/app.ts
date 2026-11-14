@@ -8,6 +8,7 @@ import { catalogLimiter } from "./catalog/limiter";
 import { auditRoutes } from "./routes/admin/audit";
 import { adminCapturesRoutes } from "./routes/admin/captures";
 import { adminCatalogueRoutes } from "./routes/admin/catalogue";
+import { adminListingRoutes } from "./routes/admin/listing";
 import { type AdminDeps, overviewRoutes } from "./routes/admin/overview";
 import { adminProductsRoutes } from "./routes/admin/products";
 import { adminReferenceRoutes } from "./routes/admin/reference";
@@ -19,6 +20,7 @@ import { capturesRoutes } from "./routes/captures";
 import { catalogueRoutes } from "./routes/catalogue";
 import { type DevAccessDeps, devAccessRoutes } from "./routes/dev-access";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
+import { listingRoutes } from "./routes/listing";
 import { alertsRoutes, type PushDeps } from "./routes/me/alerts";
 import { budgetsRoutes } from "./routes/me/budgets";
 import { bulkRoutes } from "./routes/me/bulk";
@@ -141,6 +143,7 @@ export function createApp(deps: AppDeps) {
     .route("/", productsRoutes(deps.catalog, captureLimiter))
     .route("/", shopsRoutes(deps.catalog))
     .route("/", catalogueRoutes(deps.catalog))
+    .route("/", listingRoutes(deps.catalog))
     .route("/", eventsRoutes(deps.events))
     .route("/", profilesRoutes(deps.wardrobe))
     .route("/", loveLevelsRoutes(deps.wardrobe))
@@ -177,6 +180,7 @@ export function createApp(deps: AppDeps) {
     .route("/", adminProductsRoutes(deps.catalog))
     .route("/", adminReferenceRoutes(deps.catalog))
     .route("/", adminCatalogueRoutes(deps.catalog))
+    .route("/", adminListingRoutes(deps.catalog))
     .route("/", adminUsersRoutes({ db: deps.admin.db, store: deps.media.store }));
 
   // Not part of AppType: no client calls it, and it is absent from every real environment.

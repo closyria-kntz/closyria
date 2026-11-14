@@ -15,6 +15,7 @@ export const adminNav = [
   { key: "reference", href: "/admin/references" },
   { key: "unclassified", href: "/admin/catalogue/a-classer" },
   { key: "reports", href: "/admin/catalogue/signalements" },
+  { key: "listingRequests", href: "/admin/referencement" },
   { key: "sales", href: "/admin/soldes" },
   { key: "audit", href: "/admin/audit" },
 ] as const satisfies readonly AdminNavItem[];

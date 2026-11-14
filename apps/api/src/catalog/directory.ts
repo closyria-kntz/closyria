@@ -1,6 +1,14 @@
 import { type Database, sql } from "@closyria/db";
 import type { ShopCard, ShopDirectory } from "@closyria/shared";
-import { type Caller, inCatalogue, isPrivileged, shopInCatalogue, showsShopMedia, visibleTo } from "./catalogue";
+import {
+  type Caller,
+  inCatalogue,
+  isPrivileged,
+  partnerShop,
+  shopInCatalogue,
+  showsShopMedia,
+  visibleTo,
+} from "./catalogue";
 import { catalogImageUrl } from "./product-view";
 
 type Row = {
@@ -8,6 +16,7 @@ type Row = {
   name: string;
   domain: string;
   item_count: number;
+  known_count: number | null;
   image_id: string | null;
 };
 
@@ -40,6 +49,9 @@ export async function loadShopDirectory(db: Database, caller: Caller): Promise<S
     select s.id, s.name, d.domain,
       (select count(*)::int from products p where p.shop_id = s.id and ${inCatalogue} and ${visibleTo(viewer)})
         as item_count,
+      -- « {n} articles chez elle » on a shop without agreement: everything Closyria knows of its catalogue.
+      case when ${partnerShop} then null
+        else (select count(*)::int from products p where p.shop_id = s.id and ${inCatalogue}) end as known_count,
       (select pi.id from products p join product_images pi on pi.product_id = p.id
         where p.shop_id = s.id and ${inCatalogue} and ${showsShopMedia(viewer)}
         order by p.published_at desc nulls last, p.shop_rank nulls last, p.id, pi.position, pi.id limit 1) as image_id
@@ -55,6 +67,7 @@ export async function loadShopDirectory(db: Database, caller: Caller): Promise<S
     name: r.name,
     domain: r.domain,
     itemCount: Number(r.item_count),
+    knownCount: r.known_count === null ? null : Number(r.known_count),
     imageUrl: r.image_id ? catalogImageUrl(r.image_id) : null,
   });
   return {

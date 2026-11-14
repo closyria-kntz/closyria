@@ -1,4 +1,9 @@
-import { adminShopDetailSchema, adminShopListSchema, shippingOptionListSchema } from "@closyria/shared";
+import {
+  adminShopAgreementsSchema,
+  adminShopDetailSchema,
+  adminShopListSchema,
+  shippingOptionListSchema,
+} from "@closyria/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
@@ -11,6 +16,7 @@ import { MergeDialog } from "../merge-dialog";
 import { ShopSettingsForm } from "../shop-settings-form";
 import { FeatureShop } from "./feature-shop";
 import { ShippingOptions } from "./shipping-options";
+import { ShopAgreement } from "./shop-agreement";
 import { ShopCatalogue } from "./shop-catalogue";
 import { ShopReview } from "./shop-review";
 
@@ -29,8 +35,15 @@ export default async function AdminShopPage({ params }: Props) {
   const format = await getFormatter();
   const shop = await adminRead(`/api/admin/shops/${id}`, adminShopDetailSchema);
   if (!shop) notFound();
-  const shipping = await adminRead(`/api/admin/shops/${id}/shipping-options`, shippingOptionListSchema);
-  const all = await adminRead("/api/admin/shops", adminShopListSchema);
+  // In parallel: a refresh of this page must not get slower with each block (the catalogue block reads its
+  // import state from these props).
+  const [shipping, all, agreementView] = await Promise.all([
+    adminRead(`/api/admin/shops/${id}/shipping-options`, shippingOptionListSchema),
+    adminRead("/api/admin/shops", adminShopListSchema),
+    adminRead(`/api/admin/shops/${id}/agreements`, adminShopAgreementsSchema),
+  ]);
+  const agreements = agreementView ?? { invitation: null, agreements: [] };
+
   const options = (all?.shops ?? []).filter((s) => s.id !== shop.id).map((s) => ({ id: s.id, name: s.name }));
   const when = (iso: string) =>
     format.dateTime(new Date(iso), { dateStyle: "short", timeStyle: "medium", timeZone: "UTC" });
@@ -62,6 +75,15 @@ export default async function AdminShopPage({ params }: Props) {
 
       <div className="rounded-card border border-card-border bg-card-bg p-space-4">
         <ShopCatalogue shop={shop} />
+      </div>
+
+      <div className="rounded-card border border-card-border bg-card-bg p-space-4">
+        <ShopAgreement
+          shopId={shop.id}
+          shopName={shop.name}
+          partnerSince={shop.listingAgreementAt}
+          initial={agreements}
+        />
       </div>
 
       <div className="rounded-card border border-card-border bg-card-bg p-space-4">

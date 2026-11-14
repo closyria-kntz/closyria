@@ -166,6 +166,8 @@ describe("GET /api/shops", () => {
       domain: "lescoeurs.test",
       itemCount: 3,
       imageUrl: `/api/catalog-images/${recent.imageId}`,
+      // A partner shop: no « {n} articles chez elle » (accords en ligne).
+      knownCount: null,
     });
     expect(body.shops.find((s) => s.id === bare.id)?.imageUrl).toBeNull();
   });
@@ -224,7 +226,14 @@ describe("GET /api/shops", () => {
 
     const { text, body } = await directory(adminCookie);
     expect(body.shops).toHaveLength(1);
-    expect(Object.keys(body.shops[0] ?? {}).sort()).toEqual(["domain", "id", "imageUrl", "itemCount", "name"]);
+    expect(Object.keys(body.shops[0] ?? {}).sort()).toEqual([
+      "domain",
+      "id",
+      "imageUrl",
+      "itemCount",
+      "knownCount",
+      "name",
+    ]);
     for (const secret of ["Camille", "camille.secrete", userId, "Moi"]) expect(text).not.toContain(secret);
   });
 });

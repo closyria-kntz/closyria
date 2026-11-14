@@ -45,6 +45,7 @@ import {
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { defineAccess } from "../../access";
 import { type AdminEnv, noteAudit } from "../../admin-audit";
+import { syncAdminCheckbox } from "../../catalog/agreements";
 import { inCatalogue } from "../../catalog/catalogue";
 import type { CatalogDeps } from "../../catalog/deps";
 import { featuredShopId } from "../../catalog/directory";
@@ -536,10 +537,22 @@ export function adminShopsRoutes(deps: CatalogDeps) {
             await tx.delete(schema.shopDomains).where(eq(schema.shopDomains.shopId, id));
             await tx.insert(schema.shopDomains).values(domains.map((domain) => ({ domain, shopId: id })));
           }
+          // The checkbox is an agreement given by the admin: its history follows (shop_agreements, via 'admin').
+          // The settings form sends the box's day each time: the same day keeps the exact time of the agreement.
+          const agreementDay = settings.listingAgreementAt;
+          const sameDay =
+            agreementDay instanceof Date &&
+            current.listingAgreementAt?.toISOString().slice(0, 10) === agreementDay.toISOString().slice(0, 10);
+          const written = sameDay ? { ...settings, listingAgreementAt: current.listingAgreementAt } : settings;
+          if (agreementDay !== undefined && !sameDay) {
+            const user = c.var.session?.user;
+            if (!user) throw new Error("session expected on an admin route");
+            await syncAdminCheckbox(tx, id, agreementDay, { id: user.id, name: user.name, email: user.email }, now());
+          }
           const [updated] = await tx
             .update(schema.shops)
             // A « grande enseigne » never goes in the une: ticking it takes the shop off.
-            .set({ ...settings, ...(settings.isMajorBrand === true ? { featuredAt: null } : {}), updatedAt: now() })
+            .set({ ...written, ...(written.isMajorBrand === true ? { featuredAt: null } : {}), updatedAt: now() })
             .where(eq(schema.shops.id, id))
             .returning();
           if (!updated) return { error: "not_found" };

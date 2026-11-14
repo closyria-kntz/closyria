@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { securityHeaders, sharedListHeaders } from "./security-headers";
+import { listingLinkHeaders, securityHeaders, sharedListHeaders } from "./security-headers";
 
 const headerMap = () => Object.fromEntries(securityHeaders.map((h) => [h.key, h.value]));
 const directive = (name: string) =>
@@ -52,6 +52,7 @@ describe("next.config headers()", () => {
     expect(rules).toEqual([
       { source: "/:path*", headers: securityHeaders },
       { source: "/l/:path*", headers: sharedListHeaders },
+      { source: "/referencement/:path*", headers: listingLinkHeaders },
     ]);
   });
 });
@@ -69,5 +70,14 @@ describe("Caddy HSTS", () => {
 describe("sharedListHeaders", () => {
   it("keeps shared lists out of search engines", () => {
     expect(sharedListHeaders).toEqual([{ key: "X-Robots-Tag", value: "noindex" }]);
+  });
+});
+
+describe("listingLinkHeaders", () => {
+  it("keeps the agreement links out of referrers and search engines", () => {
+    expect(Object.fromEntries(listingLinkHeaders.map((h) => [h.key, h.value]))).toEqual({
+      "X-Robots-Tag": "noindex",
+      "Referrer-Policy": "no-referrer",
+    });
   });
 });

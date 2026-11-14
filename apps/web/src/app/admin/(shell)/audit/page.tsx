@@ -63,7 +63,9 @@ export default async function AdminAuditPage({ searchParams }: Props) {
                       })}
                     </time>
                   </td>
-                  <td className={cell}>{entry.adminEmail ?? t("deletedAdmin")}</td>
+                  <td className={cell}>
+                    {entry.adminEmail ?? (entry.action.startsWith("shop.agreement.") ? t("byShop") : t("deletedAdmin"))}
+                  </td>
                   <td className={`${cell} font-strong`}>{entry.action}</td>
                   <td className={cell}>{entry.target ?? t("none")}</td>
                   <td className={`${cell} tabular-nums`}>{entry.details.status ?? t("none")}</td>

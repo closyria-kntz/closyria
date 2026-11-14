@@ -59,6 +59,14 @@ function vouvoie(message: string): boolean {
   return words.some((word) => !NOT_VOUVOIEMENT.has(word.toLowerCase()));
 }
 
+/**
+ * The exception: what Closyria says to a shop, not to its users (accords de référencement en ligne, 2026-11-14): the
+ * invitation, management and request pages, « Vous êtes une boutique ? » and the invitation e-mail say « vous », as the
+ * founder wrote them.
+ */
+const toShops = (key: string) =>
+  key.startsWith("Listing.") || key === "Discover.shopFooter" || key === "Admin.shops.agreement.emailText";
+
 describe("French tone", () => {
   it("detects vouvoiement", () => {
     expect(vouvoie("Votre code")).toBe(true);
@@ -67,8 +75,15 @@ describe("French tone", () => {
     expect(vouvoie("Ton code, chez toi, réessaie")).toBe(false);
   });
 
+  it("lets only the shop-facing messages say « vous »", () => {
+    expect(toShops("Listing.nameLabel")).toBe(true);
+    expect(toShops("Discover.shopFooter")).toBe(true);
+    expect(toShops("Discover.shopFooterLink")).toBe(false);
+    expect(toShops("Admin.shops.agreement.linkHint")).toBe(false);
+  });
+
   it("uses tutoiement in every French message", () => {
-    const offending = Object.entries(flatten(fr)).filter(([, message]) => vouvoie(message));
+    const offending = Object.entries(flatten(fr)).filter(([key, message]) => !toShops(key) && vouvoie(message));
     expect(offending).toEqual([]);
   });
 });

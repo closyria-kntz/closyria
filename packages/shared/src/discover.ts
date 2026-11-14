@@ -11,6 +11,11 @@ export const shopCardSchema = z.object({
   domain: z.string(),
   itemCount: z.number().int().nonnegative(),
   imageUrl: z.string().startsWith("/").nullable(),
+  /**
+   * A shop without a listing agreement: how many of its catalogue articles Closyria knows, imports included (« {n}
+   * articles chez elle », a global fact, no article data). Null for a partner shop, whose tile is unchanged.
+   */
+  knownCount: z.number().int().nonnegative().nullable(),
 });
 export type ShopCard = z.infer<typeof shopCardSchema>;
 
