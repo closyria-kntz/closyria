@@ -63,6 +63,12 @@ export const shops = pgTable(
      * links) but never show in « Découvrir », and its catalogue is never imported by the planner.
      */
     isMajorBrand: boolean("is_major_brand").notNull().default(false),
+    /**
+     * « Accord de référencement » (catalogue conforme, 2026-11-14): the day the shop agreed to be listed, set by the
+     * admin; null without one. A partner shop's whole catalogue (imports included) is public in « Découvrir », with
+     * its photos and texts.
+     */
+    listingAgreementAt: timestamp("listing_agreement_at", { withTimezone: true }),
     /** The nightly import of the shop catalogue is on. */
     importEnabled: boolean("import_enabled").notNull().default(false),
     lastImportAt: timestamp("last_import_at", { withTimezone: true }),

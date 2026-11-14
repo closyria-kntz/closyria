@@ -41,7 +41,7 @@ function put(id: string, body: unknown, cookie?: string) {
 }
 
 describe("GET /api/products/:id", () => {
-  it("answers without a session", async () => {
+  it("answers without a session, without the shop's text when it has no listing agreement", async () => {
     const product = await newProduct({
       name: "Robe",
       currency: "EUR",
@@ -55,7 +55,8 @@ describe("GET /api/products/:id", () => {
       id: product.id,
       name: "Robe",
       brand: "Marque",
-      description: "Robe longue.\nCoton.",
+      // Catalogue conforme: not her article, no agreement — the shop's text stays out.
+      description: null,
       currency: "EUR",
       priceCents: 2999,
       compareAtCents: null,

@@ -1,9 +1,10 @@
-import { and, asc, eq, gte, schema } from "@closyria/db";
+import { and, asc, eq, gte, schema, sql } from "@closyria/db";
 import { catalogErrorSchema, manualEntrySchema, priceHistorySchema, productViewSchema } from "@closyria/shared";
 import { ObjectNotFoundError } from "@closyria/storage";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
 import { type AccessEnv, defineAccess } from "../access";
+import { isPrivileged } from "../catalog/catalogue";
 import type { CatalogDeps } from "../catalog/deps";
 import { loadProductView } from "../catalog/product-view";
 
@@ -20,6 +21,10 @@ const getProductRoute = defineAccess(
     method: "get",
     path: "/products/{id}",
     summary: "A product page",
+    description:
+      "Catalogue conforme: the shop's photos (`images`) and text (`description`) only for the caller's own " +
+      "article (her item on it, or a link she pasted), a shop with an « Accord de référencement », or an admin / " +
+      "« Testeuse »; otherwise `images` is empty and `description` null (name, price, sizes are facts and stay).",
     request: { params: idParams },
     responses: {
       200: { description: "The product", content: { "application/json": { schema: productViewSchema } } },
@@ -57,6 +62,21 @@ const priceHistoryRoute = defineAccess(
   }),
   "public",
 );
+
+/**
+ * Whether the caller may see the shop's photos and text of a product (catalogue conforme, 2026-11-14): her own article
+ * (an item of hers on it, even in the trash, or a link she pasted), a shop with an agreement, or an admin / « Testeuse ».
+ */
+async function shopMediaAllowed(db: CatalogDeps["db"], userId: string | null, productId: string): Promise<boolean> {
+  const { rows } = await db.execute<{ allowed: boolean }>(sql`
+    select (s.listing_agreement_at is not null
+      or exists (select 1 from items i where i.product_id = p.id and i.user_id = ${userId})
+      or exists (select 1 from captures c where c.product_id = p.id and c.trigger = 'user'
+        and c.requested_by = ${userId})) as allowed
+    from products p join shops s on s.id = p.shop_id where p.id = ${productId}`);
+  if (rows[0]?.allowed) return true;
+  return userId ? isPrivileged(db, userId) : false;
+}
 
 const dayOf = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -111,8 +131,12 @@ export function productsRoutes(deps: CatalogDeps, limiter: MiddlewareHandler<Acc
 
   return app
     .openapi(getProductRoute, async (c) => {
-      const view = await loadProductView(db, c.req.valid("param").id);
-      return view ? c.json(view, 200) : c.json(notFound, 404);
+      const id = c.req.valid("param").id;
+      const view = await loadProductView(db, id);
+      if (!view) return c.json(notFound, 404);
+      const session = await c.var.getSession();
+      const allowed = await shopMediaAllowed(db, session?.user.id ?? null, id);
+      return c.json(allowed ? view : { ...view, images: [], description: null }, 200);
     })
     .openapi(priceHistoryRoute, async (c) => {
       const { id } = c.req.valid("param");

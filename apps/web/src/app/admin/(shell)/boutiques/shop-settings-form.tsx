@@ -11,6 +11,10 @@ const STATUSES = shopStatusSchema.options;
 const MODES = ["auto", "manual"] as const;
 const KINDS = ["catalog", "secondhand"] as const;
 
+/** The UTC day (`YYYY-MM-DD`) of a stored timestamp, or empty. */
+const dayOf = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
+const todayUtc = () => new Date().toISOString().slice(0, 10);
+
 /** The settings of a shop: one PATCH with the fields, then a refresh of the page. */
 export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
   const t = useTranslations("Admin.shops");
@@ -24,6 +28,8 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
   const [testUrl, setTestUrl] = useState(shop.testUrl ?? "");
   const [domains, setDomains] = useState(shop.domains.join("\n"));
   const [isMajorBrand, setIsMajorBrand] = useState(shop.isMajorBrand);
+  const [agreed, setAgreed] = useState(shop.listingAgreementAt !== null);
+  const [agreementDay, setAgreementDay] = useState(dayOf(shop.listingAgreementAt));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; failed: boolean; shopId?: string } | null>(null);
 
@@ -43,6 +49,8 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
     setTestUrl(shop.testUrl ?? "");
     setDomains(shop.domains.join("\n"));
     setIsMajorBrand(shop.isMajorBrand);
+    setAgreed(shop.listingAgreementAt !== null);
+    setAgreementDay(dayOf(shop.listingAgreementAt));
   }, [shop]);
 
   const submit = async (event: React.FormEvent) => {
@@ -51,6 +59,7 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
     if (testUrl.trim() !== "" && canonicalizeUrl(testUrl.trim()) === null) {
       return setMessage({ text: errors("invalidUrl"), failed: true });
     }
+    if (agreed && agreementDay === "") return setMessage({ text: t("listingAgreementMissing"), failed: true });
     setBusy(true);
     const res = await adminRequest("PATCH", `/api/admin/shops/${shop.id}`, {
       name,
@@ -64,6 +73,7 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
         .map((d) => d.trim())
         .filter((d) => d !== ""),
       isMajorBrand,
+      listingAgreementAt: agreed ? agreementDay : null,
     });
     setBusy(false);
     if (res.ok) {
@@ -179,6 +189,43 @@ export function ShopSettingsForm({ shop }: { shop: AdminShop }) {
           </span>
         </span>
       </label>
+      <fieldset className="flex flex-col gap-space-2 sm:col-span-2">
+        <legend className="sr-only">{t("listingAgreement")}</legend>
+        <label className="flex min-h-touch-target items-start gap-space-2 text-sm">
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => {
+              setAgreed(e.target.checked);
+              if (e.target.checked && agreementDay === "") setAgreementDay(todayUtc());
+            }}
+            aria-describedby="listing-agreement-hint"
+            data-testid="listing-agreement"
+            className="mt-space-0-5 size-space-5 accent-accent"
+          />
+          <span className="flex flex-col gap-space-1">
+            {t("listingAgreement")}
+            <span id="listing-agreement-hint" className="text-ink-muted">
+              {t("listingAgreementHint")}
+            </span>
+          </span>
+        </label>
+        {agreed && (
+          <label className={`${field} sm:max-w-1/2`}>
+            {t("listingAgreementDate")}
+            <input
+              type="date"
+              required
+              min="2000-01-01"
+              max={todayUtc()}
+              value={agreementDay}
+              onChange={(e) => setAgreementDay(e.target.value)}
+              data-testid="listing-agreement-date"
+              className={inputClass}
+            />
+          </label>
+        )}
+      </fieldset>
       <div className="flex flex-col gap-space-2 sm:col-span-2">
         <div>
           <button type="submit" className={primaryButtonClass} disabled={busy}>

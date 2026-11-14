@@ -293,6 +293,7 @@ function shape(shop: Shop, domains: string[], stats: ShopStats | undefined, now:
     domains: [...domains].sort(),
     values: shop.values as ShopValue[],
     isMajorBrand: shop.isMajorBrand,
+    listingAgreementAt: shop.listingAgreementAt?.toISOString() ?? null,
     importEnabled: shop.importEnabled,
     ...importStatusShape(shop, now),
     health: shopHealth({
@@ -485,10 +486,14 @@ export function adminShopsRoutes(deps: CatalogDeps) {
     })
     .openapi(patchRoute, async (c) => {
       const { id } = c.req.valid("param");
-      const { domains: rawDomains, testUrl, ...rest } = c.req.valid("json");
+      const { domains: rawDomains, testUrl, listingAgreementAt, ...rest } = c.req.valid("json");
       // Validated by the schema; stored in canonical form (tracking parameters dropped).
       const settings = {
         ...rest,
+        // « Accord de référencement »: its day, at 00:00 UTC (like the admin's put-online dates).
+        ...(listingAgreementAt === undefined
+          ? {}
+          : { listingAgreementAt: listingAgreementAt === null ? null : new Date(`${listingAgreementAt}T00:00:00Z`) }),
         ...(testUrl === undefined ? {} : { testUrl: testUrl === null ? null : canonicalizeUrl(testUrl) }),
       };
       noteAudit(c, {

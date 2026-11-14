@@ -250,7 +250,9 @@
       "wantOf": "Je le veux : {name}",
       "wanted": "Dans tes envies",
       "wantFailed": "Ça n’a pas marché. Réessaie dans un instant.",
-      "previousPrice": "Prix avant réduction"
+      "previousPrice": "Prix avant réduction",
+      "photosAt": "Voir les photos chez {shop}",
+      "newTab": "(s’ouvre dans un nouvel onglet)"
     },
     "filters": {
       "menu": "{count, plural, =0 {Filtres et tri} other {Filtres et tri (#)}}",
@@ -325,7 +327,9 @@
       "checkedMinutes": "Stock vérifié il y a {minutes} min",
       "checkedHours": "Stock vérifié il y a {hours} h",
       "checkedOn": "Stock vérifié le {date}",
-      "gone": "Cet article n’est plus en vente chez la boutique."
+      "gone": "Cet article n’est plus en vente chez la boutique.",
+      "photosAt": "Voir les photos chez {shop}",
+      "illustrationNote": "Illustration Closyria : les photos de l’article sont chez {shop}."
     }
   },
   "Auth": {
@@ -717,7 +721,11 @@
           "wooApiUnavailable": "L’API publique WooCommerce de la boutique est désactivée",
           "unsupportedPlatform": "Plateforme non prise en charge pour l’import"
         }
-      }
+      },
+      "listingAgreement": "Accord de référencement",
+      "listingAgreementHint": "La boutique a accepté d’être référencée : tout son catalogue (imports compris) est public dans Découvrir, avec ses photos et ses textes.",
+      "listingAgreementDate": "Date de l’accord",
+      "listingAgreementMissing": "Indique la date de l’accord."
     },
     "captures": {
       "title": "Captures en échec",
@@ -1075,7 +1083,13 @@
         "notFound": "Ce compte n’existe plus.",
         "generic": "La suppression a échoué. Réessaie.",
         "protectedAdmin": "Compte admin : il ne se supprime pas ici."
-      }
+      },
+      "tester": "Testeuse",
+      "testerHint": "Elle voit dans Découvrir les articles venus seulement d’un import complet, avec les photos et les textes des boutiques.",
+      "testerSaved": "Enregistré.",
+      "testerFailed": "Ça n’a pas marché. Réessaie.",
+      "testerYes": "Oui",
+      "testerNo": "Non"
     }
   },
   "Capture": {

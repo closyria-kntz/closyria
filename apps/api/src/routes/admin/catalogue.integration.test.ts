@@ -80,7 +80,15 @@ async function newShop(values: Partial<typeof schema.shops.$inferInsert> = {}, d
   const n = ++counter;
   const [shop] = await t.db
     .insert(schema.shops)
-    .values({ name: `Shop ${n}`, slug: `adm-cat-${n}`, status: "published", platform: "shopify", ...values })
+    // A partner shop: what the catalogue shows to anyone is unchanged by the catalogue conforme.
+    .values({
+      name: `Shop ${n}`,
+      slug: `adm-cat-${n}`,
+      status: "published",
+      platform: "shopify",
+      listingAgreementAt: new Date("2026-11-01T00:00:00Z"),
+      ...values,
+    })
     .returning();
   if (!shop) throw new Error("no shop");
   await t.db.insert(schema.shopDomains).values({ domain: domain ?? `adm-cat-${n}.test`, shopId: shop.id });

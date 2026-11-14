@@ -167,6 +167,7 @@ const shop = {
   health: "ok",
   values: ["eco"],
   isMajorBrand: true,
+  listingAgreementAt: null,
   importEnabled: false,
   lastImportAt: null,
   lastImportError: null,

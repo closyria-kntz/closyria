@@ -246,6 +246,13 @@
       "when": 1794674435925,
       "tag": "0034_events_user_occurred",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1794682003873,
+      "tag": "0035_catalogue_conforme",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,10 @@ import {
   type CatalogQuery,
   type CatalogSort,
   catalogSortSchema,
+  factualDescription,
+  type IllustrationKind,
   type ItemStage,
+  illustrationKindsByCategory,
   type ReportReason,
   type SizeKind,
   sizeKindsByCategory,
@@ -43,7 +46,25 @@ export type Viewer = {
   profileId: string | null;
   sizes: Record<SizeKind, string[]>;
   sizeKinds: ReadonlyMap<string, SizeKind>;
+  /**
+   * An admin or a « Testeuse » (catalogue conforme, 2026-11-14): she sees what only a full import brought, with every
+   * shop's photos and texts. Everyone else sees pasted articles and partner shops (`visibleTo`, `showsShopMedia`).
+   */
+  privileged: boolean;
+  /** The illustration's silhouette of each category (`illustrationKindsByCategory`); absent: « other ». */
+  illustrationKinds: ReadonlyMap<string, IllustrationKind>;
+  /** The category tree (slug, name, parent), for the factual sentence of a sheet. */
+  categories: ReadonlyMap<string, { slug: string; name: string; parentId: string | null }>;
 };
+
+/** Whether the person is an admin or a « Testeuse » (`Viewer.privileged`); false for an unknown id. */
+export async function isPrivileged(db: Database, userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ role: schema.user.role, isTester: schema.user.isTester })
+    .from(schema.user)
+    .where(sql`${schema.user.id} = ${userId}`);
+  return row ? row.role === "admin" || row.isTester : false;
+}
 
 /**
  * The viewer: `profileId` when it is one of her profiles, else her first profile (never created here), else none.
@@ -62,7 +83,7 @@ export async function loadViewer(db: Database, userId: string, profileId: string
         .from(schema.profiles)
         .where(sql`${schema.profiles.id} = ${profileId} and ${schema.profiles.userId} = ${userId}`)
     : [];
-  const [[profile], categories] = await Promise.all([
+  const [[profile], categories, privileged] = await Promise.all([
     own.length
       ? own
       : db
@@ -73,8 +94,14 @@ export async function loadViewer(db: Database, userId: string, profileId: string
           .limit(1),
     // A small reference table, read once per request.
     db
-      .select({ id: schema.categories.id, parentId: schema.categories.parentId, slug: schema.categories.slug })
+      .select({
+        id: schema.categories.id,
+        parentId: schema.categories.parentId,
+        slug: schema.categories.slug,
+        name: schema.categories.name,
+      })
       .from(schema.categories),
+    isPrivileged(db, userId),
   ]);
   return {
     userId,
@@ -85,6 +112,9 @@ export async function loadViewer(db: Database, userId: string, profileId: string
       shoes: profile?.sizesShoes ?? [],
     },
     sizeKinds: sizeKindsByCategory(categories),
+    privileged,
+    illustrationKinds: illustrationKindsByCategory(categories),
+    categories: new Map(categories.map((c) => [c.id, { slug: c.slug, name: c.name, parentId: c.parentId }])),
   };
 }
 
@@ -177,6 +207,33 @@ export const completeWithImage = sql`${complete} and ${hasImage}`;
  */
 export const inCatalogue = sql`${visible} and ${completeWithImage}`;
 
+// --- Catalogue conforme au droit (docs/specs/2026-11-14-catalogue-conforme.md). ---
+
+/** A shop with an « Accord de référencement »: its whole catalogue is public, photos and texts included. Shop `s`. */
+export const partnerShop = sql`s.listing_agreement_at is not null`;
+
+/**
+ * Pasted by a user: a link she pasted (a user capture, whoever she is, even after her account went), or an item on
+ * it kept by someone who is neither an admin nor a « Testeuse » (their « Je le veux » on an imported article must
+ * not make it public). Product `p`.
+ */
+export const pastedByUser = sql`(exists (
+    select 1 from captures pc where pc.product_id = p.id and pc.trigger = 'user'
+  ) or exists (
+    select 1 from items pit join "user" pu on pu.id = pit.user_id
+    where pit.product_id = p.id and pu.role <> 'admin' and not pu.is_tester
+  ))`;
+
+/**
+ * Who sees an article of « Découvrir », on top of `inCatalogue`: an admin or a « Testeuse » sees them all; anyone
+ * else, the pasted ones and those of a partner shop (a full import alone stays private).
+ */
+export const visibleTo = (viewer: { privileged: boolean }): SQL =>
+  viewer.privileged ? sql`true` : sql`(${partnerShop} or ${pastedByUser})`;
+
+/** Whether the shop's photos and text may be shown: a partner shop, or an admin / « Testeuse » looking. Shop `s`. */
+export const showsShopMedia = (viewer: { privileged: boolean }): SQL => (viewer.privileged ? sql`true` : partnerShop);
+
 const onSale = sql`p.compare_at_cents > p.price_cents`;
 
 type CardRow = {
@@ -190,24 +247,36 @@ type CardRow = {
   currency: string;
   size_in_stock: boolean | null;
   wanted: boolean;
+  shows_media: boolean;
+  canonical_url: string;
+  category_id: string | null;
+  color_hex: string | null;
   [key: string]: unknown;
 };
 
-const toCard = (r: CardRow): CatalogCard => ({
-  productId: r.id,
-  name: r.name,
-  shop: { id: r.shop_id, name: r.shop_name },
-  imageUrl: catalogImageUrl(r.image_id),
-  priceCents: Number(r.price_cents),
-  // The shop's crossed price only when it is above the price (the item card's « −20 € » rule, `priceDropCents`).
-  previousPriceCents:
-    r.compare_at_cents !== null && Number(r.compare_at_cents) > Number(r.price_cents)
-      ? Number(r.compare_at_cents)
-      : null,
-  currency: r.currency,
-  sizeInStock: r.size_in_stock,
-  wanted: r.wanted,
-});
+const toCard =
+  (viewer: Viewer) =>
+  (r: CardRow): CatalogCard => ({
+    productId: r.id,
+    name: r.name,
+    shop: { id: r.shop_id, name: r.shop_name },
+    // Never the shop's photo without its agreement (or an admin / « Testeuse »): the illustration instead.
+    imageUrl: r.shows_media ? catalogImageUrl(r.image_id) : null,
+    illustration: {
+      kind: (r.category_id ? viewer.illustrationKinds.get(r.category_id) : undefined) ?? "other",
+      color: r.color_hex && /^#[0-9A-Fa-f]{6}$/.test(r.color_hex) ? r.color_hex : null,
+    },
+    url: r.canonical_url,
+    priceCents: Number(r.price_cents),
+    // The shop's crossed price only when it is above the price (the item card's « −20 € » rule, `priceDropCents`).
+    previousPriceCents:
+      r.compare_at_cents !== null && Number(r.compare_at_cents) > Number(r.price_cents)
+        ? Number(r.compare_at_cents)
+        : null,
+    currency: r.currency,
+    sizeInStock: r.size_in_stock,
+    wanted: r.wanted,
+  });
 
 /** Cards of the visible products matching `where`, in `orderBy`. */
 async function selectCards(
@@ -215,13 +284,16 @@ async function selectCards(
   viewer: Viewer,
   options: { where: SQL[]; orderBy: SQL; limit: number; extra?: SQL },
 ): Promise<CardRow[]> {
-  const where = [complete, visible, ...options.where];
+  const where = [complete, visible, visibleTo(viewer), ...options.where];
   const { rows } = await db.execute<CardRow>(sql`
     select p.id, p.name, s.id as shop_id, s.name as shop_name, img.id as image_id, p.price_cents,
-      p.compare_at_cents, p.currency, ${sizeInStock(viewer)} as size_in_stock, ${wanted(viewer)} as wanted
+      p.compare_at_cents, p.currency, ${sizeInStock(viewer)} as size_in_stock, ${wanted(viewer)} as wanted,
+      ${showsShopMedia(viewer)} as shows_media, p.category_id, pcol.hex as color_hex,
+      p.canonical_url
       ${options.extra ? sql`, ${options.extra}` : sql``}
     from products p
     join shops s on s.id = p.shop_id
+    left join colors pcol on pcol.id = p.color_id
     join lateral (
       select pi.id from product_images pi where pi.product_id = p.id order by pi.position, pi.id limit 1
     ) img on true
@@ -417,7 +489,7 @@ export async function listCatalog(db: Database, viewer: Viewer, query: CatalogQu
   const page = rows.slice(0, CATALOG_PAGE_SIZE);
   const last = page.at(-1);
   return {
-    items: page.map(toCard),
+    items: page.map(toCard(viewer)),
     hasSizes: hasSizes(viewer),
     nextCursor:
       rows.length > CATALOG_PAGE_SIZE && last
@@ -441,7 +513,7 @@ export async function loadCatalogDetail(
     where: [sql`p.id = ${productId}`],
     orderBy: sql`p.id`,
     limit: 1,
-    extra: sql`p.category_id, p.color_id, p.shop_id as own_shop_id, ${likesOf} as likes, p.canonical_url,
+    extra: sql`p.color_id, p.material_id, p.description, p.shop_id as own_shop_id, ${likesOf} as likes,
       p.last_captured_at`,
   });
   if (!row) return null;
@@ -453,12 +525,15 @@ export async function loadCatalogDetail(
     sql`, `,
   );
 
-  const [images, sizes, mine, close, sameShop, sameStyle] = await Promise.all([
-    db
-      .select({ id: schema.productImages.id })
-      .from(schema.productImages)
-      .where(sql`${schema.productImages.productId} = ${productId}`)
-      .orderBy(schema.productImages.position, schema.productImages.id),
+  const showsMedia = Boolean(row.shows_media);
+  const [images, sizes, mine, close, sameShop, sameStyle, facts] = await Promise.all([
+    showsMedia
+      ? db
+          .select({ id: schema.productImages.id })
+          .from(schema.productImages)
+          .where(sql`${schema.productImages.productId} = ${productId}`)
+          .orderBy(schema.productImages.position, schema.productImages.id)
+      : [],
     db
       .select({ label: schema.productSizes.label, available: schema.productSizes.available })
       .from(schema.productSizes)
@@ -491,27 +566,72 @@ export async function loadCatalogDetail(
         limit: CATALOG_DETAIL_LIMITS.sameStyle,
       });
     })(),
+    loadFactNames(db, colorId, (row.material_id as string | null) ?? null),
   ]);
 
   const likes = Number(row.likes);
   const own = mine[0];
+  const shopText = typeof row.description === "string" ? row.description.trim() : "";
+  const factual = factualDescription({
+    category: categoryFact(viewer, categoryId),
+    color: facts.color,
+    material: facts.material,
+    sizes: sizes.filter((s) => s.available).map((s) => s.label),
+  });
   const kind = categoryId ? viewer.sizeKinds.get(categoryId) : undefined;
   const mySizes = kind ? viewer.sizes[kind].filter((size) => size.trim() !== "") : [];
   return {
-    ...toCard(row),
+    ...toCard(viewer)(row),
     images: images.map((i) => catalogImageUrl(i.id)),
-    url: row.canonical_url as string,
+    // The shop's own words only with its agreement (or for an admin / « Testeuse »); otherwise facts only.
+    description: showsMedia && shopText ? shopText : factual,
     sizes,
     mySizes,
     likes: likes >= LIKES_THRESHOLD ? likes : null,
     myItem: own ? { itemId: own.id, stage: own.stage as ItemStage } : null,
     close,
-    sameShop: sameShop.map(toCard),
-    sameStyle: sameStyle.map(toCard),
+    sameShop: sameShop.map(toCard(viewer)),
+    sameStyle: sameStyle.map(toCard(viewer)),
     checkedAt: row.last_captured_at ? new Date(row.last_captured_at as string | Date).toISOString() : null,
     // The route says whether a fresh read is under way (`requestSheetRefresh`).
     refreshing: false,
   };
+}
+
+/** The category of the sentence, with its ancestors' slugs (nearest first) so an unknown one takes its parent's noun. */
+function categoryFact(viewer: Viewer, categoryId: string | null) {
+  const category = categoryId ? viewer.categories.get(categoryId) : undefined;
+  if (!category) return null;
+  const parents: string[] = [];
+  const seen = new Set([categoryId]);
+  let parentId = category.parentId;
+  while (parentId && !seen.has(parentId)) {
+    seen.add(parentId);
+    const parent = viewer.categories.get(parentId);
+    if (!parent) break;
+    parents.push(parent.slug);
+    parentId = parent.parentId;
+  }
+  return { slug: category.slug, name: category.name, parents };
+}
+
+/** The colour's and material's reference names (two small tables), for the factual sentence. */
+async function loadFactNames(db: Database, colorId: string | null, materialId: string | null) {
+  const [color, material] = await Promise.all([
+    colorId
+      ? db
+          .select({ slug: schema.colors.slug, name: schema.colors.name })
+          .from(schema.colors)
+          .where(sql`${schema.colors.id} = ${colorId}`)
+      : [],
+    materialId
+      ? db
+          .select({ slug: schema.materials.slug, name: schema.materials.name })
+          .from(schema.materials)
+          .where(sql`${schema.materials.id} = ${materialId}`)
+      : [],
+  ]);
+  return { color: color[0] ?? null, material: material[0] ?? null };
 }
 
 type CloseRow = {
@@ -577,9 +697,10 @@ export async function reportProduct(
   productId: string,
   reason: ReportReason,
 ): Promise<boolean> {
+  const viewer = { privileged: await isPrivileged(db, userId) };
   const { rows } = await db.execute<{ id: string }>(sql`
     select p.id from products p join shops s on s.id = p.shop_id
-    where p.id = ${productId} and ${inCatalogue}`);
+    where p.id = ${productId} and ${inCatalogue} and ${visibleTo(viewer)}`);
   if (rows.length === 0) return false;
   await db
     .insert(schema.productReports)

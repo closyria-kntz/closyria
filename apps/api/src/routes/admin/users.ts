@@ -6,6 +6,7 @@ import {
   adminUserDetailSchema,
   adminUserErrorSchema,
   adminUserListSchema,
+  adminUserPatchSchema,
   adminUsersQuerySchema,
   GUEST_DELETE_CONFIRMATION,
 } from "@closyria/shared";
@@ -119,6 +120,27 @@ const detailRoute = defineAccess(
   "admin",
 );
 
+const patchRoute = defineAccess(
+  createRoute({
+    method: "patch",
+    path: "/admin/users/{id}",
+    summary: "Switch « Testeuse » on or off",
+    description:
+      "`isTester`: she sees in « Découvrir » the articles only a full import brought, with the shops' photos and " +
+      "texts (catalogue conforme). Journalised (`user.tester`). Answers the person as `GET` does.",
+    request: {
+      params: idParam,
+      body: { required: true, content: { "application/json": { schema: adminUserPatchSchema } } },
+    },
+    responses: {
+      200: { description: "The person", content: { "application/json": { schema: adminUserDetailSchema } } },
+      400: errorContent("Invalid body"),
+      404: errorContent("Unknown person"),
+    },
+  }),
+  "admin",
+);
+
 const deleteRoute = defineAccess(
   createRoute({
     method: "delete",
@@ -155,6 +177,35 @@ async function signInMethods(db: Database, id: string, isAnonymous: boolean): Pr
   if (linked.has("apple")) methods.push("apple");
   if (!isAnonymous) methods.push("email-otp");
   return methods;
+}
+
+/** One person's facts and counts (`GET /admin/users/{id}`), or null when unknown. */
+async function loadDetail(db: Database, id: string) {
+  const owned = (table: SQL, extra?: SQL) =>
+    countOf(sql`${table} where user_id = ${u.id}${extra ? sql` and ${extra}` : sql``}`);
+  const [found] = await db
+    .select({
+      ...rowColumns,
+      isTester: u.isTester,
+      profiles: owned(sql`${schema.profiles}`),
+      wishlists: owned(sql`${schema.wishlists}`),
+      spottedItems: owned(sql`${schema.items}`, sql`deleted_at is null and stage = 'spotted'`),
+      ownedItems: owned(sql`${schema.items}`, sql`deleted_at is null and stage = 'owned'`),
+      sessions: owned(sql`${schema.session}`),
+    })
+    .from(u)
+    .where(eq(u.id, id));
+  if (!found) return null;
+  return {
+    ...toRow(found),
+    isTester: found.isTester,
+    profiles: found.profiles,
+    wishlists: found.wishlists,
+    spottedItems: found.spottedItems,
+    ownedItems: found.ownedItems,
+    sessions: found.sessions,
+    signInMethods: await signInMethods(db, found.id, found.isAnonymous),
+  };
 }
 
 export function adminUsersRoutes(deps: AdminUsersDeps) {
@@ -196,33 +247,17 @@ export function adminUsersRoutes(deps: AdminUsersDeps) {
       );
     })
     .openapi(detailRoute, async (c) => {
+      const found = await loadDetail(db, c.req.valid("param").id);
+      return found ? c.json(found, 200) : c.json(notFound, 404);
+    })
+    .openapi(patchRoute, async (c) => {
       const { id } = c.req.valid("param");
-      const owned = (table: SQL, extra?: SQL) =>
-        countOf(sql`${table} where user_id = ${u.id}${extra ? sql` and ${extra}` : sql``}`);
-      const [found] = await db
-        .select({
-          ...rowColumns,
-          profiles: owned(sql`${schema.profiles}`),
-          wishlists: owned(sql`${schema.wishlists}`),
-          spottedItems: owned(sql`${schema.items}`, sql`deleted_at is null and stage = 'spotted'`),
-          ownedItems: owned(sql`${schema.items}`, sql`deleted_at is null and stage = 'owned'`),
-          sessions: owned(sql`${schema.session}`),
-        })
-        .from(u)
-        .where(eq(u.id, id));
-      if (!found) return c.json(notFound, 404);
-      return c.json(
-        {
-          ...toRow(found),
-          profiles: found.profiles,
-          wishlists: found.wishlists,
-          spottedItems: found.spottedItems,
-          ownedItems: found.ownedItems,
-          sessions: found.sessions,
-          signInMethods: await signInMethods(db, found.id, found.isAnonymous),
-        },
-        200,
-      );
+      const { isTester } = c.req.valid("json");
+      noteAudit(c, { action: "user.tester", target: `user:${id}`, details: { isTester } });
+      const updated = await db.update(u).set({ isTester }).where(eq(u.id, id)).returning({ id: u.id });
+      if (updated.length === 0) return c.json(notFound, 404);
+      const found = await loadDetail(db, id);
+      return found ? c.json(found, 200) : c.json(notFound, 404);
     })
     .openapi(deleteRoute, async (c) => {
       const { id } = c.req.valid("param");

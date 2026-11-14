@@ -20,6 +20,11 @@ export const user = pgTable("user", {
   seenTips: text("seen_tips").array().default(sql`'{}'::text[]`).notNull(),
   /** When she went through or skipped the first-opening discovery; null while she has not. */
   onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
+  /**
+   * « Testeuse », set by the admin (catalogue conforme, 2026-11-14): like an admin, she sees in « Découvrir » the
+   * articles that only a full shop import brought, with the shops' photos and texts.
+   */
+  isTester: boolean("is_tester").default(false).notNull(),
 });
 
 export const session = pgTable(

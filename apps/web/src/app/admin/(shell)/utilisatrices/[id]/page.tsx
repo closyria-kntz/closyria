@@ -6,6 +6,7 @@ import { fetchAdminUser } from "@/lib/admin-api";
 import { adminCall, requireAdminPage } from "../../../server";
 import { buttonClass } from "../../../ui";
 import { DeleteUser } from "./delete-user";
+import { TesterSwitch } from "./tester-switch";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -87,6 +88,7 @@ export default async function AdminUserPage({ params }: Props) {
             [t("sessions"), user.sessions],
             [t("devices"), user.pushDevices],
           ])}
+          <TesterSwitch userId={user.id} isTester={user.isTester} />
         </section>
 
         <section aria-labelledby="user-usage" className={section}>

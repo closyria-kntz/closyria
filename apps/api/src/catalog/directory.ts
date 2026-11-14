@@ -1,6 +1,6 @@
 import { type Database, sql } from "@closyria/db";
 import type { ShopCard, ShopDirectory } from "@closyria/shared";
-import { inCatalogue, shopInCatalogue } from "./catalogue";
+import { inCatalogue, isPrivileged, shopInCatalogue, showsShopMedia, visibleTo } from "./catalogue";
 import { catalogImageUrl } from "./product-view";
 
 type Row = {
@@ -30,14 +30,18 @@ export async function featuredShopId(db: Database): Promise<string | null> {
 /**
  * The shops of « Découvrir »: published, not merged, not a « grande enseigne », with a domain to open. Only shop
  * facts leave this function (name, main domain, how many of its articles « Découvrir » shows, one photo of the newest
- * of them, « Nouveautés » order), never who pasted them. The featured one is the shop whose `featured_at` is the most recent; it is left out of `shops`.
+ * of them, « Nouveautés » order, only for a shop with an agreement or an admin / « Testeuse »), never who pasted them. The featured one is the shop whose `featured_at` is the most recent; it is left out of `shops`.
  */
-export async function loadShopDirectory(db: Database): Promise<ShopDirectory> {
+export async function loadShopDirectory(db: Database, userId: string): Promise<ShopDirectory> {
+  // Catalogue conforme: she counts only what « Découvrir » shows her, and a tile has a shop's photo only when the
+  // shop agreed (or she is an admin / « Testeuse »).
+  const viewer = { privileged: await isPrivileged(db, userId) };
   const { rows } = await db.execute<Row>(sql`
     select s.id, s.name, d.domain,
-      (select count(*)::int from products p where p.shop_id = s.id and ${inCatalogue}) as item_count,
+      (select count(*)::int from products p where p.shop_id = s.id and ${inCatalogue} and ${visibleTo(viewer)})
+        as item_count,
       (select pi.id from products p join product_images pi on pi.product_id = p.id
-        where p.shop_id = s.id and ${inCatalogue}
+        where p.shop_id = s.id and ${inCatalogue} and ${showsShopMedia(viewer)}
         order by p.published_at desc nulls last, p.shop_rank nulls last, p.id, pi.position, pi.id limit 1) as image_id
     from shops s
     join lateral (

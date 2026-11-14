@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { ProductIllustration } from "@/components/product-illustration";
 import {
   activeCatalogueFilterCount,
   type CatalogueFilters,
@@ -128,9 +129,18 @@ function NewArrivalsUne({ card, onOpen }: { card: CatalogCard; onOpen: () => voi
       aria-labelledby={titleId}
       className="grid grid-cols-(--grid-une) overflow-hidden rounded-card bg-une text-ink lg:grid-cols-(--grid-une-wide)"
     >
-      <Link href={sheetHref(card.productId)} className={`block ${focusRing}`}>
-        {/* biome-ignore lint/performance/noImgElement: photos come from our own API, already resized. */}
-        <img src={card.imageUrl} alt={card.name} decoding="async" className="aspect-3/4 size-full object-cover" />
+      <Link
+        href={sheetHref(card.productId)}
+        aria-label={card.imageUrl ? undefined : card.name}
+        className={`block ${focusRing}`}
+      >
+        {card.imageUrl ? (
+          // biome-ignore lint/performance/noImgElement: photos come from our own API, already resized.
+          <img src={card.imageUrl} alt={card.name} decoding="async" className="aspect-3/4 size-full object-cover" />
+        ) : (
+          // Catalogue conforme: no shop photo without its agreement; the link carries the article's name.
+          <ProductIllustration illustration={card.illustration} className="aspect-3/4 size-full" />
+        )}
       </Link>
       <div className="flex min-w-space-0 flex-col justify-center gap-space-1-5 p-space-3-5 lg:p-space-5">
         <span className={kickerClass}>{t("newKicker")}</span>

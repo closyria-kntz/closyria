@@ -53,7 +53,14 @@ async function newShop(values: Partial<typeof schema.shops.$inferInsert> = {}, d
   const n = ++counter;
   const [shop] = await t.db
     .insert(schema.shops)
-    .values({ name: `Shop ${n}`, slug: `dir-shop-${n}`, status: "published", ...values })
+    // A partner shop: its tiles show its photo (catalogue-legal.integration.test.ts covers the others).
+    .values({
+      name: `Shop ${n}`,
+      slug: `dir-shop-${n}`,
+      status: "published",
+      listingAgreementAt: new Date("2026-11-01T00:00:00Z"),
+      ...values,
+    })
     .returning();
   if (!shop) throw new Error("no shop");
   const list = domains ?? [`dir-${n}.test`];

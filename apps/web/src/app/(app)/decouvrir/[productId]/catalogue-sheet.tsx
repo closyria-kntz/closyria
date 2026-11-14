@@ -16,6 +16,7 @@ import { CatalogueCard, HeartIcon, useWant } from "@/components/catalogue-card";
 import { Dialog } from "@/components/dialog";
 import { sectionTitleClass } from "@/components/home-news";
 import { GRID_CLASS } from "@/components/item-grid";
+import { ProductIllustration } from "@/components/product-illustration";
 import { ShareSheet } from "@/components/share-sheet";
 import {
   blockClass,
@@ -30,6 +31,7 @@ import { DISCOVER_PATH, fetchCatalogueDetail, readLastDiscoverHref, reportArticl
 import { formatPrice, priceDropCents } from "@/lib/price";
 import { profileHref, useCurrentProfile, useProfilesReady } from "@/lib/profile-context";
 import { actionClass, LOOK } from "../../produits/[id]/product-actions";
+import { ProductDescription } from "../../produits/[id]/product-description";
 import { ProductGallery } from "../../produits/[id]/product-gallery";
 import { TWO_COLUMNS } from "../../produits/[id]/product-view";
 
@@ -153,6 +155,7 @@ export function CatalogueSheet({ productId }: { productId: string }) {
               sizes: found.sizes,
               sizeInStock: found.sizeInStock,
               checkedAt: found.checkedAt,
+              description: found.description,
             }
           : {};
         return { status: "ready", sheet: { ...previous.sheet, ...fresh, refreshing: false } };
@@ -228,6 +231,8 @@ export function CatalogueSheet({ productId }: { productId: string }) {
 
   const { sheet } = load;
   const shop = sheet.shop.name;
+  // Catalogue conforme: a shop without a listing agreement — Closyria's illustration instead of its photos.
+  const illustrated = sheet.images.length === 0;
   const drop = priceDropCents(sheet.priceCents, sheet.previousPriceCents);
   const mine = sheet.myItem;
   const myItemHref = profileHref(`/produits/${sheet.productId}`, current.id, current.isDefault);
@@ -315,8 +320,16 @@ export function CatalogueSheet({ productId }: { productId: string }) {
         )}
         {/* Never a `javascript:` or other address as a link (the schema also requires http(s)). */}
         {isHttpUrl(sheet.url) ? (
-          <a href={sheet.url} target="_blank" rel="noopener noreferrer" className={`${actionClass} ${LOOK.outline}`}>
-            {tProduct("viewAt", { shop })}
+          <a
+            href={sheet.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="sheet-shop-link"
+            className={`${actionClass} ${LOOK.outline}`}
+          >
+            {/* Catalogue conforme: without the shop's photos here, the button says where they are. */}
+            {illustrated ? t("photosAt", { shop }) : tProduct("viewAt", { shop })}
+            <span className="sr-only"> {tCard("newTab")}</span>
           </a>
         ) : null}
         <button
@@ -342,12 +355,19 @@ export function CatalogueSheet({ productId }: { productId: string }) {
         {back}
         <article className={`${TWO_COLUMNS} gap-space-5`}>
           <div data-testid="product-gallery" className="lg:sticky lg:top-space-0 lg:self-start">
-            <ProductGallery
-              photos={sheet.images.map((url) => ({ id: url, url, ...PHOTO_SIZE, group: "product" as const }))}
-              alt={sheet.name}
-              thumbAlt={(n) => tItem("photos.alt", { n, name: sheet.name })}
-              groupLabels={{ product: tItem("photos.title") }}
-            />
+            {illustrated ? (
+              <div className="flex flex-col gap-space-2">
+                <ProductIllustration illustration={sheet.illustration} className="aspect-3/4 w-full rounded-card" />
+                <p className="text-meta text-ink-muted">{t("illustrationNote", { shop })}</p>
+              </div>
+            ) : (
+              <ProductGallery
+                photos={sheet.images.map((url) => ({ id: url, url, ...PHOTO_SIZE, group: "product" as const }))}
+                alt={sheet.name}
+                thumbAlt={(n) => tItem("photos.alt", { n, name: sheet.name })}
+                groupLabels={{ product: tItem("photos.title") }}
+              />
+            )}
           </div>
           <div data-testid="product-info" className="flex min-w-space-0 flex-col gap-space-3-5">
             <header className="flex flex-col gap-space-3-5">
@@ -405,6 +425,7 @@ export function CatalogueSheet({ productId }: { productId: string }) {
             )}
             {sizesBlock}
             {actions}
+            {sheet.description && <ProductDescription text={sheet.description} />}
             {sheet.close.length > 0 && (
               <section aria-labelledby="close-title" data-block className={blockClass}>
                 <h2 id="close-title" className={blockTitleClass}>

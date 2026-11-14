@@ -93,7 +93,15 @@ async function newShop(values: Partial<typeof schema.shops.$inferInsert> = {}) {
   const n = ++counter;
   const [shop] = await t.db
     .insert(schema.shops)
-    .values({ name: `Shop ${n}`, slug: `cat-shop-${n}`, status: "published", ...values })
+    // A partner shop (« Accord de référencement »): « Découvrir » shows its whole catalogue as before the catalogue
+    // conforme; who sees what without an agreement is tested in catalogue-legal.integration.test.ts.
+    .values({
+      name: `Shop ${n}`,
+      slug: `cat-shop-${n}`,
+      status: "published",
+      listingAgreementAt: new Date("2026-11-01T00:00:00Z"),
+      ...values,
+    })
     .returning();
   if (!shop) throw new Error("no shop");
   return shop;

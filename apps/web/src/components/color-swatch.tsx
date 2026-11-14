@@ -17,3 +17,13 @@ export function ColorSwatch({ hex }: { hex: string | null | undefined }) {
     />
   );
 }
+
+/**
+ * The same custom property for a drawing of a stored colour (the catalogue's illustrations, catalogue conforme): an
+ * SVG group with `--swatch` set to the valid hex, read inside by a token-based class such as `fill-(--swatch)`.
+ * Nothing set for an invalid or missing hex (the drawing keeps its neutral fill).
+ */
+export function SwatchGroup({ hex, children }: { hex: string | null | undefined; children: React.ReactNode }) {
+  const valid = swatchHex(hex);
+  return <g style={valid ? ({ "--swatch": valid } as React.CSSProperties) : undefined}>{children}</g>;
+}

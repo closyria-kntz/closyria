@@ -24,6 +24,8 @@ export function shopsRoutes(deps: CatalogDeps) {
   const app = new OpenAPIHono<AccessEnv>();
   return app.openapi(directoryRoute, async (c) => {
     c.header("Cache-Control", "private, no-cache");
-    return c.json(await loadShopDirectory(deps.db), 200);
+    const userId = c.var.session?.user.id;
+    if (!userId) throw new Error("session expected on a user route");
+    return c.json(await loadShopDirectory(deps.db, userId), 200);
   });
 }

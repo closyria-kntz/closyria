@@ -29,6 +29,8 @@ const card: CatalogCard = {
   name: "Robe Iris",
   shop: { id: OTHER, name: "Atelier" },
   imageUrl: `/api/catalog-images/${UUID}`,
+  illustration: { kind: "dress", color: null },
+  url: "https://atelier.example/robe-iris",
   priceCents: 4900,
   previousPriceCents: null,
   currency: "EUR",

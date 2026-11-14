@@ -1,10 +1,11 @@
 "use client";
 
-import { type CatalogCard, DEFAULT_LOVE_LEVEL, type ItemView } from "@closyria/shared";
+import { type CatalogCard, DEFAULT_LOVE_LEVEL, type ItemView, isHttpUrl } from "@closyria/shared";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useState } from "react";
 import { GRID_CLASS } from "@/components/item-grid";
+import { ProductIllustration } from "@/components/product-illustration";
 import { focusRing } from "@/components/ui";
 import { requestAccountPrompt } from "@/lib/account-prompt-request";
 import { formatAmount } from "@/lib/budget";
@@ -104,14 +105,18 @@ export function CatalogueCard({
     >
       <Link href={sheetHref(card.productId)} className={`flex flex-col rounded-card ${focusRing}`}>
         <div className="relative aspect-3/4 overflow-hidden rounded-t-card bg-media-backdrop">
-          {/* biome-ignore lint/performance/noImgElement: photos come from our own API, already resized. */}
-          <img
-            src={card.imageUrl}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="card-photo size-full object-cover"
-          />
+          {card.imageUrl ? (
+            // biome-ignore lint/performance/noImgElement: photos come from our own API, already resized.
+            <img
+              src={card.imageUrl}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="card-photo size-full object-cover"
+            />
+          ) : (
+            <ProductIllustration illustration={card.illustration} className="size-full" />
+          )}
         </div>
         {/* Room at the bottom of the photo for « Je le veux », laid over it (outside the link). */}
         <div className="flex min-w-space-0 flex-col gap-space-0-5 px-space-2-5 pt-space-2 pb-space-3">
@@ -137,6 +142,19 @@ export function CatalogueCard({
           </span>
         </div>
       </Link>
+      {/* Catalogue conforme: no shop photo here without its agreement — her way to the shop's own photos. */}
+      {!card.imageUrl && isHttpUrl(card.url) && (
+        <a
+          href={card.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="card-photos-at"
+          className={`mx-space-2-5 mb-space-1 flex min-h-touch-target min-w-space-0 items-center text-meta font-strong text-accent underline underline-offset-3 ${focusRing}`}
+        >
+          <span className="truncate">{t("photosAt", { shop: card.shop.name })}</span>
+          <span className="sr-only"> {t("newTab")}</span>
+        </a>
+      )}
       <div className="pointer-events-none absolute inset-x-space-0 top-space-0 aspect-3/4">
         {card.sizeInStock === true && (
           <span data-testid="card-size" className="clothing-tag absolute top-space-2 left-space-2">

@@ -3,6 +3,7 @@ export * from "./alerts";
 export * from "./catalog";
 export * from "./catalog-url";
 export * from "./catalogue";
+export * from "./catalogue-facts";
 export * from "./classify";
 export * from "./client-address";
 export * from "./dev-access";

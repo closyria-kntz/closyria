@@ -143,6 +143,11 @@ export const adminShopSchema = z.object({
   values: z.array(shopValueSchema),
   /** « Grande enseigne »: its articles stay usable (wishes, lists, links) but are never in « Découvrir ». */
   isMajorBrand: z.boolean(),
+  /**
+   * « Accord de référencement »: the day the shop agreed to be listed (00:00 UTC), null without one. Its whole
+   * catalogue (imports included) is then public in « Découvrir », with its photos and texts.
+   */
+  listingAgreementAt: isoDate.nullable(),
   /** « Importer tout le catalogue » (Shopify): the nightly import is on. */
   importEnabled: z.boolean(),
   lastImportAt: isoDate.nullable(),
@@ -218,6 +223,12 @@ const slugSchema = z
   .max(80)
   .regex(/^[a-z0-9-]+$/);
 
+/** A day of an « Accord de référencement »: a real calendar day from 2000-01-01 to tomorrow (UTC). */
+export const listingAgreementDaySchema = z.iso.date().refine((day) => {
+  const at = Date.parse(`${day}T00:00:00Z`);
+  return at >= Date.parse("2000-01-01T00:00:00Z") && at <= Date.now() + 86_400_000;
+});
+
 export const adminShopPatchSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
@@ -238,6 +249,8 @@ export const adminShopPatchSchema = z
       .transform((list) => [...new Set(list)]),
     importEnabled: z.boolean(),
     isMajorBrand: z.boolean(),
+    /** « Accord de référencement »: its day (`YYYY-MM-DD`, stored at 00:00 UTC), from 2000 to tomorrow; null takes it off. */
+    listingAgreementAt: listingAgreementDaySchema.nullable(),
   })
   .partial();
 
@@ -559,6 +572,8 @@ export const adminUserListSchema = z.object({ users: z.array(adminUserRowSchema)
 export type AdminUserList = z.infer<typeof adminUserListSchema>;
 
 export const adminUserDetailSchema = adminUserRowSchema.extend({
+  /** « Testeuse »: she sees in « Découvrir » what only a full import brought, with the shops' photos and texts. */
+  isTester: z.boolean(),
   profiles: count,
   wishlists: count,
   /** Items not in the trash still wished (« Envies ») / owned. */
@@ -568,6 +583,10 @@ export const adminUserDetailSchema = adminUserRowSchema.extend({
   signInMethods: z.array(adminSignInMethodSchema),
 });
 export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
+
+/** `PATCH /api/admin/users/{id}`: the admin's switches on a person (journalised). */
+export const adminUserPatchSchema = z.object({ isTester: z.boolean() });
+export type AdminUserPatch = z.infer<typeof adminUserPatchSchema>;
 
 /** `DELETE /api/admin/users/{id}`: her e-mail, or `SUPPRIMER` for a guest, typed by the admin. */
 export const adminUserDeleteSchema = z.object({ confirmation: z.string().trim().min(1).max(320) });
