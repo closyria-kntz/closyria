@@ -225,8 +225,11 @@ export function AppShell({ children, hasSession }: { children: ReactNode; hasSes
       setAccount(read.summary.account);
       setGuest(read.summary.isAnonymous);
     }
-    // No session at all: a visitor who kept nothing yet, a guest too. A failed read changes nothing.
+    // No session at all: a visitor who kept nothing yet, a guest too.
     if (read.kind === "signed-out" && alive.current) setGuest(true);
+    // A failed read while the band still waits: the profile switcher, as before this hint existed (never an empty
+    // pill that would stay until something changes elsewhere). A known answer is kept.
+    if (read.kind === "failed" && alive.current) setGuest((known) => known ?? false);
     if (alive.current) setReady(true);
   }, []);
 

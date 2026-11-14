@@ -14,7 +14,7 @@ se connecter » ; « en partie admin, on ne voit aucun compte, pour un SaaS c'es
 - **Compte** : le sélecteur de profil reste.
 - **Premier rendu** : le serveur voit si la requête porte un cookie de session. Sans cookie, c'est une invitée :
   « Se connecter » est là dès le premier rendu. Avec un cookie, une pastille neutre (sans texte) attend la lecture du
-  résumé, qui dit invitée ou compte ; une lecture échouée ne change rien. Les pages de l'app sont donc rendues à la
+  résumé, qui dit invitée ou compte ; une lecture échouée affiche le sélecteur de profils (jamais une pastille vide qui resterait). Les pages de l'app sont donc rendues à la
   demande (elles lisent les cookies).
 - **Accueil, invitée seulement** : bandeau discret « Crée ton compte pour garder tes articles sur tous tes appareils » +
   « Créer mon compte », avec une croix « Fermer ». Fermé, il ne revient pas avant 30 jours dans ce navigateur
