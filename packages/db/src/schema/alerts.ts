@@ -109,6 +109,9 @@ export const alertEvents = pgTable(
   (t) => [
     index("alert_events_user_created_idx").on(t.userId, t.createdAt.desc()),
     index("alert_events_item_kind_idx").on(t.itemId, t.kind, t.createdAt),
+    index("alert_events_profile_id_idx").on(t.profileId),
+    index("alert_events_shop_id_idx").on(t.shopId),
+    index("alert_events_sale_period_id_idx").on(t.salePeriodId),
     index("alert_events_digest_idx").on(t.userId, t.digestOn).where(sql`${t.digestOn} IS NOT NULL`),
     check("alert_events_kind_check", oneOf(t.kind, alertKindSchema.options)),
     check("alert_events_status_check", oneOf(t.status, alertStatusSchema.options)),
@@ -132,5 +135,5 @@ export const alertSends = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow().notNull(),
     ok: boolean("ok").notNull(),
   },
-  (t) => [index("alert_sends_sent_at_idx").on(t.sentAt)],
+  (t) => [index("alert_sends_sent_at_idx").on(t.sentAt), index("alert_sends_user_sent_idx").on(t.userId, t.sentAt)],
 );

@@ -34,8 +34,9 @@ export function registerOwnedTables(): void {
   registerOwnedTable(schema.loveLevels, schema.loveLevels.userId, mergeLoveLevels);
   // After profiles and lists: a budget follows its profile or list (one folded into the account's goes with it).
   registerOwnedTable(schema.budgets, schema.budgets.userId);
-  // After items: a guest's alerts (« unes », « Nouvelles ») follow her items into the account. Those of an item
-  // folded into one of the account's go with it (ON DELETE CASCADE).
+  // After profiles and items: a guest's alerts (« unes », « Nouvelles ») move to the account. Those of her « Moi » were
+  // re-pointed to the account's « Moi » by mergeProfiles; those of an item folded into one of the account's same
+  // product were deleted with it by mergeItems (ON DELETE CASCADE on item_id, an accepted loss).
   registerOwnedTable(schema.alertEvents, schema.alertEvents.userId);
   // On the user row itself: the discovery seen and the closed tips (task 7).
   registerAccountMerge(mergePreferences);

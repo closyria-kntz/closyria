@@ -50,6 +50,11 @@ export async function mergeProfiles(fromUserId: string, toUserId: string, tx: Db
     await tx.execute(
       sql`update ${schema.itemEvents} set to_profile_id = ${accountMoi.id} where to_profile_id = ${anonymousMoi.id}`,
     );
+    // Her alerts too (« Nouvelles », « unes »): the profile's deletion below would take them (cascade). Their user_id
+    // follows with the alert_events table, registered after.
+    await tx.execute(
+      sql`update ${schema.alertEvents} set profile_id = ${accountMoi.id} where profile_id = ${anonymousMoi.id}`,
+    );
     // Her « Moi » budget goes to the account's « Moi » when it has none; else the account's wins and hers is
     // dropped with the profile (cascade). Its user_id follows with the budgets table, registered after.
     await tx.execute(sql`

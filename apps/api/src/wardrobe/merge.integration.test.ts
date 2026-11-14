@@ -149,7 +149,17 @@ async function count(query: ReturnType<typeof sql>): Promise<number> {
 /** Rows left behind by the anonymous user, and links that cross two users (none may survive a merge). */
 async function expectNothingLeftOrCrossed(anonymousId: string) {
   expect(await count(sql`select count(*)::int as n from "user" where id = ${anonymousId}`)).toBe(0);
-  for (const table of ["profiles", "tags", "items", "wishlists", "media", "events", "love_levels", "budgets"]) {
+  for (const table of [
+    "profiles",
+    "tags",
+    "items",
+    "wishlists",
+    "media",
+    "events",
+    "love_levels",
+    "budgets",
+    "alert_events",
+  ]) {
     expect(
       await count(sql`select count(*)::int as n from ${sql.identifier(table)} where user_id = ${anonymousId}`),
     ).toBe(0);
@@ -501,6 +511,61 @@ describe("anonymous -> account merge on sign-in", () => {
     await expectNothingLeftOrCrossed(second.userId);
     expect(await budgetOf(fullMoi.id)).toEqual([{ amountCents: 20000, period: "month" }]);
     expect(await handle.db.select().from(schema.budgets).where(eq(schema.budgets.userId, full))).toHaveLength(1);
+  });
+
+  it("keeps her alerts: those of her « Moi » follow it into the account's « Moi », the others move as they are", async () => {
+    const email = `alertes-${randomUUID()}@example.test`;
+    const accountId = await signInWithEmail(email);
+    const accountMoi = await newProfile(accountId, "Moi", day(1));
+    const anonymous = await signInAnonymously();
+    const anonMoi = await newProfile(anonymous.userId, "Moi", day(2), 0);
+    const anonLea = await newProfile(anonymous.userId, "Léa", day(2), 1);
+    const product = await newProduct();
+    const other = await newProduct();
+    const moiItem = await newItem({ userId: anonymous.userId, profileId: anonMoi.id, productId: product.id });
+    const leaItem = await newItem({ userId: anonymous.userId, profileId: anonLea.id, productId: other.id });
+    const [sale] = await handle.db
+      .insert(schema.salePeriods)
+      .values({ name: "Soldes d'hiver", startsOn: "2027-01-13", endsOn: "2027-02-09" })
+      .returning();
+    await handle.db.insert(schema.alertEvents).values([
+      {
+        userId: anonymous.userId,
+        profileId: anonMoi.id,
+        itemId: moiItem.id,
+        productId: product.id,
+        kind: "size_back",
+        sizeLabel: "M",
+      },
+      {
+        userId: anonymous.userId,
+        profileId: anonLea.id,
+        itemId: leaItem.id,
+        productId: other.id,
+        kind: "price_drop",
+        priceCents: 4500,
+        previousCents: 6000,
+      },
+      { userId: anonymous.userId, kind: "sale_period", salePeriodId: sale?.id },
+    ]);
+
+    expect(await signInWithEmail(email, anonymous.cookie)).toBe(accountId);
+
+    await expectNothingLeftOrCrossed(anonymous.userId);
+    const events = await handle.db
+      .select({
+        kind: schema.alertEvents.kind,
+        profileId: schema.alertEvents.profileId,
+        itemId: schema.alertEvents.itemId,
+      })
+      .from(schema.alertEvents)
+      .where(eq(schema.alertEvents.userId, accountId))
+      .orderBy(asc(schema.alertEvents.kind));
+    expect(events).toEqual([
+      { kind: "price_drop", profileId: anonLea.id, itemId: leaItem.id },
+      { kind: "sale_period", profileId: null, itemId: null },
+      { kind: "size_back", profileId: accountMoi.id, itemId: moiItem.id },
+    ]);
   });
 
   it("folds into the first profile by position, not the oldest one", async () => {

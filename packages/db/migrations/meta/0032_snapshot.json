@@ -1,5 +1,5 @@
 {
-  "id": "f20d8c11-7ac9-4499-a944-7670380f278b",
+  "id": "7acdf631-aaee-4662-90bf-c2c5ae31357e",
   "prevId": "f59ccaf1-0957-47d8-93bf-58439ef442f0",
   "version": "7",
   "dialect": "postgresql",
@@ -153,6 +153,51 @@
             },
             {
               "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "alert_events_profile_id_idx": {
+          "name": "alert_events_profile_id_idx",
+          "columns": [
+            {
+              "expression": "profile_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "alert_events_shop_id_idx": {
+          "name": "alert_events_shop_id_idx",
+          "columns": [
+            {
+              "expression": "shop_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "alert_events_sale_period_id_idx": {
+          "name": "alert_events_sale_period_id_idx",
+          "columns": [
+            {
+              "expression": "sale_period_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -335,6 +380,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "alert_sends_user_sent_idx": {
+          "name": "alert_sends_user_sent_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sent_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -419,7 +485,7 @@
       "checkConstraints": {
         "alert_settings_digest_hour_check": {
           "name": "alert_settings_digest_hour_check",
-          "value": "\"alert_settings\".\"digest_hour\" BETWEEN 7 AND 22"
+          "value": "\"alert_settings\".\"digest_hour\" BETWEEN 8 AND 21"
         }
       },
       "isRLSEnabled": false

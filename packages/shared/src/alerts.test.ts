@@ -30,6 +30,7 @@ describe("isRealDrop", () => {
   });
   it("ignores a rise and no change", () => {
     expect(isRealDrop(10000, 10000)).toBe(false);
+    expect(isRealDrop(0, 0)).toBe(false);
     expect(isRealDrop(10000, 12000)).toBe(false);
   });
 });
@@ -41,6 +42,10 @@ describe("watchedSizes", () => {
   });
   it("else the profile's sizes for its kind", () => {
     expect(watchedSizes(null, ["38", "M"], true)).toEqual(["38", "M"]);
+  });
+  it("trims the profile's sizes and drops the blank ones", () => {
+    expect(watchedSizes(null, [" M ", "", "  ", "38"], true)).toEqual(["M", "38"]);
+    expect(watchedSizes(null, ["", " "], true)).toBe("any");
   });
   it("else any size", () => {
     expect(watchedSizes(null, [], true)).toBe("any");
@@ -60,6 +65,9 @@ describe("sizeCameBack", () => {
   });
   it("ignores another size coming back", () => {
     expect(sizeCameBack({ M: false, L: false }, { M: false, L: true }, ["M"])).toEqual([]);
+  });
+  it("ignores another watched size coming back when one was already in stock", () => {
+    expect(sizeCameBack({ M: true, L: false }, { M: true, L: true }, ["M", "L"])).toEqual([]);
   });
   it("ignores a size already in stock", () => {
     expect(sizeCameBack({ M: true }, { M: true }, ["M"])).toEqual([]);
@@ -130,13 +138,13 @@ describe("schemas", () => {
   it("alert kinds", () => {
     expect(alertKindSchema.options).toEqual(["size_back", "target_price", "price_drop", "sale_period", "shop_promo"]);
   });
-  it("settings: digest hour between 7 and 22", () => {
+  it("settings: digest hour between 8 and 21, out of the quiet hours", () => {
     const base = { sizeBack: true, targetPrice: true, digest: true };
     expect(alertSettingsSchema.safeParse({ ...base, digestHour: 18 }).success).toBe(true);
-    expect(alertSettingsSchema.safeParse({ ...base, digestHour: 7 }).success).toBe(true);
-    expect(alertSettingsSchema.safeParse({ ...base, digestHour: 22 }).success).toBe(true);
-    expect(alertSettingsSchema.safeParse({ ...base, digestHour: 6 }).success).toBe(false);
-    expect(alertSettingsSchema.safeParse({ ...base, digestHour: 23 }).success).toBe(false);
+    expect(alertSettingsSchema.safeParse({ ...base, digestHour: 8 }).success).toBe(true);
+    expect(alertSettingsSchema.safeParse({ ...base, digestHour: 21 }).success).toBe(true);
+    expect(alertSettingsSchema.safeParse({ ...base, digestHour: 7 }).success).toBe(false);
+    expect(alertSettingsSchema.safeParse({ ...base, digestHour: 22 }).success).toBe(false);
     expect(alertSettingsSchema.safeParse({ ...base, digestHour: 18.5 }).success).toBe(false);
     expect(alertSettingsPatchSchema.safeParse({ digestHour: 9 }).success).toBe(true);
     expect(alertSettingsPatchSchema.safeParse({}).success).toBe(false);
@@ -203,5 +211,7 @@ describe("schemas", () => {
     };
     expect(alertEventViewSchema.safeParse(view).success).toBe(true);
     expect(alertEventViewSchema.safeParse({ ...view, kind: "other" }).success).toBe(false);
+    expect(alertEventViewSchema.safeParse({ ...view, href: "//evil.test/x" }).success).toBe(false);
+    expect(alertEventViewSchema.safeParse({ ...view, href: "https://evil.test/x" }).success).toBe(false);
   });
 });

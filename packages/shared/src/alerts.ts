@@ -14,8 +14,9 @@ export const REAL_DROP_CENTS = 500;
 export const QUIET_FROM_HOUR = 22;
 /** …until this hour (Paris), when the held ones go out. */
 export const QUIET_UNTIL_HOUR = 8;
-export const DIGEST_HOUR_MIN = 7;
-export const DIGEST_HOUR_MAX = 22;
+/** The digest hour stays out of the quiet hours (22:00–8:00). */
+export const DIGEST_HOUR_MIN = 8;
+export const DIGEST_HOUR_MAX = 21;
 export const DEFAULT_DIGEST_HOUR = 18;
 export const MAX_SALE_PERIOD_NAME = 80;
 export const MAX_PUSH_ENDPOINT = 2048;
@@ -43,8 +44,9 @@ export function isRealDrop(previousCents: number, nextCents: number): boolean {
 export function watchedSizes(itemSize: string | null, profileSizes: string[], kindHasSizes: boolean): string[] | "any" {
   const own = itemSize?.trim();
   if (own) return [own];
-  if (!kindHasSizes || profileSizes.length === 0) return "any";
-  return profileSizes;
+  const sizes = profileSizes.map((size) => size.trim()).filter((size) => size !== "");
+  if (!kindHasSizes || sizes.length === 0) return "any";
+  return sizes;
 }
 
 /**
@@ -75,8 +77,8 @@ const parisParts = new Intl.DateTimeFormat("en-CA", {
 });
 
 function partsOf(d: Date): { year: number; month: number; day: number; hour: number; minute: number; second: number } {
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    Number(parisParts.formatToParts(d).find((p) => p.type === type)?.value);
+  const parts = parisParts.formatToParts(d);
+  const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
   return {
     year: get("year"),
     month: get("month"),
@@ -188,7 +190,7 @@ export const alertEventViewSchema = z.object({
   startsOn: z.iso.date().nullable(),
   photoUrl: z.string().nullable(),
   /** Where it leads (the item's sheet or « Nouvelles »). */
-  href: z.string().startsWith("/"),
+  href: z.string().regex(/^\/(?!\/)/),
   createdAt: dateTimeSchema,
   readAt: dateTimeSchema.nullable(),
 });

@@ -69,10 +69,10 @@ describe("migration 0032 (alertes)", () => {
           `insert into alert_settings (user_id) values ('u') returning size_back, target_price, digest, digest_hour`,
         );
         expect(settings.rows[0]).toEqual({ size_back: true, target_price: true, digest: true, digest_hour: 18 });
-        await expect(client.query(`update alert_settings set digest_hour = 23`)).rejects.toThrow(
+        await expect(client.query(`update alert_settings set digest_hour = 22`)).rejects.toThrow(
           /alert_settings_digest_hour_check/,
         );
-        await expect(client.query(`update alert_settings set digest_hour = 6`)).rejects.toThrow(
+        await expect(client.query(`update alert_settings set digest_hour = 7`)).rejects.toThrow(
           /alert_settings_digest_hour_check/,
         );
 
@@ -115,6 +115,8 @@ describe("migration 0032 (alertes)", () => {
           /alert_events_status_check/,
         );
 
+        await client.query(`update alert_settings set digest_hour = 8`);
+        await client.query(`update alert_settings set digest_hour = 21`);
         await client.query(`insert into alert_sends (user_id, ok) values ('u', true)`);
 
         // An item deleted for good takes its alerts with it; the account takes everything.

@@ -35,7 +35,7 @@ CREATE TABLE "alert_settings" (
 	"target_price" boolean DEFAULT true NOT NULL,
 	"digest" boolean DEFAULT true NOT NULL,
 	"digest_hour" integer DEFAULT 18 NOT NULL,
-	CONSTRAINT "alert_settings_digest_hour_check" CHECK ("alert_settings"."digest_hour" BETWEEN 7 AND 22)
+	CONSTRAINT "alert_settings_digest_hour_check" CHECK ("alert_settings"."digest_hour" BETWEEN 8 AND 21)
 );
 --> statement-breakpoint
 CREATE TABLE "push_subscriptions" (
@@ -72,7 +72,11 @@ ALTER TABLE "alert_settings" ADD CONSTRAINT "alert_settings_user_id_user_id_fk" 
 ALTER TABLE "push_subscriptions" ADD CONSTRAINT "push_subscriptions_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "alert_events_user_created_idx" ON "alert_events" USING btree ("user_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "alert_events_item_kind_idx" ON "alert_events" USING btree ("item_id","kind","created_at");--> statement-breakpoint
+CREATE INDEX "alert_events_profile_id_idx" ON "alert_events" USING btree ("profile_id");--> statement-breakpoint
+CREATE INDEX "alert_events_shop_id_idx" ON "alert_events" USING btree ("shop_id");--> statement-breakpoint
+CREATE INDEX "alert_events_sale_period_id_idx" ON "alert_events" USING btree ("sale_period_id");--> statement-breakpoint
 CREATE INDEX "alert_events_digest_idx" ON "alert_events" USING btree ("user_id","digest_on") WHERE "alert_events"."digest_on" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "alert_sends_sent_at_idx" ON "alert_sends" USING btree ("sent_at");--> statement-breakpoint
+CREATE INDEX "alert_sends_user_sent_idx" ON "alert_sends" USING btree ("user_id","sent_at");--> statement-breakpoint
 CREATE INDEX "push_subscriptions_user_id_idx" ON "push_subscriptions" USING btree ("user_id");--> statement-breakpoint
 ALTER TABLE "items" ADD CONSTRAINT "items_target_price_check" CHECK ("items"."target_price_cents" IS NULL OR "items"."target_price_cents" >= 1);
