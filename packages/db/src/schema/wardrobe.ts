@@ -130,6 +130,10 @@ export const items = pgTable(
     colorId: uuid("color_id").references(() => colors.id, { onDelete: "set null" }),
     /** Null = the shop's first photo. The API checks the cover is one of the item's photos. */
     coverMediaId: uuid("cover_media_id").references(() => media.id, { onDelete: "set null" }),
+    /** « M'alerter »: on for every item, she can switch it off on its sheet. */
+    alertsEnabled: boolean("alerts_enabled").notNull().default(true),
+    /** « Préviens-moi sous … € »: null = no target. */
+    targetPriceCents: integer("target_price_cents"),
     /** Trash: set when deleted, purged after 30 days. */
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: createdAt(),
@@ -152,6 +156,7 @@ export const items = pgTable(
       "items_cents_check",
       sql`(${t.pricePaidCents} IS NULL OR ${t.pricePaidCents} >= 0) AND (${t.salePriceCents} IS NULL OR ${t.salePriceCents} >= 0)`,
     ),
+    check("items_target_price_check", sql`${t.targetPriceCents} IS NULL OR ${t.targetPriceCents} >= 1`),
   ],
 );
 

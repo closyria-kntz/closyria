@@ -22,6 +22,11 @@ const NOT_OWNED: Record<string, string> = {
   // account's reports are deleted with her (ON DELETE CASCADE), which loses nothing the admin needs.
   "product_reports.user_id": "catalogue report: not moved on linking (unique per person and article), cascades",
   "captures.requested_by": "capture log: outlives the user (ON DELETE SET NULL), no user content",
+  // Alerts: notifications need an account (a guest cannot subscribe), so these never belong to an anonymous user;
+  // the send log is an operational record for the dashboard.
+  "push_subscriptions.user_id": "alerts: account only (guest refused with account_required)",
+  "alert_settings.user_id": "alerts: account only, one row per account",
+  "alert_sends.user_id": "alerts: send log for the dashboard, no user content",
 };
 
 let database: TestDatabase;
@@ -49,6 +54,7 @@ describe("owned tables of the API process", () => {
   it("registers every table holding user data, each with a cascading foreign key to user(id)", async () => {
     const tables = listOwnedColumns().map((o) => o.table);
     expect(tables.sort()).toEqual([
+      "alert_events",
       "budgets",
       "events",
       "items",

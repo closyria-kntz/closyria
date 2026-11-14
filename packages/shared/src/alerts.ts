@@ -1,0 +1,224 @@
+import { z } from "zod";
+import { currencySchema } from "./catalog";
+import { sizeMatches } from "./catalogue";
+
+const dateTimeSchema = z.iso.datetime({ offset: true });
+const centsSchema = z.number().int().nonnegative().max(100_000_000);
+
+export const ALERT_TIME_ZONE = "Europe/Paris";
+/** A drop counts when the new price is at least this share under the previous one… */
+export const REAL_DROP_PERCENT = 5;
+/** …or at least this many cents under it. */
+export const REAL_DROP_CENTS = 500;
+/** No notification from this hour (Paris)… */
+export const QUIET_FROM_HOUR = 22;
+/** …until this hour (Paris), when the held ones go out. */
+export const QUIET_UNTIL_HOUR = 8;
+export const DIGEST_HOUR_MIN = 7;
+export const DIGEST_HOUR_MAX = 22;
+export const DEFAULT_DIGEST_HOUR = 18;
+export const MAX_SALE_PERIOD_NAME = 80;
+export const MAX_PUSH_ENDPOINT = 2048;
+
+export const alertKindSchema = z.enum(["size_back", "target_price", "price_drop", "sale_period", "shop_promo"]);
+export type AlertKind = z.infer<typeof alertKindSchema>;
+/** The kinds about one item (the others are about a shop or the sales calendar). */
+export const ITEM_ALERT_KINDS = ["size_back", "target_price", "price_drop"] as const satisfies readonly AlertKind[];
+
+/** `pending` waits for its send (or the digest), `digest` goes into the day's digest, `skipped` is never sent. */
+export const alertStatusSchema = z.enum(["pending", "sent", "digest", "skipped"]);
+export type AlertStatus = z.infer<typeof alertStatusSchema>;
+
+/** Whether `nextCents` is a real drop from `previousCents`: at least 5 % or 5 € under it. */
+export function isRealDrop(previousCents: number, nextCents: number): boolean {
+  const drop = previousCents - nextCents;
+  if (drop <= 0) return false;
+  return drop >= REAL_DROP_CENTS || drop * 100 >= previousCents * REAL_DROP_PERCENT;
+}
+
+/**
+ * The sizes watched on an item: its own size, else the sizes of the item's profile for its kind; « any » (back in
+ * stock at all) when there is none or the kind has no sizes (accessories).
+ */
+export function watchedSizes(itemSize: string | null, profileSizes: string[], kindHasSizes: boolean): string[] | "any" {
+  const own = itemSize?.trim();
+  if (own) return [own];
+  if (!kindHasSizes || profileSizes.length === 0) return "any";
+  return profileSizes;
+}
+
+/**
+ * The shop's labels that make a watched size come back between two captures: in stock now, not before, and none of
+ * the watched sizes was in stock before (« M » finds « 38 FR »… through `sizeMatches`). For « any », the labels back
+ * in stock after nothing was. Empty when nothing came back.
+ */
+export function sizeCameBack(
+  prev: Record<string, boolean>,
+  next: Record<string, boolean>,
+  watched: string[] | "any",
+): string[] {
+  const watches = (label: string) => watched === "any" || sizeMatches(watched, [label]) === true;
+  const before = Object.keys(prev).filter((label) => prev[label] === true && watches(label));
+  if (before.length > 0) return [];
+  return Object.keys(next).filter((label) => next[label] === true && prev[label] !== true && watches(label));
+}
+
+const parisParts = new Intl.DateTimeFormat("en-CA", {
+  timeZone: ALERT_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+function partsOf(d: Date): { year: number; month: number; day: number; hour: number; minute: number; second: number } {
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parisParts.formatToParts(d).find((p) => p.type === type)?.value);
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
+    second: get("second"),
+  };
+}
+
+/** Paris's offset from UTC at `d`, in milliseconds (+1 h in winter, +2 h in summer). */
+function parisOffsetMs(d: Date): number {
+  const p = partsOf(d);
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(d.getTime() / 1000) * 1000;
+}
+
+/** The instant of a Paris wall-clock time (the day may overflow: day + 1 is the next day). */
+function parisTime(year: number, month: number, day: number, hour: number): Date {
+  const wall = Date.UTC(year, month - 1, day, hour);
+  const first = wall - parisOffsetMs(new Date(wall));
+  return new Date(wall - parisOffsetMs(new Date(first)));
+}
+
+/** The calendar day in Paris, `YYYY-MM-DD`. */
+export function parisDay(d: Date): string {
+  const p = partsOf(d);
+  return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+}
+
+/** When an immediate alert born at `now` may go out: now, or 8:00 Paris when born in the quiet hours (22:00–8:00). */
+export function nextSendAt(now: Date): Date {
+  const p = partsOf(now);
+  if (p.hour >= QUIET_UNTIL_HOUR && p.hour < QUIET_FROM_HOUR) return now;
+  const day = p.hour >= QUIET_FROM_HOUR ? p.day + 1 : p.day;
+  return parisTime(p.year, p.month, day, QUIET_UNTIL_HOUR);
+}
+
+const digestHourSchema = z.number().int().min(DIGEST_HOUR_MIN).max(DIGEST_HOUR_MAX);
+
+/** Her notification settings (« Notifications »). Without a row: everything on, digest at 18:00. */
+export const alertSettingsSchema = z.object({
+  sizeBack: z.boolean(),
+  targetPrice: z.boolean(),
+  digest: z.boolean(),
+  digestHour: digestHourSchema,
+});
+export type AlertSettings = z.infer<typeof alertSettingsSchema>;
+export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
+  sizeBack: true,
+  targetPrice: true,
+  digest: true,
+  digestHour: DEFAULT_DIGEST_HOUR,
+};
+
+/** `PATCH /api/me/alert-settings`: at least one field. */
+export const alertSettingsPatchSchema = alertSettingsSchema
+  .partial()
+  .refine((v) => Object.values(v).some((value) => value !== undefined), { error: "at least one field" });
+export type AlertSettingsPatch = z.infer<typeof alertSettingsPatchSchema>;
+
+const isHttps = (value: string) => {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+/** A browser's `PushSubscription.toJSON()`; the API takes the device name from the request. */
+export const pushSubscriptionInputSchema = z.object({
+  endpoint: z.string().max(MAX_PUSH_ENDPOINT).refine(isHttps, { error: "https endpoint required" }),
+  expirationTime: z.number().nullable().optional(),
+  keys: z.object({
+    p256dh: z.string().min(1).max(256),
+    auth: z.string().min(1).max(64),
+  }),
+});
+export type PushSubscriptionInput = z.infer<typeof pushSubscriptionInputSchema>;
+
+/** One of her devices (« Retirer »). */
+export const pushSubscriptionViewSchema = z.object({
+  id: z.uuid(),
+  userAgent: z.string().nullable(),
+  createdAt: dateTimeSchema,
+  lastOkAt: dateTimeSchema.nullable(),
+});
+export type PushSubscriptionView = z.infer<typeof pushSubscriptionViewSchema>;
+
+/**
+ * One alert on « Nouvelles », as facts (the page words them). `title` is the item's name (item kinds), the shop's
+ * (shop_promo) or the sales' (sale_period).
+ */
+export const alertEventViewSchema = z.object({
+  id: z.uuid(),
+  kind: alertKindSchema,
+  itemId: z.uuid().nullable(),
+  title: z.string(),
+  shopName: z.string().nullable(),
+  /** size_back: the shop's label back in stock. */
+  sizeLabel: z.string().nullable(),
+  /** target_price, price_drop: the new price and the one before. */
+  priceCents: centsSchema.nullable(),
+  previousCents: centsSchema.nullable(),
+  /** target_price: the price she aimed at. */
+  targetPriceCents: centsSchema.nullable(),
+  currency: currencySchema.nullable(),
+  /** sale_period: its name and first day. */
+  salePeriodName: z.string().nullable(),
+  startsOn: z.iso.date().nullable(),
+  photoUrl: z.string().nullable(),
+  /** Where it leads (the item's sheet or « Nouvelles »). */
+  href: z.string().startsWith("/"),
+  createdAt: dateTimeSchema,
+  readAt: dateTimeSchema.nullable(),
+});
+export type AlertEventView = z.infer<typeof alertEventViewSchema>;
+
+export const alertPageSchema = z.object({ alerts: z.array(alertEventViewSchema), nextCursor: z.string().nullable() });
+export type AlertPage = z.infer<typeof alertPageSchema>;
+
+const salePeriodFields = z.object({
+  name: z.string().trim().min(1).max(MAX_SALE_PERIOD_NAME),
+  startsOn: z.iso.date(),
+  endsOn: z.iso.date(),
+});
+const endsAfterStart = (v: { startsOn: string; endsOn: string }) => v.endsOn >= v.startsOn;
+
+/** Admin « Soldes »: a period, first and last day included (Paris), the end on or after the start. */
+export const salePeriodInputSchema = salePeriodFields.refine(endsAfterStart, {
+  error: "endsOn before startsOn",
+  path: ["endsOn"],
+});
+export type SalePeriodInput = z.infer<typeof salePeriodInputSchema>;
+
+export const salePeriodSchema = salePeriodFields
+  .extend({ id: z.uuid() })
+  .refine(endsAfterStart, { error: "endsOn before startsOn", path: ["endsOn"] });
+export type SalePeriod = z.infer<typeof salePeriodSchema>;
+
+/** The item's alert fields: « M'alerter » and « Préviens-moi sous … € » (null clears it, at least 1 cent). */
+export const itemAlertFieldsSchema = z.object({
+  alertsEnabled: z.boolean().optional(),
+  targetPriceCents: centsSchema.min(1).nullable().optional(),
+});
+export type ItemAlertFields = z.infer<typeof itemAlertFieldsSchema>;

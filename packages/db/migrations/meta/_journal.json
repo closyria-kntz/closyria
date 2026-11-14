@@ -225,6 +225,13 @@
       "when": 1794620568226,
       "tag": "0031_catalogue_dates",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794652095153,
+      "tag": "0032_alertes",
+      "breakpoints": true
     }
   ]
 }

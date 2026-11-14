@@ -4,6 +4,7 @@
 // - CHECK user_role_check: user.role IN ('user', 'admin');
 // - CHECK session_auth_method_check: session.auth_method IN ('anonymous', 'email-otp', 'google', 'apple', 'passkey');
 // - passkey_credentialID_idx is UNIQUE (generated as a plain index).
+export * from "./alerts";
 export * from "./audit";
 export * from "./auth";
 export * from "./auth-limits";
