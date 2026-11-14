@@ -402,6 +402,35 @@ describe("importShopifyCatalog", () => {
     expect(await productsOf(s.id)).toHaveLength(4);
   });
 
+  it("alerts: a size back and a shop-wide drop make events; an unchanged import makes none", async () => {
+    const s = await newShop();
+    const six = (over: Record<number, Partial<FakeProduct>> = {}): FakeProduct[][] => [
+      Array.from({ length: 6 }, (_, i) => ({ id: 7000 + i, title: `Pièce ${i}`, ...over[i] })),
+    ];
+    servePages(six());
+    await importShopifyCatalog(deps, s.id);
+    const first = await byExternalId(s.id, "7000");
+    if (!first) throw new Error("no product");
+    const wish = await wishOn(first.id);
+    await handle.db.update(schema.items).set({ sizeLabel: "M" }).where(eq(schema.items.id, wish.id));
+    const eventsOfWish = () =>
+      handle.db.select().from(schema.alertEvents).where(eq(schema.alertEvents.userId, wish.userId));
+
+    // Same listing again: no history point, no event.
+    servePages(six());
+    await importShopifyCatalog(deps, s.id);
+    expect(await eventsOfWish()).toHaveLength(0);
+
+    // Her size is back on her dress, and 2 of the 6 products (33 %) drop by 10 €.
+    servePages(six({ 0: { mAvailable: true }, 1: { price: "39.90" }, 2: { price: "39.90" } }));
+    await importShopifyCatalog(deps, s.id);
+    const events = await eventsOfWish();
+    expect(events.map((e) => [e.kind, e.itemId, e.sizeLabel, e.shopId]).sort()).toEqual([
+      ["shop_promo", null, null, s.id],
+      ["size_back", wish.id, "M", null],
+    ]);
+  });
+
   it("updates a product first pasted by link (same Shopify id) instead of creating a second one", async () => {
     const s = await newShop();
     const [pasted] = await handle.db

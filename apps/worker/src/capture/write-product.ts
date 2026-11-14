@@ -1,5 +1,6 @@
-import { type Database, eq, schema } from "@closyria/db";
+import { type Database, eq, schema, sql } from "@closyria/db";
 import { classify, classifyCatalogue, type ExtractedProduct } from "@closyria/shared";
+import { detectAlerts, type HistoryPoint } from "../alerts/detect";
 import type { loadReferenceSet } from "./seed-reference";
 
 export type Reference = Awaited<ReturnType<typeof loadReferenceSet>>;
@@ -145,11 +146,19 @@ export async function writeProduct(tx: Transaction, input: WriteProductInput): P
     previousSizes.length !== sizes.length ||
     previousSizes.some((s) => sizeMap[s.label] !== s.available);
   if (input.history === "always" || changed) {
-    await tx.insert(schema.productHistory).values({
-      productId,
-      seenAt: at,
-      priceCents: product.priceCents,
-      sizes: sizeMap,
-    });
+    // Written with the point before it, in one statement (the insert's own row is not visible to its sub-select):
+    // the alerts are the transitions between the two, none on a first write.
+    const written = await tx.execute<HistoryPoint>(sql`
+      with previous as (
+        select price_cents as "priceCents", sizes from ${schema.productHistory}
+        where product_id = ${productId} and seen_at <= ${at.toISOString()}::timestamptz
+        order by seen_at desc limit 1
+      ), point as (
+        insert into ${schema.productHistory} (product_id, seen_at, price_cents, sizes)
+        values (${productId}, ${at.toISOString()}::timestamptz, ${product.priceCents}, ${JSON.stringify(sizeMap)}::jsonb)
+      )
+      select "priceCents", sizes from previous`);
+    const [previous] = written.rows;
+    await detectAlerts(tx, productId, previous ?? null, { priceCents: product.priceCents, sizes: sizeMap }, at);
   }
 }

@@ -23,6 +23,7 @@ import {
   undatedOnCreate,
 } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
+import { detectShopPromo } from "../alerts/promo";
 import { type AddressPolicy, strictPolicy } from "../capture/address-policy";
 import { CaptureError } from "../capture/capture-error";
 import { copyImages } from "../capture/copy-images";
@@ -433,6 +434,13 @@ async function run<T extends Listed>(
       updatedAt: at,
     })
     .where(eq(schema.shops.id, shopId));
+  // A completed import that lowered many of the shop's prices: « {boutique} est en promo ». Never fails the import.
+  try {
+    const promos = await detectShopPromo(db, shopId, startedAt, at);
+    if (promos > 0) console.info(`catalogue import ${shopId}: shop promo noted for ${promos} person(s)`);
+  } catch (error) {
+    console.error(`catalogue import ${shopId}: shop promo check failed`, error);
+  }
   return result;
 }
 

@@ -1,6 +1,7 @@
 import { createDb } from "@closyria/db";
 import { memoryStore, s3Store } from "@closyria/storage";
 import { PgBoss } from "pg-boss";
+import { registerSalePeriodQueue } from "./alerts/sales";
 import { checkNetworkBarrier } from "./capture/network-barrier";
 import { registerCaptureQueues } from "./capture/queues";
 import { seedReference } from "./capture/seed-reference";
@@ -50,6 +51,7 @@ const referenceAdded = await seedReference(db);
 if (referenceAdded > 0) console.log(`starting reference lists: ${referenceAdded} added`);
 await registerCaptureQueues(boss, { db, store });
 await registerWardrobeQueues(boss, { db, store });
+await registerSalePeriodQueue(boss, db);
 
 console.log(`worker ${env.APP_VERSION} (${env.APP_ENV}) started`);
 
