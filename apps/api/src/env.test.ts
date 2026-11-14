@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { envSchema } from "./env";
 
@@ -140,5 +141,32 @@ describe("envSchema", () => {
     expect(envSchema.safeParse({ ...dev, ...brevo, TEST_STORAGE_DIR: "/tmp/x" }).success).toBe(false);
     expect(envSchema.safeParse({ ...prod, ...brevo, TEST_STORAGE_DIR: "/tmp/x" }).success).toBe(false);
     expect(envSchema.safeParse({ ...test, TEST_STORAGE_DIR: "" }).success).toBe(false);
+  });
+});
+
+describe("envSchema VAPID", () => {
+  const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const pub = publicKey.export({ format: "jwk" });
+  const vapid = {
+    VAPID_PUBLIC_KEY: Buffer.concat([
+      Buffer.from([4]),
+      Buffer.from(pub.x ?? "", "base64url"),
+      Buffer.from(pub.y ?? "", "base64url"),
+    ]).toString("base64url"),
+    VAPID_PRIVATE_KEY: privateKey.export({ format: "jwk" }).d ?? "",
+    VAPID_SUBJECT: "https://closyria.com",
+  };
+  const prodMail = { ...prod, MAIL_TRANSPORT: "brevo", BREVO_API_KEY: "key" };
+
+  it("starts without any VAPID variable (push off) or with all three", () => {
+    expect(envSchema.safeParse(prodMail).success).toBe(true);
+    expect(envSchema.safeParse({ ...prodMail, ...vapid }).success).toBe(true);
+  });
+
+  it("refuses to start with only some of them", () => {
+    const { VAPID_SUBJECT: _subject, ...partial } = vapid;
+    const result = envSchema.safeParse({ ...prodMail, ...partial });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((i) => i.path.join("."))).toContain("VAPID_SUBJECT");
   });
 });

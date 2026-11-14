@@ -41,6 +41,7 @@ export {
   isNotNull,
   isNull,
   lt,
+  lte,
   ne,
   notInArray,
   or,

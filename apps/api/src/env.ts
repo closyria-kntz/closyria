@@ -1,4 +1,4 @@
-import { appEnvObject } from "@closyria/shared";
+import { appEnvObject, vapidEnvIssues, vapidEnvShape } from "@closyria/shared";
 import { z } from "zod";
 import { parseShareLinkKey } from "./wardrobe/share-link";
 
@@ -49,8 +49,13 @@ export const envSchema = appEnvObject({
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   // Browser tests only: photos as files in this directory, shared with the capture worker of the test run.
   TEST_STORAGE_DIR: z.string().min(1).optional(),
+  // Web Push (alerts): all three or none; without them, push is off (`/push/key` answers 404).
+  ...vapidEnvShape,
 })
   .superRefine((env, ctx) => {
+    for (const issue of vapidEnvIssues(env)) {
+      ctx.addIssue({ code: "custom", path: [issue.path], message: issue.message });
+    }
     // Local development and the browser tests (disposable database, http, codes in memory).
     const local = env.APP_ENV === "development" || env.APP_ENV === "test";
     // Only local development and the browser tests keep codes in memory; dev.closyria.com and prod send

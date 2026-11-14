@@ -1,6 +1,9 @@
 import { createDb } from "@closyria/db";
+import { vapidConfig } from "@closyria/shared";
 import { memoryStore, s3Store } from "@closyria/storage";
 import { PgBoss } from "pg-boss";
+import { webPushSender } from "./alerts/push";
+import { registerAlertSendQueues } from "./alerts/queues";
 import { registerSalePeriodQueue } from "./alerts/sales";
 import { checkNetworkBarrier } from "./capture/network-barrier";
 import { registerCaptureQueues } from "./capture/queues";
@@ -28,6 +31,11 @@ const store =
       })
     : memoryStore();
 
+// env.ts allows all three VAPID variables or none: without them, alerts only show in « Nouvelles ».
+const vapid = vapidConfig(env);
+if (!vapid) console.warn("alerts: push off (no VAPID_* variables), alerts are marked skipped");
+const push = vapid ? webPushSender(vapid) : null;
+
 const barrier = await checkNetworkBarrier();
 if (barrier.state === "active") {
   console.log(`network barrier: active (${barrier.reason})`);
@@ -52,6 +60,7 @@ if (referenceAdded > 0) console.log(`starting reference lists: ${referenceAdded}
 await registerCaptureQueues(boss, { db, store });
 await registerWardrobeQueues(boss, { db, store });
 await registerSalePeriodQueue(boss, db);
+await registerAlertSendQueues(boss, { db, push });
 
 console.log(`worker ${env.APP_VERSION} (${env.APP_ENV}) started`);
 

@@ -108,6 +108,11 @@ export function parisDay(d: Date): string {
   return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
 }
 
+/** The hour in Paris, 0–23. */
+export function parisHour(d: Date): number {
+  return partsOf(d).hour;
+}
+
 /** When an immediate alert born at `now` may go out: now, or 8:00 Paris when born in the quiet hours (22:00–8:00). */
 export function nextSendAt(now: Date): Date {
   const p = partsOf(now);
@@ -224,3 +229,50 @@ export const itemAlertFieldsSchema = z.object({
   targetPriceCents: centsSchema.min(1).nullable().optional(),
 });
 export type ItemAlertFields = z.infer<typeof itemAlertFieldsSchema>;
+
+/** The three VAPID variables (Web Push): all three set, or none (push off). */
+export const VAPID_VARIABLES = ["VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT"] as const;
+
+/** Unpadded base64url of exactly `bytes` bytes. */
+const base64url = (bytes: number) => z.string().regex(new RegExp(`^[A-Za-z0-9_-]{${Math.ceil((bytes * 4) / 3)}}$`));
+
+/**
+ * The VAPID variables of the worker and API schemas: the public key is an uncompressed P-256 point (65 bytes, first
+ * byte 0x04, so « B… »), the private key 32 bytes, the subject an https: URL or a mailto: address.
+ */
+export const vapidEnvShape = {
+  VAPID_PUBLIC_KEY: base64url(65)
+    .refine((v) => v.startsWith("B"), "expected an uncompressed P-256 public key (base64url, starts with B)")
+    .optional(),
+  VAPID_PRIVATE_KEY: base64url(32).optional(),
+  VAPID_SUBJECT: z
+    .string()
+    .refine((v) => {
+      try {
+        const protocol = new URL(v).protocol;
+        return protocol === "https:" || protocol === "mailto:";
+      } catch {
+        return false;
+      }
+    }, "expected an https: URL or a mailto: address")
+    .optional(),
+};
+
+type VapidEnv = { [K in (typeof VAPID_VARIABLES)[number]]?: string | undefined };
+
+/** The issues of a partial VAPID configuration (one per missing variable); none when all three or none are set. */
+export function vapidEnvIssues(env: VapidEnv): { path: string; message: string }[] {
+  if (!VAPID_VARIABLES.some((name) => env[name])) return [];
+  return VAPID_VARIABLES.filter((name) => !env[name]).map((path) => ({
+    path,
+    message: "required (all VAPID_* variables go together)",
+  }));
+}
+
+export type VapidConfig = { publicKey: string; privateKey: string; subject: string };
+
+/** The VAPID keys, or null when push is off (none set). */
+export function vapidConfig(env: VapidEnv): VapidConfig | null {
+  const { VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: privateKey, VAPID_SUBJECT: subject } = env;
+  return publicKey && privateKey && subject ? { publicKey, privateKey, subject } : null;
+}

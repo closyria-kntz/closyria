@@ -1,4 +1,6 @@
+import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   alertEventViewSchema,
   alertKindSchema,
@@ -8,10 +10,14 @@ import {
   itemAlertFieldsSchema,
   nextSendAt,
   parisDay,
+  parisHour,
   pushSubscriptionInputSchema,
   salePeriodInputSchema,
   salePeriodSchema,
   sizeCameBack,
+  vapidConfig,
+  vapidEnvIssues,
+  vapidEnvShape,
   watchedSizes,
 } from "./alerts";
 
@@ -213,5 +219,69 @@ describe("schemas", () => {
     expect(alertEventViewSchema.safeParse({ ...view, kind: "other" }).success).toBe(false);
     expect(alertEventViewSchema.safeParse({ ...view, href: "//evil.test/x" }).success).toBe(false);
     expect(alertEventViewSchema.safeParse({ ...view, href: "https://evil.test/x" }).success).toBe(false);
+  });
+});
+
+/** A fresh P-256 key pair in the VAPID format (base64url, uncompressed public point). */
+function testVapidKeys(): { publicKey: string; privateKey: string } {
+  const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const pub = publicKey.export({ format: "jwk" });
+  const priv = privateKey.export({ format: "jwk" });
+  const point = Buffer.concat([
+    Buffer.from([4]),
+    Buffer.from(pub.x ?? "", "base64url"),
+    Buffer.from(pub.y ?? "", "base64url"),
+  ]);
+  return { publicKey: point.toString("base64url"), privateKey: priv.d ?? "" };
+}
+
+describe("VAPID configuration", () => {
+  const keys = testVapidKeys();
+  const full = {
+    VAPID_PUBLIC_KEY: keys.publicKey,
+    VAPID_PRIVATE_KEY: keys.privateKey,
+    VAPID_SUBJECT: "https://closyria.com",
+  };
+  const parse = (env: Record<string, string>) => {
+    const parsed = z.object(vapidEnvShape).parse(env);
+    return { parsed, issues: vapidEnvIssues(parsed) };
+  };
+
+  it("all three set: push on", () => {
+    const { parsed, issues } = parse(full);
+    expect(issues).toEqual([]);
+    expect(vapidConfig(parsed)).toEqual({
+      publicKey: keys.publicKey,
+      privateKey: keys.privateKey,
+      subject: "https://closyria.com",
+    });
+  });
+
+  it("none set: push off, no issue", () => {
+    const { parsed, issues } = parse({});
+    expect(issues).toEqual([]);
+    expect(vapidConfig(parsed)).toBeNull();
+  });
+
+  it("some set: an issue for each missing one", () => {
+    const { issues } = parse({ VAPID_PUBLIC_KEY: keys.publicKey });
+    expect(issues.map((i) => i.path)).toEqual(["VAPID_PRIVATE_KEY", "VAPID_SUBJECT"]);
+  });
+
+  it("refuses malformed keys and subjects", () => {
+    const schema = z.object(vapidEnvShape);
+    expect(schema.safeParse({ ...full, VAPID_PUBLIC_KEY: keys.privateKey }).success).toBe(false);
+    expect(schema.safeParse({ ...full, VAPID_PRIVATE_KEY: keys.publicKey }).success).toBe(false);
+    expect(schema.safeParse({ ...full, VAPID_PRIVATE_KEY: `${keys.privateKey.slice(0, 42)}=` }).success).toBe(false);
+    expect(schema.safeParse({ ...full, VAPID_SUBJECT: "http://closyria.com" }).success).toBe(false);
+    expect(schema.safeParse({ ...full, VAPID_SUBJECT: "mailto:bonjour@closyria.com" }).success).toBe(true);
+  });
+});
+
+describe("parisHour", () => {
+  it("reads the wall-clock hour in Paris, winter and summer", () => {
+    expect(parisHour(new Date("2026-11-14T17:00:00Z"))).toBe(18);
+    expect(parisHour(new Date("2026-07-14T16:00:00Z"))).toBe(18);
+    expect(parisHour(new Date("2026-11-14T23:30:00Z"))).toBe(0);
   });
 });
