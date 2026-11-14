@@ -88,15 +88,30 @@ async function capturesOf(productIds: string[]) {
   return handle.db.select().from(schema.captures).where(inArray(schema.captures.productId, productIds));
 }
 
-async function failedCapture(shopId: string, errorCode: string, createdAt: Date) {
+async function failedCapture(shopId: string, errorCode: string, createdAt: Date, httpStatus?: number) {
   await handle.db.insert(schema.captures).values({
     shopId,
     url: "https://revisit.example/x",
     trigger: "user",
     status: "failed",
     errorCode,
+    httpStatus: httpStatus ?? null,
     createdAt,
     finishedAt: createdAt,
+  });
+}
+
+/** A revisit of the shop (any product) `hours` ago, already finished. */
+async function revisitedAgo(shopId: string, hours: number) {
+  await handle.db.insert(schema.captures).values({
+    shopId,
+    url: "https://revisit.example/w",
+    trigger: "revisit",
+    status: "failed",
+    errorCode: "blocked",
+    httpStatus: 403,
+    createdAt: hoursAgo(hours),
+    finishedAt: hoursAgo(hours),
   });
 }
 
@@ -144,11 +159,13 @@ describe("planRevisits", () => {
     expect((await capturesOf(revisited)).map((c) => c.productId).sort()).toEqual([...revisited].sort());
   });
 
-  it("never revisits a shop whose last capture was blocked or refused by robots.txt, nor a blocking major brand", async () => {
+  it("never revisits a blocking major brand, nor a shop whose last capture was blocked or refused by robots.txt (outside its weekly try)", async () => {
     const blocked = await shopRow();
-    await failedCapture(blocked.id, "blocked", hoursAgo(10));
+    await failedCapture(blocked.id, "blocked", hoursAgo(10), 403);
+    await revisitedAgo(blocked.id, 48);
     const robots = await shopRow();
     await failedCapture(robots.id, "robots_disallowed", hoursAgo(10));
+    await revisitedAgo(robots.id, 6 * 24);
     const recovered = await shopRow();
     await failedCapture(recovered.id, "blocked", hoursAgo(20));
     await handle.db.insert(schema.captures).values({
@@ -172,7 +189,55 @@ describe("planRevisits", () => {
     expect((await capturesOf(revisited)).map((c) => c.productId).sort()).toEqual([...revisited].sort());
   });
 
-  it(`takes at most ${REVISIT_BUDGET} products a pass, the longest unchecked first`, async () => {
+  it("a timeout or a Shopify « slow down » (blocked 429/430) after a block neither lifts nor sets it", async () => {
+    const stillBlocked = await shopRow();
+    await failedCapture(stillBlocked.id, "blocked", hoursAgo(20));
+    await failedCapture(stillBlocked.id, "timeout", hoursAgo(10));
+    await failedCapture(stillBlocked.id, "blocked", hoursAgo(9), 429);
+    const slowedOnly = await shopRow({ platform: "shopify" });
+    await failedCapture(slowedOnly.id, "blocked", hoursAgo(10), 430);
+    // The weekly try of the blocked shop has already been made.
+    await revisitedAgo(stillBlocked.id, 24);
+    const blockedProduct = await tracked(stillBlocked.id);
+    const slowedProduct = await tracked(slowedOnly.id);
+
+    expect(await planRevisits(handle.db, queue, at)).toBe(1);
+    expect(await capturesOf([blockedProduct])).toEqual([]);
+    expect(await capturesOf([slowedProduct])).toHaveLength(1);
+    expect(await trackingImpossible(handle.db, blockedProduct)).toBe(true);
+    expect(await trackingImpossible(handle.db, slowedProduct)).toBe(false);
+  });
+
+  it("a blocked shop gets one polite try a week, on its longest-unchecked followed product", async () => {
+    const shop = await shopRow();
+    await failedCapture(shop.id, "blocked", hoursAgo(10 * 24));
+    const newer = await tracked(shop.id, 8 * 24);
+    const older = await tracked(shop.id, 9 * 24);
+    const neverRead = await tracked(shop.id, null);
+
+    expect(await planRevisits(handle.db, queue, at)).toBe(1);
+    expect((await capturesOf([newer, older, neverRead])).map((c) => c.productId)).toEqual([older]);
+
+    // The shop refuses again: blocked for another week, whatever the product.
+    await handle.db
+      .update(schema.captures)
+      .set({ status: "failed", errorCode: "blocked", httpStatus: 403, finishedAt: at })
+      .where(eq(schema.captures.productId, older));
+    const later = (days: number) => new Date(at.getTime() + days * 24 * 60 * 60_000);
+    expect(await planRevisits(handle.db, queue, later(6))).toBe(0);
+    expect(await planRevisits(handle.db, queue, later(7.1))).toBe(1);
+    const tried = (await capturesOf([newer, older, neverRead])).filter((c) => c.status === "queued");
+    expect(tried.map((c) => c.productId)).toEqual([older]);
+
+    // It answers this time: the shop is followed again, all its products are due.
+    await handle.db
+      .update(schema.captures)
+      .set({ status: "succeeded", method: "jsonld", finishedAt: later(7.1) })
+      .where(eq(schema.captures.id, tried[0]?.id ?? ""));
+    expect(await planRevisits(handle.db, queue, later(7.2))).toBe(2);
+  });
+
+  it(`takes at most ${REVISIT_BUDGET} products a pass, the longest unchecked first, never-read ones last`, async () => {
     const shop = await shopRow();
     const ids: string[] = [];
     // Oldest last in insertion order: the order comes from the check date, not the table.
@@ -182,9 +247,10 @@ describe("planRevisits", () => {
     expect(await planRevisits(handle.db, queue, at)).toBe(REVISIT_BUDGET);
     const queued = new Set((await capturesOf([...ids, never])).map((c) => c.productId));
     expect(queued.size).toBe(REVISIT_BUDGET);
-    expect(queued.has(never)).toBe(true);
-    // The 6 most recently checked (7 to 12 h ago) wait for the next pass.
-    for (const id of ids.slice(0, 6)) expect(queued.has(id)).toBe(false);
+    // A product already read at least once goes first: never read waits behind them.
+    expect(queued.has(never)).toBe(false);
+    // The 5 most recently checked (7 to 11 h ago) wait for the next pass too.
+    for (const id of ids.slice(0, 5)) expect(queued.has(id)).toBe(false);
     // The next pass takes the 6 left; the 60 already queued are not queued twice.
     expect(await planRevisits(handle.db, queue, at)).toBe(6);
     expect(await capturesOf([...ids, never])).toHaveLength(REVISIT_BUDGET + 6);

@@ -38,6 +38,7 @@ describe("pgBossQueue", () => {
       "create capture-user",
       "create capture-admin",
       "create capture-refresh",
+      "create capture-revisit",
       "create photo-import",
       'create catalogue-import {"policy":"exclusive","retryLimit":0,"expireInSeconds":21600}',
       'send capture-user {"captureId":"c1"}',

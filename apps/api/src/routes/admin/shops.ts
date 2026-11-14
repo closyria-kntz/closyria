@@ -10,7 +10,7 @@ import {
   inArray,
   isNull,
   ne,
-  notInArray,
+  or,
   schema,
   sql,
 } from "@closyria/db";
@@ -421,12 +421,17 @@ export function adminShopsRoutes(deps: CatalogDeps) {
         db
           .select()
           .from(schema.captures)
-          // A sheet's refresh (« stocks frais ») or a revisit (alerts) is not the shop's health.
+          // A sheet's refresh (« stocks frais ») is not the shop's health, nor a revisit (alerts), unless the shop
+          // refused it: that stops the revisits of the shop, the admin must see it.
           .where(
             and(
               eq(schema.captures.shopId, id),
               eq(schema.captures.status, "failed"),
-              notInArray(schema.captures.trigger, ["refresh", "revisit"]),
+              ne(schema.captures.trigger, "refresh"),
+              or(
+                ne(schema.captures.trigger, "revisit"),
+                inArray(schema.captures.errorCode, ["blocked", "robots_disallowed"]),
+              ),
             ),
           )
           .orderBy(sql`${schema.captures.createdAt} desc`)

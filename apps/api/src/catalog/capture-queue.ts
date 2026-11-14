@@ -7,7 +7,11 @@ import {
   PHOTO_IMPORT_QUEUE,
 } from "@closyria/shared";
 
-export type CaptureQueueName = typeof CAPTURE_QUEUES.user | typeof CAPTURE_QUEUES.admin;
+export type CaptureQueueName =
+  | typeof CAPTURE_QUEUES.user
+  | typeof CAPTURE_QUEUES.admin
+  // An admin's retry of a revisit (alerts) goes back to its queue.
+  | typeof CAPTURE_QUEUES.revisit;
 export type QueueName = CaptureQueueName | typeof PHOTO_IMPORT_QUEUE;
 
 /**
@@ -47,6 +51,7 @@ export function pgBossQueue(boss: {
       await boss.createQueue(CAPTURE_QUEUES.user);
       await boss.createQueue(CAPTURE_QUEUES.admin);
       await boss.createQueue(CAPTURE_QUEUES.refresh);
+      await boss.createQueue(CAPTURE_QUEUES.revisit);
       await boss.createQueue(PHOTO_IMPORT_QUEUE);
       // Same options as the worker's: the first `createQueue` wins.
       await boss.createQueue(CATALOGUE_IMPORT_QUEUE, { ...CATALOGUE_IMPORT_QUEUE_OPTIONS });

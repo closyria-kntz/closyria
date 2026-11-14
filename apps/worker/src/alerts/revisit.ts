@@ -7,7 +7,8 @@ import {
   isNull,
   readShopifySlowdown,
   schema,
-  shopRevisitBlocked,
+  shopLastCaptureBlocked,
+  shopRevisitExcluded,
   sql,
 } from "@closyria/db";
 import { CAPTURE_QUEUES, captureJobSchema } from "@closyria/shared";
@@ -17,15 +18,22 @@ import { followedItem } from "./detect";
 export const REVISIT_INTERVAL_MS = 6 * 60 * 60_000;
 /** Revisits queued per pass (every 15 min): at most 240 an hour, one at a time. */
 export const REVISIT_BUDGET = 60;
+/** A shop that blocks us (403, robots.txt) still gets one polite revisit this often: a refusal blocks it again. */
+export const BLOCKED_SHOP_RETRY_MS = 7 * 24 * 60 * 60_000;
 
 export type RevisitQueue = { send(queue: string, data: object): Promise<unknown> };
 
 /**
  * Queues a `revisit` capture for the followed products (someone's « Repéré » wish with « M'alerter » on) of shops the
- * hourly import does not read (`importCoversShop`) and that do not block us (`shopRevisitBlocked`), checked over 6 h
- * ago and not revisited within 6 h (a failed revisit waits too), with no capture under way: at most `REVISIT_BUDGET`,
- * the longest unchecked first (never checked before all). While Shopify asks for the nightly rhythm, no Shopify
- * product is revisited. A product that left the shop (404/410) is not. Returns how many were queued.
+ * hourly import does not read (`importCoversShop`) and that are not entered by hand, refused or merged
+ * (`shopRevisitExcluded`), checked over 6 h ago and not revisited within 6 h (a failed revisit waits too), with no
+ * capture under way: at most `REVISIT_BUDGET`, the longest unchecked first, products never read last (often a link
+ * that never worked). While Shopify asks for the nightly rhythm, no Shopify product is revisited. A product that left
+ * the shop (404/410) is not. Returns how many were queued.
+ *
+ * A shop whose last telling capture was blocked or disallowed by robots.txt (`shopLastCaptureBlocked`) gets one try a
+ * week: its first followed product in that order, when no revisit of the shop was made in 7 days. robots.txt is read
+ * first as for any capture; a refusal keeps it blocked for another week, a success lifts the block.
  *
  * Each goes through `runCapture` like any capture (robots.txt, address policy, spacing, Shopify line at the monitors'
  * low place) and writes like a sheet's refresh: a history point only on a change, which is what creates the alerts.
@@ -33,11 +41,14 @@ export type RevisitQueue = { send(queue: string, data: object): Promise<unknown>
 export async function planRevisits(db: Database, queue: RevisitQueue, at = new Date()): Promise<number> {
   const slowdown = await readShopifySlowdown(db, at);
   const since = new Date(at.getTime() - REVISIT_INTERVAL_MS).toISOString();
+  const retrySince = new Date(at.getTime() - BLOCKED_SHOP_RETRY_MS).toISOString();
   const p = schema.products;
+  const s = schema.shops;
+  const order = sql`${p.lastCapturedAt} is null, ${p.lastCapturedAt} asc, ${p.id}`;
   const due = await db
     .select({ id: p.id, shopId: p.shopId, url: p.canonicalUrl })
     .from(p)
-    .innerJoin(schema.shops, eq(schema.shops.id, p.shopId))
+    .innerJoin(s, eq(s.id, p.shopId))
     .where(
       and(
         isNull(p.removedAt),
@@ -46,14 +57,20 @@ export async function planRevisits(db: Database, queue: RevisitQueue, at = new D
           .from(schema.items)
           .where(and(eq(schema.items.productId, p.id), followedItem))})`,
         sql`not ${importCoversShop}`,
-        sql`not ${shopRevisitBlocked}`,
-        slowdown?.level === "nightly" ? sql`${schema.shops.platform} <> 'shopify'` : undefined,
+        sql`not ${shopRevisitExcluded}`,
+        sql`(not ${shopLastCaptureBlocked} or (
+          not exists (select 1 from captures c where c.shop_id = ${s.id} and c.trigger = 'revisit'
+            and c.created_at >= ${retrySince}::timestamptz)
+          and ${p.id} = (select p2.id from products p2 where p2.shop_id = ${s.id} and p2.removed_at is null
+            and exists (select 1 from items where items.product_id = p2.id and ${followedItem})
+            order by p2.last_captured_at is null, p2.last_captured_at asc, p2.id limit 1)))`,
+        slowdown?.level === "nightly" ? sql`${s.platform} <> 'shopify'` : undefined,
         sql`(${p.lastCapturedAt} is null or ${p.lastCapturedAt} < ${since}::timestamptz)`,
         sql`not exists (select 1 from captures c where c.product_id = ${p.id}
           and (c.status in ('queued', 'running') or (c.trigger = 'revisit' and c.created_at >= ${since}::timestamptz)))`,
       ),
     )
-    .orderBy(sql`${p.lastCapturedAt} asc nulls first`, p.id)
+    .orderBy(order)
     .limit(REVISIT_BUDGET);
 
   let queued = 0;

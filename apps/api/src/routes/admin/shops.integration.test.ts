@@ -468,9 +468,20 @@ describe("captures", () => {
     const id1 = ((await json(r1)) as { captureId: string }).captureId;
     const r2 = await call("POST", `/captures/${monitor.id}/retry`, {});
     const id2 = ((await json(r2)) as { captureId: string }).captureId;
+    const revisit = await newCapture(shop.id, {
+      status: "failed",
+      trigger: "revisit",
+      errorCode: "timeout",
+      productId: product.id,
+      url: "https://r.test/v",
+    });
+    const r3 = await call("POST", `/captures/${revisit.id}/retry`, {});
+    const id3 = ((await json(r3)) as { captureId: string }).captureId;
+    // A revisit goes back to its own queue (one at a time, low on the Shopify line).
     expect(t.calls.slice(before)).toEqual([
       { queue: "capture-user", id: id1 },
       { queue: "capture-admin", id: id2 },
+      { queue: "capture-revisit", id: id3 },
     ]);
     const [n1] = await t.db.select().from(schema.captures).where(eq(schema.captures.id, id1));
     expect(n1).toMatchObject({
@@ -594,6 +605,23 @@ describe("stocks frais: the dashboard's figures", () => {
     const detail = adminShopDetailSchema.parse(await (await call("GET", `/shops/${shop.id}`)).json());
     expect(detail.successRate7d).toBe(1);
     expect(detail.recentErrors).toEqual([]);
+  });
+
+  it("leaves revisits out of the figures and the health, but shows a revisit the shop refused in its recent errors", async () => {
+    await t.db.delete(schema.captures);
+    const shop = await newShop({ status: "published" });
+    const fin = { createdAt: ago(HOUR), finishedAt: ago(HOUR) };
+    await newCapture(shop.id, { method: "shopify", durationMs: 100, ...fin });
+    await newCapture(shop.id, { trigger: "revisit", status: "failed", errorCode: "timeout", ...fin });
+    await newCapture(shop.id, { trigger: "revisit", status: "failed", errorCode: "http_error", ...fin });
+    await newCapture(shop.id, { trigger: "revisit", status: "failed", errorCode: "blocked", ...fin });
+    await newCapture(shop.id, { trigger: "revisit", status: "failed", errorCode: "robots_disallowed", ...fin });
+
+    const body = adminOverviewSchema.parse(await (await call("GET", "/overview")).json());
+    expect(body.captures).toMatchObject({ last24h: 1, last7d: 1, successRate7d: 1 });
+    const detail = adminShopDetailSchema.parse(await (await call("GET", `/shops/${shop.id}`)).json());
+    expect(detail.successRate7d).toBe(1);
+    expect(detail.recentErrors.map((e) => e.errorCode).sort()).toEqual(["blocked", "robots_disallowed"]);
   });
 
   it("« Relecture en retard » counts the due shops waiting more than twice their interval", async () => {

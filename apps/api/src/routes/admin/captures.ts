@@ -6,6 +6,7 @@ import {
   adminCaptureSchema,
   adminCaptureTestSchema,
   adminCatalogErrorSchema,
+  CAPTURE_QUEUES,
   type CaptureErrorCode,
   type CaptureMethod,
   type CaptureStatus,
@@ -78,7 +79,7 @@ const retryRoute = defineAccess(
     summary: "Capture the same address again",
     description:
       "A new capture with the same trigger, product, shop and address. `user` captures go back to the user queue, " +
-      "the others to the admin queue.",
+      "`revisit` ones to the revisit queue, the others to the admin queue.",
     request: { params: idParam },
     responses: {
       202: { description: "Accepted", content: { "application/json": { schema: adminCaptureAcceptedSchema } } },
@@ -191,7 +192,11 @@ export function adminCapturesRoutes(deps: CatalogDeps) {
       await enqueueCapture(
         db,
         queue,
-        original.trigger === "user" ? "capture-user" : "capture-admin",
+        original.trigger === "user"
+          ? CAPTURE_QUEUES.user
+          : original.trigger === "revisit"
+            ? CAPTURE_QUEUES.revisit
+            : CAPTURE_QUEUES.admin,
         capture.id,
         now(),
       );

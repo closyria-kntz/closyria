@@ -170,6 +170,38 @@ describe("sweepStuckCaptures", () => {
     expect(await status(ok)).toBe("ok");
     expect(await status(manual)).toBe("manual");
   });
+
+  it("gives a revisit 60 min before sweeping it (a batch waits behind the Shopify line); the others keep 5 min", async () => {
+    const { db } = handle;
+    const [shop] = await db.select().from(schema.shops).limit(1);
+    if (!shop) throw new Error("no shop");
+    const now = new Date("2026-11-06T12:00:00Z");
+    const cap = async (trigger: string, minutesAgo: number) => {
+      const [c] = await db
+        .insert(schema.captures)
+        .values({
+          shopId: shop.id,
+          url: "https://sweep.test/r",
+          trigger,
+          status: "queued",
+          createdAt: new Date(now.getTime() - minutesAgo * 60_000),
+        })
+        .returning();
+      if (!c) throw new Error("no capture");
+      return c.id;
+    };
+    const waiting = await cap("revisit", 10);
+    const stuck = await cap("revisit", 61);
+    const monitor = await cap("monitor", 10);
+
+    // (Captures left by the test above are swept too: only these three are checked.)
+    await sweepStuckCaptures(db, now);
+    const statusOf = async (id: string) =>
+      (await db.select().from(schema.captures).where(eq(schema.captures.id, id)))[0]?.status;
+    expect(await statusOf(waiting)).toBe("queued");
+    expect(await statusOf(stuck)).toBe("failed");
+    expect(await statusOf(monitor)).toBe("failed");
+  });
 });
 
 describe("job handlers", () => {

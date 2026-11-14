@@ -18,19 +18,31 @@ export const importCoversShop = and(
 
 /**
  * A shop whose products are never revisited: entered by hand (the « grandes enseignes » that refuse robots), refused or
- * merged, or whose last real capture (any trigger; not a 24 h reuse, not a queue failure) was blocked or disallowed by
- * robots.txt. Its next successful capture (a person pasting a link, the monitor) lifts the last one. Reads `shops`, in a
- * query that selects from it (its columns must come out qualified, `"shops"."id"`, not inside an update of it).
+ * merged. Reads `shops`, in a query that selects from it (its columns must come out qualified, `"shops"."id"`).
  */
-export const shopRevisitBlocked = sql`(${shops.captureMode} = 'manual' or ${shops.status} = 'refused'
-  or ${shops.mergedIntoId} is not null
-  or coalesce((
+export const shopRevisitExcluded = sql`(${shops.captureMode} = 'manual' or ${shops.status} = 'refused'
+  or ${shops.mergedIntoId} is not null)`;
+
+/**
+ * The shop's last telling capture (any trigger) was blocked or disallowed by robots.txt. Not telling: a 24 h reuse
+ * (succeeded without a method), a queue failure or a timeout (nothing proves either way), and a Shopify « slow down »
+ * (`blocked` with 429/430: the slow-down handles it, the shop does not refuse us). Its next successful capture lifts it.
+ * Reads `shops`, like `shopRevisitExcluded`.
+ */
+export const shopLastCaptureBlocked = sql`coalesce((
     select c.error_code in ('blocked', 'robots_disallowed') from captures c
     where c.shop_id = ${shops.id} and c.status in ('succeeded', 'failed')
       and not (c.status = 'succeeded' and c.method is null)
-      and coalesce(c.error_code, '') <> 'queue_unavailable'
+      and coalesce(c.error_code, '') not in ('queue_unavailable', 'timeout')
+      and not (c.error_code = 'blocked' and coalesce(c.http_status, 0) in (429, 430))
     order by c.created_at desc limit 1
-  ), false))`;
+  ), false)`;
+
+/**
+ * A shop whose products cannot be followed by revisits: excluded, or blocking us (its weekly polite try aside, see
+ * `planRevisits`). Reads `shops`.
+ */
+export const shopRevisitBlocked = sql`(${shopRevisitExcluded} or ${shopLastCaptureBlocked})`;
 
 /** « Suivi impossible pour cette boutique »: neither the import nor a revisit can follow its products. Reads `shops`. */
 export const trackingImpossibleSql = sql`(not ${importCoversShop} and ${shopRevisitBlocked})`;
