@@ -51,12 +51,10 @@ const SHAPES: Record<IllustrationKind, Shape> = {
     details: ["M24 84 L96 84", "M56 84 L56 92 L64 92 L64 84"],
     outline: ["M44 62 Q44 36 60 36 Q76 36 76 62"],
   },
-  // A scarf over a rail: the fold at the top, two tails, their stripes and fringes.
+  // A wide-brimmed hat seen from the front: crown, ribbon and brim (scarves, hats, jewellery and belts).
   accessory: {
-    body: "M36 42 Q60 32 84 42 L80 62 L86 134 L66 136 L63 66 Q60 62 57 66 L54 136 L34 134 L40 62 Z",
-    details: ["M38 112 L54 112", "M66 112 L84 112"],
-    outline: ["M40 136 V142", "M46 136 V142", "M72 136 V142", "M80 136 V142"],
-    hook: true,
+    body: "M10 112 Q10 100 34 97 Q34 64 60 62 Q86 64 86 97 Q110 100 110 112 Q110 124 60 124 Q10 124 10 112 Z",
+    details: ["M35 88 Q60 95 85 88", "M35 97 Q60 104 85 97", "M24 110 Q60 120 96 110"],
   },
   other: {
     body: "M30 64 L60 46 L90 64 L90 128 L30 128 Z",

@@ -91,7 +91,7 @@ publie jamais, quelle que soit sa session).
 ### 3.4 Illustration
 
 - Neuf silhouettes : haut, robe, bas / pantalon, jupe, manteau / veste, chaussures (basket vue de profil), sac,
-  accessoire (foulard : écharpes, chapeaux, bijoux, ceintures), autre (classement par la catégorie, une
+  accessoire (chapeau à large bord, vu de face : écharpes, chapeaux, bijoux, ceintures), autre (classement par la catégorie, une
   sous-catégorie prend celle de son parent ; non classé → « autre »).
 - Remplie de la couleur classée de l'article (`colors.hex`) ; sans couleur, une teinte neutre à elle (jeton
   `figure-neutral`, distincte du fond, en clair et en sombre) ; contour encre (lisible même pour un article blanc) sur

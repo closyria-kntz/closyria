@@ -39,11 +39,15 @@ $$;--> statement-breakpoint
 CREATE TRIGGER products_mark_pasted_item
 AFTER INSERT OR UPDATE OF product_id, user_id ON items
 FOR EACH ROW EXECUTE FUNCTION products_mark_pasted_by_item();--> statement-breakpoint
--- Backfill from the rule above, with the earliest qualifying date.
+-- Backfill from the rule above, with the earliest qualifying date; only the products that qualify are written.
 UPDATE products p SET pasted_at = least(
   (SELECT min(c.created_at) FROM captures c
     WHERE c.product_id = p.id AND c.trigger = 'user' AND c.status IN ('succeeded', 'skipped_manual')
       AND catalog_publisher(c.requested_by)),
   (SELECT min(i.created_at) FROM items i WHERE i.product_id = p.id AND catalog_publisher(i.user_id))
 )
-WHERE p.pasted_at IS NULL;
+WHERE p.pasted_at IS NULL
+  AND (EXISTS (SELECT 1 FROM captures c
+        WHERE c.product_id = p.id AND c.trigger = 'user' AND c.status IN ('succeeded', 'skipped_manual')
+          AND catalog_publisher(c.requested_by))
+    OR EXISTS (SELECT 1 FROM items i WHERE i.product_id = p.id AND catalog_publisher(i.user_id)));
