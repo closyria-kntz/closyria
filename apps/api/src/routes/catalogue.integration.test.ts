@@ -555,6 +555,19 @@ describe("GET /api/catalog — sorts and pages", () => {
     expect(ids((await page("?isNew=true")).items)).toEqual([admin.id, fresh.id, firstSeen.id]);
   });
 
+  it("refuses a cursor from before the put-online dates (two keys for « new »): invalid_cursor, for the web to restart", async () => {
+    const old = (sort: string, k: string[]) => Buffer.from(JSON.stringify({ s: sort, k })).toString("base64url");
+    const id = "00000000-0000-4000-8000-000000000001";
+    for (const [sort, keys] of [
+      ["new", ["2026-11-01 00:00:00+00", id]],
+      ["popular", ["0", "2026-11-01 00:00:00+00", id]],
+    ] as const) {
+      const res = await call("GET", `/catalog?sort=${sort}&cursor=${old(sort, [...keys])}`, me.cookie);
+      expect(res.status, sort).toBe(400);
+      expect(await res.json()).toEqual({ error: "invalid_cursor" });
+    }
+  });
+
   it("puts the undated articles after the dated ones, in their shop's own order, then the never listed ones", async () => {
     const a = await newShop();
     const b = await newShop();

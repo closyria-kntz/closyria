@@ -333,7 +333,8 @@ const pagesFor = (count: number) => Math.max(1, Math.ceil(count / WOO_PAGE_SIZE)
  *   one by one, and is remembered so;
  * - a product with more variations than the budget is read over several imports (`variants_cursor`): once it has
  *   waited 24 h (since its last full read, else since it is known) the import starts with it, within half of the
- *   budget (the rest goes to the others); otherwise only when there is nothing else to read;
+ *   budget (the rest goes to the others, and what they leave comes back to it); otherwise only when there is nothing
+ *   else to read;
  * - the first failure (5xx, timeout, unreadable) ends the reads of this import, its products waiting 24 h;
  * - a refusal (robots.txt, 401/403/429, an HTML page) stops the import like a page's.
  */
@@ -377,8 +378,16 @@ async function readVariations(
     oneByOne
       ? c.item.variations.length > WOO_VARIATION_REQUESTS_ONE_BY_ONE
       : pagesFor(c.item.variations.length) > WOO_VARIATION_REQUESTS;
-  /** Reads the next part of a big product, within `budget` requests (by default all that is left). */
-  const readInParts = async (candidate: Candidate, budget = left()) => {
+  /**
+   * Reads the next part of a big product, within `budget` requests (by default all that is left). True when it stopped
+   * part-way with its pass not over (`candidate.cursor` then says where it goes on).
+   */
+  const readInParts = async (candidate: Candidate, budget = left()): Promise<boolean> => {
+    const partly = async (stock: Map<string, WooVariationStock>, cursor: number) => {
+      await writeStock(ctx, candidate, stock, cursor);
+      candidate.cursor = cursor;
+      return true;
+    };
     const count = candidate.item.variations.length;
     read += 1;
     if (oneByOne) {
@@ -389,38 +398,49 @@ async function readVariations(
         const one = await readVariation(fetch, api, variation.id);
         stopIfInterrupted();
         spent += 1;
-        if (!one) return fail([candidate]);
+        if (!one) {
+          await fail([candidate]);
+          return false;
+        }
         stock.set(variation.id, one);
       }
       const end = start + part.length;
-      return writeStock(ctx, candidate, stock, end >= count ? null : end);
+      if (end < count) return partly(stock, end);
+      await writeStock(ctx, candidate, stock, null);
+      return false;
     }
     const firstPage = Math.floor((candidate.cursor < count ? candidate.cursor : 0) / WOO_PAGE_SIZE) + 1;
     const result = await readVariationsInBulk(fetch, api, [candidate.id], Math.min(budget, left()), firstPage);
     stopIfInterrupted();
     spent += result.requests;
-    if (result.kind === "unsupported") return switchToOneByOne();
-    if (result.kind === "failed") return fail([candidate]);
-    if (result.kind === "incomplete") {
-      return writeStock(ctx, candidate, result.stock, (result.nextPage - 1) * WOO_PAGE_SIZE);
+    if (result.kind === "unsupported") {
+      await switchToOneByOne();
+      return false;
     }
+    if (result.kind === "failed") {
+      await fail([candidate]);
+      return false;
+    }
+    if (result.kind === "incomplete") return partly(result.stock, (result.nextPage - 1) * WOO_PAGE_SIZE);
     // The pass is over: from its first page, a variation not listed is no longer on sale.
     const stock = firstPage === 1 ? completeStock(candidate, result.stock, result.rejected) : result.stock;
     await writeStock(ctx, candidate, stock, null);
+    return false;
   };
 
   const big = due.filter(oversized);
   const queue = due.filter((c) => !oversized(c));
   // Its guaranteed share: a big product waiting for a day is read first, within half of this import's budget; the
-  // other half goes to the others.
+  // other half goes to the others, and what they leave comes back to it at the end.
   const now = ctx.now().getTime();
+  let starvingUnfinished = false;
   const starving = big.find((c) => c.waitingSince <= now - WOO_VARIANTS_RECHECK_MS);
   if (starving) {
     console.info(
       `catalogue import ${shopId}: product ${starving.id} (${starving.item.variations.length} variations) read first`,
     );
     big.splice(big.indexOf(starving), 1);
-    await readInParts(starving, Math.max(1, Math.floor(left() / 2)));
+    starvingUnfinished = await readInParts(starving, Math.max(1, Math.floor(left() / 2)));
   }
 
   while (!oneByOne && !failed && queue.length > 0 && left() > 0) {
@@ -490,6 +510,9 @@ async function readVariations(
     if (complete) await writeStock(ctx, candidate, stock, null);
     else await fail([candidate]);
   }
+
+  // The overdue big product takes back what the others left of the budget.
+  if (starving && starvingUnfinished && !failed && left() > 0) await readInParts(starving);
 
   // Nothing else to read: a big product takes what is left.
   const [first, ...waiting] = big;

@@ -711,7 +711,7 @@ describe("WooCommerce catalogue import", () => {
       await importCatalog(deps, s.id);
       expect(bulkParents()).toEqual([2]);
       // A day later the skirt is due again, and the robe has waited a day: it goes first, with half of the budget;
-      // the skirt is read with the other half.
+      // the skirt is read with the other half, and what it leaves goes back to the robe.
       await handle.db
         .update(schema.products)
         .set({ createdAt: new Date(clock.getTime() - 2 * 24 * HOUR) })
@@ -719,10 +719,41 @@ describe("WooCommerce catalogue import", () => {
       later(25 * HOUR);
       await importCatalog(deps, s.id);
       const half = Math.floor(WOO_VARIATION_REQUESTS / 2);
-      expect(bulkParents()).toEqual([...Array.from({ length: half }, () => 1), 2]);
-      expect(await byExternalId(s.id, "1")).toMatchObject({ variantsCursor: half * 100 });
+      const rest = WOO_VARIATION_REQUESTS - half - 1;
+      expect(bulkParents()).toEqual([
+        ...Array.from({ length: half }, () => 1),
+        2,
+        ...Array.from({ length: rest }, () => 1),
+      ]);
+      expect(bulkHits()).toHaveLength(WOO_VARIATION_REQUESTS);
+      expect(await byExternalId(s.id, "1")).toMatchObject({ variantsCursor: (half + rest) * 100 });
       expect(await byExternalId(s.id, "2")).toMatchObject({ variantsCheckedAt: clock });
       expect(log).toHaveBeenCalledWith(expect.stringContaining("product 1 (3500 variations) read first"));
+    } finally {
+      log.mockRestore();
+    }
+  }, 60_000);
+
+  it("an overdue big product alone to read uses the whole budget", async () => {
+    const huge = Array.from({ length: WOO_VARIATION_REQUESTS * 3 * 100 }, (_, i) => `T${i}`);
+    servePages([[{ id: 1, name: "Robe aux mille tailles", sizes: huge }]]);
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const s = await newShop();
+      await importCatalog(deps, s.id);
+      expect(bulkHits()).toHaveLength(WOO_VARIATION_REQUESTS);
+      await handle.db
+        .update(schema.products)
+        .set({ createdAt: new Date(clock.getTime() - 2 * 24 * HOUR) })
+        .where(eq(schema.products.shopId, s.id));
+      later(25 * HOUR);
+      await importCatalog(deps, s.id);
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("product 1 (9000 variations) read first"));
+      // Its half, then the half nobody else took: the whole budget, going on page after page.
+      expect(bulkHits()).toHaveLength(WOO_VARIATION_REQUESTS);
+      const pages = bulkHits().map((hit) => Number(new URL(hit, "http://x").searchParams.get("page")));
+      expect(pages).toEqual(Array.from({ length: WOO_VARIATION_REQUESTS }, (_, i) => WOO_VARIATION_REQUESTS + 1 + i));
+      expect(await byExternalId(s.id, "1")).toMatchObject({ variantsCursor: 2 * WOO_VARIATION_REQUESTS * 100 });
     } finally {
       log.mockRestore();
     }

@@ -273,7 +273,10 @@ async function withSession(deps: ClientDeps, path: string, signal?: AbortSignal)
   return await deps.fetch(path, init);
 }
 
-/** One page of the catalogue (24). Throws on failure. */
+/** The API no longer takes this cursor (400 `invalid_cursor`: a page kept from before a change of its sort keys). */
+export class StaleCatalogueCursorError extends Error {}
+
+/** One page of the catalogue (24). Throws on failure (`StaleCatalogueCursorError` for a cursor it no longer takes). */
 export async function fetchCataloguePage(
   query: Record<string, string>,
   cursor: string | null,
@@ -283,8 +286,32 @@ export async function fetchCataloguePage(
   const params = new URLSearchParams(query);
   if (cursor) params.set("cursor", cursor);
   const response = await withSession(deps, `/api/catalog?${params}`, signal);
+  if (response.status === 400 && cursor) {
+    const body: unknown = await response.json().catch(() => null);
+    if (z.object({ error: z.literal("invalid_cursor") }).safeParse(body).success) {
+      throw new StaleCatalogueCursorError("catalog cursor no longer valid");
+    }
+  }
   if (!response.ok) throw new Error(`catalog ${response.status}`);
   return catalogPageSchema.parse(await response.json());
+}
+
+/**
+ * « Voir plus d'articles »: the next page; or, when the cursor is no longer taken (kept pages from before a
+ * deployment), page 1 again from the start (`restart`: it replaces the list, without any error shown). Throws on
+ * any other failure.
+ */
+export async function fetchMoreCatalogue(
+  query: Record<string, string>,
+  cursor: string,
+  deps: ClientDeps = defaultDeps,
+): Promise<{ restart: boolean; page: CatalogPage }> {
+  try {
+    return { restart: false, page: await fetchCataloguePage(query, cursor, deps) };
+  } catch (error) {
+    if (!(error instanceof StaleCatalogueCursorError)) throw error;
+    return { restart: true, page: await fetchCataloguePage(query, null, deps) };
+  }
 }
 
 /** The sheet of a catalogue article for her profile, or `not_found` when it left the catalogue. Throws on failure. */

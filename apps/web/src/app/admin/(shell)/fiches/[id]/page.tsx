@@ -173,12 +173,7 @@ export default async function AdminProductPage({ params }: Props) {
         </h2>
         {rows([
           [t("published"), product.publishedAt ? when(product.publishedAt) : t("publishedUnknown")],
-          [
-            t("publishedSource"),
-            t(`publishedSources.${product.publishedSource}`, {
-              date: product.publishedAt ? when(product.publishedAt) : "",
-            }),
-          ],
+          [t("publishedSource"), t(`publishedSources.${product.publishedSource}`)],
           [t("createdAt"), when(product.createdAt)],
           [t("lastCaptured"), when(product.lastCapturedAt)],
           [t("updatedAt"), when(product.updatedAt)],

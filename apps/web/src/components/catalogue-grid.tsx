@@ -8,6 +8,7 @@ import { sectionTitleClass } from "@/components/home-news";
 import { buttonClass, primaryButtonClass } from "@/components/ui";
 import {
   fetchCataloguePage,
+  fetchMoreCatalogue,
   reachedByHistory,
   readSnapshot,
   sessionStorageOrNull,
@@ -199,8 +200,11 @@ export function CatalogueSection({
     setLoadingMore(true);
     setMoreFailed(false);
     try {
-      const page = await fetchCataloguePage(query, data.nextCursor);
+      const { restart, page } = await fetchMoreCatalogue(query, data.nextCursor);
       if (mine !== generation.current) return;
+      learnSizes(page.hasSizes);
+      // A cursor kept from before a deployment: the list starts again from page 1, quietly.
+      if (restart) return setData({ status: "ready", items: page.items, nextCursor: page.nextCursor });
       setData((previous) => {
         const known = new Set(previous.items.map((item) => item.productId));
         return {

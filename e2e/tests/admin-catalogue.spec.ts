@@ -606,7 +606,12 @@ test("une admin saisit la date de mise en ligne d’un article, puis revient à 
   await expect(dates).toContainText("Inconnue (déjà en boutique au premier import)");
   const field = dates.getByLabel("Date de mise en ligne");
   await expect(field).toHaveValue("");
+  // Only a date set by hand can go back to automatic.
+  await expect(dates.getByRole("button", { name: "Revenir à la date automatique" })).toHaveCount(0);
   await axeLightAndDark(page);
+  // The date shown, unchanged: nothing is sent.
+  await dates.getByRole("button", { name: "Enregistrer la date" }).click();
+  await expect(dates.getByText("Date inchangée : rien n’est enregistré.")).toBeVisible();
 
   await field.fill("2026-11-02");
   await dates.getByRole("button", { name: "Enregistrer la date" }).click();
@@ -623,10 +628,12 @@ test("une admin saisit la date de mise en ligne d’un article, puis revient à 
     `product:${product}`,
   ]);
   expect(audit.rowCount).toBe(1);
+  await expect(field).toHaveValue("2026-11-02");
 
-  // Emptied: back to automatic (no date until the shop gives one).
-  await field.fill("");
-  await dates.getByRole("button", { name: "Enregistrer la date" }).click();
+  // Back to automatic (no date until the shop gives one); the field follows the reloaded sheet.
+  await dates.getByRole("button", { name: "Revenir à la date automatique" }).click();
   await expect(dates.getByText("Date automatique rétablie.")).toBeVisible();
   await expect(dates).toContainText("Inconnue (déjà en boutique au premier import)");
+  await expect(field).toHaveValue("");
+  await expect(dates.getByRole("button", { name: "Revenir à la date automatique" })).toHaveCount(0);
 });

@@ -7,12 +7,14 @@ import {
   catalogueFiltersToParams,
   fetchCatalogueDetail,
   fetchCataloguePage,
+  fetchMoreCatalogue,
   PRICE_RANGES,
   readLastDiscoverHref,
   readSnapshot,
   reportArticle,
   SNAPSHOT_MAX_AGE_MS,
   SNAPSHOT_STORAGE_KEY,
+  StaleCatalogueCursorError,
   snapshotKey,
   toCatalogueQuery,
   withoutFilter,
@@ -220,6 +222,41 @@ describe("catalogue calls", () => {
     await expect(
       fetchCataloguePage({}, null, { fetch: vi.fn().mockResolvedValue(response(200, { items: 1 })), ensure }),
     ).rejects.toThrow();
+  });
+
+  it("« Voir plus » with a cursor from before a deployment (invalid_cursor) starts again from page 1, quietly", async () => {
+    const ensure = vi.fn();
+    const first = { items: [card], nextCursor: "new-cursor", hasSizes: true };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(response(400, { error: "invalid_cursor" }))
+      .mockResolvedValueOnce(response(200, first));
+    expect(await fetchMoreCatalogue({ sort: "new" }, "old-cursor", { fetch, ensure })).toEqual({
+      restart: true,
+      page: first,
+    });
+    expect(fetch.mock.calls.map((call) => call[0])).toEqual([
+      "/api/catalog?sort=new&cursor=old-cursor",
+      "/api/catalog?sort=new",
+    ]);
+    await expect(
+      fetchCataloguePage({}, "old", {
+        fetch: vi.fn().mockResolvedValue(response(400, { error: "invalid_cursor" })),
+        ensure,
+      }),
+    ).rejects.toBeInstanceOf(StaleCatalogueCursorError);
+
+    // A valid cursor: the next page, appended by the grid.
+    const next = { items: [card], nextCursor: null, hasSizes: false };
+    expect(
+      await fetchMoreCatalogue({}, "c", { fetch: vi.fn().mockResolvedValue(response(200, next)), ensure }),
+    ).toEqual({ restart: false, page: next });
+    // Any other refusal or failure stays an error (« Réessayer »), page 1 is not asked.
+    for (const failed of [response(400, { error: "invalid_request" }), response(500)]) {
+      const once = vi.fn().mockResolvedValue(failed);
+      await expect(fetchMoreCatalogue({}, "c", { fetch: once, ensure })).rejects.toThrow();
+      expect(once).toHaveBeenCalledOnce();
+    }
   });
 
   it("reads a sheet for her profile, or says it is not in the catalogue", async () => {
