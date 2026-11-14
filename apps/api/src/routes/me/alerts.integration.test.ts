@@ -117,14 +117,26 @@ describe("GET /api/push/key", () => {
 describe("/api/me/push-subscriptions", () => {
   it("answers 401 without a session", async () => {
     expect((await call("GET", "/api/me/push-subscriptions", undefined)).status).toBe(401);
-    expect((await call("POST", "/api/me/push-subscriptions", undefined, subscription("https://p.test/x"))).status).toBe(
-      401,
-    );
+    expect(
+      (
+        await call(
+          "POST",
+          "/api/me/push-subscriptions",
+          undefined,
+          subscription("https://fcm.googleapis.com/fcm/send/x"),
+        )
+      ).status,
+    ).toBe(401);
   });
 
   it("refuses a guest: create an account first", async () => {
     const guest = await t.signIn();
-    const res = await call("POST", "/api/me/push-subscriptions", guest.cookie, subscription("https://p.test/guest"));
+    const res = await call(
+      "POST",
+      "/api/me/push-subscriptions",
+      guest.cookie,
+      subscription("https://fcm.googleapis.com/fcm/send/guest"),
+    );
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "account_required" });
     const rows = await t.db
@@ -136,7 +148,7 @@ describe("/api/me/push-subscriptions", () => {
 
   it("keeps one row per endpoint: subscribing again updates it", async () => {
     const a = await account();
-    const endpoint = `https://push.test/${++counter}`;
+    const endpoint = `https://fcm.googleapis.com/fcm/send/${++counter}`;
     const first = await call("POST", "/api/me/push-subscriptions", a.cookie, subscription(endpoint, "old"));
     expect(first.status).toBe(200);
     const view = (await first.json()) as PushSubscriptionView;
@@ -155,7 +167,7 @@ describe("/api/me/push-subscriptions", () => {
   it("moves a browser subscribed under another account to hers", async () => {
     const a = await account();
     const b = await account();
-    const endpoint = `https://push.test/${++counter}`;
+    const endpoint = `https://fcm.googleapis.com/fcm/send/${++counter}`;
     await call("POST", "/api/me/push-subscriptions", a.cookie, subscription(endpoint));
     await t.db
       .update(schema.pushSubscriptions)
@@ -170,10 +182,25 @@ describe("/api/me/push-subscriptions", () => {
     expect(listB.subscriptions).toHaveLength(1);
   });
 
-  it("refuses an endpoint that is not https", async () => {
+  it("refuses an endpoint that is not a known push service (no SSRF)", async () => {
     const a = await account();
-    const res = await call("POST", "/api/me/push-subscriptions", a.cookie, subscription("http://push.test/x"));
-    expect(res.status).toBe(400);
+    for (const endpoint of [
+      "http://fcm.googleapis.com/fcm/send/x",
+      "https://localhost/x",
+      "https://127.0.0.1/x",
+      "https://evil.com/x",
+      "https://fcm.googleapis.com.evil.com/x",
+      "https://u:p@fcm.googleapis.com/fcm/send/x",
+      "https://fcm.googleapis.com:8443/fcm/send/x",
+    ]) {
+      const res = await call("POST", "/api/me/push-subscriptions", a.cookie, subscription(endpoint));
+      expect(res.status, endpoint).toBe(400);
+    }
+    const rows = await t.db
+      .select()
+      .from(schema.pushSubscriptions)
+      .where(eq(schema.pushSubscriptions.userId, a.userId));
+    expect(rows).toEqual([]);
   });
 
   it("removes one of her devices, never another person's", async () => {
@@ -183,7 +210,7 @@ describe("/api/me/push-subscriptions", () => {
       "POST",
       "/api/me/push-subscriptions",
       a.cookie,
-      subscription(`https://push.test/${++counter}`),
+      subscription(`https://fcm.googleapis.com/fcm/send/${++counter}`),
     );
     const { id } = (await res.json()) as PushSubscriptionView;
     expect((await call("DELETE", `/api/me/push-subscriptions/${id}`, b.cookie)).status).toBe(404);

@@ -1,5 +1,5 @@
 import { type Database, eq, schema } from "@closyria/db";
-import type { VapidConfig } from "@closyria/shared";
+import { isPushEndpointAllowed, type VapidConfig } from "@closyria/shared";
 import { sendNotification } from "web-push";
 
 /** One of her devices, as the push service needs it. */
@@ -52,7 +52,11 @@ export type SendNotification = (
   },
 ) => Promise<{ statusCode: number }>;
 
-/** The real sender (`web-push`, VAPID). Logs the error message only: never an endpoint or a key. */
+/**
+ * The real sender (`web-push`, VAPID). Logs the error message only: never an endpoint or a key. Redirects are never
+ * followed: web-push 4 sends with a bare `node:https` request (no proxy, no agent given here), and a 3xx is a non-2xx
+ * answer, so `failed`.
+ */
 export function webPushSender(vapid: VapidConfig, send: SendNotification = sendNotification): PushSender {
   const vapidDetails = { subject: vapid.subject, publicKey: vapid.publicKey, privateKey: vapid.privateKey };
   return async (target, message, { topic }) => {
@@ -80,7 +84,8 @@ export function webPushSender(vapid: VapidConfig, send: SendNotification = sendN
 
 /**
  * Sends one message to each of her devices: one `alert_sends` row per attempt, `last_ok_at` on success, a device the
- * browser removed (404/410) deleted. `delivered`: devices that accepted it; `retry`: a device asked to try again;
+ * browser removed (404/410) deleted. A device whose endpoint is not a known push service (`isPushEndpointAllowed`) is
+ * deleted without a send. `delivered`: devices that accepted it; `retry`: a device asked to try again;
  * `devices`: how many she had.
  */
 export async function deliver(
@@ -104,6 +109,12 @@ export async function deliver(
   let delivered = 0;
   let retry = false;
   for (const sub of subscriptions) {
+    // Checked again before every send: a row written before the check, or not by the API, is never POSTed to.
+    if (!isPushEndpointAllowed(sub.endpoint)) {
+      console.warn("push: subscription with an unknown push service removed");
+      await db.delete(schema.pushSubscriptions).where(eq(schema.pushSubscriptions.id, sub.id));
+      continue;
+    }
     const outcome = await push(
       { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
       message,

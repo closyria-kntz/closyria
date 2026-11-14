@@ -6,6 +6,7 @@ import {
   alertKindSchema,
   alertSettingsPatchSchema,
   alertSettingsSchema,
+  isPushEndpointAllowed,
   isRealDrop,
   nextSendAt,
   parisDay,
@@ -167,6 +168,40 @@ describe("schemas", () => {
     expect(pushSubscriptionInputSchema.safeParse(input).success).toBe(true);
     expect(pushSubscriptionInputSchema.safeParse({ ...input, endpoint: "http://example.test/x" }).success).toBe(false);
     expect(pushSubscriptionInputSchema.safeParse({ ...input, keys: { p256dh: "", auth: "x" } }).success).toBe(false);
+  });
+  it("push endpoint: only the known push services (no SSRF through the endpoint)", () => {
+    for (const endpoint of [
+      "https://fcm.googleapis.com/fcm/send/abc",
+      "https://FCM.googleapis.com./fcm/send/abc",
+      "https://fcm.googleapis.com:443/fcm/send/abc",
+      "https://updates.push.services.mozilla.com/wpush/v2/abc",
+      "https://push.services.mozilla.com/wpush/abc",
+      "https://web.push.apple.com/QK0xyz",
+      "https://api.push.apple.com/3/device/abc",
+      "https://wns2-par02p.notify.windows.com/w/?token=abc",
+    ]) {
+      expect(isPushEndpointAllowed(endpoint), endpoint).toBe(true);
+    }
+    for (const endpoint of [
+      "http://fcm.googleapis.com/fcm/send/abc",
+      "https://localhost/x",
+      "https://127.0.0.1/x",
+      "https://[::1]/x",
+      "https://evil.com/x",
+      "https://fcm.googleapis.com.evil.com/x",
+      "https://evilpush.apple.com/x",
+      "https://notify.windows.com.evil.com/x",
+      "https://user:pass@fcm.googleapis.com/fcm/send/abc",
+      "https://user@fcm.googleapis.com/fcm/send/abc",
+      "https://fcm.googleapis.com:8443/fcm/send/abc",
+      "not a url",
+    ]) {
+      expect(isPushEndpointAllowed(endpoint), endpoint).toBe(false);
+      expect(
+        pushSubscriptionInputSchema.safeParse({ endpoint, keys: { p256dh: "p", auth: "a" } }).success,
+        endpoint,
+      ).toBe(false);
+    }
   });
   it("sale period: end on or after start", () => {
     expect(

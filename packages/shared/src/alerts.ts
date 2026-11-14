@@ -148,17 +148,36 @@ export const alertSettingsPatchSchema = alertSettingsSchema
   .refine((v) => Object.values(v).some((value) => value !== undefined), { error: "at least one field" });
 export type AlertSettingsPatch = z.infer<typeof alertSettingsPatchSchema>;
 
-const isHttps = (value: string) => {
+/** Push services' hosts, exactly. */
+const PUSH_HOSTS = ["fcm.googleapis.com", "updates.push.services.mozilla.com", "web.push.apple.com"] as const;
+/** Push services' domains, any host under them (`*.notify.windows.com`…). */
+const PUSH_DOMAINS = ["push.services.mozilla.com", "notify.windows.com", "push.apple.com"] as const;
+
+/**
+ * Whether a push subscription's endpoint is a known push service, the only hosts the worker ever POSTs to (no
+ * server-side request forgery through `endpoint`): `https:`, no credentials, no port but 443, and the host (lower case,
+ * without a trailing dot) one of PUSH_HOSTS or under one of PUSH_DOMAINS.
+ */
+export function isPushEndpointAllowed(endpoint: string): boolean {
+  let url: URL;
   try {
-    return new URL(value).protocol === "https:";
+    url = new URL(endpoint);
   } catch {
     return false;
   }
-};
+  if (url.protocol !== "https:" || url.username !== "" || url.password !== "") return false;
+  // `new URL` drops the default port (443) and keeps any other.
+  if (url.port !== "" && url.port !== "443") return false;
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  return (
+    (PUSH_HOSTS as readonly string[]).includes(host) ||
+    PUSH_DOMAINS.some((domain) => host === domain || host.endsWith(`.${domain}`))
+  );
+}
 
 /** A browser's `PushSubscription.toJSON()`; the API takes the device name from the request. */
 export const pushSubscriptionInputSchema = z.object({
-  endpoint: z.string().max(MAX_PUSH_ENDPOINT).refine(isHttps, { error: "https endpoint required" }),
+  endpoint: z.string().max(MAX_PUSH_ENDPOINT).refine(isPushEndpointAllowed, { error: "unknown push service" }),
   expirationTime: z.number().nullable().optional(),
   keys: z.object({
     p256dh: z.string().min(1).max(256),

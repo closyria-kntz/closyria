@@ -58,7 +58,7 @@ async function person(
   if (!profile) throw new Error("no profile");
   const endpoints: string[] = [];
   for (let i = 0; i < (options.devices ?? 1); i++) {
-    const endpoint = `https://push.example.test/${userId}/${i}`;
+    const endpoint = `https://fcm.googleapis.com/fcm/send/${userId}/${i}`;
     await db.insert(schema.pushSubscriptions).values({ userId, endpoint, p256dh: "p256dh-key", auth: "auth-key" });
     endpoints.push(endpoint);
   }
@@ -317,6 +317,22 @@ describe("sendAlert", () => {
     const next = await sizeBack(her, await wish(her));
     await sendAlert({ db: handle.db, push }, next, afternoon, once);
     expect(calls.slice(3).map((c) => c.target.endpoint)).toEqual([alive]);
+  });
+
+  it("a stored device that is not a known push service is deleted, never POSTed to (no SSRF)", async () => {
+    const her = await person();
+    const [good] = her.endpoints;
+    for (const endpoint of ["https://127.0.0.1/x", "https://fcm.googleapis.com.evil.com/x", "http://localhost/x"]) {
+      await handle.db
+        .insert(schema.pushSubscriptions)
+        .values({ userId: her.userId, endpoint, p256dh: "p256dh-key", auth: "auth-key" });
+    }
+    const { push, calls } = fakePush();
+    const id = await sizeBack(her, await wish(her));
+    expect(await sendAlert({ db: handle.db, push }, id, afternoon, once)).toBe("sent");
+    expect(calls.map((c) => c.target.endpoint)).toEqual([good]);
+    expect((await devices(her.userId)).map((d) => d.endpoint)).toEqual([good]);
+    expect(await sends(her.userId)).toHaveLength(1);
   });
 
   it("only removed devices: the event is skipped, no retry", async () => {
