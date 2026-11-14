@@ -14,6 +14,7 @@ import { adminReferenceRoutes } from "./routes/admin/reference";
 import { adminSalesRoutes } from "./routes/admin/sales";
 import { adminShippingOptionsRoutes } from "./routes/admin/shipping-options";
 import { adminShopsRoutes } from "./routes/admin/shops";
+import { adminUsersRoutes } from "./routes/admin/users";
 import { capturesRoutes } from "./routes/captures";
 import { catalogueRoutes } from "./routes/catalogue";
 import { type DevAccessDeps, devAccessRoutes } from "./routes/dev-access";
@@ -175,7 +176,8 @@ export function createApp(deps: AppDeps) {
     .route("/", adminCapturesRoutes(deps.catalog))
     .route("/", adminProductsRoutes(deps.catalog))
     .route("/", adminReferenceRoutes(deps.catalog))
-    .route("/", adminCatalogueRoutes(deps.catalog));
+    .route("/", adminCatalogueRoutes(deps.catalog))
+    .route("/", adminUsersRoutes({ db: deps.admin.db, store: deps.media.store }));
 
   // Not part of AppType: no client calls it, and it is absent from every real environment.
   if (deps.testMail) app.route("/", testMailRoutes(deps.testMail));

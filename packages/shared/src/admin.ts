@@ -518,3 +518,60 @@ export const adminReportSchema = z.object({
 export type AdminReport = z.infer<typeof adminReportSchema>;
 export const adminReportListSchema = z.object({ reports: z.array(adminReportSchema) });
 export const adminReportsResolvedSchema = z.object({ resolved: count });
+
+// ---- « Utilisatrices » (2026-11-14, docs/specs/2026-11-14-comptes-visibles.md) ----
+
+/** Number of people per page of `GET /api/admin/users`. */
+export const ADMIN_USERS_PAGE_SIZE = 50;
+/** « Comptes » (signed up with an e-mail) or « Sans compte » (anonymous guests). */
+export const adminUserKindSchema = z.enum(["accounts", "guests"]);
+export type AdminUserKind = z.infer<typeof adminUserKindSchema>;
+/** The ways she can sign in (the admin sees which, never any credential). */
+export const adminSignInMethodSchema = z.enum(["passkey", "google", "apple", "email-otp"]);
+export type AdminSignInMethod = z.infer<typeof adminSignInMethodSchema>;
+/** What a guest's deletion is confirmed with (an account's is confirmed with her e-mail). */
+export const GUEST_DELETE_CONFIRMATION = "SUPPRIMER";
+
+export const adminUsersQuerySchema = z.object({
+  q: z.string().trim().min(1).max(200).optional(),
+  kind: adminUserKindSchema.optional(),
+  cursor: z.string().min(1).max(300).optional(),
+});
+
+/** One person, as counts only: never the contents of her wardrobe (privacy). */
+export const adminUserRowSchema = z.object({
+  id: z.string(),
+  /** Null for a guest (« Sans compte »): her generated address means nothing. */
+  email: z.string().nullable(),
+  isAnonymous: z.boolean(),
+  role: z.enum(["user", "admin"]),
+  createdAt: isoDate,
+  /** Latest session update or audience event; null when there is none. */
+  lastActiveAt: isoDate.nullable(),
+  /** Items not in the trash. */
+  itemCount: count,
+  /** Devices subscribed to her notifications. */
+  pushDevices: count,
+});
+export type AdminUserRow = z.infer<typeof adminUserRowSchema>;
+
+export const adminUserListSchema = z.object({ users: z.array(adminUserRowSchema), nextCursor: z.string().nullable() });
+export type AdminUserList = z.infer<typeof adminUserListSchema>;
+
+export const adminUserDetailSchema = adminUserRowSchema.extend({
+  profiles: count,
+  wishlists: count,
+  /** Items not in the trash still wished (« Envies ») / owned. */
+  spottedItems: count,
+  ownedItems: count,
+  sessions: count,
+  signInMethods: z.array(adminSignInMethodSchema),
+});
+export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
+
+/** `DELETE /api/admin/users/{id}`: her e-mail, or `SUPPRIMER` for a guest, typed by the admin. */
+export const adminUserDeleteSchema = z.object({ confirmation: z.string().trim().min(1).max(320) });
+
+export const adminUserErrorSchema = z.object({
+  error: z.enum(["invalid_request", "not_found", "confirmation_mismatch", "self", "admin"]),
+});
