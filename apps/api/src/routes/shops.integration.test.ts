@@ -113,6 +113,21 @@ describe("GET /api/shops", () => {
     expect((await call("GET", "/shops", "")).status).toBe(401);
   });
 
+  it("gives a shop without a listing agreement no product photo, and counts only its pasted articles", async () => {
+    // Catalogue conforme (supersedes the « admins only » hotfix): a non-partner shop's photos never go out to her.
+    const shop = await newShop({ listingAgreementAt: null });
+    await newProduct(shop.id, ago(DAY), true);
+    const pasted = await newProduct(shop.id, ago(DAY), true);
+    await t.db
+      .update(schema.products)
+      .set({ pastedAt: ago(DAY) })
+      .where(eq(schema.products.id, pasted.product.id));
+    const { text, body } = await directory(userCookie);
+    const tile = [...body.shops, ...(body.featured ? [body.featured] : [])].find((s) => s.id === shop.id);
+    expect(tile).toMatchObject({ imageUrl: null, itemCount: 1 });
+    expect(text).not.toContain("/api/catalog-images/");
+  });
+
   it("lists only published shops that are not merged, the most articles first, then by name", async () => {
     const big = await newShop({ name: "Zélie" });
     const a = await newShop({ name: "Atelier" });
