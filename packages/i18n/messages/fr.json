@@ -113,8 +113,7 @@
       "anonymous": "Sans compte"
     },
     "signIn": {
-      "action": "Se connecter",
-      "label": "Se connecter ou créer un compte"
+      "action": "Se connecter"
     }
   },
   "Nav": {

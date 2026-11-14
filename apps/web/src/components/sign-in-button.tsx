@@ -17,7 +17,6 @@ export function SignInButton() {
   return (
     <Link
       href={signInHref(search ? `${pathname}?${search}` : pathname)}
-      aria-label={t("label")}
       data-testid="band-sign-in"
       className={`inline-flex min-h-touch-target shrink-0 items-center gap-space-1-5 rounded-pill bg-band-field px-space-3-5 text-caption font-bold text-band-ink hover:bg-band-tab-on hover:text-band-tab-on-ink ${focusRing}`}
     >

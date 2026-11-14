@@ -9,6 +9,8 @@ se connecter » ; « en partie admin, on ne voit aucun compte, pour un SaaS c'es
 - **Invitée** (session anonyme, ou aucune session) : la barre du haut montre « Se connecter » (bouton de 44 px) à la
   place du sélecteur de profil, sur toutes les pages de l'app, téléphone et ordinateur. Il ouvre la page de connexion /
   création de compte existante (`/connexion`), qui ramène à la page d'où elle vient (`next`).
+- Une invitée qui a déjà plusieurs profils (possible sans compte) garde le sélecteur, « Se connecter » à côté : sinon
+  elle ne pourrait plus changer de profil.
 - **Compte** : le sélecteur de profil reste. Tant que la barre ne sait pas encore (première lecture), le sélecteur
   s'affiche comme avant ; une lecture échouée ne change rien.
 - **Accueil, invitée seulement** : bandeau discret « Crée ton compte pour garder tes articles sur tous tes appareils » +

@@ -29,8 +29,8 @@ export async function redirectToSignIn(): Promise<never> {
 
 /**
  * Guard called by every admin page itself, not only by the layouts: a page must stay closed even if a
- * layout is moved or skipped. The sign-in page for a visitor without an account, 404 for non-admins (R15); an admin without passkey session goes to the
- * page explaining passkeys. That page passes `allowPasskeyRequired` (it is where those admins land).
+ * layout is moved or skipped. The sign-in page for a visitor without an account, 404 for non-admins (R15); an
+ * admin without passkey session goes to the page explaining passkeys. That page passes `allowPasskeyRequired` (it is where those admins land).
  */
 export async function requireAdminPage(options: { allowPasskeyRequired?: boolean } = {}): Promise<void> {
   const access = await getAdminAccess();

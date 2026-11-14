@@ -131,8 +131,9 @@ test("le bandeau dit le prénom du profil choisi, sans avatar en double", async 
   await page.goto("/articles");
   const switcher = page.getByLabel("Profil", { exact: true }).filter({ visible: true });
   const shown = () => switcher.evaluate((select: HTMLSelectElement) => select.selectedOptions[0]?.text ?? "");
-  // A guest has no first name: « Moi ».
-  await expect.poll(shown).toBe("Moi");
+  // A guest with one profile: « Se connecter » in place of the switcher (comptes visibles 2026-11-14).
+  await expect(page.getByRole("banner").getByRole("link", { name: "Se connecter", exact: true })).toBeVisible();
+  await expect(switcher).toHaveCount(0);
 
   const [session] = await sessionsOf(db, userAgentTag);
   await db.query(`update "user" set name = 'Camille Durand', is_anonymous = false where id = $1`, [session?.userId]);

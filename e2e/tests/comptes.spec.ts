@@ -29,7 +29,7 @@ test("une invitée voit « Se connecter » dans la barre, se connecte et revient
   // No session at all yet: still a guest.
   await page.goto("/articles");
   const band = page.locator("header");
-  const signIn = band.getByRole("link", { name: "Se connecter ou créer un compte" });
+  const signIn = band.getByRole("link", { name: "Se connecter", exact: true });
   await expect(signIn).toBeVisible();
   await expect(band.getByLabel("Profil")).toHaveCount(0);
   const box = await signIn.boundingBox();
@@ -47,7 +47,9 @@ test("une invitée voit « Se connecter » dans la barre, se connecte et revient
   });
   expect(created).toBe(201);
   await page.reload();
+  // Two profiles to choose from: the switcher comes back beside « Se connecter ».
   await expect(signIn).toBeVisible();
+  await expect(band.getByLabel("Profil")).toBeVisible();
   expect(await seriousViolations(page)).toEqual([]);
 
   await signIn.click();

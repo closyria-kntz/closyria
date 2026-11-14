@@ -312,7 +312,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <span aria-hidden="true">+ {tNav("add")}</span>
                     <span className="sr-only">{tNav("addLabel")}</span>
                   </button>
-                  <Suspense>{guest ? <SignInButton /> : <ProfileSwitcher />}</Suspense>
+                  <Suspense>
+                    {/* A guest: « Se connecter » in place of the switcher, beside it once she has profiles to choose. */}
+                    {!guest || profiles.length > 1 ? <ProfileSwitcher /> : null}
+                    {guest ? <SignInButton /> : null}
+                  </Suspense>
                 </div>
               </header>
 
