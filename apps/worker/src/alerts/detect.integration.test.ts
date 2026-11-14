@@ -264,6 +264,37 @@ describe("detectAlerts", () => {
     for (const who of [owner, other, third]) expect(await events(who.userId)).toHaveLength(0);
   });
 
+  it("moved to another of her profiles, or to someone else: the event follows the item's current profile and owner", async () => {
+    const owner = await person();
+    const [other] = await handle.db
+      .insert(schema.profiles)
+      .values({ userId: owner.userId, name: "Léa", audience: "child", color: "sage" })
+      .returning();
+    if (!other) throw new Error("no profile");
+    const productId = await product();
+    const itemId = await wish(owner, productId);
+
+    await handle.db.update(schema.items).set({ profileId: other.id }).where(eq(schema.items.id, itemId));
+    expect(await detect(productId, point(10000), point(8000))).toBe(1);
+    expect((await events(owner.userId)).map((e) => [e.itemId, e.profileId])).toEqual([[itemId, other.id]]);
+
+    // Given to someone else (her profile with it): only the new owner hears of it.
+    const heir = await person();
+    await handle.db
+      .update(schema.items)
+      .set({ userId: heir.userId, profileId: heir.profileId })
+      .where(eq(schema.items.id, itemId));
+    expect(await detect(productId, point(8000), point(6000), minutes(at, 1))).toBe(1);
+    expect(await events(owner.userId)).toHaveLength(1);
+    expect((await events(heir.userId)).map((e) => [e.itemId, e.profileId])).toEqual([[itemId, heir.profileId]]);
+
+    // An item pointing at a profile that is not its owner's: never anyone's alert.
+    await handle.db.update(schema.items).set({ profileId: other.id }).where(eq(schema.items.id, itemId));
+    expect(await detect(productId, point(6000), point(4000), minutes(at, 2))).toBe(0);
+    expect(await events(owner.userId)).toHaveLength(1);
+    expect(await events(heir.userId)).toHaveLength(1);
+  });
+
   it("her settings: size_back / target_price off → none of that kind; digest off still records drops", async () => {
     const owner = await person();
     await handle.db

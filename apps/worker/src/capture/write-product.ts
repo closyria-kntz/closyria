@@ -159,6 +159,14 @@ export async function writeProduct(tx: Transaction, input: WriteProductInput): P
       )
       select "priceCents", sizes from previous`);
     const [previous] = written.rows;
-    await detectAlerts(tx, productId, previous ?? null, { priceCents: product.priceCents, sizes: sizeMap }, at);
+    // In its own savepoint: a failed detection loses the alerts of this change, never the product's write (nor the
+    // shop's import).
+    try {
+      await tx.transaction((sp) =>
+        detectAlerts(sp, productId, previous ?? null, { priceCents: product.priceCents, sizes: sizeMap }, at),
+      );
+    } catch (error) {
+      console.error(`alerts: detection failed for product ${productId}`, error);
+    }
   }
 }
