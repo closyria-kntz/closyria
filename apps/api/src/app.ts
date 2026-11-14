@@ -16,6 +16,7 @@ import { adminShopsRoutes } from "./routes/admin/shops";
 import { capturesRoutes } from "./routes/captures";
 import { catalogueRoutes } from "./routes/catalogue";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
+import { alertsRoutes, type PushDeps } from "./routes/me/alerts";
 import { budgetsRoutes } from "./routes/me/budgets";
 import { bulkRoutes } from "./routes/me/bulk";
 import { changesRoutes } from "./routes/me/changes";
@@ -59,6 +60,8 @@ export type AppDeps = {
   admin: AdminDeps;
   /** Her profiles and items (`/api/me/…`). */
   wardrobe: WardrobeDeps;
+  /** Web Push (alerts); without it, push is off. */
+  push?: PushDeps;
   /** The memory mailer, exposed to the browser tests. Only ever given with APP_ENV=test (R18). */
   testMail?: TestMailDeps;
 };
@@ -156,6 +159,7 @@ export function createApp(deps: AppDeps) {
     .route("/", wishlistsRoutes(deps.wardrobe))
     .route("/", groupOrdersRoutes({ ...deps.wardrobe, queue: deps.catalog.queue }, captureLimiter))
     .route("/", budgetsRoutes(deps.wardrobe))
+    .route("/", alertsRoutes(deps.wardrobe, deps.push ?? { publicKey: null }))
     .route("/", sharedRoutes({ ...deps.wardrobe, queue: deps.catalog.queue }))
     .route("/", overviewRoutes(deps.admin))
     .route("/", auditRoutes(deps.admin))

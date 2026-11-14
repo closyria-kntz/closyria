@@ -1,5 +1,12 @@
 import { and, type Database, eq, inArray, isNull, lte, schema, sql } from "@closyria/db";
-import { ALERT_TIME_ZONE, DEFAULT_ALERT_SETTINGS, IMMEDIATE_ALERT_KINDS, nextSendAt, parisDay } from "@closyria/shared";
+import {
+  ALERT_TIME_ZONE,
+  alertItemHref,
+  DEFAULT_ALERT_SETTINGS,
+  IMMEDIATE_ALERT_KINDS,
+  nextSendAt,
+  parisDay,
+} from "@closyria/shared";
 import { z } from "zod";
 import { followedItem } from "./detect";
 import { deliver, type PushMessage, PushRetryError, type PushSender } from "./push";
@@ -64,7 +71,7 @@ export function targetPriceSentence(name: string | null, cents: number, target: 
 }
 
 /** The item's sheet, in the item's profile. */
-export const itemUrl = (productId: string, profileId: string) => `/produits/${productId}?profil=${profileId}`;
+export const itemUrl = alertItemHref;
 
 /**
  * The minute sweep: queues every immediate alert still `pending` whose `send_after` (8:00 Paris for one born at night)

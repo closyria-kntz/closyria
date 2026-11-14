@@ -17,6 +17,8 @@ export const ITEM_FIELD_KEYS = [
   "categoryId",
   "colorId",
   "coverMediaId",
+  "alertsEnabled",
+  "targetPriceCents",
   "pricePaidCents",
   "salePriceCents",
   "saleChannel",

@@ -13,11 +13,20 @@ export const HOME_NEWS_LIMIT = 5;
 /** « Tes envies du moment »: at most this many cards. */
 export const HOME_WISHES_LIMIT = 4;
 
-export const homeNewsKindSchema = z.enum(["price_drop", "size_back", "opinion", "group_order", "gift_reminder"]);
+export const homeNewsKindSchema = z.enum([
+  "price_drop",
+  "size_back",
+  "opinion",
+  "group_order",
+  "gift_reminder",
+  "sale_period",
+  "shop_promo",
+]);
 export type HomeNewsKind = z.infer<typeof homeNewsKindSchema>;
 
 /**
- * Something that changed for her, built only from data the app already keeps (refonte Boudoir, spec R3). The API
+ * Something that changed for her (`sale_period`, `shop_promo`: her alerts of the last HOME_NEWS_DAYS days, `title`
+ * being the sales' name or the shop's), built only from data the app already keeps (refonte Boudoir, spec R3). The API
  * gives facts, never sentences: the page words them. `title` is what it is about (the item's name, or the list's
  * name for list news), `detail` its second line as data (the shop, a friend's note, the occasion).
  */
@@ -42,6 +51,8 @@ export const homeNewsSchema = z.object({
   count: z.number().int().nonnegative().nullable(),
   /** group_order: open or closed. */
   groupOrderStatus: groupOrderStatusSchema.nullable(),
+  /** sale_period: the first day of the sales (`title` is their name). */
+  startsOn: z.iso.date().nullable(),
 });
 export type HomeNews = z.infer<typeof homeNewsSchema>;
 

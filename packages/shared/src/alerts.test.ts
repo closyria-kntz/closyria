@@ -7,7 +7,6 @@ import {
   alertSettingsPatchSchema,
   alertSettingsSchema,
   isRealDrop,
-  itemAlertFieldsSchema,
   nextSendAt,
   parisDay,
   parisHour,
@@ -20,6 +19,7 @@ import {
   vapidEnvShape,
   watchedSizes,
 } from "./alerts";
+import { itemAlertFieldsSchema } from "./wardrobe";
 
 describe("isRealDrop", () => {
   it("counts 5 % as a real drop", () => {

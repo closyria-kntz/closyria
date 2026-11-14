@@ -30,7 +30,10 @@ export function recordingQueue() {
 }
 
 /** A migrated database, the app wired with a recording queue and an in-memory store. */
-export async function createCatalogHarness(overrides: Partial<Omit<CatalogDeps, "db" | "store">> = {}) {
+export async function createCatalogHarness(
+  overrides: Partial<Omit<CatalogDeps, "db" | "store">> = {},
+  options: { pushPublicKey?: string } = {},
+) {
   const database = await createTestDatabase();
   const handle = createDb(database.url, { max: 8 });
   const auth = createAuth({
@@ -53,6 +56,7 @@ export async function createCatalogHarness(overrides: Partial<Omit<CatalogDeps, 
     admin: { db: handle.db, ...(overrides.now ? { now: overrides.now } : {}) },
     wardrobe: { db: handle.db, shareLinkKey: Buffer.alloc(32, 7), ...(overrides.now ? { now: overrides.now } : {}) },
     catalog: { db: handle.db, store, queue: recorder.queue, ...overrides },
+    push: { publicKey: options.pushPublicKey ?? null },
   });
   let ipCounter = 0;
   async function signIn() {

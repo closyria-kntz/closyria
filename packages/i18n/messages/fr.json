@@ -23,7 +23,9 @@
       "size_back": "Ta taille est revenue",
       "opinion": "Avis d’une amie",
       "group_order": "Commande groupée",
-      "gift_reminder": "Rappel des cadeaux"
+      "gift_reminder": "Rappel des cadeaux",
+      "sale_period": "Soldes",
+      "shop_promo": "Promo"
     },
     "une": {
       "price_drop": "{name} passe à {price}",
@@ -51,12 +53,16 @@
       "gift_reminder": "<b>{list}</b> : as-tu reçu tes cadeaux ?",
       "giftOccasion": "{occasion} est passé",
       "giftDate": "La date est passée",
+      "sale_period": "<b>Les soldes commencent {day}</b>",
+      "shop_promo": "<b>{shop}</b> est en promo",
       "action": {
         "price_drop": "Voir",
         "size_back": "Voir",
         "opinion": "Lire",
         "group_order": "Ouvrir",
-        "gift_reminder": "Ouvrir"
+        "gift_reminder": "Ouvrir",
+        "sale_period": "Voir",
+        "shop_promo": "Voir"
       }
     },
     "add": {

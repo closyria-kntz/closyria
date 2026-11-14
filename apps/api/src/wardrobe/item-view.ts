@@ -1,13 +1,31 @@
-import { and, asc, type Database, eq, inArray, isNotNull, isNull, or, type SQL, schema, sql } from "@closyria/db";
 import {
+  and,
+  asc,
+  type Database,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  type SQL,
+  schema,
+  sql,
+  trackingImpossibleSql,
+} from "@closyria/db";
+import {
+  DEFAULT_ALERT_SETTINGS,
   ITEMS_PAGE_SIZE,
+  type ItemAlertState,
   type ItemListQuery,
   type ItemPage,
   type ItemPhotoView,
   type ItemSort,
   type ItemView,
   itemSortSchema,
+  type SizeKind,
+  sizeKindsByCategory,
   type TagView,
+  watchedSizes,
 } from "@closyria/shared";
 import { z } from "zod";
 import { loadProductViews } from "../catalog/product-view";
@@ -16,6 +34,62 @@ import { isInDressing, isReceived, receivedSince } from "./received";
 
 /** URL of one of her private photos (route of task 9, owner only). */
 export const privateMediaUrl = (mediaId: string) => `/api/me/media/${mediaId}`;
+
+type AlertFacts = { state: ItemAlertState | null; watched: string[] | "any" };
+
+/**
+ * The alert line of her items (« Suivi : taille M », « Suivi en pause », « Suivi impossible pour cette boutique »), in
+ * one query for all of them (the shop's rule is `trackingImpossibleSql`) plus the category tree when an item without a
+ * size of its own needs her profile's.
+ */
+async function loadAlertFacts(db: Database | Tx, userId: string, itemIds: string[]): Promise<Map<string, AlertFacts>> {
+  const rows = await db
+    .select({
+      id: schema.items.id,
+      stage: schema.items.stage,
+      deletedAt: schema.items.deletedAt,
+      alertsEnabled: schema.items.alertsEnabled,
+      targetPriceCents: schema.items.targetPriceCents,
+      sizeLabel: schema.items.sizeLabel,
+      categoryId: sql<string | null>`coalesce(${schema.items.categoryId}, ${schema.products.categoryId})`,
+      sizesTop: schema.profiles.sizesTop,
+      sizesBottom: schema.profiles.sizesBottom,
+      sizesShoes: schema.profiles.sizesShoes,
+      sizeBack: schema.alertSettings.sizeBack,
+      targetPrice: schema.alertSettings.targetPrice,
+      impossible: sql<boolean>`${trackingImpossibleSql}`,
+    })
+    .from(schema.items)
+    .innerJoin(schema.products, eq(schema.products.id, schema.items.productId))
+    .innerJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
+    .innerJoin(schema.profiles, eq(schema.profiles.id, schema.items.profileId))
+    .leftJoin(schema.alertSettings, eq(schema.alertSettings.userId, schema.items.userId))
+    .where(and(inArray(schema.items.id, itemIds), eq(schema.items.userId, userId)));
+  let kinds: Map<string, SizeKind> | undefined;
+  if (rows.some((r) => !r.sizeLabel?.trim() && r.categoryId)) {
+    kinds = sizeKindsByCategory(
+      await db
+        .select({ id: schema.categories.id, parentId: schema.categories.parentId, slug: schema.categories.slug })
+        .from(schema.categories),
+    );
+  }
+  const facts = new Map<string, AlertFacts>();
+  for (const r of rows) {
+    const kind = r.categoryId ? kinds?.get(r.categoryId) : undefined;
+    const profileSizes =
+      kind === "top" ? r.sizesTop : kind === "bottom" ? r.sizesBottom : kind === "shoes" ? r.sizesShoes : [];
+    const watched = watchedSizes(r.sizeLabel, profileSizes, kind !== undefined);
+    const sizeBackOn = r.sizeBack ?? DEFAULT_ALERT_SETTINGS.sizeBack;
+    const targetOn = r.targetPriceCents !== null && (r.targetPrice ?? DEFAULT_ALERT_SETTINGS.targetPrice);
+    let state: ItemAlertState | null = null;
+    if (r.stage === "spotted" && r.deletedAt === null) {
+      // The shop first: she can do nothing about it, while « M'alerter » and the settings are hers to turn back on.
+      state = r.impossible ? "impossible" : !r.alertsEnabled || (!sizeBackOn && !targetOn) ? "paused" : "watching";
+    }
+    facts.set(r.id, { state, watched });
+  }
+  return facts;
+}
 
 /**
  * Her items, in the order of `itemIds`, with their products, photos, tags and lists in a fixed number of queries.
@@ -34,7 +108,7 @@ export async function loadItemViews(
     .where(and(inArray(schema.items.id, itemIds), eq(schema.items.userId, userId)));
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const [products, photos, tags, lists, ownedMoves] = await Promise.all([
+  const [products, photos, tags, lists, ownedMoves, alerts] = await Promise.all([
     loadProductViews(
       db as Database,
       rows.flatMap((r) => (r.productId ? [r.productId] : [])),
@@ -75,6 +149,7 @@ export async function loadItemViews(
         ),
       )
       .groupBy(schema.itemEvents.itemId),
+    loadAlertFacts(db, userId, ids),
   ]);
   const since = receivedSince(now).getTime();
   const lastOwned = new Map(ownedMoves.map((m) => [m.itemId, m.at]));
@@ -116,6 +191,11 @@ export async function loadItemViews(
       coverUrl: item.coverMediaId
         ? privateMediaUrl(item.coverMediaId)
         : (product.images[0]?.url ?? own[0]?.url ?? null),
+      alertsEnabled: item.alertsEnabled,
+      targetPriceCents: item.targetPriceCents,
+      alertState: alerts.get(item.id)?.state ?? null,
+      watchedSizes: alerts.get(item.id)?.watched ?? "any",
+      checkedAt: product.lastCapturedAt,
       photos: [...own, ...shop],
       tags: tags
         .filter((t) => t.itemId === item.id)

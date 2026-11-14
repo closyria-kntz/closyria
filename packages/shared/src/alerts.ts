@@ -227,12 +227,33 @@ export const salePeriodSchema = salePeriodFields
   .refine(endsAfterStart, { error: "endsOn before startsOn", path: ["endsOn"] });
 export type SalePeriod = z.infer<typeof salePeriodSchema>;
 
-/** The item's alert fields: « M'alerter » and « Préviens-moi sous … € » (null clears it, at least 1 cent). */
-export const itemAlertFieldsSchema = z.object({
-  alertsEnabled: z.boolean().optional(),
-  targetPriceCents: centsSchema.min(1).nullable().optional(),
+/** Where an alert about an item leads: the item's sheet, in the item's profile (its current one). */
+export const alertItemHref = (productId: string, profileId: string) => `/produits/${productId}?profil=${profileId}`;
+
+/** Where the other alerts (sales, shop promo, the digest) lead. */
+export const ALERTS_PAGE_HREF = "/nouvelles";
+
+/** « Nouvelles »: how far back, and how many a page holds. */
+export const ALERTS_DAYS = 30;
+export const ALERTS_PAGE_SIZE = 30;
+
+/** `POST /api/me/alerts/read`: these of her alerts (all of them without `ids`). */
+export const alertReadInputSchema = z.object({
+  ids: z
+    .array(z.uuid())
+    .min(1)
+    .max(ALERTS_PAGE_SIZE * 4)
+    .optional(),
 });
-export type ItemAlertFields = z.infer<typeof itemAlertFieldsSchema>;
+export type AlertReadInput = z.infer<typeof alertReadInputSchema>;
+export const alertReadResultSchema = z.object({ read: z.number().int().nonnegative() });
+
+/** `GET /api/push/key`: the VAPID public key the browser subscribes with. */
+export const pushKeySchema = z.object({ publicKey: z.string() });
+export type PushKey = z.infer<typeof pushKeySchema>;
+
+export const pushSubscriptionListSchema = z.object({ subscriptions: z.array(pushSubscriptionViewSchema) });
+export type PushSubscriptionList = z.infer<typeof pushSubscriptionListSchema>;
 
 /** The three VAPID variables (Web Push): all three set, or none (push off). */
 export const VAPID_VARIABLES = ["VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT"] as const;

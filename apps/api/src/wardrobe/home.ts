@@ -1,5 +1,6 @@
 import { and, asc, type Database, desc, eq, gte, inArray, isNull, lt, ne, or, schema, sql } from "@closyria/db";
 import {
+  ALERTS_PAGE_HREF,
   HOME_NEWS_DAYS,
   HOME_NEWS_LIMIT,
   HOME_WISHES_LIMIT,
@@ -25,6 +26,7 @@ const EMPTY_FACTS = {
   authorName: null,
   count: null,
   groupOrderStatus: null,
+  startsOn: null,
 } as const;
 
 /** The first point of the last run of `points` (oldest first) where `same` holds against the latest one. */
@@ -239,6 +241,51 @@ async function listNews(db: Database, userId: string, now: Date): Promise<Draft[
   return drafts;
 }
 
+/**
+ * Her sales and shop promo alerts of the last HOME_NEWS_DAYS days (whatever became of their push): one news per sales
+ * period and per shop, the newest.
+ */
+async function alertNews(db: Database, userId: string, since: Date): Promise<Draft[]> {
+  const rows = await db
+    .select({
+      kind: schema.alertEvents.kind,
+      createdAt: schema.alertEvents.createdAt,
+      shopId: schema.alertEvents.shopId,
+      shopName: schema.shops.name,
+      salePeriodId: schema.alertEvents.salePeriodId,
+      salePeriodName: schema.salePeriods.name,
+      startsOn: schema.salePeriods.startsOn,
+    })
+    .from(schema.alertEvents)
+    .leftJoin(schema.shops, eq(schema.shops.id, schema.alertEvents.shopId))
+    .leftJoin(schema.salePeriods, eq(schema.salePeriods.id, schema.alertEvents.salePeriodId))
+    .where(
+      and(
+        eq(schema.alertEvents.userId, userId),
+        inArray(schema.alertEvents.kind, ["sale_period", "shop_promo"]),
+        gte(schema.alertEvents.createdAt, since),
+      ),
+    )
+    .orderBy(desc(schema.alertEvents.createdAt), desc(schema.alertEvents.id));
+  const byKey = new Map<string, Draft>();
+  for (const row of rows) {
+    const sale = row.kind === "sale_period";
+    const title = sale ? row.salePeriodName : row.shopName;
+    const key = sale ? `sale:${row.salePeriodId}` : `shop:${row.shopId}`;
+    if (title === null || byKey.has(key)) continue;
+    byKey.set(key, {
+      ...EMPTY_FACTS,
+      kind: sale ? "sale_period" : "shop_promo",
+      href: ALERTS_PAGE_HREF,
+      at: row.createdAt.toISOString(),
+      title,
+      detail: null,
+      startsOn: sale ? row.startsOn : null,
+    });
+  }
+  return [...byKey.values()];
+}
+
 /** « Tes envies du moment »: her wishes, priority ones first, then the newest. */
 async function wishesOf(db: Database, userId: string, now: Date): Promise<ItemView[]> {
   const rows = await db
@@ -259,12 +306,12 @@ const newestFirst = (a: HomeNews, b: HomeNews) => b.at.localeCompare(a.at) || a.
 
 /**
  * What « Accueil » shows (refonte Boudoir, spec R3), from data the app already keeps: price drops and sizes back on
- * her wishes (last HOME_NEWS_DAYS days), friends' opinions she has not seen, her running group orders and the gift
- * reminders that are due. The « une » is the newest news with a photo; with it, at most HOME_NEWS_LIMIT news.
+ * her wishes (last HOME_NEWS_DAYS days), friends' opinions she has not seen, her running group orders, the gift
+ * reminders that are due, and her sales and shop promo alerts (last HOME_NEWS_DAYS days). The « une » is the newest news with a photo; with it, at most HOME_NEWS_LIMIT news.
  */
 export async function homeView(db: Database, userId: string, now: Date): Promise<HomeView> {
   const since = new Date(now.getTime() - HOME_NEWS_DAYS * 86_400_000);
-  const [[account], [kept], catalog, opinions, lists, wishes] = await Promise.all([
+  const [[account], [kept], catalog, opinions, lists, wishes, alerts] = await Promise.all([
     db
       .select({ name: schema.user.name, isAnonymous: schema.user.isAnonymous })
       .from(schema.user)
@@ -278,8 +325,9 @@ export async function homeView(db: Database, userId: string, now: Date): Promise
     opinionNews(db, userId),
     listNews(db, userId, now),
     wishesOf(db, userId, now),
+    alertNews(db, userId, since),
   ]);
-  const drafts = [...catalog, ...opinions, ...lists];
+  const drafts = [...catalog, ...opinions, ...lists, ...alerts];
   const itemIds = [...new Set(drafts.flatMap((d) => (d.itemId ? [d.itemId] : [])))];
   const views = new Map((await loadItemViews(db, userId, itemIds, now)).map((v) => [v.id, v]));
   const all: HomeNews[] = drafts

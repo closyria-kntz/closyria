@@ -18,6 +18,8 @@ const ICONS: Record<HomeNewsKind, string> = {
   opinion: "💬",
   group_order: "🛍️",
   gift_reminder: "🎁",
+  sale_period: "🗓️",
+  shop_promo: "🏷️",
 };
 
 /** The title of a section of « Accueil » (mockup .t3) and the link or button on its right (mockup .more). */
@@ -30,6 +32,13 @@ export function useNewsWords() {
   const locale = useLocale();
   const price = (cents: number | null, currency: string | null) =>
     cents === null ? "" : formatPrice(locale, cents, currency ?? "EUR");
+  // The first day of the sales, a calendar date (« mercredi 7 janvier »).
+  const saleDay = (day: string | null) =>
+    day
+      ? new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(
+          new Date(`${day}T12:00:00Z`),
+        )
+      : "";
   return (news: HomeNews, strong: (chunks: ReactNode) => ReactNode): { line: ReactNode; detail: string } => {
     const name = news.title;
     switch (news.kind) {
@@ -66,6 +75,13 @@ export function useNewsWords() {
           line: t.rich("gift_reminder", { list: name, b: strong }),
           detail: news.detail ? t("giftOccasion", { occasion: news.detail }) : t("giftDate"),
         };
+      case "sale_period":
+        return {
+          line: t.rich("sale_period", { day: saleDay(news.startsOn), b: strong }),
+          detail: name,
+        };
+      case "shop_promo":
+        return { line: t.rich("shop_promo", { shop: name, b: strong }), detail: "" };
     }
   };
 }

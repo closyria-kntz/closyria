@@ -1,5 +1,6 @@
 import { brevoMailer, createAuth, memoryMailer } from "@closyria/auth";
 import { createDb, type Database, pingDb } from "@closyria/db";
+import { vapidConfig } from "@closyria/shared";
 import { fsStore, memoryStore, type ObjectStore, s3Store } from "@closyria/storage";
 import { PgBoss } from "pg-boss";
 import { createApp } from "./app";
@@ -53,6 +54,7 @@ export function bootstrap(env: Env): Api {
     catalog: { db, store, queue: pgBossQueue(boss) },
     admin: { db },
     wardrobe: { db, shareLinkKey: parseShareLinkKey(env.SHARE_LINK_KEY) },
+    push: { publicKey: vapidConfig(env)?.publicKey ?? null },
     // R18: the browser tests read their codes here; env.ts guarantees the memory mailer with APP_ENV=test.
     ...(env.APP_ENV === "test" && memory ? { testMail: memory } : {}),
   });

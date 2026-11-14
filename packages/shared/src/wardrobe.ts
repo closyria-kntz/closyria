@@ -165,7 +165,23 @@ export const itemCreateSchema = z
   });
 export type ItemCreate = z.infer<typeof itemCreateSchema>;
 
+/** The item's alert fields: « M'alerter » and « Préviens-moi sous … € » (null clears it, at least 1 cent). */
+export const itemAlertFieldsSchema = z.object({
+  alertsEnabled: z.boolean().optional(),
+  targetPriceCents: centsSchema.min(1).nullable().optional(),
+});
+export type ItemAlertFields = z.infer<typeof itemAlertFieldsSchema>;
+
+/**
+ * The sheet's line about her alerts: `watching` (« Suivi : taille M · vérifié il y a … »), `paused` (« M'alerter »
+ * off, or the settings that apply to it all off) or `impossible` (« Suivi impossible pour cette boutique »: neither the
+ * import nor a revisit can read it). Null when the item is not a wish (not « Repéré », or in the trash).
+ */
+export const itemAlertStateSchema = z.enum(["watching", "paused", "impossible"]);
+export type ItemAlertState = z.infer<typeof itemAlertStateSchema>;
+
 export const itemPatchSchema = z.object({
+  ...itemAlertFieldsSchema.shape,
   loveLevel: loveLevelSchema.nullable().optional(),
   priority: z.boolean().optional(),
   why: z.string().max(MAX_WHY).nullable().optional(),
@@ -420,6 +436,14 @@ export const itemViewSchema = z.object({
   colorId: z.uuid().nullable(),
   coverMediaId: z.uuid().nullable(),
   coverUrl: z.string().nullable(),
+  /** « M'alerter » and « Préviens-moi sous … € ». */
+  alertsEnabled: z.boolean(),
+  targetPriceCents: centsSchema.nullable(),
+  alertState: itemAlertStateSchema.nullable(),
+  /** The sizes watched for « Ta taille est revenue »: hers on the item, else her profile's for its kind, else any. */
+  watchedSizes: z.union([z.array(z.string()), z.literal("any")]),
+  /** When the product was last read (« vérifié il y a … »). */
+  checkedAt: dateTimeSchema.nullable(),
   photos: z.array(itemPhotoViewSchema),
   tags: z.array(tagViewSchema),
   wishlistIds: z.array(z.uuid()),
@@ -695,6 +719,7 @@ export const wardrobeErrorCodes = [
   "too_many_lines",
   "not_in_shop",
   "not_eligible",
+  "account_required",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];
