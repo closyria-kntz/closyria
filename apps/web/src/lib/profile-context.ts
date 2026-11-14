@@ -53,6 +53,11 @@ export type ProfilesState = {
   /** Re-reads the profiles; the settings pages call it after creating, renaming or deleting one. */
   /** Who is signed in (null until the first read): her e-mail, null without an account. */
   account: SummaryView["account"] | null;
+  /**
+   * True for a guest (an anonymous session, or no session at all), false for an account, null until known (a failed
+   * read keeps the last answer): the band shows « Se connecter » to a guest (comptes visibles 2026-11-14).
+   */
+  guest: boolean | null;
   refreshProfiles: () => Promise<void>;
   /** Her names and emojis for the 4 levels: the starting ones until the shell has read hers. */
   loveLevels: readonly LoveLevelView[];
@@ -65,6 +70,7 @@ export const ProfilesContext = createContext<ProfilesState>({
   profiles: [],
   ready: true,
   account: null,
+  guest: null,
   refreshProfiles: async () => {},
   loveLevels: DEFAULT_LOVE_LEVELS,
   refreshLoveLevels: async () => {},
@@ -107,4 +113,9 @@ export function useAccount(): AccountState | null {
   const { account, ready } = useContext(ProfilesContext);
   if (account?.email) return { email: account.email, createdAt: account.createdAt };
   return account || ready ? { email: null } : null;
+}
+
+/** True for a guest, false for an account, null until the shell knows (see `ProfilesState.guest`). */
+export function useIsGuest(): boolean | null {
+  return useContext(ProfilesContext).guest;
 }

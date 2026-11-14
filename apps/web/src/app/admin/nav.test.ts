@@ -17,6 +17,10 @@ describe("isActive", () => {
     expect(isActive(audit, "/admin/auditing")).toBe(false);
   });
 
+  it("lists « Utilisatrices » (comptes visibles 2026-11-14)", () => {
+    expect(entry("users")?.href).toBe("/admin/utilisatrices");
+  });
+
   it("lists the shop and capture screens", () => {
     expect(entry("shops")?.href).toBe("/admin/boutiques");
     expect(entry("captures")?.href).toBe("/admin/captures");

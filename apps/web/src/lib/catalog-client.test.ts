@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createCapture, fetchProduct, fetchSummary, saveManual } from "./catalog-client";
+import { createCapture, fetchProduct, fetchSummary, readSummary, saveManual } from "./catalog-client";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const json = (body: unknown, status = 200) =>
@@ -69,5 +69,14 @@ describe("fetchSummary", () => {
   it("is null without a session or with an unexpected answer", async () => {
     expect(await fetchSummary(deps(json({ error: "unauthorized" }, 401)))).toBeNull();
     expect(await fetchSummary(deps(json({ nope: 1 })))).toBeNull();
+  });
+
+  it("tells a visitor without any session (401) from a failed read", async () => {
+    expect(await readSummary(deps(json(summary)))).toEqual({ kind: "ok", summary });
+    expect(await readSummary(deps(json({ error: "unauthorized" }, 401)))).toEqual({ kind: "signed-out" });
+    expect(await readSummary(deps(json({}, 500)))).toEqual({ kind: "failed" });
+    expect(await readSummary(deps(json({ nope: 1 })))).toEqual({ kind: "failed" });
+    const offline = { fetch: vi.fn(async () => Promise.reject(new TypeError("offline"))), ensure: vi.fn() };
+    expect(await readSummary(offline)).toEqual({ kind: "failed" });
   });
 });

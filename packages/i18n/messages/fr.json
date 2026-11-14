@@ -93,6 +93,12 @@
     "recents": {
       "title": "Derniers liens",
       "forget": "Retirer {name} de la liste"
+    },
+    "accountBanner": {
+      "label": "Créer un compte",
+      "body": "Crée ton compte pour garder tes articles sur tous tes appareils",
+      "action": "Créer mon compte",
+      "dismiss": "Fermer"
     }
   },
   "Shell": {
@@ -105,6 +111,10 @@
     "account": {
       "label": "Mon compte",
       "anonymous": "Sans compte"
+    },
+    "signIn": {
+      "action": "Se connecter",
+      "label": "Se connecter ou créer un compte"
     }
   },
   "Nav": {
@@ -402,6 +412,7 @@
     },
     "nav": {
       "dashboard": "Tableau de bord",
+      "users": "Utilisatrices",
       "shops": "Boutiques",
       "captures": "Captures",
       "audit": "Journal d’audit",
@@ -1004,6 +1015,68 @@
       "invalidName": "Donne un nom à la période.",
       "invalidDates": "Choisis le premier et le dernier jour.",
       "endBeforeStart": "Le dernier jour doit être le premier jour ou après."
+    },
+    "users": {
+      "title": "Utilisatrices",
+      "intro": "Les comptes et les visiteuses sans compte, des plus récents aux plus anciens. Seulement des nombres : jamais le contenu de leur dressing.",
+      "search": "Rechercher",
+      "searchLabel": "Rechercher par e-mail",
+      "searchHint": "Une partie de l’e-mail",
+      "kind": "Type",
+      "kinds": {
+        "accounts": "Comptes",
+        "guests": "Sans compte"
+      },
+      "apply": "Filtrer",
+      "reset": "Tout afficher",
+      "empty": "Personne ne correspond.",
+      "who": "E-mail",
+      "noAccount": "Sans compte",
+      "role": "Rôle",
+      "roles": {
+        "user": "Utilisatrice",
+        "admin": "Admin"
+      },
+      "created": "Créé le (UTC)",
+      "lastActive": "Dernière activité (UTC)",
+      "never": "Jamais",
+      "items": "Articles",
+      "devices": "Appareils notifiés",
+      "pagination": "Pagination des utilisatrices",
+      "next": "Page suivante",
+      "first": "Revenir aux plus récentes",
+      "back": "Toutes les utilisatrices",
+      "facts": "Compte",
+      "usage": "Usage",
+      "profiles": "Profils",
+      "wishlists": "Listes",
+      "spotted": "Envies",
+      "owned": "Possédés",
+      "sessions": "Sessions ouvertes",
+      "methods": "Moyens de connexion",
+      "noMethod": "Aucun",
+      "methodNames": {
+        "passkey": "Clé d’accès",
+        "google": "Google",
+        "apple": "Apple",
+        "email-otp": "Code par e-mail"
+      },
+      "delete": {
+        "title": "Supprimer ce compte",
+        "intro": "À faire seulement sur sa demande (RGPD). Tout ce qui lui appartient est effacé pour de bon, photos comprises.",
+        "open": "Supprimer ce compte",
+        "confirmAccount": "Pour confirmer, tape son e-mail : {email}",
+        "confirmGuest": "Pour confirmer, tape {word}",
+        "confirm": "Supprimer définitivement",
+        "deleting": "Suppression…",
+        "cancel": "Annuler",
+        "mismatch": "Ce n’est pas le texte attendu.",
+        "self": "Tu ne peux pas supprimer ton propre compte ici.",
+        "admin": "Le compte d’une autre admin ne se supprime pas ici.",
+        "notFound": "Ce compte n’existe plus.",
+        "generic": "La suppression a échoué. Réessaie.",
+        "protectedAdmin": "Compte admin : il ne se supprime pas ici."
+      }
     }
   },
   "Capture": {

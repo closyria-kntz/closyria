@@ -40,3 +40,12 @@ export function codeErrorKey(error: AuthError): CodeErrorKey {
       return "signInFailed";
   }
 }
+
+/** Request header set by `proxy.ts` on admin pages: the address asked for (path and query). */
+export const ADMIN_PATH_HEADER = "x-closyria-admin-path";
+
+/** The sign-in page, coming back to `next` (a same-origin path, else the home page) once signed in. */
+export function signInHref(next: string | null | undefined): string {
+  const back = safeNext(next ?? undefined);
+  return back === "/" ? "/connexion" : `/connexion?next=${encodeURIComponent(back)}`;
+}

@@ -17,7 +17,7 @@ import {
 } from "react";
 import { AddSheetContext } from "@/lib/add-sheet-context";
 import { ARTICLES_PATH } from "@/lib/articles-address";
-import { fetchSummary } from "@/lib/catalog-client";
+import { readSummary } from "@/lib/catalog-client";
 import { useChangesPoller, useLiveRefresh } from "@/lib/live-changes";
 import {
   discoveryShown,
@@ -35,6 +35,7 @@ import { type AppNavItem, type AppNavKey, appNav, isCurrent, phoneNav } from "./
 import { GiftWarning } from "./gift-warning";
 import { Onboarding } from "./onboarding";
 import { ProfileSwitcher } from "./profile-switcher";
+import { SignInButton } from "./sign-in-button";
 import { focusRing } from "./ui";
 import { UndoToast } from "./undo-toast";
 
@@ -182,7 +183,8 @@ function BandSearch() {
 
 /**
  * The frame of the signed-in pages (refonte Boudoir, spec §2 R2): a burgundy band at the top with the logo and the
- * profile switcher (her account is the « Compte » place, navigation 2026-11-12); one menu, at the bottom on a phone (with the raised +), in the band from a tablet up (with « + Ajouter »).
+ * profile switcher (her account is the « Compte » place, navigation 2026-11-12), « Se connecter » in its place for a
+ * guest (comptes visibles 2026-11-14); one menu, at the bottom on a phone (with the raised +), in the band from a tablet up (with « + Ajouter »).
  * Content grows up to `container.app`.
  */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -197,6 +199,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [pathname]);
   const [profiles, setProfiles] = useState<readonly ProfileView[]>([]);
   const [account, setAccount] = useState<SummaryView["account"] | null>(null);
+  const [guest, setGuest] = useState<boolean | null>(null);
   const [ready, setReady] = useState(false);
   const [adding, setAdding] = useState(false);
   const openAdd = useCallback(() => setAdding(true), []);
@@ -215,11 +218,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshProfiles = useCallback(async () => {
-    const summary = await fetchSummary();
-    if (summary && alive.current) {
-      setProfiles(summary.profiles);
-      setAccount(summary.account);
+    const read = await readSummary();
+    if (read.kind === "ok" && alive.current) {
+      setProfiles(read.summary.profiles);
+      setAccount(read.summary.account);
+      setGuest(read.summary.isAnonymous);
     }
+    // No session at all: a visitor who kept nothing yet, a guest too. A failed read changes nothing.
+    if (read.kind === "signed-out" && alive.current) setGuest(true);
     if (alive.current) setReady(true);
   }, []);
 
@@ -273,7 +279,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   });
 
   return (
-    <ProfilesContext.Provider value={{ profiles, ready, account, refreshProfiles, loveLevels, refreshLoveLevels }}>
+    <ProfilesContext.Provider
+      value={{ profiles, ready, account, guest, refreshProfiles, loveLevels, refreshLoveLevels }}
+    >
       <PreferencesContext.Provider value={preferencesValue}>
         <AddSheetContext.Provider value={openAdd}>
           <a
@@ -304,9 +312,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <span aria-hidden="true">+ {tNav("add")}</span>
                     <span className="sr-only">{tNav("addLabel")}</span>
                   </button>
-                  <Suspense>
-                    <ProfileSwitcher />
-                  </Suspense>
+                  <Suspense>{guest ? <SignInButton /> : <ProfileSwitcher />}</Suspense>
                 </div>
               </header>
 

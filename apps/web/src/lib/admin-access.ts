@@ -13,15 +13,17 @@ function isTransient(error: unknown): boolean {
   );
 }
 
-export type AdminAccess = "ok" | "not-found" | "passkey-required";
+export type AdminAccess = "ok" | "not-found" | "passkey-required" | "sign-in";
 
 /**
- * Who may see the admin area (spec §8, ruling R15). Without a session or without the admin role the area
- * does not exist (404, its existence is not revealed). An admin who did not sign in with a passkey is sent
- * to the page explaining how to use one. The API enforces the same rule on every admin route.
+ * Who may see the admin area (spec §8, ruling R15, comptes visibles 2026-11-14). A visitor who is not signed in to
+ * an account (no session, or a guest's anonymous one) is sent to the sign-in page, as on any site. A signed-in account
+ * without the admin role finds nothing (404, its existence is not revealed). An admin who did not sign in with a
+ * passkey is sent to the page explaining how to use one. The API enforces the same rule on every admin route.
  */
 export function adminAccess(session: AdminSession): AdminAccess {
-  if (session?.user.role !== "admin") return "not-found";
+  if (!session) return "sign-in";
+  if (session.user.role !== "admin") return session.session.authMethod === "anonymous" ? "sign-in" : "not-found";
   return session.session.authMethod === "passkey" ? "ok" : "passkey-required";
 }
 

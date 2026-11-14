@@ -8,6 +8,7 @@ export type AdminNavItem = { key: AdminNavKey; href: `/admin${string}` };
 /** The admin menu. Each chantier adds its screens here (and their labels under `Admin.nav`). */
 export const adminNav = [
   { key: "dashboard", href: "/admin" },
+  { key: "users", href: "/admin/utilisatrices" },
   { key: "shops", href: "/admin/boutiques" },
   { key: "captures", href: "/admin/captures" },
   { key: "products", href: "/admin/fiches" },

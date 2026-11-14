@@ -5,12 +5,16 @@ import { SessionCheckError } from "./admin-api";
 const session = (role: string, authMethod: string) => ({ user: { role }, session: { authMethod } });
 
 describe("adminAccess", () => {
-  it("hides the area (404) without a session", () => {
-    expect(adminAccess(null)).toBe("not-found");
+  it("sends a visitor without a session to the sign-in page", () => {
+    expect(adminAccess(null)).toBe("sign-in");
   });
 
-  it("hides the area (404) from a non-admin, whatever the sign-in method", () => {
-    for (const method of ["anonymous", "email-otp", "google", "apple", "passkey"]) {
+  it("sends a guest (anonymous session) to the sign-in page", () => {
+    expect(adminAccess(session("user", "anonymous"))).toBe("sign-in");
+  });
+
+  it("hides the area (404) from a signed-in non-admin, whatever the sign-in method", () => {
+    for (const method of ["email-otp", "google", "apple", "passkey"]) {
       expect(adminAccess(session("user", method))).toBe("not-found");
     }
   });

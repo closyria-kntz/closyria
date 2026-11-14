@@ -6,6 +6,8 @@ import {
   adminSessionSchema,
   adminShopDetailSchema,
   adminShopListSchema,
+  adminUserDetailSchema,
+  adminUserListSchema,
   lastForwardedAddress,
   type ReferenceKind,
   referenceListSchema,
@@ -141,3 +143,16 @@ export async function fetchAdminProduct(api: InternalApi, id: string) {
 
 export const fetchAdminReference = (api: InternalApi, kind: ReferenceKind) =>
   fetchAdminJson(api, `/api/admin/reference/${kind}`, referenceListSchema);
+
+export type UserFilters = { q?: string | undefined; kind?: string | undefined; cursor?: string | undefined };
+
+export const adminUsersPath = (filters: UserFilters) => withQuery("/api/admin/users", filters);
+
+export const fetchAdminUsers = (api: InternalApi, filters: UserFilters) =>
+  fetchAdminJson(api, adminUsersPath(filters), adminUserListSchema);
+
+/** One person; Better Auth ids are short opaque strings, anything else never reaches the API path. */
+export async function fetchAdminUser(api: InternalApi, id: string) {
+  if (!/^[A-Za-z0-9_-]{1,200}$/.test(id)) return { ok: false, status: 404 } as const;
+  return fetchAdminJson(api, `/api/admin/users/${id}`, adminUserDetailSchema);
+}

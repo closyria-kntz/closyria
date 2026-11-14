@@ -41,9 +41,13 @@ const browserStore = (): KeyValueStore | undefined => {
   }
 };
 
-export function readDismissedAt(store: KeyValueStore | undefined = browserStore()): Date | undefined {
+/** When a banner was last closed (`key`: the G6 proposal by default, or another banner's key). */
+export function readDismissedAt(
+  store: KeyValueStore | undefined = browserStore(),
+  key: string = DISMISS_KEY,
+): Date | undefined {
   try {
-    const raw = store?.getItem(DISMISS_KEY);
+    const raw = store?.getItem(key);
     if (!raw) return undefined;
     const date = new Date(raw);
     return Number.isNaN(date.getTime()) ? undefined : date;
@@ -52,9 +56,13 @@ export function readDismissedAt(store: KeyValueStore | undefined = browserStore(
   }
 }
 
-export function writeDismissedAt(now: Date = new Date(), store: KeyValueStore | undefined = browserStore()): void {
+export function writeDismissedAt(
+  now: Date = new Date(),
+  store: KeyValueStore | undefined = browserStore(),
+  key: string = DISMISS_KEY,
+): void {
   try {
-    store?.setItem(DISMISS_KEY, now.toISOString());
+    store?.setItem(key, now.toISOString());
   } catch {}
 }
 

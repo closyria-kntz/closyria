@@ -92,14 +92,23 @@ export async function saveManual(
   return { ok: false, error: "failed" };
 }
 
-/** The app shell's summary (profiles, item count). Null without a session or on any unexpected answer. */
-export async function fetchSummary(deps: ClientDeps = defaultDeps, signal?: AbortSignal): Promise<SummaryView | null> {
+/** The app shell's summary, or why there is none: no session at all (401), or a failed read. */
+export type SummaryRead = { kind: "ok"; summary: SummaryView } | { kind: "signed-out" } | { kind: "failed" };
+
+export async function readSummary(deps: ClientDeps = defaultDeps, signal?: AbortSignal): Promise<SummaryRead> {
   try {
     const response = await deps.fetch("/api/me/summary", { cache: "no-store", signal: signal ?? null });
-    if (!response.ok) return null;
+    if (response.status === 401) return { kind: "signed-out" };
+    if (!response.ok) return { kind: "failed" };
     const parsed = summaryViewSchema.safeParse(await response.json());
-    return parsed.success ? parsed.data : null;
+    return parsed.success ? { kind: "ok", summary: parsed.data } : { kind: "failed" };
   } catch {
-    return null;
+    return { kind: "failed" };
   }
+}
+
+/** The app shell's summary (profiles, item count). Null without a session or on any unexpected answer. */
+export async function fetchSummary(deps: ClientDeps = defaultDeps, signal?: AbortSignal): Promise<SummaryView | null> {
+  const read = await readSummary(deps, signal);
+  return read.kind === "ok" ? read.summary : null;
 }

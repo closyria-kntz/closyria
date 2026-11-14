@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { AdminNavLinks } from "../admin-nav";
 import { CommandPalette } from "../command-palette";
 import { adminNav } from "../nav";
-import { getAdminAccess } from "../server";
+import { getAdminAccess, redirectToSignIn } from "../server";
 import { ThemeToggle } from "../theme-toggle";
 import { focusRing } from "../ui";
 
@@ -12,6 +12,7 @@ import { focusRing } from "../ui";
 export default async function AdminShellLayout({ children }: { children: ReactNode }) {
   // Next renders nested layouts concurrently: repeat the 404 here so a non-admin never sees the redirect target.
   const access = await getAdminAccess();
+  if (access === "sign-in") await redirectToSignIn();
   if (access === "not-found") notFound();
   if (access === "passkey-required") redirect("/admin/passkey-required");
   const t = await getTranslations("Admin");

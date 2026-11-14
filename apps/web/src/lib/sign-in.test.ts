@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { codeErrorKey, isSixDigitCode, safeNext, sendErrorKey } from "./sign-in";
+import { codeErrorKey, isSixDigitCode, safeNext, sendErrorKey, signInHref } from "./sign-in";
 
 describe("safeNext", () => {
   it("keeps same-origin relative paths", () => {
@@ -50,5 +50,19 @@ describe("error messages", () => {
     expect(codeErrorKey({ status: 403, code: "TOO_MANY_ATTEMPTS" })).toBe("tooManyAttempts");
     expect(codeErrorKey({ status: 429 })).toBe("tooManyRequests");
     expect(codeErrorKey({ status: 500 })).toBe("signInFailed");
+  });
+});
+
+describe("signInHref", () => {
+  it("comes back to the page asked for, encoded", () => {
+    expect(signInHref("/admin/utilisatrices?q=a&kind=guests")).toBe(
+      "/connexion?next=%2Fadmin%2Futilisatrices%3Fq%3Da%26kind%3Dguests",
+    );
+  });
+
+  it("never sends her to another site, and drops a useless return to the home page", () => {
+    expect(signInHref("//evil.example")).toBe("/connexion");
+    expect(signInHref(null)).toBe("/connexion");
+    expect(signInHref("/")).toBe("/connexion");
   });
 });

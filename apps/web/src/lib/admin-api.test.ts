@@ -4,6 +4,7 @@ import {
   adminFailuresPath,
   adminProductsPath,
   adminShopsPath,
+  adminUsersPath,
   fetchAdminFailures,
   fetchAdminJson,
   fetchAdminProduct,
@@ -12,6 +13,7 @@ import {
   fetchAdminSession,
   fetchAdminShop,
   fetchAdminShops,
+  fetchAdminUser,
   internalApiFor,
   internalApiUrl,
 } from "./admin-api";
@@ -294,5 +296,24 @@ describe("shop and capture reads", () => {
     const result = await fetchAdminReference(api(fetch), "colors");
     expect(calls[0]?.url).toBe("http://api/api/admin/reference/colors");
     expect(result.ok && result.data.entries[0]?.hex).toBe(HEX);
+  });
+});
+
+describe("people reads (« Utilisatrices »)", () => {
+  const api = (fetch: typeof globalThis.fetch) => ({ fetch, baseUrl: "http://api", cookie: "c=1" });
+
+  it("builds the list path from the filters that are set", () => {
+    expect(adminUsersPath({})).toBe("/api/admin/users");
+    expect(adminUsersPath({ q: "anna@", kind: "accounts", cursor: "" })).toBe(
+      "/api/admin/users?q=anna%40&kind=accounts",
+    );
+  });
+
+  it("refuses an id that could leave the path before calling the API", async () => {
+    const { fetch, calls } = fakeFetch(200, {});
+    for (const id of ["../audit", "a/b", "a?b", ""]) {
+      expect(await fetchAdminUser(api(fetch), id)).toEqual({ ok: false, status: 404 });
+    }
+    expect(calls).toHaveLength(0);
   });
 });

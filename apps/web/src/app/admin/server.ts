@@ -4,6 +4,7 @@ import { cache } from "react";
 import type { z } from "zod";
 import { loadAdminAccess } from "@/lib/admin-access";
 import { type AdminResult, fetchAdminJson, fetchAdminSession, type InternalApi, internalApiFor } from "@/lib/admin-api";
+import { ADMIN_PATH_HEADER, signInHref } from "@/lib/sign-in";
 
 // Server only: imported by the admin layouts and pages, never by a client component.
 
@@ -19,12 +20,21 @@ export const getAdminAccess = cache(async () => {
 });
 
 /**
+ * Sends a visitor who is not signed in to an account to the sign-in page, back to the admin address she asked for
+ * (set by `proxy.ts`; the admin home when it is missing). Called wherever the access is decided.
+ */
+export async function redirectToSignIn(): Promise<never> {
+  redirect(signInHref((await headers()).get(ADMIN_PATH_HEADER) ?? "/admin"));
+}
+
+/**
  * Guard called by every admin page itself, not only by the layouts: a page must stay closed even if a
- * layout is moved or skipped. 404 for non-admins (R15); an admin without passkey session goes to the
+ * layout is moved or skipped. The sign-in page for a visitor without an account, 404 for non-admins (R15); an admin without passkey session goes to the
  * page explaining passkeys. That page passes `allowPasskeyRequired` (it is where those admins land).
  */
 export async function requireAdminPage(options: { allowPasskeyRequired?: boolean } = {}): Promise<void> {
   const access = await getAdminAccess();
+  if (access === "sign-in") await redirectToSignIn();
   if (access === "not-found") notFound();
   if (access === "passkey-required" && !options.allowPasskeyRequired) redirect("/admin/passkey-required");
 }
