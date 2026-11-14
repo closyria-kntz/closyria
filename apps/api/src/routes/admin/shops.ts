@@ -499,7 +499,11 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       noteAudit(c, {
         action: "shop.update",
         target: `shop:${id}`,
-        details: { fields: Object.keys(c.req.valid("json")).join(",") },
+        details: {
+          fields: Object.keys(c.req.valid("json")).join(","),
+          // « Accord de référencement »: the day given (or null when taken off), kept in the journal.
+          ...(listingAgreementAt === undefined ? {} : { listingAgreementAt }),
+        },
       });
       let domains: string[] | undefined;
       if (rawDomains) {

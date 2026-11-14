@@ -1,6 +1,6 @@
 import { type Database, sql } from "@closyria/db";
 import type { ShopCard, ShopDirectory } from "@closyria/shared";
-import { inCatalogue, isPrivileged, shopInCatalogue, showsShopMedia, visibleTo } from "./catalogue";
+import { type Caller, inCatalogue, isPrivileged, shopInCatalogue, showsShopMedia, visibleTo } from "./catalogue";
 import { catalogImageUrl } from "./product-view";
 
 type Row = {
@@ -32,10 +32,10 @@ export async function featuredShopId(db: Database): Promise<string | null> {
  * facts leave this function (name, main domain, how many of its articles « Découvrir » shows, one photo of the newest
  * of them, « Nouveautés » order, only for a shop with an agreement or an admin / « Testeuse »), never who pasted them. The featured one is the shop whose `featured_at` is the most recent; it is left out of `shops`.
  */
-export async function loadShopDirectory(db: Database, userId: string): Promise<ShopDirectory> {
+export async function loadShopDirectory(db: Database, caller: Caller): Promise<ShopDirectory> {
   // Catalogue conforme: she counts only what « Découvrir » shows her, and a tile has a shop's photo only when the
   // shop agreed (or she is an admin / « Testeuse »).
-  const viewer = { privileged: await isPrivileged(db, userId) };
+  const viewer = { privileged: await isPrivileged(db, caller) };
   const { rows } = await db.execute<Row>(sql`
     select s.id, s.name, d.domain,
       (select count(*)::int from products p where p.shop_id = s.id and ${inCatalogue} and ${visibleTo(viewer)})

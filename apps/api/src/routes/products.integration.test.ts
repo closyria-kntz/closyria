@@ -1,4 +1,4 @@
-import { eq, schema } from "@closyria/db";
+import { eq, schema, sql } from "@closyria/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { BASE_URL, createCatalogHarness } from "../catalog/test-app";
 
@@ -74,7 +74,20 @@ describe("GET /api/products/:id", () => {
       { label: "Composition", value: "60% mohair" },
       { label: "Dimensions", value: "Largeur : 63 cm\n\nLongueur : 50 cm" },
     ];
+    // A partner shop (« Accord de référencement »): its words may be shown to anyone (catalogue conforme).
+    const partner = async (productId: string) =>
+      t.db.execute(sql`update shops set listing_agreement_at = now()
+        where id = (select shop_id from products where id = ${productId})`);
     const product = await newProduct({ name: "Pull", shopData: { details, material: "60% mohair" } });
+    await partner(product.id);
+    const shown = await t.app.request(`/api/products/${product.id}`);
+    expect(((await shown.json()) as { details: unknown }).details).toEqual(details);
+    await t.db.execute(sql`update shops set listing_agreement_at = null
+      where id = (select shop_id from products where id = ${product.id})`);
+    // Without an agreement nor rights: not even the attributes table.
+    const stripped = await t.app.request(`/api/products/${product.id}`);
+    expect(((await stripped.json()) as { details: unknown }).details).toEqual([]);
+    await partner(product.id);
     const res = await t.app.request(`/api/products/${product.id}`);
     expect(((await res.json()) as { details: unknown }).details).toEqual(details);
     const broken = await newProduct({ name: "Pull", shopData: { details: [{ label: "", value: 3 }] } });

@@ -4,13 +4,18 @@ import { swatchHex } from "@/lib/swatch-hex";
 
 // Catalogue conforme (docs/specs/2026-11-14-catalogue-conforme.md): what « Découvrir » draws instead of a shop's photo
 // when the shop gave no listing agreement. One Closyria silhouette per kind of article (viewBox 120 × 160, the 3:4 of
-// the photos), filled with the article's colour (neutral when unknown), outlined in ink so that a white or very pale
-// piece still reads on the powder-pink backdrop, in light and dark. Purely decorative: the article's name is the label.
+// the photos), filled with the article's colour (a neutral tint when unknown), outlined in ink so that a white or very
+// pale piece still reads on the powder-pink backdrop, in light and dark. The drawings are fitted above y = 118, where
+// the card lays « Je le veux ». Purely decorative: the article's name is the label.
 
-type Shape = { body: string; details?: string[]; hook?: boolean };
+/** `details` lie on the fill (their stroke contrasts with it); `outline` lies outside it, in ink like the contour. */
+type Shape = { body: string; details?: string[]; outline?: string[]; hook?: boolean };
 
 /** A coat hanger's hook above the garments that hang. */
 const HOOK = "M60 34 V25 a5 5 0 1 1 5 -5";
+
+/** Drawn in a 120 × 148 frame, then fitted: y 14…144 lands on 15…116 (the bottom stays clear of « Je le veux »). */
+const FIT = "translate(13.2 4) scale(0.78)";
 
 const SHAPES: Record<IllustrationKind, Shape> = {
   top: {
@@ -36,13 +41,22 @@ const SHAPES: Record<IllustrationKind, Shape> = {
     details: ["M60 46 L60 136", "M52 28 L56 60 L60 46", "M68 28 L64 60 L60 46"],
     hook: true,
   },
+  // A sneaker seen from the side: toe on the right, a flat sole, laces on the instep.
   shoes: {
-    body: "M24 96 Q26 80 38 78 L48 78 Q56 94 78 98 L96 102 Q104 108 98 114 L46 114 L44 128 L36 128 L34 114 Q22 110 24 96 Z",
-    details: ["M48 78 Q46 92 34 98"],
+    body: "M12 140 V118 Q12 100 28 96 L44 88 Q50 104 66 104 Q78 104 84 96 L100 108 Q112 116 110 130 V140 Z",
+    details: ["M12 130 H110", "M48 114 L56 106", "M58 116 L66 108", "M68 116 L76 108"],
   },
   bag: {
     body: "M28 70 Q28 62 36 62 L84 62 Q92 62 92 70 L96 124 Q96 132 88 132 L32 132 Q24 132 24 124 Z",
-    details: ["M44 62 Q44 36 60 36 Q76 36 76 62", "M24 84 L96 84", "M56 84 L56 92 L64 92 L64 84"],
+    details: ["M24 84 L96 84", "M56 84 L56 92 L64 92 L64 84"],
+    outline: ["M44 62 Q44 36 60 36 Q76 36 76 62"],
+  },
+  // A scarf over a rail: the fold at the top, two tails, their stripes and fringes.
+  accessory: {
+    body: "M36 42 Q60 32 84 42 L80 62 L86 134 L66 136 L63 66 Q60 62 57 66 L54 136 L34 134 L40 62 Z",
+    details: ["M38 112 L54 112", "M66 112 L84 112"],
+    outline: ["M40 136 V142", "M46 136 V142", "M72 136 V142", "M80 136 V142"],
+    hook: true,
   },
   other: {
     body: "M30 64 L60 46 L90 64 L90 128 L30 128 Z",
@@ -50,6 +64,15 @@ const SHAPES: Record<IllustrationKind, Shape> = {
     hook: true,
   },
 };
+
+/** Relative luminance of a `#RRGGBB` (WCAG): what decides whether the detail lines are light or dark. */
+function luminance(hex: string): number {
+  const channel = (i: number) => {
+    const c = Number.parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+}
 
 /**
  * The illustration of a catalogue article: its kind's silhouette in its colour on the soft backdrop, the size of its
@@ -63,7 +86,9 @@ export function ProductIllustration({
   className?: string;
 }) {
   const shape = SHAPES[illustration.kind] ?? SHAPES.other;
-  const filled = swatchHex(illustration.color) !== null;
+  const hex = swatchHex(illustration.color);
+  // Light lines on a dark fill (black bag, navy trousers), dark lines on a light one: never lost in the fill.
+  const detail = hex && luminance(hex) < 0.2 ? "stroke-figure-detail-on-dark" : "stroke-figure-detail-on-light";
   return (
     <span
       aria-hidden="true"
@@ -76,17 +101,22 @@ export function ProductIllustration({
         viewBox="0 0 120 160"
         focusable="false"
         className="size-full stroke-ink"
-        strokeWidth="1.6"
+        strokeWidth="2"
         strokeLinejoin="round"
         strokeLinecap="round"
       >
-        {shape.hook && <path d={HOOK} className="fill-none" />}
-        <SwatchGroup hex={illustration.color}>
-          <path d={shape.body} className={filled ? "fill-(--swatch)" : "fill-surface-strong"} />
-        </SwatchGroup>
-        {shape.details?.map((d) => (
-          <path key={d} d={d} className="fill-none opacity-50" />
-        ))}
+        <g transform={FIT}>
+          {shape.hook && <path d={HOOK} className="fill-none" />}
+          {shape.outline?.map((d) => (
+            <path key={d} d={d} className="fill-none" />
+          ))}
+          <SwatchGroup hex={hex}>
+            <path d={shape.body} className={hex ? "fill-(--swatch)" : "fill-figure-neutral"} />
+          </SwatchGroup>
+          {shape.details?.map((d) => (
+            <path key={d} d={d} className={`fill-none ${detail}`} strokeWidth="1.6" />
+          ))}
+        </g>
       </svg>
     </span>
   );

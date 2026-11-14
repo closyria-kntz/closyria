@@ -26,7 +26,11 @@ export const platformSchema = z.enum([
  * `revisit`: a followed product of a shop the hourly import does not read, checked again every 6 h (alerts). It writes
  * like `refresh`, at the monitors' place on the Shopify line.
  */
-export const captureTriggerSchema = z.enum(["user", "admin_test", "monitor", "refresh", "revisit"]);
+/**
+ * Why a capture runs. `admin_recapture` is the admin's « Recapturer » on a product: written like `user`, but it never
+ * publishes the product in « Découvrir » (catalogue conforme, 2026-11-14).
+ */
+export const captureTriggerSchema = z.enum(["user", "admin_test", "monitor", "refresh", "revisit", "admin_recapture"]);
 export const captureStatusSchema = z.enum(["queued", "running", "succeeded", "failed", "skipped_manual"]);
 /** How a capture read the product: `woocommerce` is the shop's Store API (an imported WooCommerce product's refresh). */
 export const captureMethodSchema = z.enum(["shopify", "jsonld", "opengraph", "woocommerce"]);

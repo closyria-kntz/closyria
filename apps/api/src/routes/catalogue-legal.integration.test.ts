@@ -128,16 +128,37 @@ async function newProduct(shopId: string) {
   return p;
 }
 
-/** A link she pasted: a user capture of the product. */
-async function paste(productId: string, shopId: string, by: Person) {
-  await t.db.insert(schema.captures).values({
-    productId,
-    shopId,
-    url: `https://legal.test/paste/${++counter}`,
-    trigger: "user",
-    requestedBy: by.userId,
-    status: "succeeded",
-  });
+/** A link she pasted (null: a friend on a shared link): a user capture of the product, as the worker ends it. */
+async function paste(
+  productId: string,
+  shopId: string,
+  by: Person | null,
+  trigger: "user" | "admin_recapture" = "user",
+) {
+  const [capture] = await t.db
+    .insert(schema.captures)
+    .values({
+      productId,
+      shopId,
+      url: `https://legal.test/paste/${++counter}`,
+      trigger,
+      requestedBy: by?.userId ?? null,
+      status: "queued",
+    })
+    .returning();
+  // The worker's end of the capture: the publishing rule reads the success (migration 0035's trigger).
+  await t.db
+    .update(schema.captures)
+    .set({ status: "succeeded" })
+    .where(eq(schema.captures.id, capture?.id ?? ""));
+}
+
+async function pastedAt(productId: string) {
+  const [row] = await t.db
+    .select({ pastedAt: schema.products.pastedAt })
+    .from(schema.products)
+    .where(eq(schema.products.id, productId));
+  return row?.pastedAt ?? null;
 }
 
 /** Her item on the product (a wish), with a profile of hers. */
@@ -214,6 +235,90 @@ describe("visibility matrix", () => {
   });
 });
 
+describe("who publishes a product (products.pasted_at)", () => {
+  it("only someone neither admin nor tester: her paste or her item; a friend's paste too", async () => {
+    const shop = await newShop(false);
+    const byPublic = await newProduct(shop.id);
+    await paste(byPublic.id, shop.id, pasting);
+    const byFriend = await newProduct(shop.id);
+    await paste(byFriend.id, shop.id, null);
+    const byTester = await newProduct(shop.id);
+    await paste(byTester.id, shop.id, tester);
+    const byAdmin = await newProduct(shop.id);
+    await paste(byAdmin.id, shop.id, admin);
+    const keptByAdmin = await newProduct(shop.id);
+    await want(keptByAdmin.id, admin);
+    const publicIds = (await listed(pub)).page.items.map((c) => c.productId).sort();
+    expect(publicIds).toEqual([byPublic.id, byFriend.id].sort());
+    expect(await pastedAt(byTester.id)).toBeNull();
+    expect(await pastedAt(byAdmin.id)).toBeNull();
+    expect(await pastedAt(keptByAdmin.id)).toBeNull();
+  });
+
+  it("a capture still queued or failed publishes nothing; its success does", async () => {
+    const shop = await newShop(false);
+    const p = await newProduct(shop.id);
+    const [capture] = await t.db
+      .insert(schema.captures)
+      .values({
+        productId: p.id,
+        shopId: shop.id,
+        url: "https://legal.test/q",
+        trigger: "user",
+        requestedBy: pasting.userId,
+      })
+      .returning();
+    expect(await pastedAt(p.id)).toBeNull();
+    await t.db
+      .update(schema.captures)
+      .set({ status: "failed" })
+      .where(eq(schema.captures.id, capture?.id ?? ""));
+    expect(await pastedAt(p.id)).toBeNull();
+    await paste(p.id, shop.id, pasting);
+    expect(await pastedAt(p.id)).not.toBeNull();
+  });
+
+  it("the admin's « Recapturer » never publishes, through the route or its trigger", async () => {
+    const shop = await newShop(false);
+    const p = await newProduct(shop.id);
+    const res = await call("POST", `/admin/products/${p.id}/recapture`, admin.cookie);
+    expect(res.status).toBe(202);
+    const [capture] = await t.db.select().from(schema.captures).where(eq(schema.captures.productId, p.id));
+    expect(capture?.trigger).toBe("admin_recapture");
+    await t.db.update(schema.captures).set({ status: "succeeded" }).where(eq(schema.captures.productId, p.id));
+    await paste(p.id, shop.id, pasting, "admin_recapture");
+    expect(await pastedAt(p.id)).toBeNull();
+    expect((await listed(pub)).page.items).toHaveLength(0);
+  });
+
+  it("is never cleared, and a tester's earlier items stay unpublished when she stops testing", async () => {
+    const shop = await newShop(false);
+    const kept = await newProduct(shop.id);
+    const someone = await t.signIn();
+    await t.db.update(schema.user).set({ isTester: true }).where(eq(schema.user.id, someone.userId));
+    await want(kept.id, someone);
+    await t.db.update(schema.user).set({ isTester: false }).where(eq(schema.user.id, someone.userId));
+    expect(await pastedAt(kept.id)).toBeNull();
+    const p = await newProduct(shop.id);
+    await want(p.id, pasting);
+    const first = await pastedAt(p.id);
+    expect(first).not.toBeNull();
+    await t.db.delete(schema.items).where(eq(schema.items.productId, p.id));
+    await paste(p.id, shop.id, pasting);
+    expect(await pastedAt(p.id)).toEqual(first);
+  });
+
+  it("an admin counts only in a passkey session, like in the admin area", async () => {
+    const shop = await newShop(false);
+    await newProduct(shop.id);
+    const otp = await t.signIn();
+    await t.db.update(schema.user).set({ role: "admin" }).where(eq(schema.user.id, otp.userId));
+    await t.db.update(schema.session).set({ authMethod: "email-otp" }).where(eq(schema.session.userId, otp.userId));
+    expect((await listed(otp)).page.items).toHaveLength(0);
+    expect((await listed(admin)).page.items).toHaveLength(1);
+  });
+});
+
 describe("no shop photo nor shop text in public answers for shops without an agreement", () => {
   it("cards: an illustration (kind, colour) instead of the photo; partner cards keep it", async () => {
     const m = await seedMatrix();
@@ -253,7 +358,8 @@ describe("no shop photo nor shop text in public answers for shops without an agr
     const sheet = catalogDetailSchema.parse(await (await call("GET", `/catalog/${m.pasted.id}`, pub.cookie)).json());
     expect(sheet.images).toEqual([]);
     expect(sheet.imageUrl).toBeNull();
-    expect(sheet.description).toBe("Robe longue rouge en lin, du 36 au 42.");
+    // 38 is sold out between 36 and 42: the sizes are listed, never a range over the gap.
+    expect(sheet.description).toBe("Robe longue rouge en lin, tailles 36 et 42.");
     // « De la même boutique »: the other public article of the shop, illustrated too.
     expect(sheet.sameShop.map((c) => c.productId)).toEqual([m.keptByItem.id]);
     expect(sheet.sameShop.every((c) => c.imageUrl === null)).toBe(true);
@@ -291,9 +397,17 @@ describe("no shop photo nor shop text in public answers for shops without an agr
     const m = await seedMatrix();
     const view = async (productId: string, who: Person | null) =>
       productViewSchema.parse(await (await call("GET", `/products/${productId}`, who?.cookie ?? "")).json());
-    // Someone else's paste: neither photo nor text.
+    await t.db
+      .update(schema.products)
+      .set({ shopData: { details: [{ label: "Composition", value: "Écrit par la boutique" }] } })
+      .where(eq(schema.products.id, m.pasted.id));
+    // Someone else's paste: neither photo, nor text, nor attributes table.
     expect((await view(m.pasted.id, pub)).images).toEqual([]);
     expect((await view(m.pasted.id, pub)).description).toBeNull();
+    expect((await view(m.pasted.id, pub)).details).toEqual([]);
+    expect((await view(m.pasted.id, pasting)).details).toEqual([
+      { label: "Composition", value: "Écrit par la boutique" },
+    ]);
     expect((await view(m.pasted.id, null)).images).toEqual([]);
     // Her own paste, her own item: unchanged.
     expect((await view(m.pasted.id, pasting)).images).toHaveLength(1);
@@ -357,5 +471,10 @@ describe("admin switches", () => {
       { action: "shop.update", fields: "listingAgreementAt" },
       { action: "shop.update", fields: "listingAgreementAt" },
     ]);
+    const { rows: days } = await t.db.execute<{ day: string | null }>(
+      sql`select details->>'listingAgreementAt' as day from admin_audit_log where target = ${`shop:${shop.id}`}
+        and details->>'status' = '200' order by created_at, id`,
+    );
+    expect(days.map((d) => d.day).sort()).toEqual(["2026-11-10", null].sort());
   });
 });

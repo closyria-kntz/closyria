@@ -11,6 +11,7 @@ import { type AccessEnv, defineAccess } from "../access";
 import {
   CATALOG_DETAIL_LIMITS,
   CATALOG_PAGE_SIZE,
+  callerOf,
   InvalidCatalogCursorError,
   LIKES_THRESHOLD,
   listCatalog,
@@ -116,10 +117,10 @@ const reportRoute = (limiter: MiddlewareHandler<AccessEnv>) =>
     "user",
   );
 
-const userIdOf = (c: Context<AccessEnv>) => {
+const callerOfContext = (c: Context<AccessEnv>) => {
   const session = c.var.session;
   if (!session) throw new Error("session expected on a user route");
-  return session.user.id;
+  return callerOf(session);
 };
 
 export function catalogueRoutes(deps: CatalogDeps) {
@@ -138,7 +139,7 @@ export function catalogueRoutes(deps: CatalogDeps) {
       const query = c.req.valid("query");
       c.header("Cache-Control", "private, no-cache");
       try {
-        const viewer = await loadViewer(db, userIdOf(c), query.profile);
+        const viewer = await loadViewer(db, callerOfContext(c), query.profile);
         return c.json(await listCatalog(db, viewer, query, now()), 200);
       } catch (error) {
         if (error instanceof InvalidCatalogCursorError) return c.json({ error: "invalid_cursor" } as const, 400);
@@ -147,7 +148,7 @@ export function catalogueRoutes(deps: CatalogDeps) {
     })
     .openapi(detailRoute, async (c) => {
       const { productId } = c.req.valid("param");
-      const viewer = await loadViewer(db, userIdOf(c), c.req.valid("query").profile);
+      const viewer = await loadViewer(db, callerOfContext(c), c.req.valid("query").profile);
       const sheet = await loadCatalogDetail(db, viewer, productId);
       c.header("Cache-Control", "private, no-cache");
       if (!sheet) return c.json(notFound, 404);
@@ -159,7 +160,7 @@ export function catalogueRoutes(deps: CatalogDeps) {
     })
     .openapi(reportRoute(reportLimiter), async (c) => {
       const { productId } = c.req.valid("param");
-      const recorded = await reportProduct(db, userIdOf(c), productId, c.req.valid("json").reason);
+      const recorded = await reportProduct(db, callerOfContext(c), productId, c.req.valid("json").reason);
       return recorded ? c.body(null, 204) : c.json(notFound, 404);
     });
 }

@@ -224,6 +224,13 @@ export const products = pgTable(
      * read (it goes on from there at the next import); 0 when no pass is under way.
      */
     variantsCursor: integer("variants_cursor").notNull().default(0),
+    /**
+     * Catalogue conforme (2026-11-14): when someone neither admin nor « Testeuse » first pasted it (her user capture
+     * succeeded, or her manual shop's capture was recorded) or kept an item on it; never cleared. Set by the triggers
+     * of migration 0035 (`products_mark_pasted_*`). Null: it came from a full import only, and only admins and
+     * testers see it in « Découvrir » (unless its shop has a listing agreement).
+     */
+    pastedAt: timestamp("pasted_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -233,6 +240,8 @@ export const products = pgTable(
     index("products_color_id_idx").on(t.colorId),
     index("products_material_id_idx").on(t.materialId),
     index("products_pattern_id_idx").on(t.patternId),
+    // « Découvrir » for the public: the pasted products (a sliver of an imported catalogue).
+    index("products_pasted_idx").on(t.shopId, t.publishedAt).where(sql`${t.pastedAt} IS NOT NULL`),
     // Text search of « Découvrir » on the name and brand, accents folded by `catalog_fold` (migration 0022).
     index("products_search_idx").using("gin", productSearchDocument()),
     check("products_audience_check", sql`${t.audience} IS NULL OR ${oneOf(t.audience, audienceSchema.options)}`),

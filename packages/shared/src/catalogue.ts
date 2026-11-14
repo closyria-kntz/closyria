@@ -35,7 +35,17 @@ export type CatalogQuery = z.infer<typeof catalogQuerySchema>;
 // --- Illustrations (catalogue conforme, 2026-11-14): what a card shows instead of a shop's photo. ---
 
 /** The silhouettes of the illustrations, one per kind of article. */
-export const ILLUSTRATION_KINDS = ["top", "dress", "bottom", "skirt", "coat", "shoes", "bag", "other"] as const;
+export const ILLUSTRATION_KINDS = [
+  "top",
+  "dress",
+  "bottom",
+  "skirt",
+  "coat",
+  "shoes",
+  "bag",
+  "accessory",
+  "other",
+] as const;
 export const illustrationKindSchema = z.enum(ILLUSTRATION_KINDS);
 export type IllustrationKind = z.infer<typeof illustrationKindSchema>;
 
@@ -75,11 +85,11 @@ const ILLUSTRATION_KIND_BY_SLUG: Readonly<Record<string, IllustrationKind>> = {
   sandales: "shoes",
   ballerines: "shoes",
   sacs: "bag",
-  accessoires: "bag",
-  bijoux: "bag",
-  ceintures: "bag",
-  "echarpes-foulards": "bag",
-  "chapeaux-bonnets": "bag",
+  accessoires: "accessory",
+  bijoux: "accessory",
+  ceintures: "accessory",
+  "echarpes-foulards": "accessory",
+  "chapeaux-bonnets": "accessory",
 };
 
 /** The silhouette of a category slug; « other » when unknown or unfiled. */

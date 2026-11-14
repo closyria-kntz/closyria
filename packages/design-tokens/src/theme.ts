@@ -94,6 +94,7 @@ export const boudoirDark: Theme = {
     "color-button-ink": c.boudoirInk,
     "color-detail": c.ochre,
     "color-toast-action": "color-mix(in srgb, var(--color-button-ink) 16%, transparent)",
+    "color-figure-neutral": c.nightMuted,
     "shadow-block": "0 10px 30px rgb(0 0 0 / 0.4)",
   },
 };

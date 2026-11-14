@@ -516,7 +516,8 @@
         "admin_test": "Test admin",
         "monitor": "Surveillance",
         "refresh": "Vérification de fiche",
-        "revisit": "Suivi d’un article"
+        "revisit": "Suivi d’un article",
+        "admin_recapture": "Recapture admin"
       },
       "health": {
         "ok": "OK",
@@ -1087,9 +1088,7 @@
       "tester": "Testeuse",
       "testerHint": "Elle voit dans Découvrir les articles venus seulement d’un import complet, avec les photos et les textes des boutiques.",
       "testerSaved": "Enregistré.",
-      "testerFailed": "Ça n’a pas marché. Réessaie.",
-      "testerYes": "Oui",
-      "testerNo": "Non"
+      "testerFailed": "Ça n’a pas marché. Réessaie."
     }
   },
   "Capture": {

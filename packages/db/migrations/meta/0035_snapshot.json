@@ -1,5 +1,5 @@
 {
-  "id": "35ba3d18-3b89-400c-a599-f09d888291c9",
+  "id": "d7770189-f761-45dc-a3ca-36cbf6a3e82f",
   "prevId": "a7843c2a-abb0-4536-b66a-77d639f72cd3",
   "version": "7",
   "dialect": "postgresql",
@@ -1580,7 +1580,7 @@
       "checkConstraints": {
         "captures_trigger_check": {
           "name": "captures_trigger_check",
-          "value": "\"captures\".\"trigger\" IN ('user', 'admin_test', 'monitor', 'refresh', 'revisit')"
+          "value": "\"captures\".\"trigger\" IN ('user', 'admin_test', 'monitor', 'refresh', 'revisit', 'admin_recapture')"
         },
         "captures_status_check": {
           "name": "captures_status_check",
@@ -2217,6 +2217,12 @@
           "notNull": true,
           "default": 0
         },
+        "pasted_at": {
+          "name": "pasted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2304,6 +2310,28 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "products_pasted_idx": {
+          "name": "products_pasted_idx",
+          "columns": [
+            {
+              "expression": "shop_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "published_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"products\".\"pasted_at\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}

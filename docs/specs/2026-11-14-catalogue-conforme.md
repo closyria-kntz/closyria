@@ -35,15 +35,28 @@ référencement » (écrit, durée, retrait).
 
 ## 3. Règles précises (construction)
 
-### 3.1 « Collé par une utilisatrice »
+### 3.1 « Collé par une utilisatrice » (`products.pasted_at`)
 
-Un produit est **collé** s'il existe :
-- une capture déclenchée par une utilisatrice (`captures.trigger = 'user'`), quelle qu'elle soit (même admin ou
-  testeuse : coller un lien est un geste réel), même si son compte a été supprimé depuis ; **ou**
-- un article (`items`, corbeille comprise) qui pointe vers ce produit, gardé par une personne qui n'est **ni admin ni
-  testeuse** (un « Je le veux » d'une testeuse sur un article importé ne le rend pas public).
+Seule une personne **ni admin ni testeuse** publie un produit. `products.pasted_at` (migration 0035) note la première
+fois que :
+- sa capture d'un lien réussit (`captures.trigger = 'user'`, statut « réussie », ou « saisie à la main » pour une
+  boutique capturée à la main) ; une capture sans demandeuse (une amie sur un lien partagé, ou un compte supprimé
+  depuis) compte aussi ; **ou**
+- elle garde un article (`items`) qui pointe vers ce produit.
 
-Un produit d'abord importé puis collé par une utilisatrice devient public dès la capture.
+La date n'est jamais effacée. Elle est posée par deux déclencheurs en base (`products_mark_pasted_capture`,
+`products_mark_pasted_item`), quel que soit le chemin (lien collé, « Je le veux », lien d'une amie, fusion d'une
+invitée) ; la migration la remplit pour l'existant avec la même règle. Le statut admin ou testeuse est lu au moment
+du geste : une testeuse qui cesse de l'être ne publie pas après coup ce qu'elle avait gardé.
+
+- Le « Recapturer » de l'admin a son propre déclencheur de capture, `admin_recapture` : il écrit le produit comme une
+  capture d'utilisatrice (historique, file prioritaire, échec par délai), mais ne le publie jamais.
+- Une capture en file ou en échec ne publie rien ; sa réussite publie.
+- Un produit d'abord importé puis collé par une utilisatrice devient public dès sa capture réussie.
+
+**Qui est admin** : la même règle que l'espace admin — rôle admin **et** session ouverte avec une clé d'accès ; sinon
+le compte voit Découvrir comme le public (sauf s'il est testeuse). Pour publier, le rôle seul compte (un admin ne
+publie jamais, quelle que soit sa session).
 
 ### 3.2 Matrice de visibilité (sur les règles existantes de Découvrir)
 
@@ -68,7 +81,7 @@ Un produit d'abord importé puis collé par une utilisatrice devient public dès
 | « De la même boutique », « Dans le même style » | dans la fiche | mêmes règles que la grille |
 | Une « Nouveautés de la semaine » | `GET /api/catalog?isNew=true` | idem grille (illustration dans l'une) |
 | Une « Boutique de la semaine », liste des boutiques (Découvrir et Accueil) | `GET /api/shops` | photo seulement pour une boutique partenaire, sinon l'initiale ; le nombre d'articles ne compte que ce qu'elle peut voir |
-| Fiche produit hors de son dressing | `GET /api/products/{id}` | photos et texte seulement pour son article (un article à elle ou un lien qu'elle a collé), une boutique partenaire, ou une admin / testeuse ; sinon `images` vide et `description` nulle |
+| Fiche produit hors de son dressing | `GET /api/products/{id}` | photos, texte et tableau des caractéristiques seulement pour son article (un article à elle ou un lien qu'elle a collé), une boutique partenaire, ou une admin / testeuse ; sinon `images` et `details` vides, `description` nulle |
 | Signaler | `POST /api/catalog/{id}/report` | 404 si invisible pour elle |
 | Accueil (baisses de prix, tailles revenues, alertes) | `GET /api/me/home`, alertes | ses propres articles : inchangé |
 | Proche (« Tu as déjà quelque chose de proche ») | dans la fiche | ses propres pièces : inchangé |
@@ -77,26 +90,31 @@ Un produit d'abord importé puis collé par une utilisatrice devient public dès
 
 ### 3.4 Illustration
 
-- Huit silhouettes : haut, robe, bas / pantalon, jupe, manteau / veste, chaussures, sac / accessoire, autre (classement
-  par la catégorie, une sous-catégorie prend celle de son parent ; non classé → « autre »).
-- Remplie de la couleur classée de l'article (`colors.hex`) ; neutre (rose doux des jetons) sans couleur ; contour
-  encre (lisible en clair et en sombre, même pour un article blanc) sur le fond rose poudré des photos.
+- Neuf silhouettes : haut, robe, bas / pantalon, jupe, manteau / veste, chaussures (basket vue de profil), sac,
+  accessoire (foulard : écharpes, chapeaux, bijoux, ceintures), autre (classement par la catégorie, une
+  sous-catégorie prend celle de son parent ; non classé → « autre »).
+- Remplie de la couleur classée de l'article (`colors.hex`) ; sans couleur, une teinte neutre à elle (jeton
+  `figure-neutral`, distincte du fond, en clair et en sombre) ; contour encre (lisible même pour un article blanc) sur
+  le fond rose poudré des photos ; traits de détail clairs sur un fond foncé et foncés sur un fond clair.
+- Dessins ajustés au-dessus du bas de la photo (y ≤ 116/160) : « Je le veux » ne les couvre jamais.
 - Décorative (`aria-hidden`) : le nom de l'article est le libellé.
 
 ### 3.5 Phrase factuelle
 
 Fonction pure `factualDescription` (`packages/shared`) : nom de catégorie au singulier (« Robe longue », « Chemise ou
 blouse », « Sandales »…, sinon celui de sa catégorie parente, sinon « Article »), couleur accordée (« noire »,
-« blanches », « marron » invariable), « en {matière} », puis les tailles en stock : « taille 38 », « taille unique »,
-« du XS au L », « du 36 au 42 », « tailles S et 38 » (lettres et nombres mêlés), « 7 tailles » (au-delà de 6 tailles
-non ordonnables).
+« blanches », « marron » invariable), « en {matière} », puis les tailles en stock : « taille 38 », « taille unique » ;
+une fourchette (« du S au L », « du 36 au 42 ») seulement quand elles se suivent (lettres une à une, nombres à 2 au
+plus d'écart, aucune taille épuisée entre les deux) ; sinon elles-mêmes jusqu'à 4 (« tailles 36, 40 et 42 »,
+« tailles S et 38 ») ; au-delà, leur nombre (« 5 tailles »).
 
 ### 3.6 Admin
 
 - **Testeuse** : `user.is_tester` (migration 0035), case sur `/admin/utilisatrices/{id}`, `PATCH
   /api/admin/users/{id}` journalisé (`user.tester`, avec la valeur).
 - **Accord de référencement** : `shops.listing_agreement_at` (migration 0035), case et date (du 1er janvier 2000 à
-  demain, 00:00 UTC) dans les réglages de la boutique, journalisée comme les autres réglages (`shop.update`).
+  demain, 00:00 UTC) dans les réglages de la boutique, journalisée comme les autres réglages (`shop.update`, avec
+  la date donnée ou nulle quand elle est retirée).
 - « Articles dans Découvrir » de la fiche boutique admin compte toujours tout ce que voit l'admin.
 
 ## 4. Tests
@@ -112,5 +130,9 @@ non ordonnables).
 ## 5. Points ouverts
 
 - Validation par un avocat (§1).
-- Une testeuse qui redevient simple utilisatrice : ses articles gardés rendent publics les produits qu'ils visent.
 - Un article gardé depuis le lien d'une amie (« Je le prends aussi ») compte comme collé.
+- Retour arrière de la migration 0035 : supprimer les déclencheurs `products_mark_pasted_capture` /
+  `products_mark_pasted_item`, les fonctions `products_mark_pasted_by_capture`, `products_mark_pasted_by_item`,
+  `catalog_publisher`, l'index `products_pasted_idx`, les colonnes `products.pasted_at`,
+  `shops.listing_agreement_at`, `user.is_tester` ; ramener `UPDATE captures SET trigger = 'user' WHERE trigger =
+  'admin_recapture'` avant de remettre l'ancienne contrainte `captures_trigger_check`.

@@ -61,12 +61,15 @@ const COLOR_FORMS: Readonly<Record<string, readonly [string, string, string, str
 /** A reference entry: its slug and name; a category also gives its ancestors' slugs, nearest first. */
 export type FactRef = { slug: string; name: string; parents?: readonly string[] };
 
-/** The facts Closyria knows of an article, never the shop's own text. `sizes`: the labels in stock, in order. */
+/** A size of the article as the shop lists it, in stock or sold out (a sold-out size breaks a range). */
+export type FactSize = { label: string; available: boolean };
+
+/** The facts Closyria knows of an article, never the shop's own text. `sizes`: all its sizes, in the shop's order. */
 export type CatalogueFacts = {
   category: FactRef | null;
   color: FactRef | null;
   material: FactRef | null;
-  sizes: readonly string[];
+  sizes: readonly FactSize[];
 };
 
 function nounOf(category: FactRef | null): Noun {
@@ -86,7 +89,8 @@ function colorOf(color: FactRef, of: Noun): string {
 
 const LETTER_ORDER = ["xxs", "xs", "s", "m", "l", "xl", "2xl", "3xl", "4xl"];
 const LETTER_LABEL: Record<string, string> = { "2xl": "XXL" };
-const MAX_LISTED = 6;
+/** Sizes listed one by one at most (beyond, their number). */
+const MAX_LISTED = 4;
 
 /** One readable size of a label: a number (36, 38.5) or a letter size; null when no rule reads it alone. */
 function readSize(label: string): { kind: "number" | "letter"; rank: number; text: string } | null {
@@ -104,24 +108,54 @@ function readSize(label: string): { kind: "number" | "letter"; rank: number; tex
   return null;
 }
 
-function sizesPhrase(labels: readonly string[]): string | null {
-  const given = [...new Set(labels.map((l) => l.trim()).filter(Boolean))];
+/** « taille 38 », « tailles 36, 40 et 42 ». */
+const listed = (texts: readonly string[]) =>
+  texts.length === 1 ? `taille ${texts[0]}` : `tailles ${texts.slice(0, -1).join(", ")} et ${texts.at(-1)}`;
+
+type ReadSize = NonNullable<ReturnType<typeof readSize>>;
+
+/**
+ * Whether the sizes in stock (sorted, one kind) follow each other: letters one step apart, numbers at most 2 apart
+ * (36, 38, 40 or 37, 37,5, 38), and no sold-out size of the article between the first and the last.
+ */
+function contiguous(inStock: readonly ReadSize[], soldOut: readonly ReadSize[]): boolean {
+  const first = inStock[0];
+  const last = inStock.at(-1);
+  if (!first || !last) return false;
+  const stepOk = inStock.every((size, i) => {
+    const previous = inStock[i - 1];
+    if (!previous) return true;
+    const step = size.rank - previous.rank;
+    return size.kind === "letter" ? step === 1 : step <= 2;
+  });
+  const holes = soldOut.some((s) => s.kind === first.kind && s.rank > first.rank && s.rank < last.rank);
+  return stepOk && !holes;
+}
+
+/**
+ * The sizes in stock: « taille unique », « taille 38 », a range when they follow each other (« du 36 au 42 »), else
+ * the sizes themselves up to 4 (« tailles 36, 40 et 42 »), else their number (« 6 tailles »).
+ */
+function sizesPhrase(sizes: readonly FactSize[]): string | null {
+  const given = [...new Set(sizes.filter((s) => s.available).map((s) => s.label.trim()))].filter(Boolean);
   if (given.length === 0) return null;
   if (given.every(isOneSize)) return "taille unique";
   const read = given.map(readSize);
-  if (read.every((r) => r !== null)) {
-    const kinds = new Set(read.map((r) => r.kind));
+  if (read.every((r) => r !== null) && new Set(read.map((r) => r.kind)).size === 1) {
     const unique = [...new Map(read.map((r) => [r.text, r])).values()].sort((a, b) => a.rank - b.rank);
-    if (unique.length === 1) return `taille ${(unique[0] as { text: string }).text}`;
-    if (kinds.size === 1) {
-      return `du ${(unique[0] as { text: string }).text} au ${(unique.at(-1) as { text: string }).text}`;
+    const soldOut = sizes
+      .filter((s) => !s.available)
+      .map((s) => readSize(s.label))
+      .filter((r): r is ReadSize => r !== null);
+    if (unique.length === 1) return listed([(unique[0] as ReadSize).text]);
+    if (contiguous(unique, soldOut)) {
+      return `du ${(unique[0] as ReadSize).text} au ${(unique.at(-1) as ReadSize).text}`;
     }
+    return unique.length <= MAX_LISTED ? listed(unique.map((r) => r.text)) : `${unique.length} tailles`;
   }
-  if (given.length > MAX_LISTED) return `${given.length} tailles`;
-  const shown = read.every((r) => r !== null) ? read.map((r) => r.text) : given;
-  const list = [...new Set(shown)];
-  if (list.length === 1) return `taille ${list[0]}`;
-  return `tailles ${list.slice(0, -1).join(", ")} et ${list.at(-1)}`;
+  // Letters and numbers mixed, or labels no rule reads: as given (in the shop's order), never invented.
+  const texts = [...new Set(read.every((r) => r !== null) ? read.map((r) => r.text) : given)];
+  return texts.length <= MAX_LISTED ? listed(texts) : `${texts.length} tailles`;
 }
 
 /**

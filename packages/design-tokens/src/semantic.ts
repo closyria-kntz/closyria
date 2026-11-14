@@ -66,6 +66,11 @@ export const defaultSemanticTokens = {
   // The « Annuler » of a toast: a light veil of the toast's own text colour.
   "color-toast-action": "color-mix(in srgb, var(--color-button-ink) 16%, transparent)",
   "color-card-bg": "var(--color-surface-raised)",
+  // Catalogue conforme: the illustration of an article without a known colour (a neutral tint, not the backdrop),
+  // and its detail lines, dark on a light fill and light on a dark fill whatever the theme.
+  "color-figure-neutral": palette.sage,
+  "color-figure-detail-on-light": palette.boudoirInk,
+  "color-figure-detail-on-dark": palette.white,
   "color-card-border": "var(--color-line)",
   // Spacing
   "spacing-space-0": space[0],

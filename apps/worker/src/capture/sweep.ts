@@ -1,4 +1,5 @@
 import { and, type Database, inArray, lt, ne, or, schema } from "@closyria/db";
+import { isPersonCapture } from "./run-capture";
 
 export const STUCK_AFTER_MS = 5 * 60_000;
 /**
@@ -28,7 +29,7 @@ export async function sweepStuckCaptures(db: Database, now: Date): Promise<numbe
         ),
       )
       .returning({ trigger: schema.captures.trigger, productId: schema.captures.productId });
-    const productIds = stuck.flatMap((c) => (c.trigger === "user" && c.productId ? [c.productId] : []));
+    const productIds = stuck.flatMap((c) => (isPersonCapture(c.trigger) && c.productId ? [c.productId] : []));
     if (productIds.length > 0) {
       await tx
         .update(schema.products)

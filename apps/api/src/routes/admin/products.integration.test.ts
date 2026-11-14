@@ -261,7 +261,8 @@ describe("admin products", () => {
       productId: product.id,
       shopId: shop.id,
       url: product.canonicalUrl,
-      trigger: "user",
+      // Its own trigger: written like her capture, it never publishes the product (catalogue conforme).
+      trigger: "admin_recapture",
       requestedBy: adminId,
       status: "queued",
     });

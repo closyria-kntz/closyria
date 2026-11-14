@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
-import type { Page } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
 import type pg from "pg";
 import { sessionsOf, signInAsAdmin, signInWithEmailCode, uniqueEmail } from "../fixtures/auth";
 import { setupValue } from "../fixtures/paths";
@@ -12,8 +12,12 @@ import { expect, test } from "../fixtures/test";
 // Closyria's illustration and « Voir les photos chez … » to the public, never its photos; a full import alone is seen
 // by a « Testeuse » only; the admin switches « Testeuse » and « Accord de référencement ».
 
-/** Where the illustrated cards are pictured for the founder (light and dark, every device). */
-const SHOTS = "/tmp/claude-1001/-home-mystery/90e4ae59-6a1f-49ff-b2de-1893dca12bad/scratchpad/catalogue-legal";
+/**
+ * Where the illustrated cards are pictured (light and dark, every device): the test's own output folder, or
+ * `E2E_SHOTS_DIR` when set (to gather them for a review).
+ */
+const shotPath = (testInfo: TestInfo, name: string) =>
+  process.env.E2E_SHOTS_DIR ? join(process.env.E2E_SHOTS_DIR, name) : testInfo.outputPath(name);
 const TINY_WEBP = Buffer.from("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA", "base64");
 
 const axe = async (page: Page) => {
@@ -29,7 +33,7 @@ const axe = async (page: Page) => {
   expect(violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target.join(" ")) }))).toEqual([]);
 };
 
-async function axeLightAndDark(page: Page, shot?: string) {
+async function axeLightAndDark(page: Page, shot?: { testInfo: TestInfo; name: string }) {
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
     await expect
@@ -37,11 +41,12 @@ async function axeLightAndDark(page: Page, shot?: string) {
       .toBe(scheme === "dark");
     await axe(page);
     if (shot) {
-      await mkdir(SHOTS, { recursive: true });
+      const path = shotPath(shot.testInfo, `${shot.name}-${scheme}.png`);
+      await mkdir(dirname(path), { recursive: true });
       // The app scrolls inside its content area, not the window: a tall viewport pictures the whole page.
       const size = page.viewportSize();
       if (size) await page.setViewportSize({ width: size.width, height: 3200 });
-      await page.screenshot({ path: join(SHOTS, `${shot}-${scheme}.png`) });
+      await page.screenshot({ path });
       if (size) await page.setViewportSize(size);
     }
   }
@@ -126,7 +131,8 @@ async function seedIllustrated(db: pg.Pool, tag: string) {
     ["Manteau", "vestes-manteaux", "Vestes et manteaux", "Camel", "#B98B54"],
     ["Baskets", "baskets", "Baskets", "Blanc", "#FFFFFF"],
     ["Sac", "sacs", "Sacs", "Noir", "#111111"],
-    ["Écharpe", null, null, "", ""],
+    ["Foulard", "echarpes-foulards", "Écharpes et foulards", "Vert", "#2E7D4F"],
+    ["Pièce", null, null, "", ""],
   ];
   for (const [label, slug, name, colorName, hex] of kinds) {
     const categoryId = slug && name ? await category(db, slug, name) : null;
@@ -136,7 +142,7 @@ async function seedIllustrated(db: pg.Pool, tag: string) {
       categoryId,
       colorId,
       pasted: true,
-      sizes: slug === "robes" ? ["36", "38", "42"] : [],
+      sizes: slug === "robes" ? ["36", "38", "40", "42"] : [],
     });
   }
   const importedOnly = await seedProduct(db, shop.id, {
@@ -158,22 +164,24 @@ test("une carte publique sans accord : illustration et « Voir les photos chez �
   const { shop } = await seedIllustrated(db, tag);
 
   await page.goto(`/decouvrir?recherche=${tag}`);
-  await expect(cards(page)).toHaveCount(8);
+  await expect(cards(page)).toHaveCount(9);
   // The imported-only article is not there for her.
   await expect(cards(page).filter({ hasText: `Importé ${tag}` })).toHaveCount(0);
   // No shop photo on the page: illustrations, each with its way to the shop's photos.
   await expect(cards(page).locator("img")).toHaveCount(0);
-  await expect(cards(page).getByTestId("product-illustration")).toHaveCount(8);
+  await expect(cards(page).getByTestId("product-illustration")).toHaveCount(9);
   const kinds = await cards(page)
     .getByTestId("product-illustration")
     .evaluateAll((all) => all.map((el) => el.getAttribute("data-kind")));
-  expect(new Set(kinds)).toEqual(new Set(["top", "dress", "bottom", "skirt", "coat", "shoes", "bag", "other"]));
+  expect(new Set(kinds)).toEqual(
+    new Set(["top", "dress", "bottom", "skirt", "coat", "shoes", "bag", "accessory", "other"]),
+  );
   const robe = cards(page).filter({ hasText: `Robe ${tag}` });
   const photosAt = robe.getByRole("link", { name: new RegExp(`^Voir les photos chez ${shop.name}`) });
   await expect(photosAt).toHaveAttribute("href", /^https:\/\/legal\.e2e\.test\/products\//);
   await expect(photosAt).toHaveAttribute("target", "_blank");
   // Measured once the cards' entrance (a slight scale) is over: axe waits for the animations to end.
-  await axeLightAndDark(page, `cartes-${testInfo.project.name.replace(/\W+/g, "-")}`);
+  await axeLightAndDark(page, { testInfo, name: `cartes-${testInfo.project.name.replace(/\W+/g, "-")}` });
   const box = await photosAt.boundingBox();
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
 
@@ -188,7 +196,7 @@ test("une carte publique sans accord : illustration et « Voir les photos chez �
   await expect(page.getByTestId("sheet-shop-link")).toContainText(`Voir les photos chez ${shop.name}`);
   await expect(page.getByTestId("product-description")).toContainText("Robe rouge, du 36 au 42.");
   await expect(page.getByText("Le texte de la boutique, jamais repris.")).toHaveCount(0);
-  await axeLightAndDark(page, `fiche-${testInfo.project.name.replace(/\W+/g, "-")}`);
+  await axeLightAndDark(page, { testInfo, name: `fiche-${testInfo.project.name.replace(/\W+/g, "-")}` });
 });
 
 test("une testeuse voit les articles importés, avec les photos de la boutique", async ({
@@ -206,7 +214,7 @@ test("une testeuse voit les articles importés, avec les photos de la boutique",
   expect((await sessionsOf(db, userAgentTag)).length).toBeGreaterThan(0);
 
   await page.goto(`/decouvrir?recherche=${tag}`);
-  await expect(cards(page)).toHaveCount(9);
+  await expect(cards(page)).toHaveCount(10);
   const imported = cards(page).filter({ hasText: `Importé ${tag}` });
   await expect(imported.locator("img")).toHaveCount(1);
   await expect(imported.getByTestId("card-photos-at")).toHaveCount(0);

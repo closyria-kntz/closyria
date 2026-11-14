@@ -1,3 +1,4 @@
+import type { Session } from "@closyria/auth";
 import { type Database, type SQL, schema, sql } from "@closyria/db";
 import {
   type CatalogCard,
@@ -57,20 +58,33 @@ export type Viewer = {
   categories: ReadonlyMap<string, { slug: string; name: string; parentId: string | null }>;
 };
 
-/** Whether the person is an admin or a « Testeuse » (`Viewer.privileged`); false for an unknown id. */
-export async function isPrivileged(db: Database, userId: string): Promise<boolean> {
+/**
+ * Who asks, as her session says. An admin counts as one only in a session opened with a passkey: the admin area's
+ * own rule (`accessMiddleware`), so « Découvrir » and the admin agree on who is an admin.
+ */
+export type Caller = { userId: string; adminSession: boolean };
+
+export const callerOf = (session: Session): Caller => ({
+  userId: session.user.id,
+  adminSession: session.user.role === "admin" && session.session.authMethod === "passkey",
+});
+
+/** An admin (passkey session) or a « Testeuse » (`Viewer.privileged`); false for an unknown id. */
+export async function isPrivileged(db: Database, caller: Caller): Promise<boolean> {
+  if (caller.adminSession) return true;
   const [row] = await db
-    .select({ role: schema.user.role, isTester: schema.user.isTester })
+    .select({ isTester: schema.user.isTester })
     .from(schema.user)
-    .where(sql`${schema.user.id} = ${userId}`);
-  return row ? row.role === "admin" || row.isTester : false;
+    .where(sql`${schema.user.id} = ${caller.userId}`);
+  return row?.isTester ?? false;
 }
 
 /**
  * The viewer: `profileId` when it is one of her profiles, else her first profile (never created here), else none.
  * Another person's profile is never read.
  */
-export async function loadViewer(db: Database, userId: string, profileId: string | undefined): Promise<Viewer> {
+export async function loadViewer(db: Database, caller: Caller, profileId: string | undefined): Promise<Viewer> {
+  const { userId } = caller;
   const columns = {
     id: schema.profiles.id,
     sizesTop: schema.profiles.sizesTop,
@@ -101,7 +115,7 @@ export async function loadViewer(db: Database, userId: string, profileId: string
         name: schema.categories.name,
       })
       .from(schema.categories),
-    isPrivileged(db, userId),
+    isPrivileged(db, caller),
   ]);
   return {
     userId,
@@ -213,16 +227,10 @@ export const inCatalogue = sql`${visible} and ${completeWithImage}`;
 export const partnerShop = sql`s.listing_agreement_at is not null`;
 
 /**
- * Pasted by a user: a link she pasted (a user capture, whoever she is, even after her account went), or an item on
- * it kept by someone who is neither an admin nor a « Testeuse » (their « Je le veux » on an imported article must
- * not make it public). Product `p`.
+ * Pasted by someone who is neither an admin nor a « Testeuse » (her link, or her item on it): `products.pasted_at`,
+ * kept by the triggers of migration 0035. Product `p`.
  */
-export const pastedByUser = sql`(exists (
-    select 1 from captures pc where pc.product_id = p.id and pc.trigger = 'user'
-  ) or exists (
-    select 1 from items pit join "user" pu on pu.id = pit.user_id
-    where pit.product_id = p.id and pu.role <> 'admin' and not pu.is_tester
-  ))`;
+export const pastedByUser = sql`p.pasted_at is not null`;
 
 /**
  * Who sees an article of « Découvrir », on top of `inCatalogue`: an admin or a « Testeuse » sees them all; anyone
@@ -576,7 +584,7 @@ export async function loadCatalogDetail(
     category: categoryFact(viewer, categoryId),
     color: facts.color,
     material: facts.material,
-    sizes: sizes.filter((s) => s.available).map((s) => s.label),
+    sizes,
   });
   const kind = categoryId ? viewer.sizeKinds.get(categoryId) : undefined;
   const mySizes = kind ? viewer.sizes[kind].filter((size) => size.trim() !== "") : [];
@@ -693,11 +701,12 @@ async function loadClosePieces(
 /** Records her report once (a second one changes nothing); false when the article is not visible or unknown. */
 export async function reportProduct(
   db: Database,
-  userId: string,
+  caller: Caller,
   productId: string,
   reason: ReportReason,
 ): Promise<boolean> {
-  const viewer = { privileged: await isPrivileged(db, userId) };
+  const { userId } = caller;
+  const viewer = { privileged: await isPrivileged(db, caller) };
   const { rows } = await db.execute<{ id: string }>(sql`
     select p.id from products p join shops s on s.id = p.shop_id
     where p.id = ${productId} and ${inCatalogue} and ${visibleTo(viewer)}`);

@@ -351,7 +351,8 @@ export function adminProductsRoutes(deps: CatalogDeps) {
             shopId: product.shopId,
             productId: id,
             url: product.canonicalUrl,
-            trigger: "user",
+            // Written like her capture, but it never publishes the product (catalogue conforme).
+            trigger: "admin_recapture",
             requestedBy: adminId,
             status: "queued",
           })

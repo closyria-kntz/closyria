@@ -1,6 +1,7 @@
 import { shopDirectorySchema } from "@closyria/shared";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { type AccessEnv, defineAccess } from "../access";
+import { callerOf } from "../catalog/catalogue";
 import type { CatalogDeps } from "../catalog/deps";
 import { loadShopDirectory } from "../catalog/directory";
 
@@ -24,8 +25,8 @@ export function shopsRoutes(deps: CatalogDeps) {
   const app = new OpenAPIHono<AccessEnv>();
   return app.openapi(directoryRoute, async (c) => {
     c.header("Cache-Control", "private, no-cache");
-    const userId = c.var.session?.user.id;
-    if (!userId) throw new Error("session expected on a user route");
-    return c.json(await loadShopDirectory(deps.db, userId), 200);
+    const session = c.var.session;
+    if (!session) throw new Error("session expected on a user route");
+    return c.json(await loadShopDirectory(deps.db, callerOf(session)), 200);
   });
 }

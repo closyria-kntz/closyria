@@ -48,9 +48,15 @@ function isGone(error: unknown): boolean {
   );
 }
 
-/** Triggers that write the product they speak for (a person's capture, a sheet's refresh, a followed product's revisit). */
+/**
+ * Triggers that write the product they speak for (a person's capture, the admin's « Recapturer », a sheet's refresh,
+ * a followed product's revisit).
+ */
 const writesProduct = (trigger: string): boolean =>
-  trigger === "user" || trigger === "refresh" || trigger === "revisit";
+  trigger === "user" || trigger === "admin_recapture" || trigger === "refresh" || trigger === "revisit";
+
+/** A person's capture or the admin's « Recapturer »: every read goes in the history, and a stuck one fails the page. */
+export const isPersonCapture = (trigger: string): boolean => trigger === "user" || trigger === "admin_recapture";
 
 /**
  * The product a capture speaks for: the user's (or a sheet refresh's, or a revisit's) product, or for a monitor the product known at
@@ -73,6 +79,7 @@ async function productOf(db: Database, capture: typeof schema.captures.$inferSel
  */
 const LINE_PRIORITY: Record<CaptureTrigger, LinePriority> = {
   user: "high",
+  admin_recapture: "high",
   admin_test: "high",
   refresh: "medium",
   monitor: "low",
@@ -190,7 +197,7 @@ export async function runCapture(captureId: string, deps: CaptureDeps): Promise<
           listingKind: shop.listingKind,
           reference,
           at,
-          history: capture.trigger === "user" ? "always" : "on_change",
+          history: isPersonCapture(capture.trigger) ? "always" : "on_change",
           // The page answers again: a product marked gone comes back to the catalogue.
           extra: { removedAt: null, ...(fromStore?.complete ? { variantsCheckedAt: at } : {}) },
         });

@@ -16,7 +16,7 @@
     "e2e": {
       "dependsOn": ["^build"],
       "cache": false,
-      "passThroughEnv": ["CI", "HOME", "PLAYWRIGHT_BROWSERS_PATH"]
+      "passThroughEnv": ["CI", "HOME", "PLAYWRIGHT_BROWSERS_PATH", "E2E_SHOTS_DIR"]
     },
     "dev": {
       "cache": false,

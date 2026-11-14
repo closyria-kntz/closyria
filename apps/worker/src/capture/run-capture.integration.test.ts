@@ -102,7 +102,7 @@ async function setup(
     shop?: Partial<typeof schema.shops.$inferInsert>;
     product?: Partial<typeof schema.products.$inferInsert>;
   } = {},
-  trigger: "user" | "admin_test" | "monitor" | "refresh" | "revisit" = "user",
+  trigger: "user" | "admin_test" | "monitor" | "refresh" | "revisit" | "admin_recapture" = "user",
 ) {
   const n = ++counter;
   const [s] = await handle.db
@@ -131,7 +131,7 @@ async function newCapture(
   shopId: string,
   productId: string | null,
   url: string,
-  trigger: "user" | "admin_test" | "monitor" | "refresh" | "revisit",
+  trigger: "user" | "admin_test" | "monitor" | "refresh" | "revisit" | "admin_recapture",
 ) {
   const [c] = await handle.db.insert(schema.captures).values({ shopId, productId, url, trigger }).returning();
   if (!c) throw new Error("no capture");
@@ -193,6 +193,44 @@ describe("runCapture", () => {
     }
     // Shopify shop: the .js only, the HTML page is never requested.
     expect(shop.hits).not.toContain("/products/produit-3679");
+  });
+
+  it("the admin's « Recapturer » writes the product like her capture, history included, and never publishes it", async () => {
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const admin = await newUser();
+    await handle.db.update(schema.user).set({ role: "admin" }).where(eq(schema.user.id, admin));
+    const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } }, "admin_recapture");
+    await handle.db.update(schema.captures).set({ requestedBy: admin }).where(eq(schema.captures.id, t.capture.id));
+
+    await runCapture(t.capture.id, deps);
+
+    const r = await load(t.capture.id, t.product.id);
+    expect(r.capture?.status).toBe("succeeded");
+    expect(r.product?.name).toBe("PANTALON LEONIE");
+    expect(r.product?.captureStatus).toBe("ok");
+    expect(r.history).toHaveLength(1);
+    expect(r.images).toHaveLength(5);
+    // Catalogue conforme: an admin's read is no paste.
+    expect(r.product?.pastedAt).toBeNull();
+  });
+
+  it("her capture publishes the product once it succeeds; a tester's does not (catalogue conforme)", async () => {
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const someone = await newUser();
+    const t = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
+    await handle.db.update(schema.captures).set({ requestedBy: someone }).where(eq(schema.captures.id, t.capture.id));
+    expect((await load(t.capture.id, t.product.id)).product?.pastedAt).toBeNull();
+    await runCapture(t.capture.id, deps);
+    expect((await load(t.capture.id, t.product.id)).product?.pastedAt).toBeInstanceOf(Date);
+
+    const tester = await newUser();
+    await handle.db.update(schema.user).set({ isTester: true }).where(eq(schema.user.id, tester));
+    const u = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
+    await handle.db.update(schema.captures).set({ requestedBy: tester }).where(eq(schema.captures.id, u.capture.id));
+    await runCapture(u.capture.id, deps);
+    const r = await load(u.capture.id, u.product.id);
+    expect(r.capture?.status).toBe("succeeded");
+    expect(r.product?.pastedAt).toBeNull();
   });
 
   it("reads the page, then the .js of an unknown shop whose page is Shopify, and detects the platform", async () => {

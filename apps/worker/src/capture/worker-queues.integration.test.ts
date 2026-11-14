@@ -139,6 +139,7 @@ describe("sweepStuckCaptures", () => {
     const pending = await product(1, "pending");
     const ok = await product(2, "ok");
     const manual = await product(3, "manual");
+    const recaptured = await product(4, "pending");
     const cap = async (status: string, createdAt: Date, productId: string | null, trigger = "user") => {
       const [c] = await db
         .insert(schema.captures)
@@ -153,10 +154,12 @@ describe("sweepStuckCaptures", () => {
     const oldMonitor = await cap("queued", old, null, "monitor");
     const recentRunning = await cap("running", recent, pending);
     const oldDone = await cap("succeeded", old, pending);
+    // The admin's « Recapturer » is a person's capture too: stuck, it fails the page.
+    const oldRecapture = await cap("queued", old, recaptured, "admin_recapture");
 
-    expect(await sweepStuckCaptures(db, now)).toBe(4);
+    expect(await sweepStuckCaptures(db, now)).toBe(5);
     const get = async (id: string) => (await db.select().from(schema.captures).where(eq(schema.captures.id, id)))[0];
-    for (const id of [oldQueued, oldRunning, oldManual, oldMonitor]) {
+    for (const id of [oldQueued, oldRunning, oldManual, oldMonitor, oldRecapture]) {
       const c = await get(id);
       expect(c?.status).toBe("failed");
       expect(c?.errorCode).toBe("timeout");
@@ -169,6 +172,7 @@ describe("sweepStuckCaptures", () => {
     expect(await status(pending)).toBe("failed");
     expect(await status(ok)).toBe("ok");
     expect(await status(manual)).toBe("manual");
+    expect(await status(recaptured)).toBe("failed");
   });
 
   it("gives a revisit 60 min before sweeping it (a batch waits behind the Shopify line); the others keep 5 min", async () => {
