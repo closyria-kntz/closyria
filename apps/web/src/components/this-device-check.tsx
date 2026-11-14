@@ -5,8 +5,9 @@ import { checkThisDeviceOnce, pushSupport, readPushEnvironment } from "@/lib/pus
 
 /**
  * Once per page load, on every app page: a push subscription this browser holds for another account (a shared
- * computer left without « Se déconnecter ») is dropped, hers is re-attached when its id is unknown
- * (`checkThisDevice`). Nothing at all where push is unsupported; never asks for the permission. Renders nothing.
+ * computer left without « Se déconnecter »), with an unknown owner, or removed elsewhere is dropped
+ * (`checkThisDevice`); only « Activer » subscribes again. Nothing at all where push is unsupported; never asks for the
+ * permission. Renders nothing.
  */
 export function ThisDeviceCheck() {
   useEffect(() => {
