@@ -1,5 +1,5 @@
 {
-  "id": "6825d39a-f1a0-47c6-aff4-4caece763863",
+  "id": "fd9d436f-8900-46d0-acd9-9c65adbd3d58",
   "prevId": "99fb4104-051d-4b82-9c89-790eaeeef011",
   "version": "7",
   "dialect": "postgresql",
@@ -1523,6 +1523,13 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "variants_cursor": {
+          "name": "variants_cursor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "created_at": {
           "name": "created_at",

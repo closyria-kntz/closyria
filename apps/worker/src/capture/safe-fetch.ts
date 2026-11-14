@@ -16,7 +16,11 @@ export const DEFAULT_MAX_REDIRECTS = 5;
 
 /** The cause of an `invalid_data` failure when the answer was of another type than asked (`mime`, lower case). */
 export class WrongContentType extends Error {
-  constructor(readonly mime: string) {
+  constructor(
+    readonly mime: string,
+    /** An HTML page whose start carries a bot challenge's markers (Cloudflare, DataDome…). */
+    readonly challenge = false,
+  ) {
     super(`unexpected content type ${mime}`);
     this.name = "WrongContentType";
   }
@@ -30,6 +34,13 @@ export function isHtmlAnswer(error: unknown): boolean {
     error.cause instanceof WrongContentType &&
     ACCEPTED_TYPES.page(error.cause.mime)
   );
+}
+
+/** Whether a failure is an HTML bot challenge answered where JSON (or another type) was asked. */
+export function isChallengeAnswer(error: unknown): boolean {
+  return isHtmlAnswer(error) && (error as CaptureError).cause instanceof WrongContentType
+    ? ((error as CaptureError).cause as WrongContentType).challenge
+    : false;
 }
 
 export type SafeFetchAccept = "page" | "json" | "image" | "text" | "xml";
@@ -313,9 +324,13 @@ async function run(rawUrl: string, options: SafeFetchOptions, signal: AbortSigna
     const contentType = res.headers["content-type"] ?? "";
     const mime = mimeOf(contentType);
     if (!ACCEPTED_TYPES[options.accept](mime)) {
+      // The type answered, for a caller that tells an HTML page apart (a WooCommerce endpoint answering a page), and
+      // for a page whether its start is a bot challenge.
+      const head = ACCEPTED_TYPES.page(mime)
+        ? await readBody(res, Math.min(CHALLENGE_SCAN_BYTES, maxBytes), true).catch(() => Buffer.alloc(0))
+        : Buffer.alloc(0);
       res.destroy();
-      // The type answered, for a caller that tells an HTML page apart (a WooCommerce endpoint answering a page).
-      throw new CaptureError("invalid_data", status, { cause: new WrongContentType(mime) });
+      throw new CaptureError("invalid_data", status, { cause: new WrongContentType(mime, isChallenge(head)) });
     }
     const body = await readBody(res, maxBytes);
     if (ACCEPTED_TYPES.page(mime) && isChallenge(body)) throw new CaptureError("blocked", status);

@@ -39,12 +39,11 @@ export type WooRequest = { url: string; robotsUrl: string };
 
 export function wooRequest(api: WooApi, path = "", params: string[] = []): WooRequest {
   const query = params.join("&");
-  const pretty = `${api.origin}/wp-json${WOO_STORE_ROUTE}${path}`;
+  const pretty = `${api.origin}/wp-json${WOO_STORE_ROUTE}${path}${query ? `?${query}` : ""}`;
   return {
-    url: api.plain
-      ? `${api.origin}/?rest_route=${WOO_STORE_ROUTE}${path}${query ? `&${query}` : ""}`
-      : `${pretty}${query ? `?${query}` : ""}`,
-    // `?rest_route=` is the same API: what robots.txt forbids under `/wp-json/` is not read there either.
+    url: api.plain ? `${api.origin}/?rest_route=${WOO_STORE_ROUTE}${path}${query ? `&${query}` : ""}` : pretty,
+    // `?rest_route=` is the same API: what robots.txt forbids under `/wp-json/` (its query rules too) is not read
+    // there either.
     robotsUrl: pretty,
   };
 }
@@ -67,11 +66,13 @@ function refusal(error: unknown): CaptureError | null {
 
 /**
  * The variations of these products, through the Store API's listing (`?type=variation&parent[]=…&per_page=100`), page
- * after page within `maxRequests`:
- * - `ok`: every page read; a variation of these products the listing does not hold is no longer on sale;
- * - `incomplete`: out of requests before the last page (`stock` holds what was read);
+ * after page from `firstPage`, within `maxRequests`:
+ * - `ok`: the last page read (a 400 or 404 past the first page is the end, as for the products); from the first page,
+ *   a variation of these products the listing does not hold is no longer on sale;
+ * - `incomplete`: out of requests before the last page (`stock` holds what was read, `nextPage` where to go on);
  * - `unsupported`: the shop refuses the listing (400 on its first page: an older WooCommerce);
  * - `failed`: anything else (5xx, timeout, unreadable).
+ * `rejected`: variations listed but unreadable: still on sale, their stock unknown (never taken for sold out).
  * A refusal (401/403/429, a challenge, an HTML page) throws, like anything that is not a failed request (robots.txt,
  * an interruption).
  */
@@ -80,17 +81,28 @@ export async function readVariationsInBulk(
   api: WooApi,
   parents: string[],
   maxRequests: number,
+  firstPage = 1,
 ): Promise<{
   kind: "ok" | "incomplete" | "unsupported" | "failed";
   stock: Map<string, WooVariationStock>;
+  rejected: Set<string>;
   requests: number;
+  nextPage: number;
 }> {
   const stock = new Map<string, WooVariationStock>();
+  const rejected = new Set<string>();
   const wanted = new Set(parents);
   let requests = 0;
   let totalPages: number | null = null;
-  for (let page = 1; ; page++) {
-    if (requests >= maxRequests) return { kind: "incomplete", stock, requests };
+  for (let page = firstPage; ; page++) {
+    const out = (kind: "ok" | "incomplete" | "unsupported" | "failed") => ({
+      kind,
+      stock,
+      rejected,
+      requests,
+      nextPage: page,
+    });
+    if (requests >= maxRequests) return out("incomplete");
     const params = [
       "type=variation",
       ...parents.map((p) => `parent[]=${p}`),
@@ -105,11 +117,15 @@ export async function readVariationsInBulk(
       const refused = refusal(error);
       if (refused) throw refused;
       if (!(error instanceof CaptureError)) throw error;
-      const unsupported = page === 1 && error.code === "http_error" && error.httpStatus === 400;
-      return { kind: unsupported ? "unsupported" : "failed", stock, requests };
+      const status = error.code === "http_error" ? error.httpStatus : undefined;
+      if (page === 1 && status === 400) return out("unsupported");
+      // Past the first page, the shop says there is no such page: the listing is over.
+      if (page > 1 && (status === 400 || status === 404)) return out("ok");
+      return out("failed");
     }
     const listing = extractWooVariations(decodeBody(response.body, response.contentType));
-    if (!listing) return { kind: "failed", stock, requests };
+    if (!listing) return out("failed");
+    for (const id of listing.rejected) rejected.add(id);
     for (const variation of listing.variations) {
       if (wanted.has(variation.parent)) {
         stock.set(variation.id, {
@@ -118,9 +134,12 @@ export async function readVariationsInBulk(
         });
       }
     }
-    if (page === 1) totalPages = wooCount(response, "x-wp-totalpages");
+    if (totalPages === null) totalPages = wooCount(response, "x-wp-totalpages");
     const last = totalPages !== null ? page >= totalPages : listing.count < WOO_PAGE_SIZE;
-    if (last) return { kind: "ok", stock, requests };
+    if (last) {
+      page += 1;
+      return out("ok");
+    }
   }
 }
 
@@ -241,10 +260,13 @@ export async function readWooStore(
       const bulk = await readVariationsInBulk(fetch, api, [String(row.externalId)], 1);
       stock = bulk.stock;
       if (bulk.kind === "ok") {
-        // A variation the listing does not hold is no longer on sale.
-        for (const variation of item.variations)
-          if (!stock.has(variation.id)) stock.set(variation.id, { available: false });
-        complete = true;
+        // A variation the listing does not hold is no longer on sale; one it holds but could not read is unknown.
+        for (const variation of item.variations) {
+          if (!stock.has(variation.id) && !bulk.rejected.has(variation.id)) {
+            stock.set(variation.id, { available: false });
+          }
+        }
+        complete = bulk.rejected.size === 0;
       } else if (bulk.kind === "unsupported") {
         oneByOne = true;
         await rememberOneByOne(deps.db, shop.id, deps.now());

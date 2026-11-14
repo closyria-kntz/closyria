@@ -169,14 +169,17 @@ describe("extractWooVariations", () => {
         { id: "2023", parent: "202", available: false, priceCents: 5490 },
         { id: "3051", parent: "305", available: true, priceCents: 4990 },
       ],
+      rejected: [],
     });
   });
 
   it("skips an entry that is no variation, and is null for what is not a listing", () => {
     const [first] = JSON.parse(fixture("woocommerce-store-variations.json")) as Record<string, unknown>[];
-    expect(extractWooVariations(JSON.stringify([{ ...first, parent: 0 }, { id: 9 }, first]))).toMatchObject({
-      count: 3,
+    expect(extractWooVariations(JSON.stringify([{ ...first, parent: 0 }, { id: 9 }, "x", first]))).toMatchObject({
+      count: 4,
       variations: [{ id: "2021" }],
+      // Listed but unreadable: their stock is unknown, not sold out.
+      rejected: ["2021", "9"],
     });
     expect(extractWooVariations(JSON.stringify({ code: "rest_invalid_param" }))).toBeNull();
     expect(extractWooVariations("<html></html>")).toBeNull();

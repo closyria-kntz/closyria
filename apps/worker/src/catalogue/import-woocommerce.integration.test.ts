@@ -55,6 +55,12 @@ let deps: ImportDeps;
 let variations: Map<number, { parent: number; inStock: boolean }>;
 /** What the variations listing answers instead (400: an older WooCommerce; 500: a failure). */
 let bulkStatus: number | null;
+/** The variations listing answers 400 from its n-th request on (an older WooCommerce behind a cache, say). */
+let bulkRefusedFrom: number | null;
+/** No page count on the variations listing, and this status past its last page. */
+let bulkPastEnd: number | null;
+/** Variations listed in a shape the parser rejects. */
+let broken: Set<number>;
 /** Runs at each pause (before each request after the first): what the admin sees meanwhile. */
 let duringPause: (() => Promise<void>) | null;
 
@@ -62,6 +68,9 @@ beforeEach(async () => {
   routes = {};
   variations = new Map();
   bulkStatus = null;
+  bulkRefusedFrom = null;
+  bulkPastEnd = null;
+  broken = new Set();
   duringPause = null;
   shop = await startFakeShop(routes);
   routes[API] = { dynamic: listVariations };
@@ -115,20 +124,31 @@ const variationJson = (id: number, parent: number, inStock: boolean) => ({
 /** `…/products?type=variation&parent[]=…&per_page=100&page=n`: the variations of those products, 100 a page. */
 function listVariations(url: URL): FakeRoute {
   if (url.searchParams.get("type") !== "variation") return { status: 404, body: "not found" };
-  if (bulkStatus)
-    return { status: bulkStatus, headers: JSON_TYPE, body: JSON.stringify({ code: "rest_invalid_param" }) };
+  const refusal = (status: number) => ({
+    status,
+    headers: JSON_TYPE,
+    body: JSON.stringify({ code: "rest_invalid_param" }),
+  });
+  if (bulkStatus) return refusal(bulkStatus);
+  // `bulkHits` already holds this request.
+  if (bulkRefusedFrom !== null && bulkHits().length >= bulkRefusedFrom) return refusal(400);
   const parents = new Set(url.searchParams.getAll("parent[]").map(Number));
   const all = [...variations].filter(([, v]) => parents.has(v.parent));
   const page = Number(url.searchParams.get("page") ?? 1);
   const perPage = Number(url.searchParams.get("per_page") ?? 10);
+  const pages = Math.max(1, Math.ceil(all.length / perPage));
+  if (bulkPastEnd !== null && page > pages) return refusal(bulkPastEnd);
   const slice = all.slice((page - 1) * perPage, page * perPage);
   return {
     headers: {
       ...JSON_TYPE,
-      "x-wp-total": String(all.length),
-      "x-wp-totalpages": String(Math.max(1, Math.ceil(all.length / perPage))),
+      ...(bulkPastEnd !== null ? {} : { "x-wp-total": String(all.length), "x-wp-totalpages": String(pages) }),
     },
-    body: JSON.stringify(slice.map(([id, v]) => variationJson(id, v.parent, v.inStock))),
+    body: JSON.stringify(
+      slice.map(([id, v]) =>
+        broken.has(id) ? { id, parent: v.parent, type: "variation" } : variationJson(id, v.parent, v.inStock),
+      ),
+    ),
   };
 }
 
@@ -457,7 +477,7 @@ describe("WooCommerce catalogue import", () => {
     expect(variationRequests()).toHaveLength(10);
   }, 60_000);
 
-  it("never skips a product too big for the budget for good: read alone in a run with nothing else to read", async () => {
+  it("never skips a product too big for the budget: read in parts over imports with nothing else to read", async () => {
     const huge = Array.from({ length: (WOO_VARIATION_REQUESTS + 5) * 100 }, (_, i) => `T${i}`);
     servePages([
       [
@@ -473,11 +493,25 @@ describe("WooCommerce catalogue import", () => {
       expect((await byExternalId(s.id, "1")).variantsCheckedAt).toBeNull();
       expect(log).toHaveBeenCalledWith(expect.stringContaining("product 1 (3500 variations) waits"));
 
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("product 1 (3500 variations) waits for its share"));
+
+      // Nothing else to read: the budget goes to it, its pass goes on at the next import.
       later(HOUR);
       await importCatalog(deps, s.id);
-      expect(bulkHits()).toHaveLength(35);
-      expect((await byExternalId(s.id, "1")).variantsCheckedAt).toEqual(clock);
-      expect(log).toHaveBeenCalledWith(expect.stringContaining("product 1 has 3500 variations, read alone"));
+      expect(bulkHits()).toHaveLength(WOO_VARIATION_REQUESTS);
+      expect(await byExternalId(s.id, "1")).toMatchObject({ variantsCheckedAt: null, variantsCursor: 3000 });
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("product 1 (3500 variations) read in parts"));
+
+      later(HOUR);
+      await importCatalog(deps, s.id);
+      expect(bulkHits().map((hit) => new URL(hit, "http://x").searchParams.get("page"))).toEqual([
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+      ]);
+      expect(await byExternalId(s.id, "1")).toMatchObject({ variantsCheckedAt: clock, variantsCursor: 0 });
     } finally {
       log.mockRestore();
     }
@@ -536,11 +570,166 @@ describe("WooCommerce catalogue import", () => {
     expect(await shopRow(s.id)).toMatchObject({ importState: null, lastImportError: "woocommerce_api_unavailable" });
   });
 
-  it("takes an HTML page where the JSON should be for a refusal (blocked), not a disabled API", async () => {
-    routes[pagePath(1)] = { headers: { "content-type": "text/html" }, body: "<html>Un instant…</html>" };
+  it("takes a bot challenge where the JSON should be for a refusal (blocked), not a disabled API", async () => {
+    const challenge = {
+      headers: { "content-type": "text/html" },
+      body: '<html><script src="/cdn-cgi/cf-chl/x.js"></script></html>',
+    };
+    routes[pagePath(1)] = challenge;
+    routes["/"] = challenge;
     const s = await newShop();
     expect((await importCatalog(deps, s.id)).error).toBe("blocked (HTTP 200)");
-    expect(pageHits()).toEqual([pagePath(1)]);
+    // The other address was tried once: the same challenge there.
+    expect(shop.hits.filter((h) => h !== "/robots.txt")).toEqual([pagePath(1), plainPagePath(1)]);
+
+    // A challenge on /wp-json/ only, nothing under ?rest_route=: still a refusal.
+    delete routes["/"];
+    expect((await importCatalog(deps, s.id)).error).toBe("blocked (HTTP 200)");
+  });
+
+  it("goes on to ?rest_route= when /wp-json/ answers the home page (plain permalinks behind nginx)", async () => {
+    servePages([[{ id: 1, name: "Robe" }]], { plain: true });
+    routes[pagePath(1)] = { headers: { "content-type": "text/html" }, body: "<html>Accueil de la boutique</html>" };
+    const s = await newShop();
+    expect(await importCatalog(deps, s.id)).toMatchObject({ created: 1, error: null });
+    expect((await shopRow(s.id))?.importHints).toEqual({ wooRoute: "plain" });
+
+    // The home page at both addresses (no Store API, no challenge): no Store API.
+    const other = await newShop({ slug: `woo-home-${++counter}` });
+    delete routes[plainPagePath(1)];
+    routes["/"] = { headers: { "content-type": "text/html" }, body: "<html>Accueil de la boutique</html>" };
+    expect((await importCatalog(deps, other.id)).error).toBe("woocommerce_api_unavailable");
+  });
+
+  it("takes an HTML page on a later page of the listing for a refusal", async () => {
+    servePages(twoPages());
+    routes[pagePath(2)] = { headers: { "content-type": "text/html" }, body: "<html>Un instant…</html>" };
+    const s = await newShop();
+    expect((await importCatalog(deps, s.id)).error).toBe("blocked (HTTP 200)");
+  });
+
+  it("applies robots.txt's query rules for /wp-json/ to ?rest_route= as well", async () => {
+    servePages([[{ id: 1, name: "Robe" }]], { plain: true });
+    routes["/robots.txt"] = {
+      headers: { "content-type": "text/plain" },
+      body: "User-agent: *\nDisallow: /wp-json/wc/store/v1/products?per_page=\n",
+    };
+    const s = await newShop({ importHints: { wooRoute: "plain" } });
+    expect((await importCatalog(deps, s.id)).error).toBe("robots_disallowed");
+    expect(shop.hits.filter((h) => h !== "/robots.txt")).toEqual([]);
+  });
+
+  it("takes a 400 or 404 past the first page of the variations listing for its end", async () => {
+    const sizes = Array.from({ length: 100 }, (_, i) => `T${i}`);
+    for (const status of [400, 404]) {
+      later(0);
+      // Its own product each time (another shop already has the first one's address).
+      servePages([[{ id: status, name: "Robe", sizes }]]);
+      bulkPastEnd = status;
+      const s = await newShop();
+      expect((await importCatalog(deps, s.id)).error).toBeNull();
+      expect(bulkHits()).toHaveLength(2);
+      const robe = await byExternalId(s.id, String(status));
+      expect(robe).toMatchObject({ variantsCheckedAt: clock, variantsTriedAt: null });
+      expect((await sizesOf(robe.id)).every((size) => !size.includes("épuisé"))).toBe(true);
+    }
+  });
+
+  it("refused part-way (400 after earlier batches): one by one for the rest, the requests made counted in", async () => {
+    const big = Array.from({ length: 100 }, (_, i) => `T${i}`);
+    const twenty = Array.from({ length: 20 }, (_, i) => `T${i}`);
+    servePages([
+      [
+        ...Array.from({ length: 25 }, (_, i) => ({ id: 100 + i, name: `Robe ${i}`, sizes: big })),
+        ...Array.from({ length: 15 }, (_, i) => ({ id: 200 + i, name: `Jupe ${i}`, sizes: twenty })),
+      ],
+    ]);
+    // 25 listing requests for the first batch, then the listing is refused.
+    bulkRefusedFrom = 26;
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const s = await newShop();
+      await importCatalog(deps, s.id);
+      expect(bulkHits()).toHaveLength(26);
+      // 300 in all: 26 listing requests, then 13 skirts of 20 variations (14 left: not enough for one more).
+      expect(oneByOneHits()).toHaveLength(260);
+      expect(variationRequests().length).toBeLessThanOrEqual(300);
+      expect((await shopRow(s.id))?.importHints).toMatchObject({ wooSingleSince: clock.toISOString() });
+    } finally {
+      log.mockRestore();
+    }
+  }, 60_000);
+
+  it("reads a big product one by one over several imports, from where it stopped", async () => {
+    const sizes = Array.from({ length: 350 }, (_, i) => `T${i}`);
+    servePages([[{ id: 1, name: "Robe", sizes }]]);
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const s = await newShop({ importHints: { wooSingleSince: clock.toISOString() } });
+      await importCatalog(deps, s.id);
+      expect(oneByOneHits()).toHaveLength(300);
+      expect(await byExternalId(s.id, "1")).toMatchObject({ variantsCheckedAt: null, variantsCursor: 300 });
+
+      later(HOUR);
+      await importCatalog(deps, s.id);
+      expect(oneByOneHits()).toEqual(sizes.slice(300).map((_, i) => `${API}/${variationId(1, 300 + i)}`));
+      expect(await byExternalId(s.id, "1")).toMatchObject({ variantsCheckedAt: clock, variantsCursor: 0 });
+    } finally {
+      log.mockRestore();
+    }
+  }, 60_000);
+
+  it("gives a big product waiting for a day the import's budget first", async () => {
+    const huge = Array.from({ length: (WOO_VARIATION_REQUESTS + 5) * 100 }, (_, i) => `T${i}`);
+    servePages([
+      [
+        { id: 1, name: "Robe aux mille tailles", sizes: huge },
+        { id: 2, name: "Jupe", sizes: ["S"] },
+      ],
+    ]);
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const s = await newShop();
+      await importCatalog(deps, s.id);
+      expect(bulkParents()).toEqual([2]);
+      // A day later the skirt is due again, and the robe has waited a day: it goes first, with the whole budget.
+      await handle.db
+        .update(schema.products)
+        .set({ createdAt: new Date(clock.getTime() - 2 * 24 * HOUR) })
+        .where(eq(schema.products.shopId, s.id));
+      later(25 * HOUR);
+      await importCatalog(deps, s.id);
+      expect(new Set(bulkParents())).toEqual(new Set([1]));
+      expect(bulkHits()).toHaveLength(WOO_VARIATION_REQUESTS);
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("product 1 (3500 variations) read first"));
+    } finally {
+      log.mockRestore();
+    }
+  }, 60_000);
+
+  it("keeps the last known stock of a variation listed in a shape it cannot read (never sold out)", async () => {
+    servePages([[{ id: 1, name: "Robe", sizes: ["S", "M"] }]]);
+    const s = await newShop();
+    await importCatalog(deps, s.id);
+    const robe = await byExternalId(s.id, "1");
+    expect(await sizesOf(robe.id)).toEqual(["S", "M"]);
+
+    servePages([[{ id: 1, name: "Robe", sizes: ["S", "M"], price: "3990" }]], { outOfStock: [variationId(1, 0)] });
+    broken.add(variationId(1, 1));
+    later(HOUR);
+    await importCatalog(deps, s.id);
+    expect(await sizesOf(robe.id)).toEqual(["S (épuisé)", "M"]);
+  });
+
+  it("stops reading variations at the first failure of the import, those products waiting 24 h", async () => {
+    servePages([Array.from({ length: 60 }, (_, i) => ({ id: 100 + i, name: `Robe ${i}`, sizes: ["S", "M"] }))]);
+    bulkStatus = 500;
+    const s = await newShop();
+    expect((await importCatalog(deps, s.id)).error).toBeNull();
+    expect(bulkHits()).toHaveLength(1);
+    const rows = await productsOf(s.id);
+    expect(rows.filter((p) => p.variantsTriedAt !== null)).toHaveLength(25);
+    expect(rows.filter((p) => p.variantsTriedAt === null && p.variantsCheckedAt === null)).toHaveLength(35);
   });
 
   it("counts and logs the listed products it could not read", async () => {

@@ -205,6 +205,11 @@ export const products = pgTable(
     variantsCheckedAt: timestamp("variants_checked_at", { withTimezone: true }),
     /** WooCommerce: the last read of its per-size stock that failed (5xx, unreadable); not tried again for 24 h. */
     variantsTriedAt: timestamp("variants_tried_at", { withTimezone: true }),
+    /**
+     * WooCommerce, a product with more variations than one import may read: how many of them the current pass has
+     * read (it goes on from there at the next import); 0 when no pass is under way.
+     */
+    variantsCursor: integer("variants_cursor").notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

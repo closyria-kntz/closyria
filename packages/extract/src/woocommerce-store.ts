@@ -222,15 +222,23 @@ const listedVariationSchema = variationSchema.extend({ parent: z.number().int().
 /**
  * A page of the Store API's variations (`…/products?type=variation&parent[]=…`), a JSON array of variation products:
  * each one with its product, and how many entries the page had (a short page is the last one). An entry that is no
- * variation of a product is skipped; null when the body is no listing.
+ * variation of a product is skipped, its id (when it has one) in `rejected`: listed, so still on sale, its stock
+ * unknown. Null when the body is no listing.
  */
-export function extractWooVariations(json: string): { count: number; variations: WooListedVariation[] } | null {
+export function extractWooVariations(
+  json: string,
+): { count: number; variations: WooListedVariation[]; rejected: string[] } | null {
   const raw = parseJson(json);
   if (!Array.isArray(raw)) return null;
   const out: WooListedVariation[] = [];
+  const rejected: string[] = [];
   for (const item of raw) {
     const parsed = listedVariationSchema.safeParse(item);
-    if (!parsed.success) continue;
+    if (!parsed.success) {
+      const id = listedIdSchema.safeParse(item);
+      if (id.success) rejected.push(String(id.data.id));
+      continue;
+    }
     const v = parsed.data;
     out.push({
       id: String(v.id),
@@ -239,7 +247,7 @@ export function extractWooVariations(json: string): { count: number; variations:
       ...(v.prices ? { priceCents: centsOf(v.prices).priceCents } : {}),
     });
   }
-  return { count: raw.length, variations: out };
+  return { count: raw.length, variations: out, rejected };
 }
 
 /**
