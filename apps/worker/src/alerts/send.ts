@@ -1,5 +1,5 @@
 import { and, type Database, eq, inArray, isNull, lte, schema, sql } from "@closyria/db";
-import { ALERT_TIME_ZONE, DEFAULT_ALERT_SETTINGS, nextSendAt, parisDay } from "@closyria/shared";
+import { ALERT_TIME_ZONE, DEFAULT_ALERT_SETTINGS, IMMEDIATE_ALERT_KINDS, nextSendAt, parisDay } from "@closyria/shared";
 import { z } from "zod";
 import { followedItem } from "./detect";
 import { deliver, type PushMessage, PushRetryError, type PushSender } from "./push";
@@ -22,7 +22,7 @@ const SWEEP_BUDGET = 500;
 /** An item's or shop's name longer than this is cut in a notification. */
 const MAX_NAME = 80;
 
-export const IMMEDIATE_KINDS = ["size_back", "target_price"] as const;
+export const IMMEDIATE_KINDS = IMMEDIATE_ALERT_KINDS;
 
 export type SendDeps = { db: Database; push: PushSender | null };
 export type Attempt = { lastAttempt: boolean };
@@ -32,12 +32,10 @@ export type AlertQueue = {
 
 const cut = (text: string) => (text.length > MAX_NAME ? `${text.slice(0, MAX_NAME - 1).trimEnd()}…` : text);
 
-/** « La robe Iris » (the shop's « Robe Iris »), or « Ton article » without a name. */
-function subject(name: string | null): string {
+/** The item's name exactly as stored (cut when very long), or « Ton article » without one. */
+function itemName(name: string | null): string {
   const trimmed = name?.trim();
-  if (!trimmed) return "Ton article";
-  const lowered = /^\p{Lu}\p{Ll}/u.test(trimmed) ? trimmed.charAt(0).toLowerCase() + trimmed.slice(1) : trimmed;
-  return `La ${cut(lowered)}`;
+  return trimmed ? cut(trimmed) : "Ton article";
 }
 
 /** « 59 € », « 59,90 € » (fr-FR, cents only when there are some). */
@@ -51,15 +49,18 @@ export function formatAlertPrice(cents: number, currency: string | null): string
   }).format(cents / 100);
 }
 
-/** « La {article} est de retour en {taille} chez {boutique} ». */
+/**
+ * « {Nom} : de retour en {taille} chez {boutique} », « {Nom} : de retour en {taille} » without a shop, « {Nom} : de
+ * retour en stock chez {boutique} » without a size (« any »).
+ */
 export function sizeBackSentence(name: string | null, size: string | null, shop: string | null): string {
   const where = shop ? ` chez ${cut(shop)}` : "";
-  return size ? `${subject(name)} est de retour en ${size}${where}` : `${subject(name)} est de retour${where}`;
+  return `${itemName(name)} : de retour en ${size ?? "stock"}${where}`;
 }
 
-/** « La {article} est à {prix} (tu visais {seuil}) ». */
+/** « {Nom} : {prix} (tu visais {seuil}) ». */
 export function targetPriceSentence(name: string | null, cents: number, target: number, currency: string | null) {
-  return `${subject(name)} est à ${formatAlertPrice(cents, currency)} (tu visais ${formatAlertPrice(target, currency)})`;
+  return `${itemName(name)} : ${formatAlertPrice(cents, currency)} (tu visais ${formatAlertPrice(target, currency)})`;
 }
 
 /** The item's sheet, in the item's profile. */
@@ -67,7 +68,7 @@ export const itemUrl = (productId: string, profileId: string) => `/produits/${pr
 
 /**
  * The minute sweep: queues every immediate alert still `pending` whose `send_after` (8:00 Paris for one born at night)
- * has come. An event already queued, waiting for a retry or running is not queued twice (`exclusive` + its id as
+ * has come (`alert_events_pending_send_idx`). An event already queued, waiting for a retry or running is not queued twice (`exclusive` + its id as
  * key). Returns how many jobs were asked for.
  */
 export async function planAlertSends(db: Database, queue: AlertQueue, now: Date): Promise<number> {
@@ -78,7 +79,7 @@ export async function planAlertSends(db: Database, queue: AlertQueue, now: Date)
       and(
         eq(schema.alertEvents.status, "pending"),
         inArray(schema.alertEvents.kind, IMMEDIATE_KINDS),
-        isNull(schema.alertEvents.sentAt),
+        // A claimed one (`sent_at` set, still pending: its job died) comes back too, to be closed as sent.
         lte(schema.alertEvents.sendAfter, now),
       ),
     )
@@ -126,6 +127,11 @@ async function sentToday(db: Database, userId: string, day: string): Promise<num
  * - `sent` when a device accepted it. A busy push service (429/5xx) throws `PushRetryError` for pg-boss to try again,
  *   until the last attempt (then `skipped`).
  * `none` when the event is not a pending immediate alert (already handled, or gone).
+ *
+ * At most once: the event is claimed (`sent_at`) before the push and marked `sent` after it. A job that dies in
+ * between leaves it claimed; the next job closes it as `sent` without pushing again (a lost notification rather than
+ * a duplicate). A retry releases the claim. The push `topic` (the event id) also makes the push service replace,
+ * not repeat, a message it already holds.
  */
 export async function sendAlert(
   deps: SendDeps,
@@ -139,11 +145,13 @@ export async function sendAlert(
       id: schema.alertEvents.id,
       userId: schema.alertEvents.userId,
       kind: schema.alertEvents.kind,
-      profileId: schema.alertEvents.profileId,
+      // The item's profile now (it may have moved since the event): the link opens it there.
+      profileId: schema.items.profileId,
       productId: schema.alertEvents.productId,
       sizeLabel: schema.alertEvents.sizeLabel,
       priceCents: schema.alertEvents.priceCents,
       sendAfter: schema.alertEvents.sendAfter,
+      sentAt: schema.alertEvents.sentAt,
       followed: sql<boolean>`coalesce((${followedItem}), false)`,
       name: sql<string | null>`coalesce(${schema.items.nameOverride}, ${schema.products.name})`,
       currency: schema.products.currency,
@@ -167,6 +175,11 @@ export async function sendAlert(
       ),
     );
   if (!event) return "none";
+  if (event.sentAt) {
+    // Claimed by a job that died after the claim: it may have gone out, never push it twice.
+    await setStatus(db, event.id, { status: "sent" });
+    return "sent";
+  }
 
   const allowed = nextSendAt(now);
   if (allowed.getTime() > now.getTime() || (event.sendAfter && event.sendAfter.getTime() > now.getTime())) {
@@ -217,13 +230,30 @@ export async function sendAlert(
     return "digest";
   }
 
-  const result = await deliver(db, push, event.userId, message, now);
+  const [claimed] = await db
+    .update(schema.alertEvents)
+    .set({ sentAt: now })
+    .where(
+      and(
+        eq(schema.alertEvents.id, event.id),
+        eq(schema.alertEvents.status, "pending"),
+        isNull(schema.alertEvents.sentAt),
+      ),
+    )
+    .returning({ id: schema.alertEvents.id });
+  if (!claimed) return "none";
+
+  const result = await deliver(db, push, event.userId, message, { topic: event.id.replaceAll("-", "") }, now);
   if (result.delivered > 0) {
-    await setStatus(db, event.id, { status: "sent", sentAt: now });
+    await setStatus(db, event.id, { status: "sent" });
     return "sent";
   }
-  if (result.retry && !attempt.lastAttempt) throw new PushRetryError();
-  return skip();
+  if (result.retry && !attempt.lastAttempt) {
+    await setStatus(db, event.id, { sentAt: null });
+    throw new PushRetryError();
+  }
+  await setStatus(db, event.id, { status: "skipped", sentAt: null });
+  return "skipped";
 }
 
 const sendJobSchema = z.object({ eventId: z.uuid() });

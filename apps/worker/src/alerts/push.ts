@@ -11,8 +11,13 @@ export type PushMessage = { title: string; body: string; url: string };
  * busy or unreachable (429, 5xx, network: pg-boss tries again); `failed` refused for good (other 4xx).
  */
 export type PushOutcome = "ok" | "gone" | "retry" | "failed";
+/**
+ * `topic`: the push service keeps only the latest message with the same topic for an offline device, so a send repeated
+ * after a crash replaces the first one instead of showing twice.
+ */
+export type PushOptions = { topic: string };
 /** Sends one notification; injected, so tests never reach the network. */
-export type PushSender = (target: PushTarget, message: PushMessage) => Promise<PushOutcome>;
+export type PushSender = (target: PushTarget, message: PushMessage, options: PushOptions) => Promise<PushOutcome>;
 
 /** Thrown to have pg-boss try the job again (its retry limit decides when to stop). */
 export class PushRetryError extends Error {
@@ -24,6 +29,8 @@ export class PushRetryError extends Error {
 
 /** A notification older than this is dropped by the push service (a phone off for the night still gets it). */
 const PUSH_TTL_SECONDS = 12 * 60 * 60;
+/** A push service that does not answer within this is « busy » (a socket timeout has no status: `retry`). */
+export const PUSH_TIMEOUT_MS = 10_000;
 
 export function outcomeOfStatus(status: number | undefined): PushOutcome {
   if (status === undefined) return "retry";
@@ -33,12 +40,29 @@ export function outcomeOfStatus(status: number | undefined): PushOutcome {
   return "failed";
 }
 
+/** `web-push`'s `sendNotification`, injectable for the tests. */
+export type SendNotification = (
+  target: PushTarget,
+  payload: string,
+  options: {
+    vapidDetails: { subject: string; publicKey: string; privateKey: string };
+    TTL: number;
+    timeout: number;
+    topic: string;
+  },
+) => Promise<{ statusCode: number }>;
+
 /** The real sender (`web-push`, VAPID). Logs the error message only: never an endpoint or a key. */
-export function webPushSender(vapid: VapidConfig): PushSender {
+export function webPushSender(vapid: VapidConfig, send: SendNotification = sendNotification): PushSender {
   const vapidDetails = { subject: vapid.subject, publicKey: vapid.publicKey, privateKey: vapid.privateKey };
-  return async (target, message) => {
+  return async (target, message, { topic }) => {
     try {
-      const result = await sendNotification(target, JSON.stringify(message), { vapidDetails, TTL: PUSH_TTL_SECONDS });
+      const result = await send(target, JSON.stringify(message), {
+        vapidDetails,
+        TTL: PUSH_TTL_SECONDS,
+        timeout: PUSH_TIMEOUT_MS,
+        topic,
+      });
       return outcomeOfStatus(result.statusCode);
     } catch (error) {
       const status =
@@ -64,6 +88,7 @@ export async function deliver(
   push: PushSender,
   userId: string,
   message: PushMessage,
+  options: PushOptions,
   at: Date,
 ): Promise<{ delivered: number; retry: boolean; devices: number }> {
   const subscriptions = await db
@@ -79,7 +104,11 @@ export async function deliver(
   let delivered = 0;
   let retry = false;
   for (const sub of subscriptions) {
-    const outcome = await push({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, message);
+    const outcome = await push(
+      { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+      message,
+      options,
+    );
     await db.insert(schema.alertSends).values({ userId, sentAt: at, ok: outcome === "ok" });
     if (outcome === "ok") {
       delivered += 1;

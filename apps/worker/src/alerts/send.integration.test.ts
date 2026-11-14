@@ -2,9 +2,16 @@ import { and, createDb, eq, schema } from "@closyria/db";
 import { createTestDatabase } from "@closyria/testing/vitest";
 import { PgBoss } from "pg-boss";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { planDigests, sendDigest } from "./digest";
+import { digestTopic, planDigests, sendDigest } from "./digest";
 import { type PushMessage, type PushOutcome, PushRetryError, type PushSender, type PushTarget } from "./push";
-import { ALERT_SEND_QUEUE, ALERT_SEND_QUEUE_OPTIONS, alertSendHandler, planAlertSends, sendAlert } from "./send";
+import {
+  ALERT_SEND_QUEUE,
+  ALERT_SEND_QUEUE_OPTIONS,
+  alertSendHandler,
+  planAlertSends,
+  sendAlert,
+  sizeBackSentence,
+} from "./send";
 
 let database: Awaited<ReturnType<typeof createTestDatabase>>;
 let handle: ReturnType<typeof createDb>;
@@ -28,9 +35,9 @@ const afternoon = paris(D, "14:00");
 
 /** A fake push service: records what it was asked and answers `outcome(endpoint)`. */
 function fakePush(outcome: (endpoint: string) => PushOutcome = () => "ok") {
-  const calls: { target: PushTarget; message: PushMessage }[] = [];
-  const push: PushSender = async (target, message) => {
-    calls.push({ target, message });
+  const calls: { target: PushTarget; message: PushMessage; topic: string }[] = [];
+  const push: PushSender = async (target, message, { topic }) => {
+    calls.push({ target, message, topic });
     return outcome(target.endpoint);
   };
   return { push, calls };
@@ -156,12 +163,14 @@ describe("sendAlert", () => {
     expect(calls).toHaveLength(2);
     expect(calls[0]?.message).toEqual({
       title: "Ta taille est revenue",
-      body: "La robe Iris est de retour en M chez Atelier Margaux",
+      body: "Robe Iris : de retour en M chez Atelier Margaux",
       url: `/produits/${item.productId}?profil=${her.profileId}`,
     });
     const row = await eventRow(id);
     expect(row.status).toBe("sent");
     expect(row.sentAt?.toISOString()).toBe(afternoon.toISOString());
+    expect(calls.map((c) => c.topic)).toEqual([id.replaceAll("-", ""), id.replaceAll("-", "")]);
+    expect(calls[0]?.topic).toHaveLength(32);
     const logged = await sends(her.userId);
     expect(logged.map((s) => s.ok)).toEqual([true, true]);
     expect((await devices(her.userId)).every((d) => d.lastOkAt?.getTime() === afternoon.getTime())).toBe(true);
@@ -180,7 +189,7 @@ describe("sendAlert", () => {
 
     expect(await sendAlert({ db: handle.db, push }, id, afternoon, once)).toBe("sent");
     expect(calls[0]?.message.title).toBe("Prix visé");
-    expect(calls[0]?.message.body.replace(/\s/g, " ")).toBe("La robe Iris est à 59 € (tu visais 60 €)");
+    expect(calls[0]?.message.body.replace(/\s/g, " ")).toBe("Robe Iris : 59 € (tu visais 60 €)");
   });
 
   it("keeps cents when the price has some, and a neutral subject without a name", async () => {
@@ -195,7 +204,7 @@ describe("sendAlert", () => {
     const { push, calls } = fakePush();
 
     await sendAlert({ db: handle.db, push }, id, afternoon, once);
-    expect(calls[0]?.message.body.replace(/\s/g, " ")).toBe("Ton article est à 59,90 € (tu visais 60 €)");
+    expect(calls[0]?.message.body.replace(/\s/g, " ")).toBe("Ton article : 59,90 € (tu visais 60 €)");
   });
 
   it("an alert born at 23:30 waits for 8:00 and counts in the cap of the day it goes out (RF 3)", async () => {
@@ -325,11 +334,61 @@ describe("sendAlert", () => {
     const id = await sizeBack(her, await wish(her));
 
     await expect(sendAlert({ db: handle.db, push }, id, afternoon, once)).rejects.toBeInstanceOf(PushRetryError);
-    expect((await eventRow(id)).status).toBe("pending");
+    // The retry releases the claim: the next attempt sends again.
+    expect(await eventRow(id)).toMatchObject({ status: "pending", sentAt: null });
     expect(await devices(her.userId)).toHaveLength(1);
 
     expect(await sendAlert({ db: handle.db, push }, id, afternoon, { lastAttempt: true })).toBe("skipped");
     expect((await sends(her.userId)).map((s) => s.ok)).toEqual([false, false]);
+  });
+
+  it("a job that dies between the claim and the status is not sent again", async () => {
+    const her = await person();
+    const id = await sizeBack(her, await wish(her));
+    let pushes = 0;
+    const crashing: PushSender = async () => {
+      pushes += 1;
+      throw new Error("worker killed");
+    };
+    await expect(sendAlert({ db: handle.db, push: crashing }, id, afternoon, once)).rejects.toThrow("worker killed");
+    const claimed = await eventRow(id);
+    expect(claimed.status).toBe("pending");
+    expect(claimed.sentAt?.toISOString()).toBe(afternoon.toISOString());
+
+    // The sweep queues it again; its job closes it as sent without pushing.
+    const queued: string[] = [];
+    await planAlertSends(
+      handle.db,
+      { send: async (_q, data) => void queued.push((data as { eventId: string }).eventId) },
+      afternoon,
+    );
+    expect(queued).toContain(id);
+    const { push, calls } = fakePush();
+    expect(await sendAlert({ db: handle.db, push }, id, paris(D, "14:01"), once)).toBe("sent");
+    expect(calls).toHaveLength(0);
+    expect(pushes).toBe(1);
+    expect(await eventRow(id)).toMatchObject({ status: "sent" });
+  });
+
+  it("links to the item's profile now, not the one at the event", async () => {
+    const her = await person();
+    const item = await wish(her);
+    const id = await sizeBack(her, item);
+    const [other] = await handle.db
+      .insert(schema.profiles)
+      .values({ userId: her.userId, name: "Léa", audience: "women", color: "sage" })
+      .returning();
+    await handle.db.update(schema.items).set({ profileId: other?.id }).where(eq(schema.items.id, item.itemId));
+    const { push, calls } = fakePush();
+
+    await sendAlert({ db: handle.db, push }, id, afternoon, once);
+    expect(calls[0]?.message.url).toBe(`/produits/${item.productId}?profil=${other?.id}`);
+  });
+
+  it("words a size back without a shop or without a size", () => {
+    expect(sizeBackSentence("Robe Iris", "M", null)).toBe("Robe Iris : de retour en M");
+    expect(sizeBackSentence("Sac Lune", null, "Maison Iris")).toBe("Sac Lune : de retour en stock chez Maison Iris");
+    expect(sizeBackSentence(null, "M", "Maison Iris")).toBe("Ton article : de retour en M chez Maison Iris");
   });
 
   it("an event already handled is left alone", async () => {
@@ -462,7 +521,7 @@ describe("digest", () => {
     expect(await sendDigest({ db: handle.db, push }, her.userId, evening, once)).toBe("sent");
     expect(calls[0]?.message).toEqual({
       title: "2 baisses de prix dans tes envies",
-      body: "La jupe Lou est de retour en S chez Atelier Margaux",
+      body: "Jupe Lou : de retour en S chez Atelier Margaux",
       url: "/nouvelles",
     });
   });
@@ -507,13 +566,45 @@ describe("digest", () => {
     const { push } = fakePush(() => "retry");
 
     await expect(sendDigest({ db: handle.db, push }, her.userId, evening, once)).rejects.toBeInstanceOf(PushRetryError);
-    expect((await eventRow(id)).status).toBe("pending");
+    expect(await eventRow(id)).toMatchObject({ status: "pending", sentAt: null });
     expect(
       await handle.db
         .select()
         .from(schema.alertSends)
         .where(and(eq(schema.alertSends.userId, her.userId), eq(schema.alertSends.ok, false))),
     ).toHaveLength(1);
+  });
+
+  it("a digest job that dies between the claim and the status is not sent again", async () => {
+    const her = await person();
+    const id = await event(her, await wish(her), {
+      kind: "price_drop",
+      priceCents: 8000,
+      previousCents: 10000,
+      digestOn: D,
+    });
+    const crashing: PushSender = async () => {
+      throw new Error("worker killed");
+    };
+    await expect(sendDigest({ db: handle.db, push: crashing }, her.userId, evening, once)).rejects.toThrow(
+      "worker killed",
+    );
+    expect((await eventRow(id)).sentAt?.toISOString()).toBe(evening.toISOString());
+
+    const { push, calls } = fakePush();
+    expect(await sendDigest({ db: handle.db, push }, her.userId, paris(D, "18:01"), once)).toBe("sent");
+    expect(calls).toHaveLength(0);
+    expect((await eventRow(id)).status).toBe("sent");
+  });
+
+  it("one push topic per person and day", async () => {
+    const her = await person();
+    await event(her, await wish(her), { kind: "price_drop", priceCents: 8000, previousCents: 10000, digestOn: D });
+    const { push, calls } = fakePush();
+    await sendDigest({ db: handle.db, push }, her.userId, evening, once);
+    expect(calls[0]?.topic).toBe(digestTopic(her.userId, D));
+    expect(digestTopic(her.userId, D)).toMatch(/^[A-Za-z0-9_-]{32}$/);
+    expect(digestTopic(her.userId, NEXT)).not.toBe(digestTopic(her.userId, D));
   });
 
   it("without push (no VAPID keys) or without devices: skipped", async () => {

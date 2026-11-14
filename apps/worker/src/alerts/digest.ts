@@ -1,5 +1,13 @@
-import { and, type Database, eq, inArray, isNotNull, lte, schema, sql } from "@closyria/db";
-import { ALERT_TIME_ZONE, DEFAULT_ALERT_SETTINGS, nextSendAt, parisDay, parisHour } from "@closyria/shared";
+import { createHash } from "node:crypto";
+import { and, type Database, eq, inArray, isNotNull, isNull, lte, schema, sql } from "@closyria/db";
+import {
+  ALERT_TIME_ZONE,
+  DEFAULT_ALERT_SETTINGS,
+  DIGEST_WAITING_STATUSES,
+  nextSendAt,
+  parisDay,
+  parisHour,
+} from "@closyria/shared";
 import { z } from "zod";
 import { followedItem } from "./detect";
 import { deliver, type PushMessage, PushRetryError } from "./push";
@@ -21,8 +29,7 @@ const MAX_DIGEST_LINES = 5;
 /** People queued per planning pass. */
 const PLAN_BUDGET = 1000;
 
-/** Waiting for a digest: the digest kinds (`pending`) and the immediate ones the daily cap sent there (`digest`). */
-const WAITING = ["pending", "digest"] as const;
+const WAITING = DIGEST_WAITING_STATUSES;
 
 type DigestQueue = { send(name: string, data: object, options: { singletonKey: string }): Promise<unknown> };
 
@@ -63,6 +70,7 @@ export function digestMessage(facts: DigestFacts, today: string): PushMessage | 
     lines.push(`Les soldes commencent ${dayWord(startsOn, today)}`);
   }
   for (const shop of [...new Set(facts.promoShops)]) lines.push(`${shop} est en promo`);
+  // Lines past the 5th are not shown; their events are still marked sent with the digest, and stay in « Nouvelles ».
   const [title, ...body] = lines.slice(0, MAX_DIGEST_LINES);
   if (!title) return null;
   return { title, body: body.join("\n"), url: "/nouvelles" };
@@ -117,6 +125,16 @@ export async function sendDigest(
   if (nextSendAt(now).getTime() > now.getTime()) return "held";
   const today = parisDay(now);
   const e = schema.alertEvents;
+  const waiting = and(eq(e.userId, userId), isNotNull(e.digestOn), lte(e.digestOn, today), inArray(e.status, WAITING));
+
+  // Claimed by a digest job that died after the claim: they may have gone out, never push them twice.
+  const recovered = await db
+    .update(e)
+    .set({ status: "sent" })
+    .where(and(waiting, isNotNull(e.sentAt)))
+    .returning({ id: e.id });
+  if (recovered.length > 0) return "sent";
+
   const events = await db
     .select({
       id: e.id,
@@ -133,7 +151,7 @@ export async function sendDigest(
     .leftJoin(schema.items, eq(schema.items.id, e.itemId))
     .leftJoin(schema.products, eq(schema.products.id, e.productId))
     .leftJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
-    .where(and(eq(e.userId, userId), isNotNull(e.digestOn), lte(e.digestOn, today), inArray(e.status, WAITING)))
+    .where(waiting)
     .orderBy(e.createdAt);
   if (events.length === 0) return "none";
 
@@ -209,15 +227,33 @@ export async function sendDigest(
     return "skipped";
   }
 
-  const result = await deliver(db, push, userId, message, now);
+  // At most once, as for the immediate alerts: claim (`sent_at`), push, then mark sent; a retry releases the claim.
+  const claimed = (
+    await db
+      .update(e)
+      .set({ sentAt: now })
+      .where(and(inArray(e.id, used), inArray(e.status, WAITING), isNull(e.sentAt)))
+      .returning({ id: e.id })
+  ).map((row) => row.id);
+  if (claimed.length === 0) return "none";
+
+  const result = await deliver(db, push, userId, message, { topic: digestTopic(userId, today) }, now);
   if (result.delivered > 0) {
-    await mark(used, { status: "sent", sentAt: now });
+    await mark(claimed, { status: "sent" });
     await mark(unused, { status: "skipped" });
     return "sent";
   }
-  if (result.retry && !attempt.lastAttempt) throw new PushRetryError();
-  await mark(allIds, { status: "skipped" });
+  if (result.retry && !attempt.lastAttempt) {
+    await mark(claimed, { sentAt: null });
+    throw new PushRetryError();
+  }
+  await mark(allIds, { status: "skipped", sentAt: null });
   return "skipped";
+}
+
+/** One push topic per person and Paris day (32 base64url characters): a repeated digest replaces the first one. */
+export function digestTopic(userId: string, day: string): string {
+  return createHash("sha256").update(`digest:${userId}:${day}`).digest("base64url").slice(0, 32);
 }
 
 const digestJobSchema = z.object({ userId: z.string().min(1) });

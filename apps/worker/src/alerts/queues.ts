@@ -25,6 +25,9 @@ export async function registerAlertSendQueues(boss: PgBoss, deps: SendDeps): Pro
   await boss.createQueue(ALERT_DIGEST_QUEUE, { ...ALERT_DIGEST_QUEUE_OPTIONS });
   await boss.createQueue(ALERT_DIGEST_PLAN_QUEUE);
 
+  // The daily cap (5 immediate a day) counts the sent events before each send: it holds only because the sends run
+  // one at a time (`localConcurrency: 1`) in a single worker process. A second process or more concurrency would need
+  // a per-person lock.
   await boss.work(ALERT_SEND_QUEUE, { localConcurrency: 1, includeMetadata: true }, alertSendHandler(deps));
   await boss.work(ALERT_DIGEST_QUEUE, { localConcurrency: 1, includeMetadata: true }, digestHandler(deps));
   await boss.work(ALERT_SEND_PLAN_QUEUE, async () => {

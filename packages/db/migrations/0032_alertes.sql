@@ -79,4 +79,6 @@ CREATE INDEX "alert_events_digest_idx" ON "alert_events" USING btree ("user_id",
 CREATE INDEX "alert_sends_sent_at_idx" ON "alert_sends" USING btree ("sent_at");--> statement-breakpoint
 CREATE INDEX "alert_sends_user_sent_idx" ON "alert_sends" USING btree ("user_id","sent_at");--> statement-breakpoint
 CREATE INDEX "push_subscriptions_user_id_idx" ON "push_subscriptions" USING btree ("user_id");--> statement-breakpoint
-ALTER TABLE "items" ADD CONSTRAINT "items_target_price_check" CHECK ("items"."target_price_cents" IS NULL OR "items"."target_price_cents" >= 1);
+ALTER TABLE "items" ADD CONSTRAINT "items_target_price_check" CHECK ("items"."target_price_cents" IS NULL OR "items"."target_price_cents" >= 1);--> statement-breakpoint
+CREATE INDEX "alert_events_pending_send_idx" ON "alert_events" USING btree ("send_after") WHERE "alert_events"."status" = 'pending' AND "alert_events"."kind" IN ('size_back', 'target_price');--> statement-breakpoint
+CREATE INDEX "alert_events_digest_waiting_idx" ON "alert_events" USING btree ("digest_on") WHERE "alert_events"."status" IN ('pending', 'digest');

@@ -4,6 +4,8 @@ import {
   DEFAULT_DIGEST_HOUR,
   DIGEST_HOUR_MAX,
   DIGEST_HOUR_MIN,
+  DIGEST_WAITING_STATUSES,
+  IMMEDIATE_ALERT_KINDS,
   ITEM_ALERT_KINDS,
   MAX_SALE_PERIOD_NAME,
 } from "@closyria/shared";
@@ -113,6 +115,11 @@ export const alertEvents = pgTable(
     index("alert_events_shop_id_idx").on(t.shopId),
     index("alert_events_sale_period_id_idx").on(t.salePeriodId),
     index("alert_events_digest_idx").on(t.userId, t.digestOn).where(sql`${t.digestOn} IS NOT NULL`),
+    // The minute sweep of the immediate alerts due, and the digest planner (Task 4).
+    index("alert_events_pending_send_idx")
+      .on(t.sendAfter)
+      .where(sql`${t.status} = 'pending' AND ${oneOf(t.kind, IMMEDIATE_ALERT_KINDS)}`),
+    index("alert_events_digest_waiting_idx").on(t.digestOn).where(oneOf(t.status, DIGEST_WAITING_STATUSES)),
     check("alert_events_kind_check", oneOf(t.kind, alertKindSchema.options)),
     check("alert_events_status_check", oneOf(t.status, alertStatusSchema.options)),
     check(

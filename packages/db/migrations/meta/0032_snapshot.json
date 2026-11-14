@@ -229,6 +229,38 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "alert_events_pending_send_idx": {
+          "name": "alert_events_pending_send_idx",
+          "columns": [
+            {
+              "expression": "send_after",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"alert_events\".\"status\" = 'pending' AND \"alert_events\".\"kind\" IN ('size_back', 'target_price')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "alert_events_digest_waiting_idx": {
+          "name": "alert_events_digest_waiting_idx",
+          "columns": [
+            {
+              "expression": "digest_on",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"alert_events\".\"status\" IN ('pending', 'digest')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
