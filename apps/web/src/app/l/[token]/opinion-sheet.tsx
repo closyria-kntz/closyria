@@ -17,8 +17,6 @@ import type { FriendDevice } from "@/lib/friend-device";
 import { deleteOpinion, type OpinionError, putOpinion } from "@/lib/shared-list";
 import { cleanName, clip, FriendNameStep, NameTakenQuestion, nameFits } from "./friend-name";
 
-/** A multi-line field: the input's look with softer corners (a pill does not suit several lines). */
-
 /** The note's counter shows from this many characters (spec §3.2). */
 export const NOTE_COUNTER_FROM = 150;
 

@@ -4,7 +4,11 @@
 # The release artifact must exist in /home/mystery/closyria-artifacts/<release-id>.tar.gz (deploy/build.sh).
 set -euo pipefail
 
+[ "$EUID" -eq 0 ] || { echo "run as root: sudo bash $0 <release-id>" >&2; exit 1; }
+
 ID="${1:?release id}"
+# A release id from deploy/build.sh: no slash, no space, nothing that would leave the artifacts directory.
+[[ "$ID" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "invalid release id: $ID" >&2; exit 1; }
 ART="/home/mystery/closyria-artifacts/$ID.tar.gz"
 COPY=closyria_dryrun
 SOCK="host=/var/run/postgresql"
@@ -17,7 +21,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-tar -xzf "$ART" -C "$TMP"
+tar -xzf "$ART" -C "$TMP" --no-same-owner --no-same-permissions
 chmod -R a+rX "$TMP"
 
 echo "== Prod ownership (CREATE FUNCTION in public needs the closyria role to own the schema or have CREATE on it)"
@@ -31,6 +35,8 @@ sudo -u postgres dropdb --if-exists "$COPY"
 sudo -u postgres createdb -O closyria "$COPY"
 install -d -o closyria -g closyria -m 700 "$TMP/dump"
 sudo -u closyria pg_dump -Fc -d "postgresql:///closyria?$SOCK" -f "$TMP/dump/prod.dump"
+# Keep up with the schema: the extension filter below and the tables counted in count() must follow the migrations
+# (a new extension a migration needs, a renamed or dropped table).
 # Extensions (pg_stat_statements…) need a superuser and play no part in the migrations: leave them out of the copy.
 pg_restore -l "$TMP/dump/prod.dump" | grep -v -E " EXTENSION | COMMENT - EXTENSION " >"$TMP/restore.list"
 chmod a+r "$TMP/restore.list"
