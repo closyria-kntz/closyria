@@ -32,6 +32,10 @@ describe("isActive", () => {
     expect(entry("reports")?.href).toBe("/admin/catalogue/signalements");
   });
 
+  it("lists « Soldes » of the alerts", () => {
+    expect(entry("sales")?.href).toBe("/admin/soldes");
+  });
+
   it("keeps the shops entry active on a shop page", () => {
     const shops = entry("shops");
     expect(shops && isActive(shops, "/admin/boutiques/abc")).toBe(true);

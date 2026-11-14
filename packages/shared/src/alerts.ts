@@ -246,6 +246,10 @@ export const salePeriodSchema = salePeriodFields
   .refine(endsAfterStart, { error: "endsOn before startsOn", path: ["endsOn"] });
 export type SalePeriod = z.infer<typeof salePeriodSchema>;
 
+/** `GET /api/admin/sale-periods`: every period, the latest start first. */
+export const salePeriodListSchema = z.object({ periods: z.array(salePeriodSchema) });
+export type SalePeriodList = z.infer<typeof salePeriodListSchema>;
+
 /** Where an alert about an item leads: the item's sheet, in the item's profile (its current one). */
 export const alertItemHref = (productId: string, profileId: string) => `/produits/${productId}?profil=${profileId}`;
 

@@ -75,6 +75,7 @@ fixés par les unités systemd : ne pas les mettre dans ces fichiers.
 | `S3_SECRET_ACCESS_KEY` | Secret de cet utilisateur S3. | (secret) | (secret) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Facultatif : connexion avec Google. Les deux ensemble, ou aucune. | (Google Cloud) | (Google Cloud) |
 | `APPLE_CLIENT_ID`, `APPLE_CLIENT_SECRET` | Facultatif : connexion avec Apple. Les deux ensemble, ou aucune. | (Apple Developer) | (Apple Developer) |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Facultatif : notifications des alertes (Web Push). Les trois ensemble, ou aucune (sans elles, pas de notification). Voir « Clés des notifications (VAPID) ». | (clés prod), `https://closyria.com` | (clés dev, une autre paire), `https://closyria.com` |
 
 Exemple de `/etc/closyria/prod.env` (systemd ne comprend pas les commentaires en fin de ligne : un `# …` après une
 valeur ferait partie de la valeur ; `BETTER_AUTH_SECRET` se génère avec `openssl rand -base64 48`) :
@@ -117,6 +118,53 @@ connexion avec Apple cesse de marcher du jour au lendemain.
 
 Fuseau horaire : l'application ouvre toutes ses connexions à la base en UTC, quel que soit le réglage du serveur
 PostgreSQL ; rien à configurer.
+
+## Clés des notifications (VAPID)
+
+Les notifications des alertes (taille revenue, prix visé, résumé du soir) passent par Web Push, signé avec une paire de
+clés VAPID **propre à chaque environnement**. Trois variables, dans `/etc/closyria/<env>.env` :
+
+| Variable | Valeur |
+|---|---|
+| `VAPID_PUBLIC_KEY` | Clé publique (base64url, 87 caractères, commence par `B`). Le site la lit par `GET /api/push/key`. |
+| `VAPID_PRIVATE_KEY` | Clé privée (base64url, 43 caractères). **Secret** : jamais dans le dépôt, jamais affichée. |
+| `VAPID_SUBJECT` | `https://closyria.com` (même valeur en dev : c'est le contact donné aux services de push). |
+
+- **Tout ou rien** : les trois ensemble, ou aucune. S'il en manque une ou deux, l'API et le worker refusent de démarrer
+  et le journal dit laquelle manque. Une valeur mal formée est refusée de la même façon.
+- **Sans clés, les notifications sont simplement coupées** : le site ne propose pas « Activer les notifications », le
+  worker n'envoie rien (les alertes restent visibles dans « Nouvelles » et en « une »). Rien d'autre ne change.
+- **Ne jamais changer une paire en service** : les appareils déjà abonnés le sont avec l'ancienne clé publique et ne
+  recevraient plus rien (il faudrait que chacune réactive ses notifications).
+- **Redémarrer l'API et le worker** après l'ajout : ils ne lisent le fichier qu'au démarrage.
+
+Les clés se génèrent avec `npx web-push generate-vapid-keys` (outil de la bibliothèque `web-push`, déjà utilisée par
+le worker). Pour qu'elles ne s'affichent jamais à l'écran, on les génère et on les ajoute au fichier d'un seul geste :
+**une seule commande par environnement**, à lancer une fois depuis le compte avec sudo. Elle s'arrête sans rien écrire
+si le fichier contient déjà des clés VAPID, ajoute les trois lignes, puis redémarre l'API et le worker.
+
+**Toute commande à lancer une seule fois se donne dans UN SEUL message** : la commande entière, d'un bloc, prête à
+copier ; jamais en morceaux répartis sur plusieurs messages (une moitié collée sans l'autre laisserait un fichier à
+moitié rempli, que l'API refuserait au démarrage).
+
+Dev :
+
+```bash
+sudo grep -q '^VAPID_' /etc/closyria/dev.env && echo "Clés VAPID déjà présentes : rien n'est changé." || { npx --yes web-push@4.0.0 generate-vapid-keys --json | node -e 'const k=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write(`VAPID_PUBLIC_KEY=${k.publicKey}\nVAPID_PRIVATE_KEY=${k.privateKey}\nVAPID_SUBJECT=https://closyria.com\n`)' | sudo tee -a /etc/closyria/dev.env >/dev/null && sudo systemctl restart closyria-dev-api closyria-dev-worker && echo "Clés VAPID ajoutées, API et worker redémarrés."; }
+```
+
+Prod (même commande, avec `prod`) :
+
+```bash
+sudo grep -q '^VAPID_' /etc/closyria/prod.env && echo "Clés VAPID déjà présentes : rien n'est changé." || { npx --yes web-push@4.0.0 generate-vapid-keys --json | node -e 'const k=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write(`VAPID_PUBLIC_KEY=${k.publicKey}\nVAPID_PRIVATE_KEY=${k.privateKey}\nVAPID_SUBJECT=https://closyria.com\n`)' | sudo tee -a /etc/closyria/prod.env >/dev/null && sudo systemctl restart closyria-prod-api closyria-prod-worker && echo "Clés VAPID ajoutées, API et worker redémarrés."; }
+```
+
+Vérifier ensuite (la clé publique seule, jamais la privée) :
+
+```bash
+curl -s https://dev.closyria.com/api/push/key        # (dev : derrière le mot de passe du site)
+sudo journalctl -u closyria-dev-worker -n 50 --no-pager | grep -i vapid
+```
 
 ## Premières migrations : droits sur la base
 

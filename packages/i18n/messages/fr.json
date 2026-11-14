@@ -395,7 +395,8 @@
       "products": "Fiches",
       "reference": "Listes de référence",
       "unclassified": "À classer",
-      "reports": "Signalements"
+      "reports": "Signalements",
+      "sales": "Soldes"
     },
     "palette": {
       "open": "Commandes",
@@ -432,7 +433,8 @@
         "opengraph": "Open Graph",
         "woocommerce": "WooCommerce"
       },
-      "rereadLate": "Relecture en retard : {count, plural, one {# boutique attend} other {# boutiques attendent}} depuis plus de deux fois leur intervalle."
+      "rereadLate": "Relecture en retard : {count, plural, one {# boutique attend} other {# boutiques attendent}} depuis plus de deux fois leur intervalle.",
+      "notifications": "Notifications : {sent, plural, one {# envoyée} other {# envoyées}}, {failed, plural, one {# en échec} other {# en échec}} (7 j) · {devices, plural, one {# appareil} other {# appareils}}"
     },
     "audit": {
       "title": "Journal d’audit",
@@ -958,6 +960,37 @@
       "noPhoto": "Pas de photo",
       "showHidden": "Voir les articles masqués",
       "openSheet": "Voir la fiche"
+    },
+    "sales": {
+      "title": "Soldes",
+      "intro": "Les périodes de soldes, premier et dernier jour compris (heure de Paris). Chaque personne qui suit une envie reçoit « Les soldes commencent … » dans son résumé deux jours avant le début, puis le jour même.",
+      "listTitle": "Périodes",
+      "none": "Aucune période de soldes.",
+      "dates": "Du {start} au {end}",
+      "oneDay": "Le {start}",
+      "current": "En cours",
+      "upcoming": "À venir",
+      "past": "Passée",
+      "formAdd": "Ajouter une période",
+      "formEdit": "Modifier « {name} »",
+      "name": "Nom",
+      "nameHint": "Par exemple « Soldes d’hiver 2027 ».",
+      "startsOn": "Premier jour",
+      "endsOn": "Dernier jour",
+      "add": "Ajouter la période",
+      "save": "Enregistrer",
+      "edit": "Modifier",
+      "editLabel": "Modifier {name}",
+      "remove": "Supprimer",
+      "removeLabel": "Supprimer {name}",
+      "confirmRemove": "Supprimer la période « {name} » ? Ses annonces disparaissent aussi des « Nouvelles ».",
+      "confirmButton": "Oui, supprimer",
+      "cancel": "Annuler",
+      "saved": "Période enregistrée.",
+      "removed": "Période supprimée.",
+      "invalidName": "Donne un nom à la période.",
+      "invalidDates": "Choisis le premier et le dernier jour.",
+      "endBeforeStart": "Le dernier jour doit être le premier jour ou après."
     }
   },
   "Capture": {

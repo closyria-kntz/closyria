@@ -38,7 +38,8 @@ const overviewRoute = defineAccess(
       "automatically captured shops whose two latest monitor captures failed (sheet refreshes are left out of every capture figure). `shopifySlowdown`: « Shopify nous demande de ralentir » " +
       "(after a 429/430 from a Shopify shop: imports doubled, else nightly) until `until`; null when none. `rereadLate`: " +
       "shops due for their catalogue re-read whose last import started over twice their interval ago (« Relecture en " +
-      "retard »).",
+      "retard »). `notifications`: pushes over the last 7 days, one per device (accepted / refused or failed), and the " +
+      "devices subscribed now.",
     responses: {
       200: { description: "Figures", content: { "application/json": { schema: adminOverviewSchema } } },
     },
@@ -88,32 +89,33 @@ export function overviewRoutes(deps: AdminDeps) {
     const at = now();
     const since7d = new Date(at.getTime() - HEALTH_WINDOW_MS).toISOString();
     const since24h = new Date(at.getTime() - DAY_MS).toISOString();
-    const [[users], [today], captureFigures, [pending], monitored, shopifySlowdown] = await Promise.all([
-      deps.db
-        .select({
-          total: count(),
-          anonymous: count(sql`case when ${anonymous} then 1 end`),
-          signupsToday: count(
-            // Column-bound comparisons: the dates are encoded like the column (UTC), whatever the server's time zone.
-            sql`case when not ${anonymous} and ${and(gte(user.createdAt, start), lt(user.createdAt, end))} then 1 end`,
-          ),
-        })
-        .from(user),
-      deps.db
-        .select({ events: count() })
-        .from(events)
-        .where(and(gte(events.occurredAt, start), lt(events.occurredAt, end))),
-      deps.db.execute<{
-        last24h: number;
-        last7d: number;
-        finished: number;
-        succeeded: number;
-        shopify: number;
-        jsonld: number;
-        opengraph: number;
-        woocommerce: number;
-        median: number | null;
-      }>(sql`
+    const [[users], [today], captureFigures, [pending], monitored, shopifySlowdown, [sends], [devices]] =
+      await Promise.all([
+        deps.db
+          .select({
+            total: count(),
+            anonymous: count(sql`case when ${anonymous} then 1 end`),
+            signupsToday: count(
+              // Column-bound comparisons: the dates are encoded like the column (UTC), whatever the server's time zone.
+              sql`case when not ${anonymous} and ${and(gte(user.createdAt, start), lt(user.createdAt, end))} then 1 end`,
+            ),
+          })
+          .from(user),
+        deps.db
+          .select({ events: count() })
+          .from(events)
+          .where(and(gte(events.occurredAt, start), lt(events.occurredAt, end))),
+        deps.db.execute<{
+          last24h: number;
+          last7d: number;
+          finished: number;
+          succeeded: number;
+          shopify: number;
+          jsonld: number;
+          opengraph: number;
+          woocommerce: number;
+          median: number | null;
+        }>(sql`
         select
           (count(*) filter (where created_at >= ${since24h}::timestamptz))::int as last24h,
           (count(*) filter (where created_at >= ${since7d}::timestamptz))::int as last7d,
@@ -127,22 +129,31 @@ export function overviewRoutes(deps: AdminDeps) {
         from captures
         -- Sheet refreshes (« stocks frais ») and revisits (alerts) are not counted: automatic and many.
         where created_at >= ${since7d}::timestamptz and trigger not in ('refresh', 'revisit')`),
-      deps.db
-        .select({ pending: count() })
-        .from(schema.shops)
-        .where(and(eq(schema.shops.status, "pending"), isNull(schema.shops.mergedIntoId))),
-      deps.db
-        .select({ id: schema.shops.id, status: schema.shops.status, captureMode: schema.shops.captureMode })
-        .from(schema.shops)
-        .where(
-          and(
-            eq(schema.shops.status, "published"),
-            eq(schema.shops.captureMode, "auto"),
-            isNull(schema.shops.mergedIntoId),
+        deps.db
+          .select({ pending: count() })
+          .from(schema.shops)
+          .where(and(eq(schema.shops.status, "pending"), isNull(schema.shops.mergedIntoId))),
+        deps.db
+          .select({ id: schema.shops.id, status: schema.shops.status, captureMode: schema.shops.captureMode })
+          .from(schema.shops)
+          .where(
+            and(
+              eq(schema.shops.status, "published"),
+              eq(schema.shops.captureMode, "auto"),
+              isNull(schema.shops.mergedIntoId),
+            ),
           ),
-        ),
-      shopifySlowdownOf(deps.db, at),
-    ]);
+        shopifySlowdownOf(deps.db, at),
+        // One row per device a notification was pushed to; `ok` is the push service's answer.
+        deps.db
+          .select({
+            sent: count(sql`case when ${schema.alertSends.ok} then 1 end`),
+            failed: count(sql`case when not ${schema.alertSends.ok} then 1 end`),
+          })
+          .from(schema.alertSends)
+          .where(gte(schema.alertSends.sentAt, new Date(since7d))),
+        deps.db.select({ n: count() }).from(schema.pushSubscriptions),
+      ]);
     const rereadLate = await countRereadLate(deps.db, at, shopifySlowdown?.level ?? null);
     const stats = await loadShopStats(
       deps.db,
@@ -181,6 +192,7 @@ export function overviewRoutes(deps: AdminDeps) {
         shops: { pending: pending?.pending ?? 0, down },
         shopifySlowdown,
         rereadLate,
+        notifications: { sent7d: sends?.sent ?? 0, failed7d: sends?.failed ?? 0, devices: devices?.n ?? 0 },
       },
       200,
     );

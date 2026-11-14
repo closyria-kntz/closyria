@@ -123,7 +123,33 @@ describe("GET /api/admin/overview", () => {
       shops: expect.any(Object),
       shopifySlowdown: null,
       rereadLate: expect.any(Number),
+      notifications: expect.any(Object),
     });
+  });
+
+  it("counts the notifications sent and failed over 7 days, and the devices", async () => {
+    const admin = await session("admin", "passkey");
+    await handle.db.delete(schema.alertSends);
+    await handle.db.delete(schema.pushSubscriptions);
+    const send = (iso: string, ok: boolean) => ({ userId: admin.userId, sentAt: at(iso), ok });
+    await handle.db.insert(schema.alertSends).values([
+      send("2030-06-15T11:59:00.000Z", true),
+      send("2030-06-10T08:00:00.000Z", true),
+      send("2030-06-08T12:00:00.000Z", true), // exactly 7 days ago: counted
+      send("2030-06-14T18:00:00.000Z", false),
+      send("2030-06-08T11:59:59.000Z", true), // older than 7 days
+      send("2030-06-01T08:00:00.000Z", false),
+    ]);
+    const device = (n: number) => ({
+      userId: admin.userId,
+      endpoint: `https://fcm.googleapis.com/fcm/send/admin-test-${n}`,
+      p256dh: "p256dh",
+      auth: "auth",
+    });
+    await handle.db.insert(schema.pushSubscriptions).values([device(1), device(2)]);
+
+    const body = adminOverviewSchema.parse(await (await get("/api/admin/overview", admin.cookie)).json());
+    expect(body.notifications).toEqual({ sent7d: 3, failed7d: 1, devices: 2 });
   });
 
   it("does not write to the audit log (reads are not journalled)", async () => {

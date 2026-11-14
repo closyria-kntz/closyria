@@ -49,6 +49,11 @@ export const adminOverviewSchema = z.object({
    * interval ago (24 h a night in `nightly`), no import under way. 0 when the planner keeps up.
    */
   rereadLate: count,
+  /**
+   * Push notifications over the last 7 days, one per device reached (accepted / refused by the push service), and the
+   * devices subscribed now (a device the push service retired is removed, so every subscription counts as active).
+   */
+  notifications: z.object({ sent7d: count, failed7d: count, devices: count }),
 });
 export type AdminOverview = z.infer<typeof adminOverviewSchema>;
 

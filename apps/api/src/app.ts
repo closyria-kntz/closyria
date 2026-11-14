@@ -11,6 +11,7 @@ import { adminCatalogueRoutes } from "./routes/admin/catalogue";
 import { type AdminDeps, overviewRoutes } from "./routes/admin/overview";
 import { adminProductsRoutes } from "./routes/admin/products";
 import { adminReferenceRoutes } from "./routes/admin/reference";
+import { adminSalesRoutes } from "./routes/admin/sales";
 import { adminShippingOptionsRoutes } from "./routes/admin/shipping-options";
 import { adminShopsRoutes } from "./routes/admin/shops";
 import { capturesRoutes } from "./routes/captures";
@@ -165,6 +166,7 @@ export function createApp(deps: AppDeps) {
     .route("/", auditRoutes(deps.admin))
     .route("/", adminShopsRoutes(deps.catalog))
     .route("/", adminShippingOptionsRoutes(deps.catalog))
+    .route("/", adminSalesRoutes(deps.admin))
     .route("/", adminCapturesRoutes(deps.catalog))
     .route("/", adminProductsRoutes(deps.catalog))
     .route("/", adminReferenceRoutes(deps.catalog))

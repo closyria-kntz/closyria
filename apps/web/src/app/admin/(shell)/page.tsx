@@ -88,6 +88,16 @@ export default async function AdminDashboardPage() {
       <p className="text-sm text-ink-muted">
         {t("byMethod")} : {methods}
       </p>
+      <p
+        data-testid="notifications-line"
+        className="rounded-card border border-card-border bg-card-bg p-space-4 shadow-soft"
+      >
+        {t("notifications", {
+          sent: overview.notifications.sent7d,
+          failed: overview.notifications.failed7d,
+          devices: overview.notifications.devices,
+        })}
+      </p>
     </>
   );
 }
