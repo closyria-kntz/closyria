@@ -4,7 +4,7 @@ import { brotliCompressSync, deflateSync, gzipSync } from "node:zlib";
 import { type FakeRoute, type FakeShop, startFakeShop } from "@closyria/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import { CaptureError } from "./capture-error";
-import { BOT_USER_AGENT, safeFetch } from "./safe-fetch";
+import { BOT_USER_AGENT, isChallengeAnswer, isHtmlAnswer, safeFetch } from "./safe-fetch";
 import { loopbackForTests } from "./testing";
 
 const HTML = { "content-type": "text/html; charset=utf-8" };
@@ -270,6 +270,33 @@ describe("safeFetch with the fake shop and loopbackForTests", () => {
       expect(error.code, path).toBe("http_error");
       expect(error.httpStatus, path).toBe(503);
     }
+  });
+
+  it("reads only the head of an HTML page answered where JSON was asked, and flags a bot challenge there", async () => {
+    const challenge = `<html><script src="https://x/captcha-delivery/a.js"></script>${"a".repeat(SIX_MB)}</html>`;
+    const late = Buffer.concat([Buffer.alloc(SIX_MB, 0x61), Buffer.from("captcha-delivery")]);
+    const { origin } = await serve({
+      "/challenge": { headers: HTML, body: challenge },
+      "/home": { headers: HTML, body: "<html><body>Accueil</body></html>" },
+      "/late": { headers: HTML, body: late },
+      "/png": { headers: { "content-type": "image/png" }, body: "png" },
+    });
+    const asJson = (path: string) =>
+      captureError(safeFetch(`${origin}${path}`, { accept: "json", policy: loopbackForTests }));
+
+    // A 6 MB page is never too_large here: only its head is read, for the challenge's markers.
+    const challenged = await asJson("/challenge");
+    expect(challenged.code).toBe("invalid_data");
+    expect([isHtmlAnswer(challenged), isChallengeAnswer(challenged)]).toEqual([true, true]);
+    // A plain page (a home page served at /wp-json/): HTML, no challenge.
+    const home = await asJson("/home");
+    expect([isHtmlAnswer(home), isChallengeAnswer(home)]).toEqual([true, false]);
+    // A marker past the head is not seen.
+    const notSeen = await asJson("/late");
+    expect([notSeen.code, isHtmlAnswer(notSeen), isChallengeAnswer(notSeen)]).toEqual(["invalid_data", true, false]);
+    // Another type than HTML is neither.
+    const png = await asJson("/png");
+    expect([png.code, isHtmlAnswer(png), isChallengeAnswer(png)]).toEqual(["invalid_data", false, false]);
   });
 
   it.each([404, 410, 500, 503])("gives http_error with the status for %i", async (status) => {

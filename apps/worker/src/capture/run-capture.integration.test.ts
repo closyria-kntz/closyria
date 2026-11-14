@@ -379,6 +379,45 @@ describe("runCapture", () => {
     expect(Object.keys(r.product?.shopData ?? {}).length).toBeGreaterThan(0);
   });
 
+  it("dates a product by its page (shop), keeps a date set by the admin, and never invents one", async () => {
+    serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
+    const dated = await setup("/products/produit-3679", { shop: { platform: "shopify" } });
+    await runCapture(dated.capture.id, deps);
+    const fromShop = (await load(dated.capture.id, dated.product.id)).product;
+    expect(fromShop?.publishedSource).toBe("shop");
+    expect(fromShop?.publishedAt).toBeInstanceOf(Date);
+
+    const byHand = new Date("2026-01-15T00:00:00Z");
+    const admin = await setup("/products/produit-3679", {
+      shop: { platform: "shopify" },
+      product: { publishedAt: byHand, publishedSource: "admin" },
+    });
+    await runCapture(admin.capture.id, deps);
+    expect((await load(admin.capture.id, admin.product.id)).product).toMatchObject({
+      publishedAt: byHand,
+      publishedSource: "admin",
+    });
+
+    // A page without a date: the row keeps what it had (unknown: no date; first seen: its hour).
+    servePage("/produit/sans-date", "synthetic/jsonld-simple.html");
+    const unknown = await setup("/produit/sans-date", { shop: { platform: "other" } });
+    await runCapture(unknown.capture.id, deps);
+    expect((await load(unknown.capture.id, unknown.product.id)).product).toMatchObject({
+      publishedAt: null,
+      publishedSource: "unknown",
+    });
+    const seenAt = new Date("2026-11-10T15:00:00Z");
+    const firstSeen = await setup("/produit/sans-date", {
+      shop: { platform: "other" },
+      product: { publishedAt: seenAt, publishedSource: "first_seen" },
+    });
+    await runCapture(firstSeen.capture.id, deps);
+    expect((await load(firstSeen.capture.id, firstSeen.product.id)).product).toMatchObject({
+      publishedAt: seenAt,
+      publishedSource: "first_seen",
+    });
+  });
+
   it("never changes the classification of an admin-corrected product, but refreshes the raw fields", async () => {
     await seedReference(handle.db);
     serveJs("/products/produit-3679.js", "real/mcb-paris.js.json");
@@ -672,6 +711,34 @@ describe("runCapture", () => {
       const again = await newCapture(t.shop.id, t.product.id, t.url, "refresh");
       await runCapture(again.id, deps);
       expect((await stockOf(again.id, t.product.id))[1]).toBe("M");
+    });
+
+    it("a sheet's refresh keeps the last known stock of a variation listed in a shape it cannot read", async () => {
+      serveWoo({ inStock: [770] });
+      // M (771) is listed, but unreadable (no stock, no price): still on sale, its stock unknown.
+      routes[bulkPath] = {
+        headers: { ...JSON_TYPE, "x-wp-total": "2", "x-wp-totalpages": "1" },
+        body: JSON.stringify([variation(770, true), { id: 771, parent: 77, type: "variation" }]),
+      };
+      const t = await setupWoo();
+      await handle.db
+        .insert(schema.productSizes)
+        .values(SIZES.map((label, position) => ({ productId: t.product.id, label, position, available: true })));
+      await runCapture(t.capture.id, deps);
+      expect((await load(t.capture.id, t.product.id)).capture).toMatchObject({
+        status: "succeeded",
+        method: "woocommerce",
+      });
+      // M keeps its last stock (in stock), never taken for sold out; the sizes not listed are sold out.
+      expect(await stockOf(t.capture.id, t.product.id)).toEqual([
+        "S",
+        "M",
+        "L (épuisé)",
+        "XL (épuisé)",
+        "XXL (épuisé)",
+      ]);
+      // Not every variation was read: not a complete check.
+      expect((await load(t.capture.id, t.product.id)).product?.variantsCheckedAt).toBeNull();
     });
 
     it("her capture of the product reads it the same way", async () => {

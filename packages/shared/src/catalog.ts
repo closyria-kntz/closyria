@@ -49,6 +49,27 @@ export type CaptureErrorCode = z.infer<typeof captureErrorCodeSchema>;
 export const productSourceSchema = z.enum(["captured", "manual"]);
 export type ProductSource = z.infer<typeof productSourceSchema>;
 
+/**
+ * Where a product's put-online date (`published_at`) comes from: `shop` (given by the shop: Shopify `published_at`, a
+ * page's date), `first_seen` (arrived after the shop's first completed import, or pasted afterwards: the hour Closyria
+ * first saw it), `admin` (set by hand, never overwritten by an import) or `unknown` (already on sale at the shop's first
+ * import, no date given: never invented, never « Nouveauté »).
+ */
+export const publishedSourceSchema = z.enum(["shop", "first_seen", "admin", "unknown"]);
+export type PublishedSource = z.infer<typeof publishedSourceSchema>;
+
+/**
+ * The put-online date of a product row about to be created without the shop's date: after the shop's first completed
+ * import (`lastImportAt` set), the hour Closyria first sees it (`first_seen`); before (first import, or a shop never
+ * imported), nothing: the row stays `unknown`. A date the shop gives replaces it when the product is written.
+ */
+export function undatedOnCreate(
+  lastImportAt: Date | null,
+  at: Date,
+): { publishedSource: "first_seen"; publishedAt: Date } | Record<string, never> {
+  return lastImportAt ? { publishedSource: "first_seen", publishedAt: at } : {};
+}
+
 export const productCaptureStatusSchema = z.enum(["pending", "ok", "failed", "manual"]);
 export type ProductCaptureStatus = z.infer<typeof productCaptureStatusSchema>;
 

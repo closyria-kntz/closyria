@@ -24,7 +24,7 @@ export const CATALOG_PAGE_SIZE = 24;
 export const CATALOG_DETAIL_LIMITS = { close: 3, sameShop: 8, sameStyle: 8 } as const;
 /** « Aimé par N personnes » only from this many people. */
 export const LIKES_THRESHOLD = 3;
-/** `isNew`: put online by the shop (else first seen by Closyria) less than this many days ago. */
+/** `isNew`: put online (`published_at`: the shop's date, first seen, or set by the admin) less than this many days ago. */
 export const NEW_DAYS = 7;
 /** « Dans le même style »: a price within this share of the article's counts as close. */
 const NEAR_PRICE_RATIO = 0.2;
@@ -235,14 +235,20 @@ async function selectCards(
 
 type SortKey = { expr: SQL; type: KeyType };
 const idKey: SortKey = { expr: sql`p.id`, type: "uuid" };
-/** The shop's put-online date (Shopify `published_at`), else the day Closyria first saw the article. */
-const onlineSince = sql`coalesce(p.published_at, p.created_at)`;
-const onlineKey: SortKey = { expr: onlineSince, type: "timestamptz" };
+/**
+ * « Nouveautés »: the dated products first, newest first (`published_at`: the shop's date, the hour first seen, or the
+ * admin's); then the undated ones (`unknown`, a date never invented) in their shop's own order (`shop_rank`, newest
+ * first for WooCommerce; never listed: last); then the id. Keyset keys are never null: an undated product sorts at the
+ * epoch, before any real date, and its rank is negated so that the whole key goes one way.
+ */
+const UNDATED = "1970-01-01T00:00:00Z";
+const onlineKey: SortKey = { expr: sql`coalesce(p.published_at, ${UNDATED}::timestamptz)`, type: "timestamptz" };
+const rankKey: SortKey = { expr: sql`(-coalesce(p.shop_rank, 2147483647))`, type: "integer" };
 const priceKey: SortKey = { expr: sql`p.price_cents`, type: "integer" };
 
 /** Keyset of each sort: every key is non-null on a visible article and they all go one way. */
 const SORTS: Record<CatalogSort, { keys: SortKey[]; desc: boolean }> = {
-  new: { keys: [onlineKey, idKey], desc: true },
+  new: { keys: [onlineKey, rankKey, idKey], desc: true },
   price_asc: { keys: [priceKey, idKey], desc: false },
   price_desc: { keys: [priceKey, idKey], desc: true },
   /**
@@ -253,13 +259,14 @@ const SORTS: Record<CatalogSort, { keys: SortKey[]; desc: boolean }> = {
     keys: [
       { expr: sql`(case when ${likesOf} >= ${LIKES_THRESHOLD} then ${likesOf} else 0 end)`, type: "integer" },
       onlineKey,
+      rankKey,
       idKey,
     ],
     desc: true,
   },
 };
 
-const cursorSchema = z.object({ s: catalogSortSchema, k: z.array(z.string()).min(2).max(3) });
+const cursorSchema = z.object({ s: catalogSortSchema, k: z.array(z.string()).min(2).max(4) });
 
 function encodeCursor(sort: CatalogSort, keys: string[]): string {
   return Buffer.from(JSON.stringify({ s: sort, k: keys })).toString("base64url");
@@ -368,7 +375,10 @@ function filters(query: CatalogQuery, viewer: Viewer, now: Date): SQL[] {
     );
   }
   if (query.onSale) where.push(onSale);
-  if (query.isNew) where.push(sql`${onlineSince} >= ${new Date(now.getTime() - NEW_DAYS * 86_400_000).toISOString()}`);
+  // An undated product (`unknown`) is never new.
+  if (query.isNew) {
+    where.push(sql`p.published_at >= ${new Date(now.getTime() - NEW_DAYS * 86_400_000).toISOString()}`);
+  }
   // Strict: only what is known to fit her (one of her sizes available, or « taille unique » for a sized kind).
   // Without any size of
   // hers the filter is off (`hasSizes`, the web greys it out).
@@ -438,7 +448,10 @@ export async function loadCatalogDetail(
   const categoryId = row.category_id as string | null;
   const colorId = row.color_id as string | null;
   const price = Number(row.price_cents);
-  const newest = sql`${onlineSince} desc, p.id desc`;
+  const newest = sql.join(
+    SORTS.new.keys.map((k) => sql`${k.expr} desc`),
+    sql`, `,
+  );
 
   const [images, sizes, mine, close, sameShop, sameStyle] = await Promise.all([
     db

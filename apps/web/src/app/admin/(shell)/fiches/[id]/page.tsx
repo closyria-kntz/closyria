@@ -10,6 +10,7 @@ import { buttonClass, sheetLinkClass } from "../../../ui";
 import { CorrectedPill } from "../corrected-pill";
 import { CorrectForm } from "./correct-form";
 import { DeleteButton } from "./delete-button";
+import { PublishedAtForm } from "./published-at-form";
 import { RecaptureButton } from "./recapture-button";
 import { UnhideButton } from "./unhide-button";
 
@@ -171,11 +172,18 @@ export default async function AdminProductPage({ params }: Props) {
           {t("dates")}
         </h2>
         {rows([
-          [t("published"), when(product.publishedAt)],
+          [t("published"), product.publishedAt ? when(product.publishedAt) : t("publishedUnknown")],
+          [
+            t("publishedSource"),
+            t(`publishedSources.${product.publishedSource}`, {
+              date: product.publishedAt ? when(product.publishedAt) : "",
+            }),
+          ],
           [t("createdAt"), when(product.createdAt)],
           [t("lastCaptured"), when(product.lastCapturedAt)],
           [t("updatedAt"), when(product.updatedAt)],
         ])}
+        <PublishedAtForm product={product} />
       </section>
 
       <section aria-labelledby="filing-title" className={section}>

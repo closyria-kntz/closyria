@@ -8,6 +8,7 @@ import {
   listingKindSchema,
   platformSchema,
   productCaptureStatusSchema,
+  publishedSourceSchema,
   shopStatusSchema,
 } from "./catalog";
 import { canonicalizeUrl } from "./catalog-url";
@@ -333,7 +334,9 @@ export const adminProductDetailSchema = adminProductBase.extend({
   materialId: z.uuid().nullable(),
   patternId: z.uuid().nullable(),
   season: seasonSchema.nullable(),
+  /** Its put-online date (null when unknown) and where it comes from (« Date de mise en ligne »). */
   publishedAt: isoDate.nullable(),
+  publishedSource: publishedSourceSchema,
   lastCapturedAt: isoDate.nullable(),
   updatedAt: isoDate,
   /** When an admin hid it from « Découvrir » (« Masquer du catalogue »); null when it is not hidden. */
@@ -360,6 +363,26 @@ export const adminProductPatchSchema = z
   .partial()
   .refine((v) => Object.keys(v).length > 0);
 export type AdminProductPatch = z.infer<typeof adminProductPatchSchema>;
+
+/** The earliest put-online date the admin may enter. */
+export const ADMIN_PUBLISHED_MIN = "2000-01-01";
+
+/** `YYYY-MM-DD` of the UTC day `days` after `now`. */
+export function isoDay(now: Date, days = 0): string {
+  return new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * « Date de mise en ligne » set by hand (`YYYY-MM-DD`, stored at 00:00 UTC, source `admin`), at most tomorrow (a
+ * product put online in another time zone); null goes back to automatic.
+ */
+export const adminProductPublishedAtSchema = z.object({
+  publishedAt: z.iso
+    .date()
+    .refine((day) => day >= ADMIN_PUBLISHED_MIN && day <= isoDay(new Date(), 1))
+    .nullable(),
+});
+export type AdminProductPublishedAt = z.infer<typeof adminProductPublishedAtSchema>;
 
 export const adminRecaptureSchema = z.object({ captureId: z.uuid() });
 

@@ -11,6 +11,7 @@ import {
   platformSchema,
   productCaptureStatusSchema,
   productSourceSchema,
+  publishedSourceSchema,
   reportReasonSchema,
   reportResolutionSchema,
   seasonSchema,
@@ -173,8 +174,15 @@ export const products = pgTable(
     source: text("source").notNull().default("captured"),
     captureStatus: text("capture_status").notNull().default("pending"),
     lastCapturedAt: timestamp("last_captured_at", { withTimezone: true }),
-    /** When the shop put the product online. */
+    /** When the product was put online (`published_source` says by whom); null when unknown (never invented). */
     publishedAt: timestamp("published_at", { withTimezone: true }),
+    /** `shop`, `first_seen`, `admin` or `unknown` (`publishedSourceSchema`). */
+    publishedSource: text("published_source").notNull().default("unknown"),
+    /**
+     * Its place in the shop's own listing at the last import (0 first; WooCommerce lists the newest first): the order of
+     * the undated products in « Nouveautés ». Null: never listed by an import.
+     */
+    shopRank: integer("shop_rank"),
     gtin: text("gtin"),
     sku: text("sku"),
     /** Shop breadcrumb, keywords, colours, material, care, collection, as read (lengths capped). */
@@ -230,6 +238,7 @@ export const products = pgTable(
     check("products_classified_by_check", oneOf(t.classifiedBy, classifiedBySchema.options)),
     check("products_category_source_check", oneOf(t.categorySource, ["auto", "admin"])),
     check("products_source_check", oneOf(t.source, productSourceSchema.options)),
+    check("products_published_source_check", oneOf(t.publishedSource, publishedSourceSchema.options)),
     check("products_capture_status_check", oneOf(t.captureStatus, productCaptureStatusSchema.options)),
     check("products_currency_check", sql`char_length(${t.currency}) = 3`),
     check("products_description_check", sql`${t.description} IS NULL OR char_length(${t.description}) <= 5000`),

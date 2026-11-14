@@ -588,3 +588,45 @@ test("une admin voit la plateforme des boutiques, filtre dessus et marque une «
   );
   expect(audit.rows.map((r) => r.action)).toEqual(["shop.update"]);
 });
+
+test("une admin saisit la date de mise en ligne d’un article, puis revient à la date automatique", async ({
+  page,
+  request,
+  db,
+  userAgentTag,
+}) => {
+  const shop = await seedShop(db, "published");
+  const name = `Article sans date ${shop.tag}`;
+  // Already on sale at the shop's first import: no date (`unknown`).
+  const product = await seedProduct(db, shop.id, name);
+  await signInAsAdmin(page, request, db, userAgentTag);
+
+  await page.goto(`/admin/fiches/${product}`);
+  const dates = page.getByRole("region", { name: "Dates" });
+  await expect(dates).toContainText("Inconnue (déjà en boutique au premier import)");
+  const field = dates.getByLabel("Date de mise en ligne");
+  await expect(field).toHaveValue("");
+  await axeLightAndDark(page);
+
+  await field.fill("2026-11-02");
+  await dates.getByRole("button", { name: "Enregistrer la date" }).click();
+  await expect(dates.getByText("Date de mise en ligne enregistrée.")).toBeVisible();
+  await expect(dates).toContainText("Saisie dans l’admin");
+  const saved = await db.query<{ published_at: Date; published_source: string }>(
+    "select published_at, published_source from products where id = $1",
+    [product],
+  );
+  expect(saved.rows.map((r) => [r.published_at.toISOString(), r.published_source])).toEqual([
+    ["2026-11-02T00:00:00.000Z", "admin"],
+  ]);
+  const audit = await db.query("select 1 from admin_audit_log where action = 'product.published_at' and target = $1", [
+    `product:${product}`,
+  ]);
+  expect(audit.rowCount).toBe(1);
+
+  // Emptied: back to automatic (no date until the shop gives one).
+  await field.fill("");
+  await dates.getByRole("button", { name: "Enregistrer la date" }).click();
+  await expect(dates.getByText("Date automatique rétablie.")).toBeVisible();
+  await expect(dates).toContainText("Inconnue (déjà en boutique au premier import)");
+});

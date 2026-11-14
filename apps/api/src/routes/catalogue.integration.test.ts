@@ -107,6 +107,7 @@ type ProductOptions = Partial<typeof schema.products.$inferInsert> & {
 async function newProduct(shopId: string, options: ProductOptions = {}) {
   const n = ++counter;
   const { image = true, sizes = [], ...values } = options;
+  const createdAt = values.createdAt ?? ago(30 * DAY);
   const [p] = await t.db
     .insert(schema.products)
     .values({
@@ -115,7 +116,11 @@ async function newProduct(shopId: string, options: ProductOptions = {}) {
       name: `Article ${n}`,
       priceCents: 5000,
       currency: "EUR",
-      createdAt: ago(30 * DAY),
+      createdAt,
+      // First seen when created, unless the test gives a date (the shop's) or none (`publishedAt: null`: unknown).
+      publishedAt: createdAt,
+      publishedSource:
+        values.publishedAt === null ? "unknown" : values.publishedAt === undefined ? "first_seen" : "shop",
       // Read just now: opening its sheet asks nothing in the background (the « stocks frais » tests set it).
       lastCapturedAt: NOW,
       ...values,
@@ -534,16 +539,34 @@ describe("GET /api/catalog — sorts and pages", () => {
     expect(ids((await page("?sort=popular")).items)).toEqual([c.id, a.id, b.id]);
   });
 
-  it("« Nouveautés » goes by the shop's put-online date, else the day Closyria first saw the article", async () => {
+  it("« Nouveautés » goes by the put-online date (shop's, first seen, admin's), never by the import day", async () => {
     const shop = await newShop();
     // Imported today, but online at the shop for a month: not new.
     const old = await newProduct(shop.id, { createdAt: ago(DAY / 2), publishedAt: ago(30 * DAY) });
-    // Seen long ago, put online 2 days ago: new, and newer than one first seen 3 days ago without a date.
+    // Seen long ago, put online 2 days ago: new, and newer than one first seen 3 days ago.
     const fresh = await newProduct(shop.id, { createdAt: ago(40 * DAY), publishedAt: ago(2 * DAY) });
-    const undated = await newProduct(shop.id, { createdAt: ago(3 * DAY) });
+    const firstSeen = await newProduct(shop.id, { createdAt: ago(3 * DAY) });
+    // Already on sale at the shop's first import, imported an hour ago: no date, never new, after every dated one.
+    const unknown = await newProduct(shop.id, { createdAt: ago(3_600_000), publishedAt: null, shopRank: 0 });
+    // Dated by hand by the admin, yesterday.
+    const admin = await newProduct(shop.id, { publishedAt: ago(DAY), publishedSource: "admin" });
 
-    expect(ids((await page("?sort=new")).items)).toEqual([fresh.id, undated.id, old.id]);
-    expect(ids((await page("?isNew=true")).items)).toEqual([fresh.id, undated.id]);
+    expect(ids((await page("?sort=new")).items)).toEqual([admin.id, fresh.id, firstSeen.id, old.id, unknown.id]);
+    expect(ids((await page("?isNew=true")).items)).toEqual([admin.id, fresh.id, firstSeen.id]);
+  });
+
+  it("puts the undated articles after the dated ones, in their shop's own order, then the never listed ones", async () => {
+    const a = await newShop();
+    const b = await newShop();
+    const dated = await newProduct(a.id, { publishedAt: ago(300 * DAY) });
+    const a0 = await newProduct(a.id, { publishedAt: null, shopRank: 0 });
+    const a2 = await newProduct(a.id, { publishedAt: null, shopRank: 2 });
+    const b1 = await newProduct(b.id, { publishedAt: null, shopRank: 1 });
+    const pasted = await newProduct(b.id, { publishedAt: null });
+    const order = ids((await page("?sort=new")).items);
+    expect(order).toEqual([dated.id, a0.id, b1.id, a2.id, pasted.id]);
+    // The same order in « De la même boutique » on a sheet.
+    expect(ids((await detail(a0.id)).body.sameShop)).toEqual([dated.id, a2.id]);
   });
 
   for (const sort of ["new", "price_asc", "price_desc", "popular"] as const) {
@@ -552,9 +575,11 @@ describe("GET /api/catalog — sorts and pages", () => {
       const created: string[] = [];
       for (let i = 0; i < 50; i++) {
         // Ties on the price and the date, so that the id breaks them; a third put online by the shop (its date wins).
+        // Some undated (unknown) ones too, with ties on the shop's rank and none at all.
         const p = await newProduct(shop.id, {
           createdAt: ago((i % 5) * DAY),
           ...(i % 3 === 0 ? { publishedAt: ago((i % 4) * DAY + 3_600_000) } : {}),
+          ...(i % 5 === 1 ? { publishedAt: null, ...(i % 2 === 0 ? { shopRank: i % 4 } : {}) } : {}),
           priceCents: 1000 * (i % 7),
         });
         created.push(p.id);

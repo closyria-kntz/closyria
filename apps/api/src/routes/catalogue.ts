@@ -48,11 +48,11 @@ const listRoute = defineAccess(
     summary: "The catalogue of « Découvrir »",
     description:
       `${CATALOG_PAGE_SIZE} visible articles per page (published shop, not hidden, not removed, with a photo and a ` +
-      "price); `nextCursor` gives the next page of the same sort. `sort`: `new` (put online at the shop, else first " +
-      "seen), `price_asc`, " +
+      "price); `nextCursor` gives the next page of the same sort. `sort`: `new` (dated articles first, by put-online " +
+      "date: the shop's, first seen, or the admin's; then the undated ones in their shop's own order), `price_asc`, " +
       "`price_desc`, `popular` (the most kept, then the newest). `q` looks for every word (prefix, accents and case " +
       "aside) in the name, brand, shop, category or color. `priceMin`/`priceMax` in cents; `values` keeps the shops " +
-      `that claim all of them; \`onSale\`: a crossed price above the price; \`isNew\`: put online (else first seen) less than ${NEW_DAYS} ` +
+      `that claim all of them; \`onSale\`: a crossed price above the price; \`isNew\`: put online (shop's date, first seen or admin's; never an undated one) less than ${NEW_DAYS} ` +
       "days ago; `mySize` (strict): only the articles where one of her sizes for their kind is available, or whose " +
       "only available size is « taille unique » (sizes of `profile`, else of her first profile; off without any " +
       "size). `wanted` and `sizeInStock` are hers only; " +

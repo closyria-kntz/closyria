@@ -97,6 +97,24 @@ describe("POST /api/captures", () => {
     expect(product).toMatchObject({ shopId: shop.id, name: null, priceCents: null, captureStatus: "pending" });
   });
 
+  it("dates a new pasted product by the hour first seen once its shop has a completed import, else leaves it undated", async () => {
+    const { cookie } = await t.signIn();
+    const imported = host();
+    await newShop(imported, { lastImportAt: new Date("2026-11-01T03:00:00Z") });
+    const never = host();
+    await newShop(never);
+    const pasted = async (url: string) => {
+      const { productId } = (await (await post(url, cookie)).json()) as Accepted;
+      const [row] = await t.db.select().from(schema.products).where(eq(schema.products.id, productId));
+      return row;
+    };
+    expect(await pasted(`https://${imported}/p/nouveau`)).toMatchObject({
+      publishedAt: NOW,
+      publishedSource: "first_seen",
+    });
+    expect(await pasted(`https://${never}/p/ancien`)).toMatchObject({ publishedAt: null, publishedSource: "unknown" });
+  });
+
   it("gives the same product for the same link with tracking parameters, and returns the active capture", async () => {
     const { cookie } = await t.signIn();
     const domain = host();

@@ -77,6 +77,7 @@ describe("admin products", () => {
       ["PATCH", `/products/${id}`, { name: "x" }],
       ["POST", `/products/${id}/recapture`],
       ["DELETE", `/products/${id}`],
+      ["PUT", `/products/${id}/published-at`, { publishedAt: null }],
     ];
     for (const [method, path, body] of routes) {
       expect((await call(method, path, body, userCookie)).status, `${method} ${path}`).toBe(403);
@@ -135,6 +136,8 @@ describe("admin products", () => {
       sku: "SKU-1",
       shopData: { breadcrumb: ["Femme", "Robes"] },
       publishedAt: published.toISOString(),
+      // Inserted with a date but no source: the column's default.
+      publishedSource: "unknown",
       lastCapturedAt: "2026-11-01T00:00:00.000Z",
       keptBy: 0,
       sizes: [{ label: "M", available: true, priceCents: null }],
@@ -332,5 +335,58 @@ describe("admin products", () => {
     expect(refused.status).toBe(409);
     expect(await refused.json()).toEqual({ error: "capture_active" });
     expect(await t.db.select().from(schema.products).where(eq(schema.products.id, busy.id))).toHaveLength(1);
+  });
+
+  it("« Date de mise en ligne »: set by hand (admin), cleared back to automatic, validated and journaled", async () => {
+    const shop = await newShop();
+    const shopDate = new Date("2026-10-01T10:00:00Z");
+    const product = await newProduct(shop.id, {
+      publishedAt: shopDate,
+      publishedSource: "shop",
+      sourceHash: "same-listing",
+      classifiedBy: "rule",
+    });
+    const path = `/products/${product.id}/published-at`;
+
+    const set = await call("PUT", path, { publishedAt: "2026-11-02" });
+    expect(set.status).toBe(200);
+    expect(await json(set)).toMatchObject({ publishedAt: "2026-11-02T00:00:00.000Z", publishedSource: "admin" });
+    // A date is not a correction of the filing: the rules still classify the sheet.
+    const [row] = await t.db.select().from(schema.products).where(eq(schema.products.id, product.id));
+    expect(row).toMatchObject({ classifiedBy: "rule", sourceHash: "same-listing" });
+
+    // Not a day, before 2000, or after tomorrow: refused, nothing changes.
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+    const afterTomorrow = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
+    for (const publishedAt of ["2026-13-01", "1999-12-31", afterTomorrow, "02/11/2026", 3]) {
+      expect((await call("PUT", path, { publishedAt })).status, String(publishedAt)).toBe(400);
+    }
+    expect((await call("PUT", path, {})).status).toBe(400);
+    expect((await json(await call("PUT", path, { publishedAt: tomorrow }))).publishedSource).toBe("admin");
+
+    // Cleared: no date until the next import, which writes the sheet again in full (its shop's date, if any).
+    const cleared = await json(await call("PUT", path, { publishedAt: null }));
+    expect(cleared).toMatchObject({ publishedAt: null, publishedSource: "unknown" });
+    const [after] = await t.db.select().from(schema.products).where(eq(schema.products.id, product.id));
+    expect(after?.sourceHash).toBeNull();
+
+    // Clearing a date the admin did not set changes nothing.
+    const fromShop = await newProduct(shop.id, { publishedAt: shopDate, publishedSource: "shop", sourceHash: "h" });
+    const kept = await json(await call("PUT", `/products/${fromShop.id}/published-at`, { publishedAt: null }));
+    expect(kept).toMatchObject({ publishedAt: shopDate.toISOString(), publishedSource: "shop" });
+
+    expect(
+      (await call("PUT", "/products/00000000-0000-4000-8000-0000000000ff/published-at", { publishedAt: null })).status,
+    ).toBe(404);
+    const audit = await t.db
+      .select()
+      .from(schema.adminAuditLog)
+      .where(eq(schema.adminAuditLog.action, "product.published_at"));
+    expect(audit.filter((a) => a.target === `product:${product.id}`).map((a) => [a.adminId, a.details])).toEqual(
+      expect.arrayContaining([
+        [adminId, expect.objectContaining({ publishedAt: "2026-11-02", status: 200 })],
+        [adminId, expect.objectContaining({ publishedAt: null, status: 200 })],
+      ]),
+    );
   });
 });

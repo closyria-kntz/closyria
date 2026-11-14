@@ -30,7 +30,7 @@ export async function featuredShopId(db: Database): Promise<string | null> {
 /**
  * The shops of « Découvrir »: published, not merged, not a « grande enseigne », with a domain to open. Only shop
  * facts leave this function (name, main domain, how many of its articles « Découvrir » shows, one photo of the newest
- * of them), never who pasted them. The featured one is the shop whose `featured_at` is the most recent; it is left out of `shops`.
+ * of them, « Nouveautés » order), never who pasted them. The featured one is the shop whose `featured_at` is the most recent; it is left out of `shops`.
  */
 export async function loadShopDirectory(db: Database): Promise<ShopDirectory> {
   const { rows } = await db.execute<Row>(sql`
@@ -38,7 +38,7 @@ export async function loadShopDirectory(db: Database): Promise<ShopDirectory> {
       (select count(*)::int from products p where p.shop_id = s.id and ${inCatalogue}) as item_count,
       (select pi.id from products p join product_images pi on pi.product_id = p.id
         where p.shop_id = s.id and ${inCatalogue}
-        order by coalesce(p.published_at, p.created_at) desc, p.id, pi.position, pi.id limit 1) as image_id
+        order by p.published_at desc nulls last, p.shop_rank nulls last, p.id, pi.position, pi.id limit 1) as image_id
     from shops s
     join lateral (
       select domain from shop_domains where shop_id = s.id order by length(domain), domain limit 1

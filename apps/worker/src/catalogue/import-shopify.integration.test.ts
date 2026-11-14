@@ -336,6 +336,9 @@ describe("importShopifyCatalog", () => {
 
     expect((await byExternalId(s.id, "1"))?.publishedAt?.toISOString()).toBe("2026-10-01T10:00:00.000Z");
     expect((await byExternalId(s.id, "2"))?.publishedAt?.toISOString()).toBe("2026-09-15T08:00:00.000Z");
+    // Given by the shop (Shopify always gives a date), at the first import as at the next ones.
+    expect((await byExternalId(s.id, "1"))?.publishedSource).toBe("shop");
+    expect((await byExternalId(s.id, "2"))?.publishedSource).toBe("shop");
   });
 
   it("marks a product gone from the shop as removed without touching wishes, updates prices, and brings it back", async () => {

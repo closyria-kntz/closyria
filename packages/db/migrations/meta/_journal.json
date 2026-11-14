@@ -218,6 +218,13 @@
       "when": 1794614419118,
       "tag": "0030_catalogue_woocommerce",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1794620568226,
+      "tag": "0031_catalogue_dates",
+      "breakpoints": true
     }
   ]
 }

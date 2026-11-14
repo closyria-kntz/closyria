@@ -59,6 +59,8 @@ let bulkStatus: number | null;
 let bulkRefusedFrom: number | null;
 /** No page count on the variations listing, and this status past its last page. */
 let bulkPastEnd: number | null;
+/** With the shop's page count, this page of the variations listing answers 404 all the same. */
+let bulkMissingPage: number | null;
 /** Variations listed in a shape the parser rejects. */
 let broken: Set<number>;
 /** Runs at each pause (before each request after the first): what the admin sees meanwhile. */
@@ -70,6 +72,7 @@ beforeEach(async () => {
   bulkStatus = null;
   bulkRefusedFrom = null;
   bulkPastEnd = null;
+  bulkMissingPage = null;
   broken = new Set();
   duringPause = null;
   shop = await startFakeShop(routes);
@@ -138,6 +141,7 @@ function listVariations(url: URL): FakeRoute {
   const perPage = Number(url.searchParams.get("per_page") ?? 10);
   const pages = Math.max(1, Math.ceil(all.length / perPage));
   if (bulkPastEnd !== null && page > pages) return refusal(bulkPastEnd);
+  if (bulkMissingPage === page) return refusal(404);
   const slice = all.slice((page - 1) * perPage, page * perPage);
   return {
     headers: {
@@ -635,6 +639,20 @@ describe("WooCommerce catalogue import", () => {
     }
   });
 
+  it("takes a 404 on a page the shop's own count announces for a failure, not the end of the listing", async () => {
+    const sizes = Array.from({ length: 150 }, (_, i) => `T${i}`);
+    servePages([[{ id: 3, name: "Robe", sizes }]]);
+    // Two pages announced (x-wp-totalpages: 2), the second answers 404.
+    bulkMissingPage = 2;
+    const s = await newShop();
+    expect((await importCatalog(deps, s.id)).error).toBeNull();
+    expect(bulkHits()).toHaveLength(2);
+    const robe = await byExternalId(s.id, "3");
+    // Not read in full: its stock stays as it was, and it waits 24 h.
+    expect(robe).toMatchObject({ variantsCheckedAt: null, variantsTriedAt: clock });
+    expect((await sizesOf(robe.id)).every((size) => !size.includes("épuisé"))).toBe(true);
+  });
+
   it("refused part-way (400 after earlier batches): one by one for the rest, the requests made counted in", async () => {
     const big = Array.from({ length: 100 }, (_, i) => `T${i}`);
     const twenty = Array.from({ length: 20 }, (_, i) => `T${i}`);
@@ -679,7 +697,7 @@ describe("WooCommerce catalogue import", () => {
     }
   }, 60_000);
 
-  it("gives a big product waiting for a day the import's budget first", async () => {
+  it("gives a big product waiting for a day half of the import's budget first, the rest to the others", async () => {
     const huge = Array.from({ length: (WOO_VARIATION_REQUESTS + 5) * 100 }, (_, i) => `T${i}`);
     servePages([
       [
@@ -692,15 +710,18 @@ describe("WooCommerce catalogue import", () => {
       const s = await newShop();
       await importCatalog(deps, s.id);
       expect(bulkParents()).toEqual([2]);
-      // A day later the skirt is due again, and the robe has waited a day: it goes first, with the whole budget.
+      // A day later the skirt is due again, and the robe has waited a day: it goes first, with half of the budget;
+      // the skirt is read with the other half.
       await handle.db
         .update(schema.products)
         .set({ createdAt: new Date(clock.getTime() - 2 * 24 * HOUR) })
         .where(eq(schema.products.shopId, s.id));
       later(25 * HOUR);
       await importCatalog(deps, s.id);
-      expect(new Set(bulkParents())).toEqual(new Set([1]));
-      expect(bulkHits()).toHaveLength(WOO_VARIATION_REQUESTS);
+      const half = Math.floor(WOO_VARIATION_REQUESTS / 2);
+      expect(bulkParents()).toEqual([...Array.from({ length: half }, () => 1), 2]);
+      expect(await byExternalId(s.id, "1")).toMatchObject({ variantsCursor: half * 100 });
+      expect(await byExternalId(s.id, "2")).toMatchObject({ variantsCheckedAt: clock });
       expect(log).toHaveBeenCalledWith(expect.stringContaining("product 1 (3500 variations) read first"));
     } finally {
       log.mockRestore();
@@ -818,6 +839,80 @@ describe("WooCommerce catalogue import", () => {
     const after = await byExternalId(s.id, "1");
     expect(after.updatedAt).toEqual(before.updatedAt);
     expect(after.lastCapturedAt).toEqual(clock);
+  });
+
+  it("dates nothing at the shop's first import (unknown), then dates a new product by the hour it was first seen", async () => {
+    servePages([
+      [
+        { id: 1, name: "Robe" },
+        { id: 2, name: "Jupe" },
+      ],
+    ]);
+    const s = await newShop();
+    await importCatalog(deps, s.id);
+    for (const id of ["1", "2"]) {
+      expect(await byExternalId(s.id, id)).toMatchObject({ publishedAt: null, publishedSource: "unknown" });
+    }
+    // The shop's own order (WooCommerce lists the newest first).
+    expect((await byExternalId(s.id, "1")).shopRank).toBe(0);
+    expect((await byExternalId(s.id, "2")).shopRank).toBe(1);
+
+    // An hour later the shop puts a new product online, first of its listing.
+    servePages([
+      [
+        { id: 3, name: "Pull" },
+        { id: 1, name: "Robe" },
+        { id: 2, name: "Jupe" },
+      ],
+    ]);
+    later(HOUR);
+    await importCatalog(deps, s.id);
+    expect(await byExternalId(s.id, "3")).toMatchObject({
+      publishedAt: clock,
+      publishedSource: "first_seen",
+      shopRank: 0,
+    });
+    // Unchanged, not written again: still undated, their place moved down by one.
+    expect(await byExternalId(s.id, "1")).toMatchObject({ publishedAt: null, publishedSource: "unknown", shopRank: 1 });
+    expect((await byExternalId(s.id, "2")).shopRank).toBe(2);
+  });
+
+  it("a first import cut short still leaves the products it read undated; a date set by the admin is never overwritten", async () => {
+    servePages([[{ id: 1, name: "Robe" }]]);
+    const s = await newShop();
+    // A first import that did not finish (suspicious, interrupted…): no `last_import_at`, still the first one.
+    await importCatalog(deps, s.id);
+    await handle.db.update(schema.shops).set({ lastImportAt: null }).where(eq(schema.shops.id, s.id));
+    servePages([
+      [
+        { id: 2, name: "Jupe" },
+        { id: 1, name: "Robe" },
+      ],
+    ]);
+    later(HOUR);
+    await importCatalog(deps, s.id);
+    expect(await byExternalId(s.id, "2")).toMatchObject({ publishedAt: null, publishedSource: "unknown" });
+
+    const byHand = new Date("2026-11-01T00:00:00Z");
+    const robe = await byExternalId(s.id, "1");
+    await handle.db
+      .update(schema.products)
+      .set({ publishedAt: byHand, publishedSource: "admin" })
+      .where(eq(schema.products.id, robe.id));
+    // Its listing changes: written again in full, the date stays the admin's.
+    servePages([
+      [
+        { id: 2, name: "Jupe" },
+        { id: 1, name: "Robe", price: "3990" },
+      ],
+    ]);
+    later(HOUR);
+    await importCatalog(deps, s.id);
+    expect(await byExternalId(s.id, "1")).toMatchObject({
+      priceCents: 3990,
+      publishedAt: byHand,
+      publishedSource: "admin",
+    });
   });
 
   it("dispatches by platform: Shopify through its own import, any other platform refused and recorded", async () => {

@@ -67,7 +67,8 @@ function refusal(error: unknown): CaptureError | null {
 /**
  * The variations of these products, through the Store API's listing (`?type=variation&parent[]=…&per_page=100`), page
  * after page from `firstPage`, within `maxRequests`:
- * - `ok`: the last page read (a 400 or 404 past the first page is the end, as for the products); from the first page,
+ * - `ok`: the last page read (a 400 or 404 past the first page is the end when the shop gave no page count or the
+ *   page is past it; otherwise it failed); from the first page,
  *   a variation of these products the listing does not hold is no longer on sale;
  * - `incomplete`: out of requests before the last page (`stock` holds what was read, `nextPage` where to go on);
  * - `unsupported`: the shop refuses the listing (400 on its first page: an older WooCommerce);
@@ -119,8 +120,11 @@ export async function readVariationsInBulk(
       if (!(error instanceof CaptureError)) throw error;
       const status = error.code === "http_error" ? error.httpStatus : undefined;
       if (page === 1 && status === 400) return out("unsupported");
-      // Past the first page, the shop says there is no such page: the listing is over.
-      if (page > 1 && (status === 400 || status === 404)) return out("ok");
+      // Past the first page, the shop says there is no such page: the listing is over, unless its own count says
+      // there is one (then the page failed).
+      if (page > 1 && (status === 400 || status === 404) && (totalPages === null || page > totalPages)) {
+        return out("ok");
+      }
       return out("failed");
     }
     const listing = extractWooVariations(decodeBody(response.body, response.contentType));

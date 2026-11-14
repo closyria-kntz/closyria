@@ -1,12 +1,26 @@
 import { createHash } from "node:crypto";
 import type dns from "node:dns";
-import { and, asc, count, type Database, eq, inArray, isNotNull, isNull, or, type SQL, schema } from "@closyria/db";
+import {
+  and,
+  asc,
+  count,
+  type Database,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  type SQL,
+  schema,
+  sql,
+} from "@closyria/db";
 import {
   CATALOGUE_IMPORT_HEARTBEAT_MS,
   canonicalizeUrl,
   type ExtractedProduct,
   type ImportPhase,
   shopDomain,
+  undatedOnCreate,
 } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import { type AddressPolicy, strictPolicy } from "../capture/address-policy";
@@ -338,14 +352,16 @@ async function run<T extends Listed>(
       const unchanged = await unchangedOf(db, shopId, hashes, new Date(now().getTime() - RECHECK_MS));
       const toWrite = listing.products.filter((item) => !unchanged.has(item));
       const prepared = source.prepare && toWrite.length > 0 ? await source.prepare(ctx, toWrite) : null;
-      const checked: string[] = [];
-      for (const item of listing.products) {
+      const checked: { id: string; rank: number }[] = [];
+      for (const [index, item] of listing.products.entries()) {
         interrupted();
         await beat();
+        // Its place in the shop's own listing: the order of the undated products in « Nouveautés ».
+        const rank = read + index;
         const ids = unchanged.get(item);
         if (ids) {
           for (const id of ids) seen.add(id);
-          checked.push(...ids);
+          checked.push(...ids.map((id) => ({ id, rank })));
           result.unchanged += 1;
           continue;
         }
@@ -354,16 +370,16 @@ async function run<T extends Listed>(
           shop,
           prepared?.get(item) ?? item,
           hashes.get(item) ?? null,
+          rank,
           reference,
           seen,
           result,
           now(),
         );
       }
-      // Checked today, unchanged: the sheet's « Mis à jour le » and the capture's freshness stay current.
-      if (checked.length > 0) {
-        await db.update(schema.products).set({ lastCapturedAt: now() }).where(inArray(schema.products.id, checked));
-      }
+      // Checked today, unchanged: the sheet's « Mis à jour le » and the capture's freshness stay current, and its
+      // place in the listing moves with the shop's new products (one update per page).
+      if (checked.length > 0) await markChecked(db, checked, now());
       await source.pageDone?.(ctx, { unchanged, written: toWrite });
       // « Import en cours : page n, x articles lus » in the admin, after each page.
       read += listing.count;
@@ -562,6 +578,7 @@ async function writeImported(
   shop: Shop,
   item: Listed,
   sourceHash: string | null,
+  shopRank: number,
   reference: Reference,
   seen: Set<string>,
   result: ImportResult,
@@ -598,7 +615,7 @@ async function writeImported(
         reference,
         at,
         history: "on_change",
-        extra: { removedAt: null, sourceHash },
+        extra: { removedAt: null, sourceHash, shopRank },
       });
     });
     ids.push(match.id);
@@ -608,7 +625,14 @@ async function writeImported(
     const created = await db.transaction(async (tx) => {
       const [row] = await tx
         .insert(schema.products)
-        .values({ shopId: shop.id, canonicalUrl, name: product.name, source: "captured" })
+        .values({
+          shopId: shop.id,
+          canonicalUrl,
+          name: product.name,
+          source: "captured",
+          // On sale before the shop's first completed import: no date (`unknown`); after it, first seen now.
+          ...undatedOnCreate(shop.lastImportAt, at),
+        })
         .onConflictDoNothing()
         .returning({ id: schema.products.id });
       if (!row) return null;
@@ -620,7 +644,7 @@ async function writeImported(
         reference,
         at,
         history: "on_change",
-        extra: { sourceHash },
+        extra: { sourceHash, shopRank },
       });
       return row.id;
     });
@@ -648,6 +672,18 @@ async function writeImported(
       await db.update(schema.products).set({ sourceHash: null }).where(eq(schema.products.id, id));
     }
   }
+}
+
+/** Rows left as they were: checked now, at their new place in the listing. */
+async function markChecked(db: Database, checked: { id: string; rank: number }[], at: Date): Promise<void> {
+  const rows = sql.join(
+    checked.map((c) => sql`(${c.id}::uuid, ${c.rank}::int)`),
+    sql`, `,
+  );
+  await db.execute(sql`
+    update products p set last_captured_at = ${at.toISOString()}::timestamptz, shop_rank = v.rank
+    from (values ${rows}) as v(id, rank)
+    where p.id = v.id`);
 }
 
 const importedOnSale = (shopId: string, judged: SQL | undefined) =>

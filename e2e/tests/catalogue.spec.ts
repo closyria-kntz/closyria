@@ -60,7 +60,7 @@ type ProductSeed = {
   categoryId?: string | null;
   colorId?: string | null;
   sizes?: [string, boolean][];
-  /** How long ago Closyria first saw it (« Nouveautés »: less than 7 days). */
+  /** How long ago Closyria first saw it (its put-online date, `first_seen`; « Nouveautés »: less than 7 days). */
   ageDays?: number;
 };
 
@@ -68,8 +68,8 @@ type ProductSeed = {
 async function seedProduct(db: pg.Pool, shopId: string, seed: ProductSeed): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
     `insert into products (shop_id, canonical_url, name, price_cents, compare_at_cents, currency, category_id, color_id,
-       created_at)
-     values ($1, $2, $3, $4, $5, 'EUR', $6, $7, $8) returning id`,
+       created_at, published_at, published_source)
+     values ($1, $2, $3, $4, $5, 'EUR', $6, $7, $8, $8, 'first_seen') returning id`,
     [
       shopId,
       `https://catalogue.e2e.test/products/${randomUUID()}`,

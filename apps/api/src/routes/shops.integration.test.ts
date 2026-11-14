@@ -76,6 +76,9 @@ async function newProduct(
       shopId,
       canonicalUrl: `https://p.test/${n}`,
       createdAt,
+      // First seen when created: its put-online date (the newest goes by it, « Nouveautés » order).
+      publishedAt: createdAt,
+      publishedSource: "first_seen",
       name: `Article ${n}`,
       priceCents: 3000,
       currency: "EUR",
@@ -129,6 +132,8 @@ describe("GET /api/shops", () => {
     await newProduct(shop.id, ago(3 * DAY), true);
     const recent = await newProduct(shop.id, ago(DAY), true);
     await newProduct(shop.id, ago(0), false); // newest, no photo: not in « Découvrir »
+    // Undated (already on sale at the shop's first import), but imported just now: after every dated one.
+    await newProduct(shop.id, ago(0), true, { publishedAt: null, publishedSource: "unknown", shopRank: 0 });
     const bare = await newShop({ name: "Sans photo" });
 
     const { body } = await directory();
@@ -137,7 +142,7 @@ describe("GET /api/shops", () => {
       id: shop.id,
       name: "Les Cœurs",
       domain: "lescoeurs.test",
-      itemCount: 2,
+      itemCount: 3,
       imageUrl: `/api/catalog-images/${recent.imageId}`,
     });
     expect(body.shops.find((s) => s.id === bare.id)?.imageUrl).toBeNull();

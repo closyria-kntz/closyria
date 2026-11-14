@@ -332,8 +332,8 @@ const pagesFor = (count: number) => Math.max(1, Math.ceil(count / WOO_PAGE_SIZE)
  * - listed 25 products at a time; a shop that refuses the listing (400, even after earlier batches) has the rest read
  *   one by one, and is remembered so;
  * - a product with more variations than the budget is read over several imports (`variants_cursor`): once it has
- *   waited 24 h (since its last full read, else since it is known) the import starts with it; otherwise only when
- *   there is nothing else to read;
+ *   waited 24 h (since its last full read, else since it is known) the import starts with it, within half of the
+ *   budget (the rest goes to the others); otherwise only when there is nothing else to read;
  * - the first failure (5xx, timeout, unreadable) ends the reads of this import, its products waiting 24 h;
  * - a refusal (robots.txt, 401/403/429, an HTML page) stops the import like a page's.
  */
@@ -377,13 +377,14 @@ async function readVariations(
     oneByOne
       ? c.item.variations.length > WOO_VARIATION_REQUESTS_ONE_BY_ONE
       : pagesFor(c.item.variations.length) > WOO_VARIATION_REQUESTS;
-  const readInParts = async (candidate: Candidate) => {
+  /** Reads the next part of a big product, within `budget` requests (by default all that is left). */
+  const readInParts = async (candidate: Candidate, budget = left()) => {
     const count = candidate.item.variations.length;
     read += 1;
     if (oneByOne) {
       const start = candidate.cursor < count ? candidate.cursor : 0;
       const stock = new Map<string, WooVariationStock>();
-      const part = candidate.item.variations.slice(start, start + left());
+      const part = candidate.item.variations.slice(start, start + Math.min(budget, left()));
       for (const variation of part) {
         const one = await readVariation(fetch, api, variation.id);
         stopIfInterrupted();
@@ -395,7 +396,7 @@ async function readVariations(
       return writeStock(ctx, candidate, stock, end >= count ? null : end);
     }
     const firstPage = Math.floor((candidate.cursor < count ? candidate.cursor : 0) / WOO_PAGE_SIZE) + 1;
-    const result = await readVariationsInBulk(fetch, api, [candidate.id], left(), firstPage);
+    const result = await readVariationsInBulk(fetch, api, [candidate.id], Math.min(budget, left()), firstPage);
     stopIfInterrupted();
     spent += result.requests;
     if (result.kind === "unsupported") return switchToOneByOne();
@@ -410,7 +411,8 @@ async function readVariations(
 
   const big = due.filter(oversized);
   const queue = due.filter((c) => !oversized(c));
-  // Its guaranteed share: a big product waiting for a day takes this import first.
+  // Its guaranteed share: a big product waiting for a day is read first, within half of this import's budget; the
+  // other half goes to the others.
   const now = ctx.now().getTime();
   const starving = big.find((c) => c.waitingSince <= now - WOO_VARIANTS_RECHECK_MS);
   if (starving) {
@@ -418,7 +420,7 @@ async function readVariations(
       `catalogue import ${shopId}: product ${starving.id} (${starving.item.variations.length} variations) read first`,
     );
     big.splice(big.indexOf(starving), 1);
-    await readInParts(starving);
+    await readInParts(starving, Math.max(1, Math.floor(left() / 2)));
   }
 
   while (!oneByOne && !failed && queue.length > 0 && left() > 0) {

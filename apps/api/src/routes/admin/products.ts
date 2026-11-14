@@ -7,11 +7,13 @@ import {
   adminProductDetailSchema,
   adminProductListSchema,
   adminProductPatchSchema,
+  adminProductPublishedAtSchema,
   adminProductsQuerySchema,
   adminRecaptureSchema,
   type ChildDetail,
   type ClassifiedBy,
   type ProductCaptureStatus,
+  type PublishedSource,
   type Season,
 } from "@closyria/shared";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
@@ -71,6 +73,28 @@ const patchRoute = defineAccess(
     responses: {
       200: { description: "The sheet", content: { "application/json": { schema: adminProductDetailSchema } } },
       400: errorContent("Invalid body, or an unknown category / colour / material / pattern"),
+      404: errorContent("Unknown sheet"),
+    },
+  }),
+  "admin",
+);
+
+const publishedAtRoute = defineAccess(
+  createRoute({
+    method: "put",
+    path: "/admin/products/{id}/published-at",
+    summary: "Set the sheet's put-online date by hand, or go back to the automatic one",
+    description:
+      "A day (`YYYY-MM-DD`, from 2000-01-01 to tomorrow) is stored at 00:00 UTC with the source `admin`: no import " +
+      "overwrites it. `null` clears a date set by hand: the sheet goes back to `unknown` (no date) and the next import " +
+      "writes it again in full, with the shop's date when it gives one. Journaled.",
+    request: {
+      params: idParam,
+      body: { required: true, content: { "application/json": { schema: adminProductPublishedAtSchema } } },
+    },
+    responses: {
+      200: { description: "The sheet", content: { "application/json": { schema: adminProductDetailSchema } } },
+      400: errorContent("Invalid body (not a day, before 2000, after tomorrow)"),
       404: errorContent("Unknown sheet"),
     },
   }),
@@ -179,6 +203,7 @@ async function loadDetail(db: Database, id: string): Promise<AdminProductDetail 
     patternId: p.patternId,
     season: p.season as Season | null,
     publishedAt: p.publishedAt?.toISOString() ?? null,
+    publishedSource: p.publishedSource as PublishedSource,
     lastCapturedAt: p.lastCapturedAt?.toISOString() ?? null,
     updatedAt: p.updatedAt.toISOString(),
     hiddenAt: p.hiddenAt?.toISOString() ?? null,
@@ -274,6 +299,36 @@ export function adminProductsRoutes(deps: CatalogDeps) {
         if (pgCode(error) === "23503") return c.json(invalidRequest, 400); // unknown reference entry
         throw error;
       }
+      const detail = await loadDetail(db, id);
+      return detail ? c.json(detail, 200) : c.json(notFound, 404);
+    })
+    .openapi(publishedAtRoute, async (c) => {
+      const { id } = c.req.valid("param");
+      const { publishedAt } = c.req.valid("json");
+      noteAudit(c, {
+        action: "product.published_at",
+        target: `product:${id}`,
+        details: { publishedAt },
+      });
+      const at = now();
+      const [updated] = publishedAt
+        ? await db
+            .update(p)
+            .set({ publishedAt: new Date(`${publishedAt}T00:00:00Z`), publishedSource: "admin", updatedAt: at })
+            .where(eq(p.id, id))
+            .returning({ id: p.id })
+        : // Only a date set by hand is cleared; the next import rewrites the sheet (`source_hash`) with the shop's date.
+          await db
+            .update(p)
+            .set({
+              publishedAt: sql`case when ${p.publishedSource} = 'admin' then null else ${p.publishedAt} end`,
+              sourceHash: sql`case when ${p.publishedSource} = 'admin' then null else ${p.sourceHash} end`,
+              publishedSource: sql`case when ${p.publishedSource} = 'admin' then 'unknown' else ${p.publishedSource} end`,
+              updatedAt: at,
+            })
+            .where(eq(p.id, id))
+            .returning({ id: p.id });
+      if (!updated) return c.json(notFound, 404);
       const detail = await loadDetail(db, id);
       return detail ? c.json(detail, 200) : c.json(notFound, 404);
     })

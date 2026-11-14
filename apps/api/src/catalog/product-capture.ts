@@ -1,5 +1,5 @@
 import { and, type Database, desc, eq, inArray, schema, sql } from "@closyria/db";
-import type { CaptureStatus } from "@closyria/shared";
+import { type CaptureStatus, undatedOnCreate } from "@closyria/shared";
 import type { CaptureQueue } from "./capture-queue";
 import type { Shop } from "./shops";
 
@@ -26,10 +26,11 @@ export async function requestProductCapture(
   queue: CaptureQueue,
   { url, shop, requestedBy, now, beforeEnqueue }: CaptureRequest,
 ): Promise<{ productId: string; captureId: string; status: CaptureStatus }> {
-  // Two people pasting the same new link: one insert wins, the other re-reads.
+  // Two people pasting the same new link: one insert wins, the other re-reads. A shop already imported: first seen
+  // now (unless its page gives a date); otherwise no date (`unknown`).
   await db
     .insert(schema.products)
-    .values({ shopId: shop.id, canonicalUrl: url })
+    .values({ shopId: shop.id, canonicalUrl: url, ...undatedOnCreate(shop.lastImportAt, now()) })
     .onConflictDoNothing({ target: schema.products.canonicalUrl });
   const [product] = await db.select().from(schema.products).where(eq(schema.products.canonicalUrl, url));
   if (!product) throw new Error("product vanished after insert");

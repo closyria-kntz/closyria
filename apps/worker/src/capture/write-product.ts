@@ -35,6 +35,9 @@ export function uniqueSizes(sizes: ExtractedProduct["sizes"]): ExtractedProduct[
  * fill audience, material, pattern and season, and the category and colour come from `classifyCatalogue` (product type,
  * tags, colour option, name), then the capture rules, then the previous value — unless the admin filed the category by
  * hand (`category_source = admin`), which the rules never overwrite.
+ *
+ * Put-online date: the shop's (`shop`) when it gives one, except over a date set by the admin; otherwise the row keeps
+ * what it had (its creator set `first_seen` or left it `unknown`, see `undatedOnCreate`).
  */
 export async function writeProduct(tx: Transaction, input: WriteProductInput): Promise<void> {
   const { productId, product, at } = input;
@@ -50,6 +53,7 @@ export async function writeProduct(tx: Transaction, input: WriteProductInput): P
       patternId: schema.products.patternId,
       season: schema.products.season,
       priceCents: schema.products.priceCents,
+      publishedSource: schema.products.publishedSource,
     })
     .from(schema.products)
     .where(eq(schema.products.id, productId))
@@ -83,7 +87,11 @@ export async function writeProduct(tx: Transaction, input: WriteProductInput): P
       priceCents: product.priceCents,
       compareAtCents: product.compareAtCents ?? null,
       externalId: product.externalId ?? null,
-      publishedAt: product.publishedAt ? new Date(product.publishedAt) : null,
+      // The shop's own date, unless the admin set one by hand; without it the date stays as it was (`first_seen`,
+      // `unknown`, or a date the shop gave before): never invented here.
+      ...(product.publishedAt && current.publishedSource !== "admin"
+        ? { publishedAt: new Date(product.publishedAt), publishedSource: "shop" }
+        : {}),
       gtin: product.gtin ?? null,
       sku: product.sku ?? null,
       shopData,
