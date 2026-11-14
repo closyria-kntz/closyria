@@ -116,6 +116,12 @@ const reportRoute = (limiter: MiddlewareHandler<AccessEnv>) =>
     "user",
   );
 
+/** Until the shops agree to be listed, the catalogue answers admins only (same rule as the admin area: passkey session). */
+const isAdmin = (c: Context<AccessEnv>) => {
+  const session = c.var.session;
+  return session?.user.role === "admin" && session.session.authMethod === "passkey";
+};
+
 const userIdOf = (c: Context<AccessEnv>) => {
   const session = c.var.session;
   if (!session) throw new Error("session expected on a user route");
@@ -137,6 +143,7 @@ export function catalogueRoutes(deps: CatalogDeps) {
     .openapi(listRoute, async (c) => {
       const query = c.req.valid("query");
       c.header("Cache-Control", "private, no-cache");
+      if (!isAdmin(c)) return c.json({ items: [], nextCursor: null, hasSizes: false }, 200);
       try {
         const viewer = await loadViewer(db, userIdOf(c), query.profile);
         return c.json(await listCatalog(db, viewer, query, now()), 200);
@@ -147,6 +154,10 @@ export function catalogueRoutes(deps: CatalogDeps) {
     })
     .openapi(detailRoute, async (c) => {
       const { productId } = c.req.valid("param");
+      if (!isAdmin(c)) {
+        c.header("Cache-Control", "private, no-cache");
+        return c.json(notFound, 404);
+      }
       const viewer = await loadViewer(db, userIdOf(c), c.req.valid("query").profile);
       const sheet = await loadCatalogDetail(db, viewer, productId);
       c.header("Cache-Control", "private, no-cache");
@@ -159,6 +170,7 @@ export function catalogueRoutes(deps: CatalogDeps) {
     })
     .openapi(reportRoute(reportLimiter), async (c) => {
       const { productId } = c.req.valid("param");
+      if (!isAdmin(c)) return c.json(notFound, 404);
       const recorded = await reportProduct(db, userIdOf(c), productId, c.req.valid("json").reason);
       return recorded ? c.body(null, 204) : c.json(notFound, 404);
     });

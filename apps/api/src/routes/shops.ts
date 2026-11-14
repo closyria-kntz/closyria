@@ -24,6 +24,9 @@ export function shopsRoutes(deps: CatalogDeps) {
   const app = new OpenAPIHono<AccessEnv>();
   return app.openapi(directoryRoute, async (c) => {
     c.header("Cache-Control", "private, no-cache");
-    return c.json(await loadShopDirectory(deps.db), 200);
+    // Shop product photos are shown to admins only until the shops agree to be listed.
+    const session = c.var.session;
+    const admin = session?.user.role === "admin" && session.session.authMethod === "passkey";
+    return c.json(await loadShopDirectory(deps.db, admin), 200);
   });
 }

@@ -90,6 +90,28 @@ test("la grille montre les boutiques publiées avec leur site, et la recherche l
   await expect(page.getByRole("link", { name: new RegExp(draft.name) })).toHaveCount(0);
   await axeLightAndDark(page);
 
+  // Until the shops agree to be listed: no search, no filters, no article grid, no shop product photo, and the API refuses.
+  await expect(page.getByText("Le catalogue d’articles arrive bientôt.")).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Rechercher un article ou une boutique" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Filtres/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Les articles" })).toHaveCount(0);
+  await expect(page.getByRole("article", { name: "Les derniers arrivés" })).toHaveCount(0);
+  await expect(page.locator('img[src*="catalog-images"]')).toHaveCount(0);
+  const refused = await page.evaluate(async () => {
+    const list = await (await fetch("/api/catalog")).json();
+    const directory = await (await fetch("/api/shops")).text();
+    return { list, photos: directory.includes("catalog-images") };
+  });
+  expect(refused).toEqual({ list: { items: [], nextCursor: null, hasSizes: false }, photos: false });
+});
+
+test("un admin garde la recherche des boutiques et les articles", async ({ page, request, db, userAgentTag }) => {
+  const shop = await seedShop(db, "Atelier Zéphyr", "published", 2);
+  const draft = await seedShop(db, "Brouillon caché", "draft", 5);
+  await signInAsAdmin(page, request, db, userAgentTag);
+  await page.goto("/decouvrir");
+  const grid = page.getByRole("region", { name: "Toutes les boutiques" });
+  await expect(page.getByText("Le catalogue d’articles arrive bientôt.")).toHaveCount(0);
   const search = page.getByRole("searchbox", { name: "Rechercher un article ou une boutique" });
   await search.fill(shop.tag);
   await expect(grid.getByRole("link")).toHaveCount(1);
@@ -109,7 +131,7 @@ test("la grille montre les boutiques publiées avec leur site, et la recherche l
 
 test("sans aucune boutique, l’écran explique comment en faire apparaître", async ({ page }) => {
   // The suite's database always has shops: the answer of an empty directory is played to this page only.
-  await page.route("**/api/shops", (route) => route.fulfill({ json: { featured: null, shops: [] } }));
+  await page.route("**/api/shops", (route) => route.fulfill({ json: { featured: null, shops: [], catalogue: false } }));
   // Nor any article: no shop, no catalogue.
   await page.route("**/api/catalog?*", (route) =>
     route.fulfill({ json: { items: [], nextCursor: null, hasSizes: false } }),
@@ -120,7 +142,7 @@ test("sans aucune boutique, l’écran explique comment en faire apparaître", a
     page.getByText("Aucune boutique pour l’instant. Colle le lien d’un article : sa boutique apparaîtra ici."),
   ).toBeVisible();
   await expect(page.getByRole("region", { name: "Toutes les boutiques" })).toHaveCount(0);
-  await expect(page.getByText("Aucun article dans le catalogue pour l’instant.", { exact: false })).toBeVisible();
+  await expect(page.getByText("Le catalogue d’articles arrive bientôt.")).toBeVisible();
   await axeLightAndDark(page);
 });
 

@@ -11,6 +11,7 @@ type Harness = Awaited<ReturnType<typeof createCatalogHarness>>;
 let t: Harness;
 let me: { cookie: string; userId: string };
 let other: { cookie: string; userId: string };
+let plain: { cookie: string; userId: string };
 let counter = 0;
 const NOW = new Date("2026-11-13T12:00:00Z");
 const DAY = 24 * 3_600_000;
@@ -29,8 +30,16 @@ let ref: {
 beforeAll(async () => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   t = await createCatalogHarness({ now: () => NOW });
-  me = await t.signIn();
-  other = await t.signIn();
+  // The catalogue answers admins only until the shops agree to be listed: both test people are admins (passkey).
+  const admin = async () => {
+    const person = await t.signIn();
+    await t.db.update(schema.user).set({ role: "admin" }).where(eq(schema.user.id, person.userId));
+    await t.db.update(schema.session).set({ authMethod: "passkey" }).where(eq(schema.session.userId, person.userId));
+    return person;
+  };
+  me = await admin();
+  other = await admin();
+  plain = await t.signIn();
   await t.db
     .update(schema.user)
     .set({ name: "Camille Secrète", email: "camille.secrete@example.test", isAnonymous: false })
@@ -196,6 +205,29 @@ describe("access", () => {
     expect((await call("GET", "/catalog", "")).status).toBe(401);
     expect((await call("GET", `/catalog/${p.id}`, "")).status).toBe(401);
     expect((await call("POST", `/catalog/${p.id}/report`, "", { reason: "other" })).status).toBe(401);
+  });
+});
+
+describe("hotfix — the catalogue is for admins only until the shops agree", () => {
+  it("gives a non-admin an empty page, a 404 on the sheet and on a report, and records nothing", async () => {
+    const shop = await newShop();
+    const p = await newProduct(shop.id);
+    const res = await call("GET", "/catalog", plain.cookie);
+    expect(res.status).toBe(200);
+    expect(catalogPageSchema.parse(await res.json())).toEqual({ items: [], nextCursor: null, hasSizes: false });
+    const sheet = await call("GET", `/catalog/${p.id}`, plain.cookie);
+    expect(sheet.status).toBe(404);
+    expect(await sheet.json()).toEqual({ error: "not_found" });
+    expect((await call("POST", `/catalog/${p.id}/report`, plain.cookie, { reason: "other" })).status).toBe(404);
+    expect(await t.db.select().from(schema.productReports)).toHaveLength(0);
+    // An admin still sees it.
+    expect((await page("", me.cookie)).items.map((i) => i.productId)).toEqual([p.id]);
+  });
+
+  it("keeps an admin without a passkey session out", async () => {
+    const person = await t.signIn();
+    await t.db.update(schema.user).set({ role: "admin" }).where(eq(schema.user.id, person.userId));
+    expect((await page("", person.cookie)).items).toEqual([]);
   });
 });
 
@@ -1074,6 +1106,8 @@ describe("POST /api/catalog/{productId}/report", () => {
 
   it("allows 20 reports an hour per person", async () => {
     const reporter = await t.signIn();
+    await t.db.update(schema.user).set({ role: "admin" }).where(eq(schema.user.id, reporter.userId));
+    await t.db.update(schema.session).set({ authMethod: "passkey" }).where(eq(schema.session.userId, reporter.userId));
     const shop = await newShop();
     const statuses: number[] = [];
     for (let i = 0; i < 21; i++) {

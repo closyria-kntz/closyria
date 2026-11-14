@@ -202,6 +202,7 @@
       "newBody": "Les articles entrés cette semaine dans le catalogue.",
       "newOpen": "Voir les nouveautés"
     },
+    "soon": "Le catalogue d’articles arrive bientôt.",
     "all": "Toutes les boutiques",
     "count": "{count, plural, =0 {Aucun article pour l’instant} one {# article} other {# articles}}",
     "newTab": "(s’ouvre dans un nouvel onglet)",

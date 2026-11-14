@@ -21,5 +21,7 @@ export type ShopCard = z.infer<typeof shopCardSchema>;
 export const shopDirectorySchema = z.object({
   featured: shopCardSchema.nullable(),
   shops: z.array(shopCardSchema),
+  /** Whether the catalogue's articles may be shown to this caller (admins only for now); shop photos go with it. */
+  catalogue: z.boolean(),
 });
 export type ShopDirectory = z.infer<typeof shopDirectorySchema>;

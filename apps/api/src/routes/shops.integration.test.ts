@@ -94,7 +94,7 @@ async function newProduct(
   return { product: p, imageId: img?.id ?? null };
 }
 
-async function directory(cookie = userCookie) {
+async function directory(cookie = adminCookie) {
   const res = await call("GET", "/shops", cookie);
   expect(res.status).toBe(200);
   const text = await res.text();
@@ -104,6 +104,16 @@ async function directory(cookie = userCookie) {
 describe("GET /api/shops", () => {
   it("needs a session", async () => {
     expect((await call("GET", "/shops", "")).status).toBe(401);
+  });
+
+  it("gives a non-admin the shops without any product photo and without the catalogue", async () => {
+    const shop = await newShop();
+    await newProduct(shop.id, ago(DAY), true);
+    const { text, body } = await directory(userCookie);
+    expect(body.catalogue).toBe(false);
+    expect(body.shops.map((s) => s.id)).toEqual([shop.id]);
+    expect(body.shops[0]?.imageUrl).toBeNull();
+    expect(text).not.toContain("/api/catalog-images/");
   });
 
   it("lists only published shops that are not merged, the most articles first, then by name", async () => {
@@ -203,6 +213,7 @@ describe("GET /api/shops", () => {
     const { text, body } = await directory(adminCookie);
     expect(body.shops).toHaveLength(1);
     expect(Object.keys(body.shops[0] ?? {}).sort()).toEqual(["domain", "id", "imageUrl", "itemCount", "name"]);
+    expect(body.catalogue).toBe(true);
     for (const secret of ["Camille", "camille.secrete", userId, "Moi"]) expect(text).not.toContain(secret);
   });
 });

@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import type { Locator, Page } from "@playwright/test";
 import type pg from "pg";
-import { sessionsOf } from "../fixtures/auth";
+import { sessionsOf, signInAsAdmin } from "../fixtures/auth";
 import { setupValue } from "../fixtures/paths";
 import { expect, test } from "../fixtures/test";
 
@@ -12,6 +12,11 @@ import { expect, test } from "../fixtures/test";
 // the sheet of an article (sizes, « Aimé par », close pieces, same shop, same style, the written actions), « Signaler »
 // and the back button that keeps the filters and the place. The database is shared by the whole suite: every test
 // brings its own shops and articles under a unique tag, and searches that tag.
+
+// The catalogue is for admins only until the shops agree to be listed: every test here browses it as an admin.
+test.beforeEach(async ({ page, request, db, userAgentTag }) => {
+  await signInAsAdmin(page, request, db, userAgentTag);
+});
 
 const axe = async (page: Page) => {
   await page.evaluate(() =>

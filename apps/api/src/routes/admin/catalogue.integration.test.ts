@@ -119,7 +119,7 @@ async function newProduct(shopId: string, options: ProductOptions = {}) {
   return p;
 }
 
-async function catalogueIds(cookie = user.cookie) {
+async function catalogueIds(cookie = admin.cookie) {
   const res = await call("GET", "/catalog", undefined, cookie);
   expect(res.status).toBe(200);
   return catalogPageSchema.parse(await res.json()).items.map((c) => c.productId);

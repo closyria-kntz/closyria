@@ -30,9 +30,9 @@ export async function featuredShopId(db: Database): Promise<string | null> {
 /**
  * The shops of « Découvrir »: published, not merged, not a « grande enseigne », with a domain to open. Only shop
  * facts leave this function (name, main domain, how many of its articles « Découvrir » shows, one photo of the newest
- * of them, « Nouveautés » order), never who pasted them. The featured one is the shop whose `featured_at` is the most recent; it is left out of `shops`.
+ * of them (admins only: no shop photo goes out before the shops agree), « Nouveautés » order), never who pasted them. The featured one is the shop whose `featured_at` is the most recent; it is left out of `shops`.
  */
-export async function loadShopDirectory(db: Database): Promise<ShopDirectory> {
+export async function loadShopDirectory(db: Database, admin: boolean): Promise<ShopDirectory> {
   const { rows } = await db.execute<Row>(sql`
     select s.id, s.name, d.domain,
       (select count(*)::int from products p where p.shop_id = s.id and ${inCatalogue}) as item_count,
@@ -51,7 +51,7 @@ export async function loadShopDirectory(db: Database): Promise<ShopDirectory> {
     name: r.name,
     domain: r.domain,
     itemCount: Number(r.item_count),
-    imageUrl: r.image_id ? catalogImageUrl(r.image_id) : null,
+    imageUrl: admin && r.image_id ? catalogImageUrl(r.image_id) : null,
   });
   return {
     featured: featuredRow ? card(featuredRow) : null,
@@ -59,5 +59,6 @@ export async function loadShopDirectory(db: Database): Promise<ShopDirectory> {
       .filter((r) => r !== featuredRow)
       .map(card)
       .sort(byCountThenName),
+    catalogue: admin,
   };
 }

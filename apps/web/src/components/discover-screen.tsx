@@ -186,7 +186,9 @@ export function DiscoverScreen() {
   const query = useMemo(() => toCatalogueQuery(filters, current.id), [filters, current.id]);
   const key = snapshotKey(new URLSearchParams(searchText));
   const count = activeCatalogueFilterCount(filters, hasSizes);
-  const filtered = count > 0;
+  // Until the shops agree to be listed, the articles (grid, search, filters, « Nouveautés ») are for admins only.
+  const articles = loaded.status === "ready" && loaded.directory.catalogue;
+  const filtered = articles && count > 0;
 
   useEffect(() => {
     let live = true;
@@ -204,7 +206,7 @@ export function DiscoverScreen() {
 
   // « Nouveautés de la semaine »: read only when no shop of the week is put forward.
   const featured = loaded.status === "ready" ? loaded.directory.featured : null;
-  const needsNew = loaded.status === "ready" && !featured && ready;
+  const needsNew = articles && !featured && ready;
   useEffect(() => {
     if (!needsNew) return;
     const controller = new AbortController();
@@ -249,7 +251,8 @@ export function DiscoverScreen() {
 
   // What stands above the grid is drawn (the kept position can be given back).
   const aboveReady =
-    loaded.status !== "loading" && (filtered || featured !== null || !needsNew || newArrival.status === "ready");
+    loaded.status !== "loading" &&
+    (!articles || filtered || featured !== null || !needsNew || newArrival.status === "ready");
 
   const head = (
     <div className="flex flex-col gap-space-1">
@@ -258,7 +261,7 @@ export function DiscoverScreen() {
     </div>
   );
 
-  const tools = (
+  const tools = !articles ? null : (
     <div className="flex flex-col gap-space-3">
       {/* Positioned: the filters panel opens against this row. */}
       <div className="relative flex items-center gap-space-2">
@@ -334,15 +337,19 @@ export function DiscoverScreen() {
       {head}
       {tools}
       {une}
-      <CatalogueSection
-        query={query}
-        snapshotKey={key}
-        ready={ready}
-        aboveReady={aboveReady}
-        filtered={filtered}
-        onClear={clear}
-        onHasSizes={setHasSizes}
-      />
+      {articles ? (
+        <CatalogueSection
+          query={query}
+          snapshotKey={key}
+          ready={ready}
+          aboveReady={aboveReady}
+          filtered={filtered}
+          onClear={clear}
+          onHasSizes={setHasSizes}
+        />
+      ) : loaded.status === "ready" ? (
+        <p className="max-w-measure rounded-card bg-surface-sunken p-space-4 text-ink-muted">{t("soon")}</p>
+      ) : null}
       {shopsBlock}
     </div>
   );
