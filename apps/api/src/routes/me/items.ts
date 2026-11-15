@@ -1,5 +1,6 @@
 import { and, eq, schema } from "@closyria/db";
 import {
+  instagramItemInputSchema,
   itemCountsQuerySchema,
   itemCountsSchema,
   itemCreateSchema,
@@ -22,6 +23,7 @@ import { countItems } from "../../wardrobe/item-counts";
 import { InvalidCursorError, listItems, loadItemView } from "../../wardrobe/item-view";
 import {
   changeStage,
+  createInstagramItem,
   createItem,
   type ItemOutcome,
   moveItem,
@@ -68,6 +70,28 @@ const createItemRoute = (limiter: MiddlewareHandler<AccessEnv>) =>
         200: mutation("She already keeps this product: her item, unchanged"),
         400: errorContent("Invalid body (invalid_request)"),
         404: errorContent("Unknown product, or another account's profile or list (not_found)"),
+        429: errorContent("Over 300 creations this hour (rate_limited)"),
+      },
+    }),
+    "user",
+  );
+
+const createInstagramRoute = (limiter: MiddlewareHandler<AccessEnv>) =>
+  defineAccess(
+    createRoute({
+      method: "post",
+      path: "/me/items/instagram",
+      summary: "Keep an article from an Instagram link (the short form)",
+      description:
+        "Instagram is never read: an article without a product, with the name, brand, size and notes she typed and " +
+        "the link as its source. `wish` (« Repéré ») or `ordered` (« Commandé », with what she paid). Without " +
+        "`profileId`, her first profile. Counts as an item creation (300 an hour per account).",
+      middleware: [limiter],
+      request: body(instagramItemInputSchema),
+      responses: {
+        201: mutation("Created; undo sends it to the trash"),
+        400: errorContent("Invalid body, or not an Instagram link (invalid_request)"),
+        404: errorContent("Another account's profile (not_found)"),
         429: errorContent("Over 300 creations this hour (rate_limited)"),
       },
     }),
@@ -257,6 +281,16 @@ export function itemsRoutes(deps: WardrobeDeps, { attachReadyImports }: Pick<Imp
       const result = await answer(userId, outcome);
       if (!result) return c.json(notFound, 404);
       if (!outcome.created) return c.json(result, 200);
+      await trackItemEvent(db, userId, "item_saved", { action: input.action, stage: result.item.stage });
+      return c.json(result, 201);
+    })
+    .openapi(createInstagramRoute(limiter), async (c) => {
+      const userId = userIdOf(c);
+      const input = c.req.valid("json");
+      const outcome = await createInstagramItem(db, userId, input, now());
+      if ("error" in outcome) return c.json(notFound, 404);
+      const result = await answer(userId, outcome);
+      if (!result) return c.json(notFound, 404);
       await trackItemEvent(db, userId, "item_saved", { action: input.action, stage: result.item.stage });
       return c.json(result, 201);
     })

@@ -1,8 +1,19 @@
-import { and, asc, type Database, desc, eq, inArray, schema, sql } from "@closyria/db";
+import {
+  and,
+  asc,
+  type Database,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  receivedQuestionOpen,
+  schema,
+  sql,
+} from "@closyria/db";
 import type { Carrier, OrderView, ParcelStatus } from "@closyria/shared";
 import type { Tx } from "../wardrobe/events";
 
-type OrderRow = typeof schema.orders.$inferSelect;
+type OrderRow = typeof schema.orders.$inferSelect & { receivedQuestion: boolean };
 
 /** Her orders shown in « Mes commandes »: the newest first, this many at most. */
 export const MAX_LISTED_ORDERS = 100;
@@ -77,15 +88,22 @@ async function viewsOf(db: Database | Tx, rows: OrderRow[]): Promise<OrderView[]
           estimatedAt: iso(parcel.estimatedAt),
           deliveredAt: iso(parcel.deliveredAt),
         })),
+      receivedQuestion: order.receivedQuestion,
       createdAt: order.createdAt.toISOString(),
     };
   });
 }
 
+/** The order's columns, and whether « Tu as reçu ta commande ? » waits for her answer. */
+const orderColumns = {
+  ...getTableColumns(schema.orders),
+  receivedQuestion: sql<boolean>`${receivedQuestionOpen()}`,
+};
+
 /** One of her orders (any status), or null when unknown or another account's. */
 export async function loadOrderView(db: Database | Tx, userId: string, orderId: string): Promise<OrderView | null> {
   const rows = await db
-    .select()
+    .select(orderColumns)
     .from(schema.orders)
     .where(and(eq(schema.orders.id, orderId), eq(schema.orders.userId, userId)));
   return (await viewsOf(db, rows))[0] ?? null;
@@ -94,7 +112,7 @@ export async function loadOrderView(db: Database | Tx, userId: string, orderId: 
 /** « Mes commandes »: her drafts to validate and her orders, newest first; dismissed ones are not listed. */
 export async function listOrderViews(db: Database, userId: string): Promise<OrderView[]> {
   const rows = await db
-    .select()
+    .select(orderColumns)
     .from(schema.orders)
     .where(and(eq(schema.orders.userId, userId), inArray(schema.orders.status, ["draft", "confirmed"])))
     .orderBy(desc(schema.orders.createdAt), desc(schema.orders.id))

@@ -278,9 +278,13 @@ export async function listAlerts(db: Database, userId: string, cursor: string | 
   const alerts: AlertEventView[] = page.map((row) => {
     const kind = row.kind as AlertKind;
     const item = isItemKind(kind);
+    // « Plus que 3 jours pour retourner {article} » names her item (with or without a product), not a shop.
+    const aboutItem = item || kind === "return_reminder";
     const href =
-      item && row.productId && row.itemProfileId ? alertItemHref(row.productId, row.itemProfileId) : ALERTS_PAGE_HREF;
-    const title = item
+      aboutItem && row.productId && row.itemProfileId
+        ? alertItemHref(row.productId, row.itemProfileId)
+        : ALERTS_PAGE_HREF;
+    const title = aboutItem
       ? (row.itemName ?? "")
       : kind === "sale_period"
         ? (row.salePeriodName ?? "")
@@ -288,7 +292,7 @@ export async function listAlerts(db: Database, userId: string, cursor: string | 
     return {
       id: row.id,
       kind,
-      itemId: item && row.itemProfileId ? row.itemId : null,
+      itemId: aboutItem && row.itemProfileId ? row.itemId : null,
       title,
       shopName: row.shopName,
       sizeLabel: row.sizeLabel,
@@ -298,7 +302,7 @@ export async function listAlerts(db: Database, userId: string, cursor: string | 
       currency: item ? ((row.currency as AlertEventView["currency"]) ?? null) : null,
       salePeriodName: row.salePeriodName,
       startsOn: row.startsOn,
-      photoUrl: item
+      photoUrl: aboutItem
         ? row.coverMediaId
           ? privateMediaUrl(row.coverMediaId)
           : row.productImageId

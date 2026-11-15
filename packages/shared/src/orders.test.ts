@@ -302,6 +302,7 @@ describe("order schemas", () => {
           deliveredAt: null,
         },
       ],
+      receivedQuestion: false,
       createdAt: "2026-11-02T10:05:00.000Z",
     });
     expect(view.parcels[0]?.carrier).toBe("colissimo");

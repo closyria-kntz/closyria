@@ -153,6 +153,8 @@ describe("schemas", () => {
       "parcel_out_for_delivery",
       "parcel_pickup_ready",
       "parcel_delivered",
+      "return_reminder",
+      "order_received_check",
     ]);
   });
   it("settings: digest hour between 8 and 21, out of the quiet hours", () => {

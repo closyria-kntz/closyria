@@ -247,11 +247,14 @@ describe("order-email-purge queue", () => {
     });
     expect(boss.createQueue).toHaveBeenCalledWith(ORDER_EMAIL_PURGE_QUEUE);
     expect(boss.work).toHaveBeenCalledWith(ORDER_EMAIL_PURGE_QUEUE, expect.any(Function));
-    // The parcels are swept every 15 minutes, one sweep at a time.
+    // The parcels are swept every 15 minutes, one sweep at a time; returns and « reçue ? » at 9:00 Paris.
     expect(calls).toEqual([
       ["order-email-purge", "45 3 * * *"],
       ["parcel-check", "*/15 * * * *"],
+      ["order-daily", "0 9 * * *", undefined, { tz: "Europe/Paris", key: "daily-orders" }],
     ]);
+    expect(boss.createQueue).toHaveBeenCalledWith("order-daily", { policy: "singleton" });
+    expect(boss.work).toHaveBeenCalledWith("order-daily", expect.any(Function));
     expect(boss.createQueue).toHaveBeenCalledWith("parcel-check", { policy: "singleton" });
     expect(boss.work).toHaveBeenCalledWith("parcel-check", expect.any(Function));
     const retries = { retryLimit: 3, retryDelay: 60, retryBackoff: true };

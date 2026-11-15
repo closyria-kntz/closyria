@@ -1,4 +1,17 @@
-import { and, asc, type Database, desc, eq, inArray, isNull, ne, schema, sql } from "@closyria/db";
+import {
+  and,
+  asc,
+  type Database,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  receivedQuestionOpen,
+  receiveOrderItems,
+  schema,
+  sql,
+} from "@closyria/db";
 import {
   type Carrier,
   detectCarrier,
@@ -8,6 +21,7 @@ import {
   nextParcelCheckClamped,
   type OrderLineInput,
   type OrderPatch,
+  type OrderReceivedAnswer,
   type OrderView,
   parcelCheckUntil,
   type TrackingInput,
@@ -262,7 +276,10 @@ async function confirmLocked(tx: Tx, userId: string, order: Order, now: Date) {
     taken.add(itemId);
     await tx.update(schema.orderLines).set({ itemId }).where(eq(schema.orderLines.id, line.id));
   }
-  await tx.update(schema.orders).set({ status: "confirmed", updatedAt: now }).where(eq(schema.orders.id, order.id));
+  await tx
+    .update(schema.orders)
+    .set({ status: "confirmed", confirmedAt: now, updatedAt: now })
+    .where(eq(schema.orders.id, order.id));
 }
 
 /**
@@ -492,6 +509,7 @@ export async function addItemTracking(
         profileId: item.profileId,
         shopId: product?.shopId ?? null,
         status: "confirmed",
+        confirmedAt: now,
         source: "tracking",
         parseMethod: "manual",
       })
@@ -516,5 +534,59 @@ export async function addItemTracking(
     });
     await addParcel(tx, order.id, input.trackingNumber, input.carrier, now);
     return viewOf(tx, userId, order.id, true);
+  });
+}
+
+// --- « Tu as reçu ta commande {boutique} ? » (Task 6) -------------------------------------------------------------
+
+/**
+ * Her answer to « Tu as reçu ta commande ? » on a validated order (spec §3.5).
+ * - « Oui »: her articles of the order still « Commandé » go to « Reçu » now, with the return deadline counted from
+ *   today (`receiveOrderItems`, the same move as a delivery); its parcels are no longer checked (`next_check_at`
+ *   null, `check_until` now: settled). A parcel the carrier reports delivered later changes nothing more (a deadline
+ *   already set is kept). Twice is harmless.
+ * - « Pas encore »: recorded when a question is waiting for her (the question at 20 days follows it); otherwise
+ *   nothing (the first question at 10 days stays the first).
+ * Lock order: her profiles, the order, its parcels, then the items.
+ */
+export async function answerReceived(
+  db: Database,
+  userId: string,
+  orderId: string,
+  input: OrderReceivedAnswer,
+  now: Date,
+): Promise<OrderOutcome> {
+  return inTransaction(db, async (tx) => {
+    await lockProfilesOf(tx, userId);
+    const order = await lockOwnOrder(tx, userId, orderId);
+    if (!order) return { error: "not_found" };
+    if (order.status === "dismissed") return { error: "order_dismissed" };
+    if (order.status !== "confirmed") return { error: "order_not_confirmed" };
+    if (input.answer === "yes") {
+      await tx
+        .select({ id: schema.parcels.id })
+        .from(schema.parcels)
+        .where(eq(schema.parcels.orderId, order.id))
+        .orderBy(asc(schema.parcels.id))
+        .for("update");
+      await tx
+        .update(schema.parcels)
+        .set({
+          nextCheckAt: null,
+          checkUntil: sql`least(${schema.parcels.checkUntil}, ${now.toISOString()}::timestamptz)`,
+        })
+        .where(eq(schema.parcels.orderId, order.id));
+      await receiveOrderItems(tx, order, now, now);
+    } else {
+      const [open] = await tx
+        .select({ open: sql<boolean>`${receivedQuestionOpen()}` })
+        .from(schema.orders)
+        .where(eq(schema.orders.id, order.id));
+      if (open?.open) {
+        await tx.update(schema.orders).set({ receivedNotYetAt: now }).where(eq(schema.orders.id, order.id));
+      }
+    }
+    await tx.update(schema.orders).set({ updatedAt: now }).where(eq(schema.orders.id, order.id));
+    return viewOf(tx, userId, order.id);
   });
 }

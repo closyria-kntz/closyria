@@ -239,6 +239,7 @@ const itemView = {
   saleChannel: null,
   nameOverride: null,
   brandOverride: null,
+  sourceUrl: null,
   categoryId: null,
   colorId: null,
   coverMediaId: null,

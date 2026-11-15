@@ -30,7 +30,9 @@
       "order_received": "Commande",
       "parcel_out_for_delivery": "Colis",
       "parcel_pickup_ready": "Colis",
-      "parcel_delivered": "Colis"
+      "parcel_delivered": "Colis",
+      "return_reminder": "Retour",
+      "order_received_check": "Commande"
     },
     "une": {
       "price_drop": "{name} passe à {price}",
@@ -2706,7 +2708,30 @@
     "parcel_pickup_readyNoShop": "Ton colis est disponible en point relais",
     "parcel_delivered": "Ton colis {shop} est arrivé",
     "parcel_deliveredNoShop": "Ton colis est arrivé",
+    "return_reminder": "Plus que 3 jours pour retourner {name}",
+    "order_received_check": "Tu as reçu ta commande {shop} ?",
+    "order_received_checkNoShop": "Tu as reçu ta commande ?",
     "action": "Voir"
+  },
+  "Orders": {
+    "receivedQuestion": "Tu as reçu ta commande {shop} ?",
+    "receivedQuestionNoShop": "Tu as reçu ta commande ?",
+    "receivedYes": "Oui",
+    "receivedNotYet": "Pas encore",
+    "returnUntil": "Retour possible jusqu'au {date}",
+    "returnReminder": "Plus que 3 jours pour retourner {name}",
+    "instagram": {
+      "title": "Un article vu sur Instagram",
+      "intro": "On ne lit pas Instagram : dis-nous ce que tu as vu.",
+      "name": "Nom de l'article",
+      "brand": "Boutique ou marque",
+      "price": "Prix payé",
+      "size": "Taille",
+      "notes": "Notes",
+      "wish": "Je le veux",
+      "ordered": "Je l'ai commandé",
+      "save": "Ajouter"
+    }
   },
   "Listing": {
     "brandHome": "Closyria, accueil",

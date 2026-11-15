@@ -17,6 +17,7 @@ import {
   MAX_SALE_CHANNEL,
   MAX_SIZE_LABEL,
   MAX_SIZE_NOTE,
+  MAX_SOURCE_URL,
   MAX_TAG_NAME,
   MAX_WHY,
   MAX_WISHLIST_NAME,
@@ -136,6 +137,11 @@ export const items = pgTable(
     targetPriceCents: integer("target_price_cents"),
     /** « Retour possible jusqu'au … »: Paris day set at the delivery (`returnDeadline`), null otherwise. */
     returnDeadline: date("return_deadline", { mode: "string" }),
+    /**
+     * Where she found an article without a product: an Instagram link (C5), never read. Null for the others (their
+     * product holds the shop's page).
+     */
+    sourceUrl: text("source_url"),
     /** Trash: set when deleted, purged after 30 days. */
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: createdAt(),
@@ -158,6 +164,12 @@ export const items = pgTable(
       "items_cents_check",
       sql`(${t.pricePaidCents} IS NULL OR ${t.pricePaidCents} >= 0) AND (${t.salePriceCents} IS NULL OR ${t.salePriceCents} >= 0)`,
     ),
+    check(
+      "items_source_url_check",
+      sql`${t.sourceUrl} IS NULL OR char_length(${t.sourceUrl}) BETWEEN 1 AND ${sql.raw(String(MAX_SOURCE_URL))}`,
+    ),
+    // The daily return reminder (« Plus que 3 jours… ») reads the items by deadline.
+    index("items_return_deadline_idx").on(t.returnDeadline).where(sql`${t.returnDeadline} IS NOT NULL`),
     check("items_target_price_check", sql`${t.targetPriceCents} IS NULL OR ${t.targetPriceCents} >= 1`),
   ],
 );

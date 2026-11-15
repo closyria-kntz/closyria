@@ -62,6 +62,10 @@ function useAlertWords() {
       case "parcel_pickup_ready":
       case "parcel_delivered":
         return { line: shop ? t(alert.kind, { shop }) : t(`${alert.kind}NoShop`), detail: "" };
+      case "return_reminder":
+        return { line: t("return_reminder", { name }), detail: "" };
+      case "order_received_check":
+        return { line: shop ? t("order_received_check", { shop }) : t("order_received_checkNoShop"), detail: "" };
     }
   };
 }
@@ -73,6 +77,8 @@ const ALERT_ICONS: Record<AlertEventView["kind"], string> = {
   parcel_out_for_delivery: "📦",
   parcel_pickup_ready: "📦",
   parcel_delivered: "📦",
+  return_reminder: "↩️",
+  order_received_check: "📦",
 };
 
 function AlertRow({ alert, unread, now }: { alert: AlertEventView; unread: boolean; now: Date }) {

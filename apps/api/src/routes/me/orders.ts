@@ -2,6 +2,7 @@ import {
   manualOrderInputSchema,
   orderListSchema,
   orderPatchSchema,
+  orderReceivedAnswerSchema,
   orderViewSchema,
   trackingInputSchema,
   wardrobeErrorSchema,
@@ -12,6 +13,7 @@ import { type AccessEnv, defineAccess } from "../../access";
 import { listOrderViews } from "../../orders/view";
 import {
   addItemTracking,
+  answerReceived,
   confirmOrder,
   createManualOrder,
   dismissOrder,
@@ -106,6 +108,25 @@ const dismissRoute = defineAccess(
       200: orderContent("Dismissed"),
       ...common,
       409: errorContent("Already validated (order_not_draft)"),
+    },
+  }),
+  "user",
+);
+
+const receivedRoute = defineAccess(
+  createRoute({
+    method: "post",
+    path: "/me/orders/{id}/received",
+    summary: "« Tu as reçu ta commande ? »: « Oui » or « Pas encore »",
+    description:
+      "`yes`: her articles of the order still « Commandé » go to « Reçu » now, with the return deadline (the shop's " +
+      "delay, 14 days without one), and its parcels are no longer checked. `not_yet`: the question comes back once, " +
+      "20 days after the shipping. Idempotent.",
+    request: { params: idParams, ...body(orderReceivedAnswerSchema) },
+    responses: {
+      200: orderContent("Answered"),
+      ...common,
+      409: errorContent("Not validated yet (order_not_confirmed), or dismissed (order_dismissed)"),
     },
   }),
   "user",
@@ -215,6 +236,11 @@ export function ordersRoutes(deps: WardrobeDeps) {
       const userId = await accountIdOf(c);
       if (!userId) return c.json(accountRequired, 403);
       return answer(c, await dismissOrder(db, userId, c.req.valid("param").id, now()));
+    })
+    .openapi(receivedRoute, async (c) => {
+      const userId = await accountIdOf(c);
+      if (!userId) return c.json(accountRequired, 403);
+      return answer(c, await answerReceived(db, userId, c.req.valid("param").id, c.req.valid("json"), now()));
     })
     .openapi(manualRoute(limiter), async (c) => {
       const userId = await accountIdOf(c);

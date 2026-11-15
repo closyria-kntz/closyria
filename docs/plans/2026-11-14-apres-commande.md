@@ -81,7 +81,7 @@
 
 **Produces:** tâche quotidienne 9 h Paris : rappel « Plus que 3 jours pour retourner {article} » (une fois par article) ; « Tu as reçu ta commande {boutique} ? » à J+10 sans nouvelle (une fois), réponses « Oui » (→ « Reçu » + date limite) / « Pas encore » (redemande à J+20) ; capture d'un lien `instagram.com` : aucun appel réseau, article créé avec ce lien comme source et formulaire court.
 
-- [ ] Tests d'abord, commit « feat(commandes): retours et Instagram ».
+- [x] Tests d'abord, commit « feat(commandes): retours et Instagram ». Fait : spec §10.5.
 
 ### Task 7: Écrans
 

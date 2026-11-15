@@ -35,6 +35,10 @@ export const alertKindSchema = z.enum([
   "parcel_out_for_delivery",
   "parcel_pickup_ready",
   "parcel_delivered",
+  // « Plus que 3 jours pour retourner {article} »: once per item, 3 days before its return deadline (Task 6).
+  "return_reminder",
+  // « Tu as reçu ta commande {boutique} ? »: no news of a validated order 10 days on (again at 20 after « Pas encore »).
+  "order_received_check",
 ]);
 export type AlertKind = z.infer<typeof alertKindSchema>;
 /** The kinds about one item (the others are about a shop or the sales calendar). */
@@ -47,6 +51,8 @@ export const IMMEDIATE_ALERT_KINDS = [
   "parcel_out_for_delivery",
   "parcel_pickup_ready",
   "parcel_delivered",
+  "return_reminder",
+  "order_received_check",
 ] as const satisfies readonly AlertKind[];
 /** The kinds about a parcel (they name it, and its order). */
 export const PARCEL_ALERT_KINDS = [

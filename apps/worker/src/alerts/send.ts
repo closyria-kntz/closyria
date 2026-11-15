@@ -1,4 +1,4 @@
-import { and, type Database, eq, inArray, isNull, lte, schema, sql } from "@closyria/db";
+import { and, type Database, eq, inArray, isNull, lte, orderAwaitingNews, schema, sql } from "@closyria/db";
 import {
   ALERT_TIME_ZONE,
   ALERTS_PAGE_HREF,
@@ -7,6 +7,8 @@ import {
   IMMEDIATE_ALERT_KINDS,
   nextSendAt,
   parisDay,
+  parisDaysBetween,
+  RETURN_REMINDER_DAYS,
 } from "@closyria/shared";
 import { z } from "zod";
 import { followedItem } from "./detect";
@@ -112,6 +114,31 @@ export function parcelDeliveredBody(itemsReceived: boolean | null, parcelsLeft: 
   return "";
 }
 
+/**
+ * « Plus que 3 jours pour retourner {article} » (« Plus que 2 jours… », « Plus qu'un jour… » when the reminder is
+ * caught up late), « … retourner ton article » without a name.
+ */
+export function returnReminderTitle(name: string | null, daysLeft: number): string {
+  const what = name?.trim() ? cut(name.trim()) : "ton article";
+  return daysLeft === 1
+    ? `Plus qu'un jour pour retourner ${what}`
+    : `Plus que ${daysLeft} jours pour retourner ${what}`;
+}
+
+/** « Retour possible jusqu'au 18 novembre » (a Paris day, `YYYY-MM-DD`). */
+export function returnDeadlineSentence(deadline: string): string {
+  const date = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" }).format(
+    new Date(`${deadline}T00:00:00Z`),
+  );
+  return `Retour possible jusqu'au ${date}`;
+}
+
+/** « Tu as reçu ta commande {boutique} ? », « Tu as reçu ta commande ? » when the shop is unknown. */
+export function orderReceivedCheckTitle(shop: string | null): string {
+  const name = shop?.trim();
+  return name ? `Tu as reçu ta commande ${cut(name)} ?` : "Tu as reçu ta commande ?";
+}
+
 /** The item's sheet, in the item's profile. */
 export const itemUrl = alertItemHref;
 
@@ -201,6 +228,8 @@ export async function sendAlert(
       parcelId: schema.alertEvents.parcelId,
       sizeLabel: schema.alertEvents.sizeLabel,
       priceCents: schema.alertEvents.priceCents,
+      itemId: schema.alertEvents.itemId,
+      createdAt: schema.alertEvents.createdAt,
       sendAfter: schema.alertEvents.sendAfter,
       sentAt: schema.alertEvents.sentAt,
       followed: sql<boolean>`coalesce((${followedItem}), false)`,
@@ -313,6 +342,62 @@ export async function sendAlert(
       const body =
         event.kind === "parcel_delivered" ? parcelDeliveredBody(event.itemsReceived, event.parcelsLeft) : words.body;
       message = { title: parcelTitle(event.kind, parcel.shopName), body, url: ALERTS_PAGE_HREF };
+    }
+  }
+  if (event.kind === "return_reminder" && event.itemId) {
+    // Only while it is still hers to send back: received (not returned, sold…), not in the trash, the deadline 1 to 3
+    // days ahead (held overnight or capped, it may have come).
+    const [item] = await db
+      .select({
+        stage: schema.items.stage,
+        deletedAt: schema.items.deletedAt,
+        returnDeadline: schema.items.returnDeadline,
+        productId: schema.items.productId,
+        profileId: schema.items.profileId,
+      })
+      .from(schema.items)
+      .where(and(eq(schema.items.id, event.itemId), eq(schema.items.userId, event.userId)));
+    const daysLeft = item?.returnDeadline ? parisDaysBetween(parisDay(now), item.returnDeadline) : 0;
+    if (
+      item &&
+      item.stage === "owned" &&
+      !item.deletedAt &&
+      item.returnDeadline &&
+      daysLeft >= 1 &&
+      daysLeft <= RETURN_REMINDER_DAYS
+    ) {
+      message = {
+        title: returnReminderTitle(event.name, daysLeft),
+        body: returnDeadlineSentence(item.returnDeadline),
+        // An article without a product has no sheet yet (Task 7): « Nouvelles ».
+        url: item.productId ? itemUrl(item.productId, item.profileId) : ALERTS_PAGE_HREF,
+      };
+    }
+  }
+  if (event.kind === "order_received_check" && event.orderId) {
+    // Only while still without news and not answered since it was asked.
+    const [order] = await db
+      .select({
+        shopName: sql<string | null>`coalesce(${schema.shops.name}, ${schema.orders.shopName})`,
+        notYetAt: schema.orders.receivedNotYetAt,
+        awaiting: sql<boolean>`${orderAwaitingNews(schema.orders.id)}`,
+      })
+      .from(schema.orders)
+      .leftJoin(schema.shops, eq(schema.shops.id, schema.orders.shopId))
+      .where(
+        and(
+          eq(schema.orders.id, event.orderId),
+          eq(schema.orders.userId, event.userId),
+          eq(schema.orders.status, "confirmed"),
+        ),
+      );
+    if (order?.awaiting && (!order.notYetAt || order.notYetAt.getTime() < event.createdAt.getTime())) {
+      // TODO(Task 7): lead to the order (« Mes commandes ») once the page exists.
+      message = {
+        title: orderReceivedCheckTitle(order.shopName),
+        body: "Réponds « Oui » ou « Pas encore ».",
+        url: ALERTS_PAGE_HREF,
+      };
     }
   }
   if (!message || !push || event.isAnonymous === true) return skip();

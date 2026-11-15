@@ -1,6 +1,7 @@
 import { and, asc, type Database, desc, eq, isNull, schema, sql } from "@closyria/db";
 import {
   DEFAULT_LOVE_LEVEL,
+  type InstagramItemInput,
   type ItemCreate,
   type ItemMove,
   type ItemPatch,
@@ -123,6 +124,67 @@ export async function createItem(db: Database, userId: string, input: ItemCreate
           (select coalesce(max(position) + 1, 0) from ${schema.wishlistItems} where wishlist_id = ${input.wishlistId}),
           ${now})`);
     }
+    return {
+      itemId: item.id,
+      itemIds: [item.id],
+      undo: { ops: [{ ids: [item.id], op: "delete" }], removeEventIds },
+      created: true,
+    };
+  });
+}
+
+/**
+ * An article from an Instagram link (C5): without a product (Instagram is never read), her name, brand, size and
+ * notes from the short form, the link kept as its source (`source_url`). `wish` « Repéré » (level 2 J'aime), or
+ * `ordered` « Commandé » with what she paid and its history row. Undo sends it to the trash, as any creation.
+ */
+export async function createInstagramItem(
+  db: Database,
+  userId: string,
+  input: InstagramItemInput,
+  now: Date,
+): Promise<ItemOutcome> {
+  const profile = input.profileId
+    ? await findOwnProfile(db, userId, input.profileId)
+    : await ensureDefaultProfile(db, userId);
+  if (!profile) return { error: "not_found" };
+  return db.transaction(async (tx): Promise<ItemOutcome> => {
+    const [heldProfile] = await tx
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .where(and(eq(schema.profiles.id, profile.id), eq(schema.profiles.userId, userId)))
+      .for("share");
+    if (!heldProfile) return { error: "not_found" };
+    const ordered = input.action === "ordered";
+    const [item] = await tx
+      .insert(schema.items)
+      .values({
+        userId,
+        profileId: profile.id,
+        productId: null,
+        stage: ordered ? "ordered" : "spotted",
+        loveLevel: ordered ? null : DEFAULT_LOVE_LEVEL,
+        nameOverride: input.name,
+        brandOverride: input.brand ?? null,
+        sizeLabel: input.sizeLabel ?? null,
+        notes: input.notes ?? null,
+        pricePaidCents: ordered ? (input.priceCents ?? null) : null,
+        sourceUrl: input.url,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    if (!item) throw new Error("item not inserted");
+    const removeEventIds = ordered
+      ? [
+          await recordEvent(tx, item, {
+            type: "stage",
+            stage: "ordered",
+            at: now,
+            amountCents: input.priceCents ?? null,
+          }),
+        ]
+      : [];
     return {
       itemId: item.id,
       itemIds: [item.id],

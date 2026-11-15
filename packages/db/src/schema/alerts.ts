@@ -130,6 +130,8 @@ export const alertEvents = pgTable(
     index("alert_events_sale_period_id_idx").on(t.salePeriodId),
     index("alert_events_order_id_idx").on(t.orderId),
     // One notification of each kind per parcel, however often the carrier repeats the step.
+    // « Plus que 3 jours pour retourner {article} »: once per item, ever.
+    uniqueIndex("alert_events_return_reminder_idx").on(t.itemId).where(sql`${t.kind} = 'return_reminder'`),
     uniqueIndex("alert_events_parcel_kind_idx").on(t.parcelId, t.kind).where(sql`${t.parcelId} IS NOT NULL`),
     index("alert_events_digest_idx").on(t.userId, t.digestOn).where(sql`${t.digestOn} IS NOT NULL`),
     // The minute sweep of the immediate alerts due, and the digest planner (Task 4).
@@ -143,7 +145,14 @@ export const alertEvents = pgTable(
       "alert_events_item_check",
       sql`NOT (${oneOf(t.kind, ITEM_ALERT_KINDS)}) OR (${t.itemId} IS NOT NULL AND ${t.profileId} IS NOT NULL AND ${t.productId} IS NOT NULL)`,
     ),
-    check("alert_events_order_check", sql`${t.kind} <> 'order_received' OR ${t.orderId} IS NOT NULL`),
+    check(
+      "alert_events_order_check",
+      sql`${t.kind} NOT IN ('order_received', 'order_received_check') OR ${t.orderId} IS NOT NULL`,
+    ),
+    check(
+      "alert_events_return_reminder_check",
+      sql`${t.kind} <> 'return_reminder' OR (${t.itemId} IS NOT NULL AND ${t.profileId} IS NOT NULL)`,
+    ),
     check("alert_events_parcels_left_check", sql`${t.parcelsLeft} IS NULL OR ${t.parcelsLeft} >= 0`),
     check(
       "alert_events_parcel_check",

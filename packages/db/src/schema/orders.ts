@@ -133,6 +133,15 @@ export const orders = pgTable(
     source: text("source").notNull(),
     parseMethod: text("parse_method").notNull(),
     inboundEmailId: uuid("inbound_email_id").references(() => inboundEmails.id, { onDelete: "set null" }),
+    /** When she validated it (« C'est bon », a manual entry, a pasted number): the J+10 question's last resort. */
+    confirmedAt: at("confirmed_at"),
+    /**
+     * « Tu as reçu ta commande {boutique} ? » (Task 6): asked at 10 days without news, her « Pas encore », asked again
+     * at 20 days after it. Each is set once; a third question is never asked.
+     */
+    receivedAskedAt: at("received_asked_at"),
+    receivedNotYetAt: at("received_not_yet_at"),
+    receivedAskedAgainAt: at("received_asked_again_at"),
     createdAt: createdAt(),
     updatedAt: at("updated_at").defaultNow().notNull(),
   },

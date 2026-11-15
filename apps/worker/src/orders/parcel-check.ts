@@ -1,15 +1,13 @@
-import { and, asc, type Database, eq, inArray, isNotNull, isNull, lte, schema, sql } from "@closyria/db";
+import { and, asc, type Database, eq, inArray, isNotNull, lte, receiveOrderItems, schema, sql } from "@closyria/db";
 import {
   type Carrier,
   carrierSchema,
   DEFAULT_ALERT_SETTINGS,
-  DEFAULT_RETURN_DAYS,
   nextParcelCheckClamped,
   nextSendAt,
   PARCEL_MAX_CHECK_FAILURES,
   type ParcelStatus,
   parcelStatusSchema,
-  returnDeadline,
 } from "@closyria/shared";
 import { connectorFor, type TrackingConnectors, TrackingError, type TrackingResult } from "./tracking";
 
@@ -234,11 +232,8 @@ const isSettled = (parcel: { status: string; checkUntil: Date }, now: Date) =>
 
 /**
  * Receives the order once all its parcels are settled and one at least was delivered (none delivered: the J+10
- * question of Task 6 takes over): her items of the order's lines still « Commandé » (not in the trash) move to « Reçu »
- * (`owned`, the stage « Je l'ai reçu » gives, with its history row on the delivery date), with the return deadline
- * counted from the latest delivery (the shop's delay, 14 days without one). An item already received without a
- * deadline gets it; any other stage (returned, sold…) is left alone. Products are not needed (an article without a
- * product moves the same). Run after every check of one of its parcels (under the order's lock), so a late parcel
+ * question of Task 6 takes over): her items move to « Reçu » on the latest delivery's date (`receiveOrderItems`, shared
+ * with her « Oui » to that question), with their return deadline counted from it. Run after every check of one of its parcels (under the order's lock), so a late parcel
  * turning `unknown` or reaching its end never blocks the others; idempotent.
  *
  * Returns how many items moved and how many of its parcels are still on their way.
@@ -262,55 +257,7 @@ async function settleOrder(
   );
   if (inTransit > 0 || deliveries.length === 0) return { moved: 0, inTransit };
   const deliveredAt = new Date(Math.max(...deliveries));
-
-  const [shop] = order.shopId
-    ? await tx
-        .select({ returnDays: schema.shops.returnDays })
-        .from(schema.shops)
-        .where(eq(schema.shops.id, order.shopId))
-    : [];
-  const deadline = returnDeadline(deliveredAt, shop?.returnDays ?? DEFAULT_RETURN_DAYS);
-  const linked = tx
-    .select({ id: schema.orderLines.itemId })
-    .from(schema.orderLines)
-    .where(and(eq(schema.orderLines.orderId, order.id), isNotNull(schema.orderLines.itemId)));
-  const items = await tx
-    .select({ id: schema.items.id, stage: schema.items.stage, returnDeadline: schema.items.returnDeadline })
-    .from(schema.items)
-    .where(
-      and(
-        inArray(schema.items.id, linked),
-        eq(schema.items.userId, order.userId),
-        isNull(schema.items.deletedAt),
-        inArray(schema.items.stage, ["ordered", "owned"]),
-      ),
-    )
-    .orderBy(asc(schema.items.id))
-    .for("update");
-  let moved = 0;
-  for (const item of items) {
-    if (item.stage === "ordered") {
-      await tx
-        .update(schema.items)
-        .set({ stage: "owned", inOrderDraft: false, returnDeadline: deadline, updatedAt: now })
-        .where(eq(schema.items.id, item.id));
-      // `owned` counts nothing in the budgets (`spent_cents` null), as the API's stage change.
-      await tx.insert(schema.itemEvents).values({
-        itemId: item.id,
-        type: "stage",
-        stage: "owned",
-        at: deliveredAt,
-        amountCents: null,
-        spentCents: null,
-      });
-      moved += 1;
-    } else if (item.returnDeadline === null) {
-      await tx
-        .update(schema.items)
-        .set({ returnDeadline: deadline, updatedAt: now })
-        .where(eq(schema.items.id, item.id));
-    }
-  }
+  const moved = await receiveOrderItems(tx, order, deliveredAt, now);
   return { moved, inTransit };
 }
 

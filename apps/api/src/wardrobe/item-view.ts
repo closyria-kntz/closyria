@@ -254,6 +254,7 @@ export async function loadItemViews(
       saleChannel: item.saleChannel,
       nameOverride: item.nameOverride,
       brandOverride: item.brandOverride,
+      sourceUrl: item.sourceUrl,
       categoryId: item.categoryId,
       colorId: item.colorId,
       coverMediaId: item.coverMediaId,

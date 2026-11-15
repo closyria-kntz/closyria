@@ -5,6 +5,7 @@ import type { PgBoss } from "pg-boss";
 import { checkDueParcels, PARCEL_CHECK_QUEUE, parcelCheckHandler } from "./parcel-check";
 import { type AiReader, ORDER_EMAIL_PARSE_QUEUE_OPTIONS, orderEmailParseHandler } from "./parse";
 import { type InboundPurgeResult, purgeInboundEmails } from "./purge-inbound";
+import { registerOrderDailyQueue } from "./returns";
 import type { TrackingConnectors } from "./tracking";
 
 export const ORDER_EMAIL_PURGE_QUEUE = "order-email-purge";
@@ -38,6 +39,7 @@ export function orderEmailPurgeHandler(run: () => Promise<InboundPurgeResult>) {
  * Creates order-email-purge, processes it and schedules it every night at 03:45 (after the wardrobe purge); works
  * order-email-parse (filled by the API), its retries set here: the API may have created the queue first, bare.
  * parcel-check sweeps the due parcels every 15 minutes (one sweep at a time: the claim skips what another holds).
+ * order-daily reminds the return deadlines and asks « Tu as reçu ta commande ? » every morning at 9:00 Paris.
  */
 export async function registerOrderQueues(
   boss: PgBoss,
@@ -62,4 +64,5 @@ export async function registerOrderQueues(
     parcelCheckHandler(() => checkDueParcels({ db: deps.db, connectors: deps.connectors }, new Date())),
   );
   await boss.schedule(PARCEL_CHECK_QUEUE, "*/15 * * * *");
+  await registerOrderDailyQueue(boss, deps.db);
 }

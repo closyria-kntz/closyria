@@ -1,5 +1,12 @@
 import { eq, schema } from "@closyria/db";
-import { canonicalizeUrl, captureAcceptedSchema, captureViewSchema, catalogErrorSchema } from "@closyria/shared";
+import {
+  canonicalizeUrl,
+  captureAcceptedSchema,
+  captureViewSchema,
+  catalogErrorSchema,
+  instagramCaptureSchema,
+  isInstagramUrl,
+} from "@closyria/shared";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -25,13 +32,18 @@ const createCaptureRoute = (limiter: MiddlewareHandler<AccessEnv>) =>
       summary: "Capture a product from a pasted link",
       description:
         "Finds or creates the shop and the shared product page of the link, then queues a capture for the worker " +
-        "unless the page was captured less than 24 hours ago or the shop is captured by hand.",
+        "unless the page was captured less than 24 hours ago or the shop is captured by hand. An Instagram link is " +
+        "never read (nothing created, nothing queued): 200 tells the client to show the short form for it.",
       middleware: [limiter, bodyLimit({ maxSize: 32 * 1024, onError: (c) => c.json(invalidRequest, 400) })],
       request: {
         body: { required: true, content: { "application/json": { schema: z.object({ url: z.string() }) } } },
       },
       responses: {
         202: { description: "Accepted", content: { "application/json": { schema: captureAcceptedSchema } } },
+        200: {
+          description: "An Instagram link: she types its article (POST /api/me/items/instagram)",
+          content: { "application/json": { schema: instagramCaptureSchema } },
+        },
         400: errorContent("Not an http(s) address (invalid_url) or a malformed body (invalid_request)"),
         429: errorContent("Too many captures: 30 an hour anonymous, 100 with an account, 200 per address"),
       },
@@ -65,8 +77,11 @@ export function capturesRoutes(deps: CatalogDeps, limiter: MiddlewareHandler<Acc
     .openapi(createCaptureRoute(limiter), async (c) => {
       const userId = c.var.session?.user.id;
       if (!userId) throw new Error("capture route reached without a session");
-      const url = canonicalizeUrl(c.req.valid("json").url);
+      const pasted = c.req.valid("json").url;
+      const url = canonicalizeUrl(pasted);
       if (!url) return c.json(invalidUrl, 400);
+      // Anti-bot rule (C5): Instagram is never fetched, not even queued for the worker.
+      if (isInstagramUrl(url)) return c.json({ form: "instagram" as const, url: pasted.trim() }, 200);
 
       const shop = await findOrCreateShop(db, url);
       const capture = await requestProductCapture(db, queue, {

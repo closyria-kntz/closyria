@@ -71,3 +71,22 @@ export function nameFromUrl(url: string): string | null {
   if (!words) return null;
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
+
+/** Instagram's own hosts (and any under instagram.com): never fetched (spec « Après la commande » C5, anti-bot rule). */
+const INSTAGRAM_HOSTS = ["instagram.com", "instagr.am", "www.instagr.am"] as const;
+
+/**
+ * Whether an address is an Instagram page (`instagram.com`, `www.instagram.com` or any other host under it,
+ * `instagr.am`): such a link is never captured, she types its article herself.
+ */
+export function isInstagramUrl(input: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(input.trim());
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  return (INSTAGRAM_HOSTS as readonly string[]).includes(host) || host.endsWith(".instagram.com");
+}

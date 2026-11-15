@@ -366,3 +366,50 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   arrivé » (de même dans « Nouvelles », pour ces alertes et `order_received`). À l'envoi, l'étape doit toujours tenir (retenue la nuit puis livrée, « en cours de livraison » ou « point
   relais » n'est plus envoyée) et le réglage être encore activé. Lien vers « Nouvelles » en attendant « Mes commandes »
   (Task 7).
+
+### 10.5 Retours, question J+10, liens Instagram (Task 6, 2026-11-15)
+
+- **Tâche du matin** (`order-daily`, worker) chaque jour à 9 h, heure de Paris (planification pg-boss avec fuseau),
+  une passe à la fois. Les deux notifications sont immédiates : même envoi que le chantier 4 (calme de 22 h à 8 h,
+  5 par jour, le reste au résumé où elles ne figurent pas, comme les colis).
+- **Rappel de retour** (`return_reminder`) « Plus que 3 jours pour retourner {article} », « Retour possible jusqu'au
+  {date} » (« 18 novembre ») : ses articles « Reçu » (`owned`, hors corbeille) dont la date limite tombe 3 jours de
+  calendrier plus tard (Paris). **Une fois par article, à jamais** (index unique article + sorte) : un article reçu de
+  nouveau plus tard n'a pas de second rappel. Un matin manqué est rattrapé : une date limite à 1 ou 2 jours jamais
+  rappelée l'est encore (« Plus que 2 jours… », « Plus qu'un jour pour retourner… ») ; une date limite atteinte ou
+  passée, jamais. À l'envoi, l'article doit être encore « Reçu », hors corbeille, la date limite 1 à 3 jours plus tard
+  (sinon rien n'est envoyé : retourné, vendu, mis à la corbeille entre-temps). Sans nom : « … retourner ton article ».
+  Lien : la fiche de l'article, « Nouvelles » pour un article sans produit (en attendant sa fiche, Task 7).
+- **« Tu as reçu ta commande {boutique} ? »** (`order_received_check`, « Tu as reçu ta commande ? » sans boutique
+  connue ni nom tapé) : ses commandes **validées** sans nouvelle — aucun colis livré et un article au moins encore
+  « Commandé » (hors corbeille) ; une commande dont tous les articles ont déjà avancé (reçus à la main…) n'est pas
+  questionnée. Date de départ : la plus ancienne étape de ses colis, sinon la création du premier colis
+  (l'expédition), sinon sa validation (`orders.confirmed_at`, migration 0042 ; les commandes validées avant reprennent
+  leur dernière modification), sinon sa création. Posée une fois à 10 jours ; après « Pas encore », une seconde fois à
+  20 jours ; sans réponse à la première, ou après la seconde, plus jamais. Les colis tous `unknown` ou sans
+  transporteur entrent dans la règle (aucun n'est livré). Horodatages sur la commande (migration 0042) :
+  `received_asked_at`, `received_not_yet_at`, `received_asked_again_at`, posés sous le verrou de ses profils puis de la
+  commande. À l'envoi, la commande doit être encore sans nouvelle et sans « Pas encore » depuis la question.
+  « Réponds « Oui » ou « Pas encore ». » ; lien « Nouvelles » en attendant « Mes commandes » (Task 7). La vue d'une
+  commande dit si la question attend sa réponse (`receivedQuestion`).
+- **Réponse** `POST /api/me/orders/{id}/received` `{ answer: "yes" | "not_yet" }` (comptes seulement : invitée 403
+  `account_required` ; commande d'un autre compte 404 ; brouillon 409 `order_not_confirmed` ; écartée 409
+  `order_dismissed`). Verrous : ses profils, la commande, ses colis, puis les articles.
+  - « Oui » : ses articles de la commande encore « Commandé » passent à « Reçu » **maintenant**, date limite
+    `returnDeadline(maintenant, shops.return_days ?? 14)` — le même passage que la livraison (Task 5), écrit une seule
+    fois dans `packages/db` (`receiveOrderItems`) et appelé par le worker et l'API. Ses colis ne sont plus suivis
+    (`next_check_at` nul, `check_until` ramené à maintenant : réglés). Deux fois : rien de plus.
+  - « Pas encore » : noté seulement quand une question attend sa réponse (la seconde question suit) ; sinon rien.
+  - Un colis `unknown` déclaré livré plus tard par le transporteur ne déplace pas une date limite déjà posée (règle de
+    §10.4, inchangée).
+- **Lien Instagram** : `POST /api/captures` avec un lien `instagram.com`, `www.instagram.com` (tout hôte sous
+  `instagram.com`) ou `instagr.am` ne crée ni boutique, ni produit, ni capture, et n'appelle rien (le worker n'est
+  jamais saisi : règle anti-robot) ; il répond 200 `{ form: "instagram", url }`, l'interface montre le formulaire court.
+  `POST /api/me/items/instagram` crée un article **sans produit** : nom (obligatoire), boutique ou marque
+  (`brand_override`), taille, notes, le lien gardé comme source (`items.source_url`, migration 0042, montré par la vue
+  de l'article `sourceUrl`) ; `wish` (« Repéré », niveau J'aime) ou `ordered` (« Commandé », avec ce qu'elle a payé et
+  sa ligne d'historique) — un prix seulement pour un article commandé (« Payé … » n'a pas de sens pour une envie).
+  Annulable comme toute création ; compte dans les 300 créations par heure. La photo depuis sa galerie passe par l'ajout
+  de photos existant (Task 7 pour l'écran).
+- Textes français prêts pour les écrans (Task 7) : `Orders.*` et `News.return_reminder` / `News.order_received_check`
+  dans `fr.json`.

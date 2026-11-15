@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { parisDay } from "./alerts";
 import { currencySchema } from "./catalog";
-import { MAX_SIZE_LABEL } from "./wardrobe";
+import { isInstagramUrl } from "./catalog-url";
+import { MAX_NOTES, MAX_SIZE_LABEL } from "./wardrobe";
 
 /**
  * « Après la commande » (docs/specs/2026-11-14-apres-commande.md): orders read from a forwarded e-mail, typed by hand
@@ -205,6 +206,49 @@ export function parcelCheckUntil(start: Date): Date {
   return new Date(start.getTime() + PARCEL_CHECK_DAYS * 24 * HOUR_MS);
 }
 
+// --- Returns and « Tu as reçu ta commande ? » (Task 6) ------------------------------------------------------------
+
+/** « Plus que 3 jours pour retourner {article} »: this many Paris days before the return deadline. */
+export const RETURN_REMINDER_DAYS = 3;
+/** « Tu as reçu ta commande {boutique} ? »: this many days after the shipping (else the validation) without news… */
+export const RECEIVED_QUESTION_DAYS = 10;
+/** …and once more at this many days when she answered « Pas encore »; then never again. */
+export const RECEIVED_QUESTION_AGAIN_DAYS = 20;
+
+const dayParts = (day: string) => {
+  const [year, month, date] = day.split("-").map(Number);
+  return Date.UTC(year ?? 0, (month ?? 1) - 1, date ?? 1);
+};
+
+/** A Paris calendar day (`YYYY-MM-DD`) plus `days` calendar days. */
+export function addParisDays(day: string, days: number): string {
+  return new Date(dayParts(day) + days * 24 * HOUR_MS).toISOString().slice(0, 10);
+}
+
+/** Calendar days from `from` to `to` (both `YYYY-MM-DD`), negative when `to` comes first. */
+export function parisDaysBetween(from: string, to: string): number {
+  return Math.round((dayParts(to) - dayParts(from)) / (24 * HOUR_MS));
+}
+
+/**
+ * Which « Tu as reçu ta commande ? » is due for an order still without news: the first at RECEIVED_QUESTION_DAYS after
+ * `referenceAt` (its first parcel's earliest step or creation, else its validation); a second at
+ * RECEIVED_QUESTION_AGAIN_DAYS only after her « Pas encore »; never a third. Null when none is due.
+ */
+export function receivedQuestionDue(
+  order: { referenceAt: Date; askedAt: Date | null; notYetAt: Date | null; askedAgainAt: Date | null },
+  now: Date,
+): "first" | "again" | null {
+  const elapsed = now.getTime() - order.referenceAt.getTime();
+  if (!order.askedAt) return elapsed >= RECEIVED_QUESTION_DAYS * 24 * HOUR_MS ? "first" : null;
+  if (order.notYetAt && !order.askedAgainAt && elapsed >= RECEIVED_QUESTION_AGAIN_DAYS * 24 * HOUR_MS) return "again";
+  return null;
+}
+
+/** `POST /api/me/orders/{id}/received`: « Oui » (her articles go to « Reçu ») or « Pas encore ». */
+export const orderReceivedAnswerSchema = z.object({ answer: z.enum(["yes", "not_yet"]) });
+export type OrderReceivedAnswer = z.infer<typeof orderReceivedAnswerSchema>;
+
 // --- Order addresses and received e-mails ------------------------------------------------------------------------
 
 /** Largest e-mail received (the raw message, headers included); a larger one is refused, nothing stored. */
@@ -398,6 +442,11 @@ export const orderViewSchema = z.object({
   parseMethod: orderParseMethodSchema,
   lines: z.array(orderLineViewSchema),
   parcels: z.array(parcelViewSchema),
+  /**
+   * « Tu as reçu ta commande {boutique} ? » waits for her answer: asked (at 10 or 20 days), not answered since, and
+   * her articles still « Commandé ».
+   */
+  receivedQuestion: z.boolean(),
   createdAt: dateTimeSchema,
 });
 export type OrderView = z.infer<typeof orderViewSchema>;
@@ -579,3 +628,35 @@ export function carrierFromName(text: string | null | undefined): Carrier | null
   if (!text) return null;
   return CARRIER_NAMES.find(([re]) => re.test(text))?.[1] ?? null;
 }
+
+// --- Instagram (C5) ----------------------------------------------------------------------------------------------
+
+/** `POST /api/captures` with an Instagram link: nothing is read, the client shows the short form for this link. */
+export const instagramCaptureSchema = z.object({ form: z.literal("instagram"), url: z.string() });
+export type InstagramCapture = z.infer<typeof instagramCaptureSchema>;
+
+export const MAX_ITEM_NAME = 300;
+export const MAX_ITEM_BRAND = 120;
+export const MAX_SOURCE_URL = 2048;
+
+/**
+ * The short form of an Instagram link (`POST /api/me/items/instagram`): an article without a product, her name for it
+ * and the shop or brand she saw, the link kept as its source. `wish` (« Repéré ») or `ordered` (« Commandé »); what she
+ * paid (`priceCents`, euros) only for an ordered one.
+ */
+export const instagramItemInputSchema = z
+  .object({
+    url: z.string().trim().max(MAX_SOURCE_URL).refine(isInstagramUrl, { message: "not an Instagram link" }),
+    action: z.enum(["wish", "ordered"]),
+    profileId: uuidSchema.optional(),
+    name: z.string().trim().min(1).max(MAX_ITEM_NAME),
+    brand: optionalText(MAX_ITEM_BRAND),
+    priceCents: centsSchema.nullable().optional(),
+    sizeLabel: optionalText(MAX_SIZE_LABEL),
+    notes: optionalText(MAX_NOTES),
+  })
+  .refine((v) => v.action === "ordered" || v.priceCents == null, {
+    message: "a price only for an ordered article",
+    path: ["priceCents"],
+  });
+export type InstagramItemInput = z.infer<typeof instagramItemInputSchema>;
