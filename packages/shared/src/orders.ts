@@ -187,6 +187,31 @@ export function nextParcelCheck(status: ParcelStatus, now: Date): Date | null {
 }
 
 /**
+ * A number just given (registered at the aggregator, or not found yet) is asked again this soon, during the first
+ * hours of its tracking (founder's ruling, 2026-11-15: a new number shows its first steps within minutes, not hours).
+ */
+export const PARCEL_CHECK_NEW_MINUTES = 15;
+export const PARCEL_CHECK_NEW_HOURS = 2;
+
+/** When the tracking started: `check_until` minus its 30 days (a new number starts it again). */
+export function parcelTrackingStart(checkUntil: Date): Date {
+  return new Date(checkUntil.getTime() - PARCEL_CHECK_DAYS * 24 * HOUR_MS);
+}
+
+/**
+ * The next check after a « waiting » answer (just registered, not found yet): 15 minutes later during the first
+ * 2 hours of the tracking, the usual rhythm afterwards (`nextParcelCheckClamped`); never past `check_until`.
+ */
+export function nextParcelCheckWaiting(status: ParcelStatus, now: Date, checkUntil: Date): Date | null {
+  const usual = nextParcelCheckClamped(status, now, checkUntil);
+  if (!usual) return null;
+  const young = now.getTime() - parcelTrackingStart(checkUntil).getTime() < PARCEL_CHECK_NEW_HOURS * HOUR_MS;
+  if (!young) return usual;
+  const soon = new Date(now.getTime() + PARCEL_CHECK_NEW_MINUTES * 60_000);
+  return soon.getTime() < usual.getTime() ? soon : usual;
+}
+
+/**
  * `nextParcelCheck`, never past the end of the tracking (`check_until`): the last check happens at `checkUntil`; null
  * once delivered or when the tracking is over.
  */

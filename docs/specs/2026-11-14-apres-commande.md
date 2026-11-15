@@ -705,3 +705,54 @@ La clé La Poste (Okapi) est abandonnée pour l'instant. Sans elle, Colissimo, L
 par 17TRACK (qui reconnaît le transporteur à partir du numéro) ; si la clé est ajoutée un jour, La Poste reprend ses
 colis. Une seule clé, `TRACKING_AGGREGATOR_KEY`, suffit donc. Coût 17TRACK (quota prépayé, essai offert à
 l'inscription) à comparer avec TrackingMore avant la prod, selon le volume attendu.
+
+### 11.4 Retours de la fondatrice en dev (2026-11-15)
+
+- **Nom de la boutique lu dans l'e-mail** : une boutique inconnue du catalogue reste créée `pending` à son nom de
+  domaine (le catalogue partagé n'est jamais renommé par un e-mail transféré), mais le nom que donne l'e-mail (format
+  connu ou `shopName` de l'IA, sur une ligne, sans espaces autour, 80 caractères au plus, seulement s'il n'est pas
+  vide) est gardé sur la commande (`orders.shop_name`, sans migration). Tant que la boutique est `pending` (jamais
+  regardée par l'admin), ce nom passe avant celui de la boutique — vues de commande de l'API (carte de l'Accueil,
+  « Mes commandes », bloc « Commande / colis »), « Nouvelles », fiche d'un article sans produit, vue de ses amies,
+  filtre texte, et titres des notifications `order_received`, `parcel_*`, `order_received_check` ;
+  `return_reminder` nomme l'article, pas la boutique. Une boutique passée `draft`, `published` ou `refused` garde
+  le nom du catalogue. Une règle unique : `orderShopDisplayName` (`packages/shared`) et `orderShopNameSql`
+  (`packages/db`). Un e-mail suivant de la même commande remplit un nom manquant, seulement s'il est de la même
+  boutique ; jamais un nom tapé par elle (« Corriger », qui efface aussi le nom lu quand le nom tapé désigne une
+  boutique).
+- **« Modifier le numéro »** (`PATCH /api/me/orders/{id}/parcels/{parcelId}` prend `trackingNumber`, `carrier`, ou
+  les deux — `parcelPatchInputSchema`) : numéro nettoyé comme partout (espaces et tirets retirés, majuscules, 6 à
+  40 lettres et chiffres). Transporteur relu sur le numéro (`detectCarrier`, son transporteur actuel comme indice
+  pour un numéro tout en chiffres), sinon celui qu'elle a choisi avec, sinon aucun (`unknown`, plus interrogé, le
+  choix du transporteur s'ouvre à l'écran, comme pour un numéro collé). Le suivi repart de zéro : étape `pending`,
+  aucun raté, contrôle à la prochaine passe, 30 jours comptés de nouveau ; les étapes, la dernière étape, la date
+  estimée et les notifications de l'ancien numéro sont effacées (une notification gardée bloquerait celle du nouveau :
+  une par colis et par sorte). Numéro d'un autre colis de la commande : 409 `parcel_exists` ; d'une autre de ses
+  commandes : 409 `tracking_exists` ; le même numéro : rien ne change ; colis livré : 409 `parcel_delivered`.
+- **« Supprimer ce suivi »** (`DELETE /api/me/orders/{id}/parcels/{parcelId}`, après « Supprimer ce suivi de
+  colis ? L'article et la commande restent. » « Supprimer » / « Annuler ») : le colis part avec ses étapes et ses
+  notifications (envoyées comprises : elles en dépendent, `on delete cascade`) ; la commande et ses articles restent,
+  un article déjà passé « Reçu » le reste. Une commande validée est ensuite réglée de nouveau par la règle des colis
+  (`settleOrder`, déplacée du worker vers `packages/db`, la même pour les deux) : ses colis restants tous réglés,
+  un au moins livré → ses articles passent « Reçu ». Commande écartée : 409 `order_dismissed`.
+- Les deux : comptes seulement (invitée 403), commande ou colis d'un autre compte 404 ; verrous : ses profils, le
+  verrou du nouveau numéro, la commande, ses colis, puis les articles. Boutons sur chaque colis (« Mes commandes »,
+  cartes de l'Accueil, bloc « Commande / colis ») ; « Modifier le numéro » seulement pour un colis non livré.
+- **Rythme des nouveaux numéros** : un numéro nouveau (lu dans un e-mail, collé, saisi, ou dont le numéro ou le
+  transporteur vient d'être corrigé) est interrogé dès la prochaine passe (15 min au plus) au lieu de 6 h plus tard.
+  Pendant les 2 premières heures de son suivi (comptées depuis `check_until` − 30 jours), une réponse « en attente »
+  (numéro tout juste enregistré chez 17TRACK) ou « numéro inconnu » (pas encore trouvé) fait repasser 15 minutes plus
+  tard, et « numéro inconnu » ne compte alors **aucun raté** (sinon trois passes rapprochées le rendraient `unknown`
+  en 45 minutes) ; ensuite, rythme normal et ratés comptés comme avant. Sans connecteur : 6 h, inchangé.
+- **Au démarrage du worker** : les colis encore `pending`, sans raté ni étape, d'un transporteur qu'un connecteur
+  désormais actif sait suivre, sont dus aussitôt (`next_check_at = least(next_check_at, now())`, `wakeWaitingParcels`).
+
+#### Textes à valider (retours en dev)
+
+- « Modifier le numéro », « Enregistrer le numéro », « Numéro enregistré : le suivi reprend. »
+- « Supprimer ce suivi », « Supprimer ce suivi de colis ? », « L'article et la commande restent. », « Supprimer »,
+  « Annuler » (bouton de fermeture de la fenêtre).
+- « Ce numéro est déjà sur un autre colis de cette commande. », « Ce colis est déjà livré : son numéro ne change
+  plus. »
+- Repris tels quels : « Numéro de suivi », « Transporteur (facultatif) », « Deviner d'après le numéro », « Ce numéro de
+  suivi ne semble pas complet : vérifie-le. », « Ce numéro est déjà sur une autre de tes commandes. »

@@ -2,7 +2,6 @@ import { and, asc, type Database, eq, findOrCreateShop, inArray, schema, sql } f
 import { decodeEmail, parseOrderEmail, shopHostOf } from "@closyria/extract";
 import {
   canonicalizeUrl,
-  nextParcelCheck,
   nextSendAt,
   ORDER_EMAIL_PARSE_QUEUE,
   type OrderParseMethod,
@@ -118,8 +117,8 @@ async function addParcels(tx: Tx, orderId: string, parsed: ParsedOrder, now: Dat
         carrier: t.carrier,
         trackingNumber: t.trackingNumber,
         status: "pending",
-        // Task 5's planner picks parcels up by `next_check_at`.
-        nextCheckAt: nextParcelCheck("pending", now),
+        // Task 5's planner picks parcels up by `next_check_at`: a new number at the next sweep (2026-11-15).
+        nextCheckAt: now,
         checkUntil: parcelCheckUntil(now),
       })),
     )

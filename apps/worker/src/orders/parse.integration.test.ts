@@ -154,7 +154,8 @@ describe("parseInboundEmail", () => {
         trackingNumber: "6A12345678901",
         carrier: "colissimo",
         status: "pending",
-        nextCheckAt: new Date(now.getTime() + 6 * HOUR),
+        // A new number is asked at the next sweep (2026-11-15).
+        nextCheckAt: now,
         checkUntil: new Date(now.getTime() + 30 * 24 * HOUR),
       },
     ]);

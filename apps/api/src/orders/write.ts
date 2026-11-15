@@ -357,7 +357,7 @@ export async function dismissOrder(db: Database, userId: string, orderId: string
 /**
  * A parcel she gave: the carrier read from the number's own signature, else the one she picked, else unknown
  * (`unknown`, still created: « Suivre chez le transporteur » and the question at J+10 take over, Tasks 5–6). Its
- * first check is set so that the tracking (Task 5) picks it up.
+ * first check is due at once, so that the next sweep of the tracking (Task 5) picks it up.
  */
 async function addParcel(tx: Tx, orderId: string, trackingNumber: string, picked: Carrier | undefined, now: Date) {
   const carrier = detectCarrier(trackingNumber, picked ?? null) ?? picked ?? null;
@@ -370,7 +370,8 @@ async function addParcel(tx: Tx, orderId: string, trackingNumber: string, picked
       carrier,
       trackingNumber,
       status,
-      nextCheckAt: nextParcelCheckClamped(status, now, checkUntil),
+      // A new number is asked at the next sweep (2026-11-15); without a carrier, the tracking just marks it.
+      nextCheckAt: carrier ? now : nextParcelCheckClamped(status, now, checkUntil),
       checkUntil,
     })
     .onConflictDoNothing({ target: [schema.parcels.orderId, schema.parcels.trackingNumber] });

@@ -1,8 +1,14 @@
 import { and, createDb, eq, findOrCreateShop, schema } from "@closyria/db";
-import { nextSendAt, PARCEL_CHECK_SLOW_HOURS, type ParcelStatus } from "@closyria/shared";
+import { nextSendAt, PARCEL_CHECK_SLOW_HOURS, type ParcelStatus, parcelCheckUntil } from "@closyria/shared";
 import { createTestDatabase } from "@closyria/testing/vitest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { checkDueParcels, claimDueParcels, PARCEL_CHECK_QUEUE, parcelCheckHandler } from "./parcel-check";
+import {
+  checkDueParcels,
+  claimDueParcels,
+  PARCEL_CHECK_QUEUE,
+  parcelCheckHandler,
+  wakeWaitingParcels,
+} from "./parcel-check";
 import type { TrackedParcel, TrackingConnector, TrackingConnectors, TrackingResult } from "./tracking";
 
 let database: Awaited<ReturnType<typeof createTestDatabase>>;
@@ -500,6 +506,76 @@ describe("parcel-check: failures stay silent (RF 4)", () => {
     await checkOnly(gls.parcelId, connectors);
     expect(laPoste.asked).toEqual([{ carrier: "chronopost", trackingNumber: colissimo.trackingNumber }]);
     expect(aggregator.asked).toEqual([{ carrier: "gls", trackingNumber: gls.trackingNumber }]);
+  });
+});
+
+describe("parcel-check: a new number (2026-11-15)", () => {
+  const MINUTE = 60_000;
+  /** A parcel whose tracking started `ago` ms before now. */
+  const started = (ago: number) => parcelCheckUntil(new Date(now.getTime() - ago));
+  const nextIn = async (parcelId: string) => {
+    const at = (await parcelRow(parcelId))?.nextCheckAt;
+    return at ? (at.getTime() - now.getTime()) / MINUTE : null;
+  };
+
+  it("just registered, or not found yet: asked again after 15 minutes during its first 2 hours", async () => {
+    const who = await person();
+    const waiting = await order(who, { checkUntil: started(30 * MINUTE) });
+    await checkOnly(waiting.parcelId, connectorsFor(scripted(() => ({ kind: "waiting" })).connector));
+    expect(await nextIn(waiting.parcelId)).toBe(15);
+    // Not found yet: no miss counted in these first hours (a fresh label is often unknown for a while).
+    const notFound = await order(who, { checkUntil: started(90 * MINUTE) });
+    await checkOnly(notFound.parcelId, connectorsFor(scripted(() => ({ kind: "not_found" })).connector));
+    expect(await nextIn(notFound.parcelId)).toBe(15);
+    expect(await parcelRow(notFound.parcelId)).toMatchObject({ status: "pending", checkFailures: 0 });
+  });
+
+  it("then the usual rhythm; and without a connector it waits 6 hours", async () => {
+    const who = await person();
+    const old = await order(who, { checkUntil: started(2 * 60 * MINUTE) });
+    await checkOnly(old.parcelId, connectorsFor(scripted(() => ({ kind: "waiting" })).connector));
+    expect(await nextIn(old.parcelId)).toBe(6 * 60);
+    const oldMiss = await order(who, { checkUntil: started(3 * 60 * MINUTE) });
+    await checkOnly(oldMiss.parcelId, connectorsFor(scripted(() => ({ kind: "not_found" })).connector));
+    expect(await parcelRow(oldMiss.parcelId)).toMatchObject({ checkFailures: 1 });
+    expect(await nextIn(oldMiss.parcelId)).toBe(6 * 60);
+    const noConnector = await order(who, { carrier: "gls", checkUntil: started(10 * MINUTE) });
+    await checkOnly(noConnector.parcelId, connectorsFor(null));
+    expect(await nextIn(noConnector.parcelId)).toBe(6 * 60);
+  });
+
+  it("at the worker's start, parcels left waiting for a connector it now has are due at once", async () => {
+    const who = await person();
+    const later = new Date(now.getTime() + 5 * HOUR);
+    const gls = await order(who, { carrier: "gls", nextCheckAt: later });
+    const colissimo = await order(who, { carrier: "colissimo", nextCheckAt: later });
+    const soon = await order(who, { carrier: "gls", nextCheckAt: new Date(now.getTime() - HOUR) });
+    // Already answered once, missed once, or past « pending »: left at their rhythm.
+    const withSteps = await order(who, { carrier: "gls", nextCheckAt: later });
+    await handle.db
+      .insert(schema.parcelEvents)
+      .values({ parcelId: withSteps.parcelId, at: now, status: "pending", label: "Annoncé" });
+    const missed = await order(who, { carrier: "gls", nextCheckAt: later, checkFailures: 1 });
+    const moving = await order(who, { carrier: "gls", nextCheckAt: later, parcelStatus: "in_transit" });
+    const noCarrier = await order(who, { carrier: null, nextCheckAt: null, parcelStatus: "unknown" });
+    const at = async (o: { parcelId: string }) => (await parcelRow(o.parcelId))?.nextCheckAt?.toISOString() ?? null;
+
+    // No connector: nothing to wake.
+    expect(await wakeWaitingParcels(handle.db, connectorsFor(null), now)).toBe(0);
+    expect(await at(gls)).toBe(later.toISOString());
+
+    // La Poste only: its carriers, not GLS.
+    const laPoste = scripted(() => found("in_transit")).connector;
+    await wakeWaitingParcels(handle.db, connectorsFor(null, laPoste), now);
+    expect(await at(colissimo)).toBe(now.toISOString());
+    expect(await at(gls)).toBe(later.toISOString());
+
+    // The aggregator: every carrier.
+    await wakeWaitingParcels(handle.db, connectorsFor(laPoste), now);
+    expect(await at(gls)).toBe(now.toISOString());
+    expect(await at(soon)).toBe(new Date(now.getTime() - HOUR).toISOString());
+    for (const left of [withSteps, missed, moving]) expect(await at(left)).toBe(later.toISOString());
+    expect(await at(noCarrier)).toBeNull();
   });
 });
 

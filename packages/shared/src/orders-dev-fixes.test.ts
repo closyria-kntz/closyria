@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { MAX_PARSED_SHOP_NAME, orderShopDisplayName, parcelPatchInputSchema, parsedShopName } from "./orders";
+import {
+  MAX_PARSED_SHOP_NAME,
+  nextParcelCheckWaiting,
+  orderShopDisplayName,
+  PARCEL_CHECK_NEW_HOURS,
+  PARCEL_CHECK_NEW_MINUTES,
+  parcelCheckUntil,
+  parcelPatchInputSchema,
+  parsedShopName,
+} from "./orders";
 
 describe("parsedShopName", () => {
   it("keeps the name the e-mail gives, trimmed and on one line", () => {
@@ -35,6 +44,34 @@ describe("orderShopDisplayName", () => {
     expect(orderShopDisplayName({ name: "lolaandco.com", status: "pending" }, null)).toBe("lolaandco.com");
     expect(orderShopDisplayName(null, "Ma boutique")).toBe("Ma boutique");
     expect(orderShopDisplayName(undefined, null)).toBeNull();
+  });
+});
+
+describe("nextParcelCheckWaiting", () => {
+  const until = parcelCheckUntil(new Date("2026-11-15T10:00:00Z"));
+  const minutesLater = (now: Date, d: Date | null) => (d ? (d.getTime() - now.getTime()) / 60_000 : null);
+
+  it("asks again after 15 minutes during the first 2 hours of the tracking", () => {
+    expect(PARCEL_CHECK_NEW_MINUTES).toBe(15);
+    expect(PARCEL_CHECK_NEW_HOURS).toBe(2);
+    const now = new Date("2026-11-15T10:20:00Z");
+    expect(minutesLater(now, nextParcelCheckWaiting("pending", now, until))).toBe(15);
+    const late = new Date("2026-11-15T11:59:00Z");
+    expect(minutesLater(late, nextParcelCheckWaiting("pending", late, until))).toBe(15);
+  });
+
+  it("then goes back to the usual rhythm", () => {
+    const now = new Date("2026-11-15T12:00:00Z");
+    expect(minutesLater(now, nextParcelCheckWaiting("pending", now, until))).toBe(6 * 60);
+    expect(minutesLater(now, nextParcelCheckWaiting("pickup_ready", now, until))).toBe(2 * 60);
+  });
+
+  it("never asks past the end of the tracking, nor a delivered parcel", () => {
+    const now = new Date("2026-11-15T10:20:00Z");
+    expect(nextParcelCheckWaiting("pending", now, new Date("2026-11-15T10:25:00Z"))?.toISOString()).toBe(
+      "2026-11-15T10:25:00.000Z",
+    );
+    expect(nextParcelCheckWaiting("delivered", now, until)).toBeNull();
   });
 });
 

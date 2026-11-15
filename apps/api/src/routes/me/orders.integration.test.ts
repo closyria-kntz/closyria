@@ -616,7 +616,8 @@ describe("POST /api/me/items/{id}/tracking", () => {
       parcels: [{ carrier: "colissimo", trackingNumber: "6A12345678901", status: "pending" }],
     });
     const [parcel] = await t.db.select().from(schema.parcels).where(eq(schema.parcels.orderId, order.id));
-    expect(parcel?.nextCheckAt?.getTime()).toBeGreaterThan(Date.now());
+    // Asked at the next sweep (2026-11-15), within its 30 days.
+    expect(parcel?.nextCheckAt?.getTime()).toBeLessThanOrEqual(Date.now());
     expect(parcel?.checkUntil.getTime()).toBeGreaterThan(parcel?.nextCheckAt?.getTime() ?? 0);
   });
 

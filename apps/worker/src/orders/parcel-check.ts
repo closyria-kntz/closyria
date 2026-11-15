@@ -4,10 +4,13 @@ import {
   carrierSchema,
   DEFAULT_ALERT_SETTINGS,
   nextParcelCheckClamped,
+  nextParcelCheckWaiting,
   nextSendAt,
+  PARCEL_CHECK_NEW_HOURS,
   PARCEL_MAX_CHECK_FAILURES,
   type ParcelStatus,
   parcelStatusSchema,
+  parcelTrackingStart,
 } from "@closyria/shared";
 import { connectorFor, type TrackingConnectors, TrackingError, type TrackingResult } from "./tracking";
 
@@ -148,6 +151,12 @@ async function applyOutcome(db: Database, claimed: ClaimedParcel, outcome: Outco
 
     let status: ParcelStatus = parcelStatusSchema.parse(parcel.status);
     let failures = parcel.checkFailures;
+    // Its first 2 hours (a number just given): « waiting » or « not found » yet is asked again every 15 minutes, and a
+    // number not found yet counts no miss (founder's ruling, 2026-11-15).
+    const young = now.getTime() - parcelTrackingStart(parcel.checkUntil).getTime() < PARCEL_CHECK_NEW_HOURS * 3_600_000;
+    const notYet =
+      outcome.kind === "answer" &&
+      (outcome.result.kind === "waiting" || (outcome.result.kind === "not_found" && young));
     const values: Partial<typeof schema.parcels.$inferInsert> = {};
     if (outcome.kind === "answer" && outcome.result.kind === "found") {
       const { result } = outcome;
@@ -169,6 +178,8 @@ async function applyOutcome(db: Database, claimed: ClaimedParcel, outcome: Outco
       }
     } else if (outcome.kind === "answer" && outcome.result.kind === "waiting") {
       failures = 0;
+    } else if (notYet) {
+      // Not found during its first hours: neither a miss nor an answer.
     } else if (outcome.kind === "failed" || (outcome.kind === "answer" && outcome.result.kind === "not_found")) {
       failures += 1;
       if (failures >= PARCEL_MAX_CHECK_FAILURES) status = "unknown";
@@ -183,7 +194,11 @@ async function applyOutcome(db: Database, claimed: ClaimedParcel, outcome: Outco
         status,
         checkFailures: failures,
         // Without a carrier there is nobody to ask: no more checks (a correction sets its next check).
-        nextCheckAt: claimed.carrier ? nextParcelCheckClamped(status, now, parcel.checkUntil) : null,
+        nextCheckAt: !claimed.carrier
+          ? null
+          : notYet
+            ? nextParcelCheckWaiting(status, now, parcel.checkUntil)
+            : nextParcelCheckClamped(status, now, parcel.checkUntil),
       })
       .where(eq(schema.parcels.id, parcel.id));
 
@@ -222,6 +237,33 @@ async function applyOutcome(db: Database, claimed: ClaimedParcel, outcome: Outco
     }
     return status === "delivered";
   });
+}
+
+/**
+ * At the worker's start: the parcels left waiting for a connector (a key just set) are due at once instead of up to
+ * 6 hours later — still `pending`, no miss counted, no step yet, of a carrier one of the connectors now on can follow.
+ * Returns how many were woken.
+ */
+export async function wakeWaitingParcels(db: Database, connectors: TrackingConnectors, now: Date): Promise<number> {
+  const served = carrierSchema.options.filter((carrier) => connectorFor(carrier, connectors) !== null);
+  if (served.length === 0) return 0;
+  const p = schema.parcels;
+  const woken = await db
+    .update(p)
+    .set({ nextCheckAt: sql`least(${p.nextCheckAt}, ${now.toISOString()}::timestamptz)` })
+    .where(
+      and(
+        eq(p.status, "pending"),
+        eq(p.checkFailures, 0),
+        isNotNull(p.nextCheckAt),
+        sql`${p.nextCheckAt} > ${now.toISOString()}::timestamptz`,
+        inArray(p.carrier, served),
+        // Named in full: Drizzle may write a column of a one-table query bare, which would mean the step's own id here.
+        sql`not exists (select 1 from ${schema.parcelEvents} pe where pe.parcel_id = "parcels"."id")`,
+      ),
+    )
+    .returning({ id: p.id });
+  return woken.length;
 }
 
 /**

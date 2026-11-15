@@ -11,6 +11,7 @@ import { registerCaptureQueues } from "./capture/queues";
 import { seedReference } from "./capture/seed-reference";
 import { seedStartingShops } from "./capture/seed-shops";
 import { env } from "./env";
+import { wakeWaitingParcels } from "./orders/parcel-check";
 import { registerOrderQueues } from "./orders/queues";
 import { trackingConnectors } from "./orders/tracking";
 import { stopWorker } from "./shutdown";
@@ -80,6 +81,9 @@ await registerWardrobeQueues(boss, { db, store });
 await registerSalePeriodQueue(boss, db);
 await registerAlertSendQueues(boss, { db, push });
 await registerOrderQueues(boss, { db, store, ai, connectors });
+// A key just set: the parcels that waited for it are asked at the next sweep, not hours later.
+const woken = await wakeWaitingParcels(db, connectors, new Date());
+if (woken > 0) console.log(`parcels: ${woken} waiting for a connector, due now`);
 
 console.log(`worker ${env.APP_VERSION} (${env.APP_ENV}) started`);
 
