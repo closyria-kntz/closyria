@@ -30,6 +30,7 @@ import {
   type CaptureMode,
   type CaptureStatus,
   type CaptureTrigger,
+  type Carrier,
   canImportCatalogue,
   canonicalizeUrl,
   captureModeSchema,
@@ -299,6 +300,8 @@ function shape(shop: Shop, domains: string[], stats: ShopStats | undefined, now:
     listingAgreementAt: shop.listingAgreementAt?.toISOString() ?? null,
     importEnabled: shop.importEnabled,
     ...importStatusShape(shop, now),
+    returnDays: shop.returnDays,
+    returnsUrl: shop.returnsUrl,
     health: shopHealth({
       status: shop.status as ShopStatus,
       captureMode: shop.captureMode as CaptureMode,
@@ -419,7 +422,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
       const { id } = c.req.valid("param");
       const shop = await activeShop(db, id);
       if (!shop) return c.json(notFound, 404);
-      const [domains, stats, errors, monitors, featured, onSale, slowdown] = await Promise.all([
+      const [domains, stats, errors, monitors, featured, onSale, slowdown, carriers] = await Promise.all([
         domainsOf(db, [id]),
         loadShopStats(db, now(), [id]),
         db
@@ -458,6 +461,13 @@ export function adminShopsRoutes(deps: CatalogDeps) {
           select count(*)::int as n from products p join shops s on s.id = p.shop_id
           where p.shop_id = ${id} and ${inCatalogue}`),
         shopifySlowdownOf(db, now()),
+        // « Transporteurs vus »: the carriers of its orders' parcels (a parcel without one is left out).
+        db
+          .selectDistinct({ carrier: schema.parcels.carrier })
+          .from(schema.parcels)
+          .innerJoin(schema.orders, eq(schema.orders.id, schema.parcels.orderId))
+          .where(and(eq(schema.orders.shopId, id), sql`${schema.parcels.carrier} is not null`))
+          .orderBy(asc(schema.parcels.carrier)),
       ]);
       const s = stats.get(id);
       const [lastMonitor] = monitors;
@@ -476,6 +486,7 @@ export function adminShopsRoutes(deps: CatalogDeps) {
           featured: featured === id,
           catalogueProducts: onSale.rows[0]?.n ?? 0,
           shopifySlowdown: slowdown,
+          carriersSeen: carriers.map((row) => row.carrier as Carrier),
         },
         200,
       );

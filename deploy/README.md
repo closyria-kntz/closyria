@@ -79,6 +79,7 @@ fixés par les unités systemd : ne pas les mettre dans ces fichiers.
 | `APPLE_CLIENT_ID`, `APPLE_CLIENT_SECRET` | Facultatif : connexion avec Apple. Les deux ensemble, ou aucune. | (Apple Developer) | (Apple Developer) |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Facultatif : notifications des alertes (Web Push). Les trois ensemble, ou aucune (sans elles, pas de notification). Voir « Clés des notifications (VAPID) ». | (clés prod), `https://closyria.com` | (clés dev, une autre paire), `https://closyria.com` |
 | `INBOUND_EMAIL_SECRET` | Facultatif : réception des e-mails de commande (« Mes commandes par e-mail »). 64 caractères hexadécimaux, un par environnement ; sans lui, réception coupée. Posé par la commande de « Réception des e-mails de commande », jamais à la main. | (secret) | (secret, un autre) |
+| `ANTHROPIC_API_KEY` | Facultatif (worker) : lecture par l'IA (Claude Haiku) des e-mails de commande qu'aucun format connu ne lit, dans la limite du plafond du mois (admin → « E-mails de commande », 10 € par défaut). Sans elle, ces e-mails restent « On n'a pas su lire cet e-mail » ; rien n'échoue. Voir « Clés du suivi des colis et de l'IA ». | (clé) | (clé, une autre) |
 | `LAPOSTE_OKAPI_KEY` | Facultatif (worker) : suivi des colis Colissimo, Lettre suivie et Chronopost par l'API « Suivi » de La Poste (clé « Okapi », developer.laposte.fr). Sans elle, ces colis ne sont pas suivis (ils attendent, « Suivre chez le transporteur » reste) ; rien n'échoue. | (clé) | (clé, une autre si possible) |
 | `TRACKING_AGGREGATOR_KEY` | Facultatif (worker) : suivi des autres transporteurs (Mondial Relay, GLS, DPD, Colis Privé, UPS, DHL) par l'agrégateur 17TRACK (clé « Security Key » du compte API, en-tête `17token`). Sans elle, ces colis ne sont pas suivis ; rien n'échoue. | (clé) | (clé) |
 | `INBOUND_AUTOFORWARD` | Facultatif : `on` pour accepter le transfert automatique de Gmail ; `off` par défaut (voir « Réception des e-mails de commande »). | `off` | `off` (puis `on` pour l'essai) |
@@ -229,6 +230,17 @@ commandes.closyria.com.       TXT    "v=spf1 -all"
 commandes.dev.closyria.com.   MX 10  mx.closyria.com.
 commandes.dev.closyria.com.   TXT    "v=spf1 -all"
 ```
+
+**Ce qui est vraiment nécessaire pour recevoir seulement** :
+
+- **obligatoire** : le `MX` de chaque domaine (`commandes.closyria.com`, `commandes.dev.closyria.com`) vers
+  `mx.closyria.com`, et le `A` de `mx.closyria.com` (plus le `AAAA` seulement si la machine a une IPv6 publique : un
+  `AAAA` qui ne mène pas à la machine ferait échouer une partie des envois vers nous) ;
+- **recommandé, pas nécessaire à la réception** : le `TXT` `"v=spf1 -all"` de chaque domaine, qui dit au monde que ces
+  adresses n'envoient jamais rien (un e-mail qui prétendrait venir d'elles est refusé ailleurs) ;
+- **inutile** pour recevoir : DKIM, DMARC, le PTR (DNS inverse) de la machine et tout enregistrement de Brevo — ils
+  ne servent qu'à **envoyer**, et ce serveur n'envoie rien. Les e-mails de Closyria (codes de connexion) continuent de
+  partir par Brevo depuis `closyria.com`, sans rapport avec ces sous-domaines.
 
 Compter quelques heures de propagation. Contrôle : `dig +short MX commandes.closyria.com` doit répondre
 `10 mx.closyria.com.` (idem pour `commandes.dev.closyria.com`). Chez OVH, le port 25 entrant d'un VPS est ouvert ;
@@ -532,6 +544,134 @@ if id closyria-mx >/dev/null 2>&1; then sudo userdel closyria-mx; fi
 echo "Tout est retiré : plus de serveur d'e-mail ni de port 25, secrets, relais, compte et journal effacés. Les MX peuvent être retirés chez le registrar."
 )
 ```
+
+## Clés du suivi des colis et de l'IA
+
+« Après la commande » a trois clés facultatives de plus, toutes lues par le **worker** au démarrage, dans
+`/etc/closyria/<env>.env` (spec `docs/specs/2026-11-14-apres-commande.md`, §10.2, §10.4 et §10.7) :
+
+| Variable | D'où elle vient | Sans elle |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys (une clé par environnement, commence par `sk-ant-`). Mettre aussi une limite de dépense mensuelle dans la console : c'est une seconde barrière, derrière le plafond de l'admin. | Les e-mails que les formats connus ne lisent pas restent « On n'a pas su lire cet e-mail ». |
+| `LAPOSTE_OKAPI_KEY` | developer.laposte.fr → l'API « Suivi » (v2), sa clé « Okapi ». | Colissimo, Lettre suivie et Chronopost ne sont pas suivis (« Suivre chez le transporteur » reste). |
+| `TRACKING_AGGREGATOR_KEY` | 17TRACK → compte API → « Security Key » (en-tête `17token`). | Mondial Relay, GLS, DPD, Colis Privé, UPS et DHL ne sont pas suivis. |
+
+`INBOUND_EMAIL_SECRET` (la réception) **n'est pas** dans cette commande : il est tiré sur la machine et posé par la
+commande de « Réception des e-mails de commande » (étape 3), jamais à la main ni recopié.
+
+Ces clés viennent de comptes extérieurs : elles ne peuvent pas être tirées sur la machine. La commande les **demande**
+une à une, sans les afficher (`read -s` : rien ne s'écrit à l'écran ni dans l'historique), refuse une clé mal formée
+avant d'écrire quoi que ce soit, n'ajoute que celles qui manquent (une clé déjà là est gardée, jamais remplacée),
+puis redémarre le worker et dit quelles fonctions sont en service. Si le worker ne redémarre pas, elle retire ce
+qu'elle vient d'ajouter et le redémarre comme avant. Entrée vide : la clé est passée (à ajouter plus tard en relançant
+la même commande). Une commande par environnement, **dans un seul message**, d'un bloc.
+
+Dev :
+
+```bash
+(
+set -uo pipefail
+ENV=dev; E=/etc/closyria/$ENV.env; W=closyria-$ENV-worker
+stop() { echo "$1" >&2; exit 1; }
+sudo test -f "$E" || stop "$E introuvable : rien n'est changé."
+LINES=""; ADDED=""
+for NAME in ANTHROPIC_API_KEY LAPOSTE_OKAPI_KEY TRACKING_AGGREGATOR_KEY; do
+  if sudo grep -q "^$NAME=" "$E"; then echo "$NAME : déjà là, gardée."; continue; fi
+  printf "%s (coller la clé puis Entrée ; rien ne s'affiche ; Entrée seule : passer) : " "$NAME" >&2
+  IFS= read -rs V; echo >&2
+  V="${V//[[:space:]]/}"
+  [ -z "$V" ] && { echo "$NAME : passée."; continue; }
+  [[ "$V" =~ ^[A-Za-z0-9._~+/=-]{16,300}$ ]] || { unset V LINES; stop "$NAME : la clé collée n'a pas la forme d'une clé (caractères ou longueur) : rien n'est écrit."; }
+  [ "$NAME" != ANTHROPIC_API_KEY ] || [[ "$V" == sk-ant-* ]] || { unset V LINES; stop "ANTHROPIC_API_KEY doit commencer par sk-ant- : rien n'est écrit."; }
+  LINES+="$NAME=$V"$'\n'; ADDED+="$NAME "
+done
+unset V
+[ -n "$LINES" ] || stop "Aucune clé à ajouter : rien n'est changé."
+printf '\n%s' "$LINES" | sudo tee -a "$E" >/dev/null || { unset LINES; stop "Écriture dans $E impossible."; }
+unset LINES
+SINCE="$(date '+%Y-%m-%d %H:%M:%S')"
+if ! sudo systemctl restart "$W" || ! sleep 5 || ! systemctl is-active --quiet "$W"; then
+  for NAME in $ADDED; do sudo sed -i "/^$NAME=/d" "$E"; done
+  sudo systemctl restart "$W"
+  stop "Le worker ne repart pas avec ces clés : elles sont retirées, worker redémarré comme avant (sudo journalctl -u $W -n 50)."
+fi
+OFF="$(sudo journalctl -u "$W" --since "$SINCE" --no-pager | grep -E 'AI off|tracking off' | sed 's/.*: //' | paste -sd';')"
+echo "Ajoutées : $ADDED; worker redémarré."
+echo "Encore coupé : ${OFF:-rien}."
+)
+```
+
+Prod (même commande ; seule la deuxième ligne change) :
+
+```bash
+(
+set -uo pipefail
+ENV=prod; E=/etc/closyria/$ENV.env; W=closyria-$ENV-worker
+stop() { echo "$1" >&2; exit 1; }
+sudo test -f "$E" || stop "$E introuvable : rien n'est changé."
+LINES=""; ADDED=""
+for NAME in ANTHROPIC_API_KEY LAPOSTE_OKAPI_KEY TRACKING_AGGREGATOR_KEY; do
+  if sudo grep -q "^$NAME=" "$E"; then echo "$NAME : déjà là, gardée."; continue; fi
+  printf "%s (coller la clé puis Entrée ; rien ne s'affiche ; Entrée seule : passer) : " "$NAME" >&2
+  IFS= read -rs V; echo >&2
+  V="${V//[[:space:]]/}"
+  [ -z "$V" ] && { echo "$NAME : passée."; continue; }
+  [[ "$V" =~ ^[A-Za-z0-9._~+/=-]{16,300}$ ]] || { unset V LINES; stop "$NAME : la clé collée n'a pas la forme d'une clé (caractères ou longueur) : rien n'est écrit."; }
+  [ "$NAME" != ANTHROPIC_API_KEY ] || [[ "$V" == sk-ant-* ]] || { unset V LINES; stop "ANTHROPIC_API_KEY doit commencer par sk-ant- : rien n'est écrit."; }
+  LINES+="$NAME=$V"$'\n'; ADDED+="$NAME "
+done
+unset V
+[ -n "$LINES" ] || stop "Aucune clé à ajouter : rien n'est changé."
+printf '\n%s' "$LINES" | sudo tee -a "$E" >/dev/null || { unset LINES; stop "Écriture dans $E impossible."; }
+unset LINES
+SINCE="$(date '+%Y-%m-%d %H:%M:%S')"
+if ! sudo systemctl restart "$W" || ! sleep 5 || ! systemctl is-active --quiet "$W"; then
+  for NAME in $ADDED; do sudo sed -i "/^$NAME=/d" "$E"; done
+  sudo systemctl restart "$W"
+  stop "Le worker ne repart pas avec ces clés : elles sont retirées, worker redémarré comme avant (sudo journalctl -u $W -n 50)."
+fi
+OFF="$(sudo journalctl -u "$W" --since "$SINCE" --no-pager | grep -E 'AI off|tracking off' | sed 's/.*: //' | paste -sd';')"
+echo "Ajoutées : $ADDED; worker redémarré."
+echo "Encore coupé : ${OFF:-rien}."
+)
+```
+
+Changer une clé (révoquée, compromise) : la retirer (`sudo sed -i '/^LAPOSTE_OKAPI_KEY=/d' /etc/closyria/dev.env`),
+puis relancer la commande. Retirer une clé coupe sa fonction proprement après le redémarrage du worker.
+
+### Vérifications en vrai, après installation (la dev d'abord)
+
+Les tests automatiques n'utilisent jamais le réseau : les réponses des transporteurs et de l'IA y sont écrites d'après
+leurs documentations. Il faut donc un essai réel par pièce, **sur la dev**, avant la prod :
+
+1. **Réception** : Compte → « Mes commandes par e-mail », copier l'adresse ; depuis l'adresse du compte, transférer à
+   la main un vrai e-mail de confirmation de commande (une boutique Shopify, de préférence). Puis
+   `sudo tail -n 20 /var/log/postfix-closyria.log` : une ligne `status=sent (delivered via closyria-dev service
+   (result=queued))`. Dans la minute, la carte « Commande reçue de {boutique} » sur l'Accueil ; dans l'admin,
+   « E-mails de commande » compte un e-mail reçu et lu. `result=ignored` : l'expéditeur n'était pas l'adresse vérifiée
+   du compte, ou sa signature n'a pas passé (voir §10.1 de la spec).
+2. **Suivi La Poste** : un vrai numéro Colissimo (ou Chronopost) en cours, collé sur un article « Commandé » avec
+   « Ajouter un numéro de suivi ». Le worker passe tous les quarts d'heure :
+   `sudo journalctl -u closyria-dev-worker -n 100 --no-pager | grep -E 'parcel'` doit dire `parcels: 1 checked`, sans
+   `check failed`, et le colis montrer son étape. `check failed (unreadable…)` : la réponse réelle ne ressemble pas à
+   celle de la documentation — le noter et ne pas passer en prod.
+3. **Suivi 17TRACK** : de même avec un vrai numéro d'un autre transporteur (Mondial Relay, GLS, DPD…). Au premier
+   passage 17TRACK enregistre le numéro ; l'étape vient au passage suivant (15 minutes plus tard).
+4. **IA (Haiku)** : transférer un vrai e-mail de commande d'une boutique **qui n'est pas** sur Shopify et sans données
+   structurées (sinon les formats connus le lisent et l'IA n'est pas appelée). Dans l'admin, « E-mails de commande » →
+   « IA du mois » compte une lecture et son coût (quelques centimes au plus) ; la carte de commande arrive comme pour
+   l'essai 1. `AI off` dans le journal du worker : la clé n'est pas lue (relancer la commande ci-dessus).
+5. **Tableau de bord** : la tuile « Colis suivis » compte les colis des essais 2 et 3.
+
+### Reste à faire
+
+- **`INBOUND_AUTOFORWARD` reste sur `off`** (prod comme dev) tant qu'un **vrai** transfert automatique de Gmail n'a
+  pas été essayé sur la dev : passer `INBOUND_AUTOFORWARD=on` dans `/etc/closyria/dev.env`, redémarrer l'API dev,
+  ajouter l'adresse de commande comme adresse de transfert dans les réglages de Gmail, vérifier que le code de
+  confirmation de Gmail s'affiche dans « Mes commandes par e-mail », puis qu'un e-mail de commande reçu dans Gmail
+  arrive bien (essai 1 ci-dessus). Seulement ensuite, décider pour la prod.
+- Les réponses réelles de La Poste et de 17TRACK, vues aux essais 2 et 3, confirment (ou corrigent) les formes
+  écrites d'après les documentations (spec §10.4).
 
 ## Accès au site de test (dev)
 

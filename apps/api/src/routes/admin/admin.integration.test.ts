@@ -124,6 +124,7 @@ describe("GET /api/admin/overview", () => {
       shopifySlowdown: null,
       rereadLate: expect.any(Number),
       notifications: expect.any(Object),
+      parcels: { tracked: 0, delivered30d: 0, failing30d: 0 },
     });
   });
 

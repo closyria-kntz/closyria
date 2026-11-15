@@ -19,6 +19,7 @@ import {
   shopifySlowdownSchema,
   shopValueSchema,
 } from "./catalogue";
+import { carrierSchema, MAX_RETURN_DAYS } from "./orders";
 import { audienceSchema, childDetailSchema, classifiedBySchema, seasonSchema } from "./wardrobe";
 
 const count = z.number().int().nonnegative();
@@ -54,6 +55,12 @@ export const adminOverviewSchema = z.object({
    * devices subscribed now (a device the push service retired is removed, so every subscription counts as active).
    */
   notifications: z.object({ sent7d: count, failed7d: count, devices: count }),
+  /**
+   * « Après la commande »: parcels still followed (validated orders, a next check planned), delivered over the last
+   * 30 days, and those of the last 30 days the carrier reports in trouble (`exception`) or that tracking gave up on
+   * (`unknown`).
+   */
+  parcels: z.object({ tracked: count, delivered30d: count, failing30d: count }),
 });
 export type AdminOverview = z.infer<typeof adminOverviewSchema>;
 
@@ -169,6 +176,9 @@ export const adminShopSchema = z.object({
   lastImportRemoved: count.nullable(),
   /** Products the shop's sitemap listed at the start of the import under way (estimate); null when unknown. */
   importExpected: count.nullable(),
+  /** « Après la commande »: days to send an item back from its delivery, and the shop's returns page (https). */
+  returnDays: z.number().int().min(0).max(MAX_RETURN_DAYS),
+  returnsUrl: z.string().nullable(),
   createdAt: isoDate,
 });
 export type AdminShop = z.infer<typeof adminShopSchema>;
@@ -199,6 +209,8 @@ export const adminShopDetailSchema = adminShopSchema.extend({
   catalogueProducts: count,
   /** « Shopify nous demande de ralentir » while it lasts (whatever the shop); null otherwise. */
   shopifySlowdown: shopifySlowdownSchema.nullable(),
+  /** « Transporteurs vus »: the carriers of its orders' parcels, alphabetical. */
+  carriersSeen: z.array(carrierSchema),
 });
 export type AdminShopDetail = z.infer<typeof adminShopDetailSchema>;
 
@@ -252,6 +264,15 @@ export const adminShopPatchSchema = z
     isMajorBrand: z.boolean(),
     /** « Accord de référencement »: its day (`YYYY-MM-DD`, stored at 00:00 UTC), from 2000 to tomorrow; null takes it off. */
     listingAgreementAt: listingAgreementDaySchema.nullable(),
+    /** « Délai de retour » in days from the delivery (0: no return). */
+    returnDays: z.number().int().min(0).max(MAX_RETURN_DAYS),
+    /** « Page des retours »: an https address, null takes it off. */
+    returnsUrl: z
+      .string()
+      .trim()
+      .max(2048)
+      .pipe(z.url({ protocol: /^https$/, hostname: z.regexes.domain }))
+      .nullable(),
   })
   .partial();
 
@@ -595,3 +616,37 @@ export const adminUserDeleteSchema = z.object({ confirmation: z.string().trim().
 export const adminUserErrorSchema = z.object({
   error: z.enum(["invalid_request", "not_found", "confirmation_mismatch", "self", "admin"]),
 });
+
+/** Window of the « E-mails de commande » page, in days (the ignored e-mails are purged after 30). */
+export const ADMIN_ORDER_EMAILS_DAYS = 30;
+
+/**
+ * Answer of `GET /api/admin/order-emails`: aggregates only, never an e-mail's content, sender or lines (spec §4).
+ * `counts`: e-mails received over the window by status. `byMethod`: the read ones, by known format or by the AI.
+ * `shops`: per shop of the orders the e-mails became (a failed e-mail counts for a shop once she typed its order by
+ * hand), `readRate` = parsed / (parsed + failed), `dismissed` = read as an order she then dismissed (« Ce n'est pas une
+ * commande »: misread). The row with `shopId` null gathers the e-mails without a shop. `ai`: the month's cost (euro
+ * cents, a dollar counted as a euro) against the cap.
+ */
+export const adminOrderEmailsSchema = z.object({
+  days: count,
+  counts: z.object({ received: count, ignored: count, queued: count, parsed: count, failed: count }),
+  byMethod: z.object({ known: count, ai: count }),
+  shops: z.array(
+    z.object({
+      shopId: z.uuid().nullable(),
+      name: z.string().nullable(),
+      parsed: count,
+      failed: count,
+      dismissed: count,
+      readRate: z.number().min(0).max(1).nullable(),
+    }),
+  ),
+  ai: z.object({
+    month: z.string(),
+    costCents: z.number().nonnegative(),
+    calls: count,
+    capCents: count,
+  }),
+});
+export type AdminOrderEmails = z.infer<typeof adminOrderEmailsSchema>;

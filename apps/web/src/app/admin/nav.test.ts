@@ -44,6 +44,10 @@ describe("isActive", () => {
     expect(entry("sales")?.href).toBe("/admin/soldes");
   });
 
+  it("lists « E-mails de commande » (après la commande)", () => {
+    expect(entry("orderEmails")?.href).toBe("/admin/e-mails-de-commande");
+  });
+
   it("keeps the shops entry active on a shop page", () => {
     const shops = entry("shops");
     expect(shops && isActive(shops, "/admin/boutiques/abc")).toBe(true);

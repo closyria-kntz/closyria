@@ -44,6 +44,7 @@ const overview = {
   shopifySlowdown: null,
   rereadLate: 0,
   notifications: { sent7d: 0, failed7d: 0, devices: 0 },
+  parcels: { tracked: 0, delivered30d: 0, failing30d: 0 },
 };
 
 describe("internalApiUrl", () => {
@@ -180,6 +181,8 @@ const shop = {
   lastImportCreated: null,
   lastImportRemoved: null,
   importExpected: null,
+  returnDays: 14,
+  returnsUrl: null,
   createdAt: "2026-11-01T10:00:00.000Z",
 };
 
@@ -220,6 +223,7 @@ describe("shop and capture reads", () => {
       featured: false,
       catalogueProducts: 12,
       shopifySlowdown: null,
+      carriersSeen: [],
     };
     const ok = fakeFetch(200, detail);
     const found = await fetchAdminShop(api(ok.fetch), shopId);

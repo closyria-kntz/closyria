@@ -448,7 +448,8 @@
       "unclassified": "À classer",
       "reports": "Signalements",
       "sales": "Soldes",
-      "listingRequests": "Demandes de référencement"
+      "listingRequests": "Demandes de référencement",
+      "orderEmails": "E-mails de commande"
     },
     "palette": {
       "open": "Commandes",
@@ -486,7 +487,13 @@
         "woocommerce": "WooCommerce"
       },
       "rereadLate": "Relecture en retard : {count, plural, one {# boutique attend} other {# boutiques attendent}} depuis plus de deux fois leur intervalle.",
-      "notifications": "Notifications : {sent, plural, one {# envoi} other {# envois}}, {failed, plural, one {# en échec} other {# en échec}} (7 j) · {devices, plural, one {# appareil} other {# appareils}}"
+      "notifications": "Notifications : {sent, plural, one {# envoi} other {# envois}}, {failed, plural, one {# en échec} other {# en échec}} (7 j) · {devices, plural, one {# appareil} other {# appareils}}",
+      "parcelsTitle": "Colis",
+      "parcelsTracked": "Colis suivis",
+      "parcelsDelivered": "Livrés sur 30 jours",
+      "parcelsFailing": "En échec de suivi sur 30 jours",
+      "parcelsNote": "« Suivis » : colis des commandes validées encore interrogés. « En échec » : incident chez le transporteur ou plus de nouvelles.",
+      "orderEmailsLink": "Voir les e-mails de commande"
     },
     "audit": {
       "title": "Journal d’audit",
@@ -792,6 +799,19 @@
         "manageLinkLabel": "Lien privé de gestion",
         "manageEmailLabel": "E-mail à envoyer avec le lien de gestion",
         "manageEmailText": "Bonjour {name},\n\nVoici le lien privé qui vous permet de voir le référencement de {shop} sur Closyria et de retirer votre boutique à tout moment, sans justification :\n{url}\n\nGardez-le précieusement : il remplace tout lien envoyé auparavant.\n\nBelle journée,\nClosyria"
+      },
+      "returns": {
+        "title": "Retours et colis",
+        "days": "Délai de retour (jours)",
+        "daysHint": "Compté à partir de la livraison, de 0 à {max} jours. 14 par défaut.",
+        "url": "Page des retours",
+        "urlHint": "Adresse en https:// affichée à côté de « Retour possible jusqu’au … ». Laisser vide pour ne pas en avoir.",
+        "save": "Enregistrer les retours",
+        "saved": "Retours enregistrés.",
+        "invalidDays": "Le délai doit être un nombre entier de jours, de 0 à 365.",
+        "invalidUrl": "La page des retours doit être une adresse complète en https://.",
+        "carriers": "Transporteurs vus",
+        "noCarriers": "Aucun colis suivi pour cette boutique pour l’instant."
       }
     },
     "captures": {
@@ -1187,6 +1207,37 @@
       "decidedAlready": "Cette demande a déjà été décidée.",
       "failed": "L’action a échoué. Réessaie.",
       "close": "Fermer"
+    },
+    "orderEmails": {
+      "title": "E-mails de commande",
+      "intro": "Ce que sont devenus les e-mails transférés sur les {days} derniers jours. Chiffres seulement : aucun e-mail, expéditeur ni article n’est affiché ici.",
+      "received": "Reçus",
+      "parsed": "Lus",
+      "failed": "Non lus",
+      "ignored": "Ignorés",
+      "queued": "En attente de lecture",
+      "byMethod": "Lus par format connu : {known} · par l’IA : {ai}.",
+      "ignoredNote": "« Ignorés » : expéditeur qui n’est pas la titulaire, ou signature invalide ; rien n’en est gardé au-delà de 30 jours.",
+      "aiTitle": "IA du mois",
+      "aiLine": "{month} : {cost} dépensés sur un plafond de {cap} ({calls, plural, one {# lecture} other {# lectures}}).",
+      "aiUsed": "{percent} du plafond utilisé.",
+      "aiCapReached": "Plafond atteint : les e-mails que les formats connus ne lisent pas restent « On n’a pas su lire cet e-mail » jusqu’au mois prochain.",
+      "cap": "Plafond du mois (€)",
+      "capHint": "De 0 à 1 000 €. 0 coupe l’IA. Un dollar est compté pour un euro : le plafond est atteint un peu tôt, jamais tard.",
+      "capSave": "Enregistrer le plafond",
+      "capSaved": "Plafond enregistré.",
+      "capInvalid": "Indique un montant en euros, de 0 à 1 000, avec au plus deux décimales.",
+      "capFailed": "Le plafond n’a pas pu être enregistré. Réessaie dans un instant.",
+      "shopsTitle": "Taux de lecture par boutique",
+      "shop": "Boutique",
+      "readRate": "Taux de lecture",
+      "shopParsed": "Lus",
+      "shopFailed": "Non lus",
+      "shopDismissed": "Mal lus",
+      "noShop": "Boutique inconnue",
+      "noShops": "Aucun e-mail lu ou non lu sur la période.",
+      "shopsNote": "Un e-mail non lu ne compte pour une boutique qu’une fois sa commande saisie à la main. « Mal lus » : lus comme une commande qu’elle a écartée (« Ce n’est pas une commande »). Un e-mail qui a complété une commande déjà là compte en « Boutique inconnue ».",
+      "none": "—"
     }
   },
   "Capture": {

@@ -263,8 +263,9 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
     mis à part (jamais une boutique fusionnée ; une boutique publiée d'abord) ; sinon la commande reste sans boutique
     et garde le nom tapé (`orders.shop_name`, migration 0040). Un nom tapé ne crée jamais de boutique.
 - **« C'est bon »** : chaque ligne reçoit son article. D'abord son article du produit de la ligne (un seul article
-  actif par produit, quel que soit son stade) ; sinon son unique envie ou article « Commandé » de la même boutique et
-  du même nom (casse, accents, ponctuation et espaces mis à part), pas déjà relié à une autre commande validée — deux
+  actif par produit, quel que soit son stade, dans n'importe lequel de ses profils) ; sinon son unique envie ou
+  article « Commandé » **du profil de la commande** (Task 8 : un nom seul n'atteint jamais un autre profil), de la même
+  boutique et du même nom (casse, accents, ponctuation et espaces mis à part), pas déjà relié à une autre commande validée — deux
   articles du même nom, ou une commande sans boutique : pas de liaison par le nom, un nouvel article (mieux vaut un
   article de trop qu'une envie passée « Commandé » à tort). Une envie passe « Commandé » à la date de la commande
   (sinon le jour même), avec sa ligne d'historique, la taille de la commande et ce qu'elle a payé (prix unitaire ×
@@ -487,3 +488,53 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   produit) ; chaque ligne d'une commande dit l'étape de son article (`itemStage`) : « Ajouter un numéro de suivi » n'est
   proposé que par un article encore « Commandé » (l'API répond 409 `item_not_ordered` sinon, dit en clair) ; les
   messages d'erreur des formulaires sont reliés à leur champ.
+
+### 10.7 Admin et mise en service (Task 8, 2026-11-15)
+
+- **Boutique** (fiche de l'admin) : bloc « Retours et colis » — « Délai de retour (jours) », entier de 0 à 365
+  (`shops.return_days`, 14 par défaut), « Page des retours », adresse **https** seulement (nulle pour la retirer),
+  validés par `adminShopPatchSchema` aux deux bouts ; enregistrés par le `PATCH /api/admin/shops/{id}` existant
+  (journalisé `shop.update`). « Transporteurs vus » : ceux des colis de ses commandes, une fois chacun.
+- **« E-mails de commande »** (`/admin/e-mails-de-commande`, menu de l'admin ; `GET /api/admin/order-emails`) :
+  **chiffres seulement**, sur 30 jours (la durée de garde des e-mails ignorés) — reçus, lus, non lus, ignorés, en
+  attente ; lus par format connu / par l'IA ; par boutique : lus, non lus, « mal lus » (lus comme une commande
+  qu'elle a ensuite écartée), taux de lecture = lus / (lus + non lus). La boutique d'un e-mail est celle de la commande
+  qu'il est devenu (une non écartée d'abord) ; un e-mail non lu n'en a une qu'une fois sa commande saisie à la main ;
+  un e-mail qui a complété une commande déjà là compte en « Boutique inconnue ». **Rien de personnel n'est lu ni
+  affiché** : ni expéditeur, ni adresse de commande, ni objet, ni article, ni personne ; pas de « voir » (pas de
+  détail d'un e-mail dans l'admin, même rédigé) — décidé pour ce chantier, à rouvrir seulement si la fondatrice en a
+  besoin pour corriger les lectures.
+- **IA du mois** (même page) : coût du mois de Paris (`ai_usage_months`, en centimes d'euro, un dollar compté pour un
+  euro), nombre de lectures, plafond, part utilisée (« Plafond atteint » à 100 % ou à 0 €). « Plafond du mois (€) »
+  modifiable (`PUT /api/admin/settings/ai-cap` `{ capCents }`, 0 à 100 000, journalisé `settings.ai_cap`), pris par
+  le prochain appel. `aiMonth`, `NANO_USD_PER_EURO_CENT` passent dans `packages/shared` et la lecture du plafond
+  (`readAiMonthlyCapCents`) dans `packages/db`, partagés par l'IA et l'admin.
+- **Tableau de bord** : tuiles « Colis » — suivis (colis des commandes validées avec un prochain contrôle), livrés sur
+  30 jours, en échec de suivi sur 30 jours (créés sur 30 jours, étape `exception` ou `unknown`).
+- **Accès** : routes `admin` (403 pour une utilisatrice, 401 sans session), testées.
+- **Mise en service** (`deploy/README.md`) : ce qu'il faut vraiment au DNS pour recevoir seulement (MX et A/AAAA de
+  `mx.closyria.com` obligatoires ; `TXT "v=spf1 -all"` recommandé ; ni DKIM, ni DMARC, ni PTR) ; une commande par
+  environnement qui **demande** `ANTHROPIC_API_KEY`, `LAPOSTE_OKAPI_KEY`, `TRACKING_AGGREGATOR_KEY` sans les afficher
+  (`read -s`), refuse une clé mal formée avant d'écrire, n'ajoute que les manquantes, redémarre le worker (retour en
+  arrière s'il ne repart pas) et dit ce qui reste coupé ; `INBOUND_EMAIL_SECRET` reste posé par la commande de
+  réception (§10.1). Vérifications réelles listées (un transfert, le journal `/var/log/postfix-closyria.log`, un vrai
+  numéro par connecteur, un vrai appel Haiku).
+- **Reste à faire avant la prod** : `INBOUND_AUTOFORWARD` reste `off` tant qu'un vrai transfert automatique de Gmail
+  n'a pas été essayé sur la dev ; les formes réelles des réponses de La Poste et de 17TRACK sont à confirmer au premier
+  vrai colis (§10.4).
+- **Points en attente des relectures, réglés** :
+  - **Rédaction avant l'IA** : adresses belges, suisses, luxembourgeoises (rue avant le numéro, « Rue de la Loi 16 » ;
+    rues allemandes et néerlandaises collées, « Bahnhofstrasse 5 » ; code postal à 4 chiffres avant la ville, ou ville
+    seule sur sa ligne avant le code, jamais une année 19xx/20xx ni après un mois), adresses anglaises « 4 Ashdown
+    Close » (nom en capitales, puis le genre de rue), e-mails écrits « &#64; », « &#x40; », « &commat; », « (at) »,
+    « [at] », « [dot] », et `%40` encodé plusieurs fois (« %2540 »). Montants, années, numéros de commande et dates
+    restent.
+  - **Liaison par le nom** (« C'est bon », saisie) : seulement dans le **profil de la commande** ; la liaison par le
+    produit reste sur tous ses profils (un article actif par produit), voir §10.3.
+  - **Admin « Utilisatrices »** : les sous-requêtes de comptage nomment toujours la personne `"user"."id"` (Drizzle
+    écrit une colonne sans sa table en tête d'un champ choisi ; dans une sous-requête, un `"id"` nu se lierait à la
+    table comptée). Elles étaient justes par leur imbrication ; un test le tient désormais (une session dont l'id est
+    celui de sa titulaire n'est comptée qu'à elle).
+  - **Produit d'une ligne sans boutique** (lecture des e-mails) : gardé tel quel — l'adresse canonique d'un produit
+    est unique, elle désigne au plus une page, celle que la ligne de l'e-mail donne ; seuls les formats connus gardent
+    un lien, et seulement celui du titre ou de la photo de la ligne.

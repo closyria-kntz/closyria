@@ -1,10 +1,5 @@
-import { type Database, eq, schema, sql } from "@closyria/db";
-import {
-  AI_MONTHLY_CAP_SETTING,
-  aiMonthlyCapCentsSchema,
-  DEFAULT_AI_MONTHLY_CAP_CENTS,
-  parisDay,
-} from "@closyria/shared";
+import { type Database, eq, readAiMonthlyCapCents, schema, sql } from "@closyria/db";
+import { aiMonth, NANO_USD_PER_EURO_CENT } from "@closyria/shared";
 
 /**
  * Claude Haiku 5.5's prices (claude-api skill, cached 2026-11-03), in billionths of a dollar per token: $0.10 / $0.50
@@ -19,11 +14,9 @@ export const MODEL_PRICES = {
   longPromptTokens: 100_000,
 } as const;
 
-/**
- * The cap is in euros, the bill in dollars: a dollar is counted as a euro. The dollar is worth less than the euro, so
- * this over-counts (the cap is reached a little early, never late).
- */
-export const NANO_USD_PER_EURO_CENT = 10_000_000;
+// The month (Paris) and the dollar-for-a-euro unit live in `@closyria/shared`: the admin reads them too.
+// The cap is read by `@closyria/db`, shared with the admin page.
+export { aiMonth, NANO_USD_PER_EURO_CENT, readAiMonthlyCapCents };
 
 export type TokenUsage = {
   input_tokens: number;
@@ -43,19 +36,6 @@ export function callCostNanoUsd(usage: TokenUsage): number {
   return Math.ceil(
     usage.input_tokens * input + cacheWrite * input * 2 + cacheRead * input * 0.1 + usage.output_tokens * output,
   );
-}
-
-/** The month a call counts in, `YYYY-MM` in Paris. */
-export const aiMonth = (now: Date) => parisDay(now).slice(0, 7);
-
-/** The monthly cap in euro cents: the admin's setting, or 10 € without one (or with an unreadable one). */
-export async function readAiMonthlyCapCents(db: Database): Promise<number> {
-  const [row] = await db
-    .select({ value: schema.appSettings.value })
-    .from(schema.appSettings)
-    .where(eq(schema.appSettings.key, AI_MONTHLY_CAP_SETTING));
-  const parsed = aiMonthlyCapCentsSchema.safeParse(row?.value);
-  return parsed.success ? parsed.data : DEFAULT_AI_MONTHLY_CAP_CENTS;
 }
 
 /** A call's place in the month's budget: `settle` replaces the reserved cost with the real one (0: not billed). */

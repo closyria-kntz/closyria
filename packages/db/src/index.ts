@@ -52,6 +52,7 @@ export {
 export { importNotUnderWay } from "./import-state";
 export { OUTER_ORDER_ID, orderAwaitingNews, receivedQuestionOpen, receiveOrderItems } from "./orders";
 export type { AuditDetails } from "./schema/audit";
+export { readAiMonthlyCapCents } from "./settings";
 export { findOrCreateShop, findShopByHost, LostRace, type Shop } from "./shops";
 export { type ActiveSlowdown, readShopifySlowdown, recordShopifyRejection } from "./slowdown";
 export { type TrackedEvent, trackServer } from "./track";

@@ -39,6 +39,12 @@ export default async function AdminDashboardPage() {
     { label: t("shopsPending"), value: format.number(shops.pending), href: "/admin/boutiques?status=pending" },
     { label: t("shopsDown"), value: format.number(shops.down), href: "/admin/boutiques?health=down" },
   ];
+  // « Après la commande »: parcels followed now, delivered and in trouble over 30 days.
+  const parcelFigures = [
+    { label: t("parcelsTracked"), value: overview.parcels.tracked },
+    { label: t("parcelsDelivered"), value: overview.parcels.delivered30d },
+    { label: t("parcelsFailing"), value: overview.parcels.failing30d },
+  ];
 
   return (
     <>
@@ -87,6 +93,24 @@ export default async function AdminDashboardPage() {
       </dl>
       <p className="text-sm text-ink-muted">
         {t("byMethod")} : {methods}
+      </p>
+      <h2 className="font-display text-lead font-strong">{t("parcelsTitle")}</h2>
+      <dl data-testid="parcel-figures" className="grid grid-cols-1 gap-space-3 sm:grid-cols-3">
+        {parcelFigures.map((figure) => (
+          <div
+            key={figure.label}
+            className="flex flex-col-reverse gap-space-1 rounded-card border border-card-border bg-card-bg p-space-4 shadow-soft"
+          >
+            <dt className="text-sm text-ink-muted">{figure.label}</dt>
+            <dd className="font-display text-display font-strong tabular-nums">{format.number(figure.value)}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-sm text-ink-muted">
+        {t("parcelsNote")}{" "}
+        <Link href="/admin/e-mails-de-commande" className="underline">
+          {t("orderEmailsLink")}
+        </Link>
       </p>
       <p
         data-testid="notifications-line"

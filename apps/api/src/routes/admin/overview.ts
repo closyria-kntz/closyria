@@ -39,7 +39,9 @@ const overviewRoute = defineAccess(
       "(after a 429/430 from a Shopify shop: imports doubled, else nightly) until `until`; null when none. `rereadLate`: " +
       "shops due for their catalogue re-read whose last import started over twice their interval ago (« Relecture en " +
       "retard »). `notifications`: pushes over the last 7 days, one per device (accepted / refused or failed), and the " +
-      "devices subscribed now.",
+      "devices subscribed now. `parcels` (« Après la commande »): parcels of validated orders with a next check " +
+      "planned, delivered over the last 30 days, and created over the last 30 days whose step is `exception` or " +
+      "`unknown`.",
     responses: {
       200: { description: "Figures", content: { "application/json": { schema: adminOverviewSchema } } },
     },
@@ -89,7 +91,8 @@ export function overviewRoutes(deps: AdminDeps) {
     const at = now();
     const since7d = new Date(at.getTime() - HEALTH_WINDOW_MS).toISOString();
     const since24h = new Date(at.getTime() - DAY_MS).toISOString();
-    const [[users], [today], captureFigures, [pending], monitored, shopifySlowdown, [sends], [devices]] =
+    const since30d = new Date(at.getTime() - 30 * DAY_MS).toISOString();
+    const [[users], [today], captureFigures, [pending], monitored, shopifySlowdown, [sends], [devices], parcels] =
       await Promise.all([
         deps.db
           .select({
@@ -153,6 +156,13 @@ export function overviewRoutes(deps: AdminDeps) {
           .from(schema.alertSends)
           .where(gte(schema.alertSends.sentAt, new Date(since7d))),
         deps.db.select({ n: count() }).from(schema.pushSubscriptions),
+        deps.db.execute<{ tracked: number; delivered30d: number; failing30d: number }>(sql`
+          select
+            (count(*) filter (where p.next_check_at is not null and o.status = 'confirmed'))::int as tracked,
+            (count(*) filter (where p.delivered_at >= ${since30d}::timestamptz))::int as delivered30d,
+            (count(*) filter (where p.status in ('exception', 'unknown')
+              and p.created_at >= ${since30d}::timestamptz))::int as failing30d
+          from parcels p join orders o on o.id = p.order_id`),
       ]);
     const rereadLate = await countRereadLate(deps.db, at, shopifySlowdown?.level ?? null);
     const stats = await loadShopStats(
@@ -193,6 +203,11 @@ export function overviewRoutes(deps: AdminDeps) {
         shopifySlowdown,
         rereadLate,
         notifications: { sent7d: sends?.sent ?? 0, failed7d: sends?.failed ?? 0, devices: devices?.n ?? 0 },
+        parcels: {
+          tracked: parcels.rows[0]?.tracked ?? 0,
+          delivered30d: parcels.rows[0]?.delivered30d ?? 0,
+          failing30d: parcels.rows[0]?.failing30d ?? 0,
+        },
       },
       200,
     );

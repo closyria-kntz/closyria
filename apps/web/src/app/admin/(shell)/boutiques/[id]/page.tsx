@@ -18,13 +18,17 @@ import { FeatureShop } from "./feature-shop";
 import { ShippingOptions } from "./shipping-options";
 import { ShopAgreement } from "./shop-agreement";
 import { ShopCatalogue } from "./shop-catalogue";
+import { ShopReturns } from "./shop-returns";
 import { ShopReview } from "./shop-review";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Props = { params: Promise<{ id: string }> };
 
-/** One shop: validation, settings, catalogue (values, import), « boutique de la semaine », delivery, health, link tester and merge. */
+/**
+ * One shop: validation, settings, catalogue (values, import), « boutique de la semaine », delivery, returns and
+ * carriers seen, health, link tester and merge.
+ */
 export default async function AdminShopPage({ params }: Props) {
   await requireAdminPage();
   const { id } = await params;
@@ -99,6 +103,15 @@ export default async function AdminShopPage({ params }: Props) {
         </h2>
         <ShippingOptions shopId={shop.id} options={shipping?.options ?? []} />
       </section>
+
+      <div className="rounded-card border border-card-border bg-card-bg p-space-4">
+        <ShopReturns
+          id={shop.id}
+          returnDays={shop.returnDays}
+          returnsUrl={shop.returnsUrl}
+          carriersSeen={shop.carriersSeen}
+        />
+      </div>
 
       <section
         aria-labelledby="health-title"

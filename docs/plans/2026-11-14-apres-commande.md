@@ -39,8 +39,8 @@
 
 **Produces:** tables `order_inboxes` (user_id, local_part unique, active, created_at), `inbound_emails` (id, user_id null, inbox_id, received_at, from_address, auth_ok bool, status ('ignored'|'queued'|'parsed'|'failed'), raw_object_key null, purge_after), `orders` (id, user_id, profile_id, shop_id null, external_ref null, ordered_at null, status ('draft'|'confirmed'|'dismissed'), source ('email'|'manual'|'tracking'), parse_method ('known'|'ai'|'manual'), inbound_email_id null), `order_lines` (order_id, item_id null, product_id null, name, size_label, color, quantity, price_cents, currency), `parcels` (id, order_id, carrier, tracking_number, status ('pending'|'in_transit'|'out_for_delivery'|'pickup_ready'|'delivered'|'exception'|'unknown'), last_event_at, estimated_at, delivered_at, next_check_at, check_until), `parcel_events` (parcel_id, at, status, label); `shops.return_days int default 14`, `shops.returns_url text null`; `items.return_deadline date null`. Toutes possédées (registre `registerOwnedTable`). Shared : `detectCarrier(trackingNumber): Carrier | null` (formats Colissimo, Lettre suivie, Chronopost, Mondial Relay, GLS, DPD, Colis Privé, UPS, DHL), `returnDeadline(deliveredAt, returnDays): string` (date Paris), `nextParcelCheck(status, now): Date`, schémas Zod des vues et entrées.
 
-- [ ] Tests d'abord (formats de numéros réels anonymisés, date limite à cheval sur l'heure d'été, rythme), migration + test de migration, suppression de compte qui efface tout.
-- [ ] Commit « feat(commandes): données et règles ».
+- [x] Tests d'abord (formats de numéros réels anonymisés, date limite à cheval sur l'heure d'été, rythme), migration + test de migration, suppression de compte qui efface tout.
+- [x] Commit « feat(commandes): données et règles ».
 
 ### Task 2: Réception des e-mails
 
@@ -94,4 +94,4 @@
 
 **Produces:** boutique : délai de retour et lien de la page retours ; page « E-mails de commande » (reçus, non lus, mal lus, sans contenu personnel affiché par défaut, taux de lecture par boutique, coût IA du mois et plafond) ; tableau de bord (colis suivis, livrés, en échec) ; `deploy/README.md` : DNS du sous-domaine, clés La Poste / agrégateur / IA / secret de réception (une commande par environnement, un seul message) ; spec § « Décisions de construction », plan coché.
 
-- [ ] Tests d'abord, suite e2e complète seule, commit « feat(commandes): admin et mise en service ».
+- [x] Tests d'abord, suite e2e complète seule, commit « feat(commandes): admin et mise en service ». Fait : spec §10.7 ; points en attente des relectures (rédaction BE/CH et e-mails écrits autrement, liaison par le nom limitée au profil de la commande, sous-requêtes de l'admin « Utilisatrices ») dans « fix(commandes): points en attente ».
