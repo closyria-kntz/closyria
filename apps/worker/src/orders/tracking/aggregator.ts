@@ -33,6 +33,11 @@ const ALREADY_REGISTERED = -18019901;
  * eCommerce) 17TRACK tells apart from the number better than we do.
  */
 const CARRIER_CODES: Partial<Record<Carrier, number>> = {
+  // Without La Poste's own key its carriers come here (§11.3). 17TRACK does not recognise Chronopost's XR…TS numbers
+  // by itself (seen on dev, 2026-11-15): name the carrier. Colissimo and Lettre suivie are « La Poste (Colissimo) ».
+  colissimo: 6051,
+  lettre_suivie: 6051,
+  chronopost: 100273,
   mondial_relay: 100304,
   gls: 100005,
   dpd: 100072,

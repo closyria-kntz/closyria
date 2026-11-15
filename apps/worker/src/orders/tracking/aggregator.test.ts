@@ -21,6 +21,21 @@ const parcel = { carrier: "mondial_relay" as const, trackingNumber: "12345678" }
 const noWait = async () => {};
 
 describe("aggregator connector (17TRACK)", () => {
+  it("names La Poste's carriers (17TRACK does not recognise Chronopost's XR…TS numbers alone)", async () => {
+    for (const [carrier, code] of [
+      ["chronopost", 100273],
+      ["colissimo", 6051],
+      ["lettre_suivie", 6051],
+    ] as const) {
+      const { fetch, calls } = fakeFetch([{ status: 200, body: fixture("aggregator-delivered") }]);
+      // The fixture answers for another number: only the request matters here.
+      await aggregatorConnector({ apiKey: "k", fetch, wait: noWait })
+        .track({ carrier, trackingNumber: "XR713092733TS" })
+        .catch(() => undefined);
+      expect(calls[0]?.body).toEqual([{ number: "XR713092733TS", carrier: code }]);
+    }
+  });
+
   it("asks for the parcel with the key in its header and the carrier's code", async () => {
     const { fetch, calls } = fakeFetch([{ status: 200, body: fixture("aggregator-delivered") }]);
     await aggregatorConnector({ apiKey: "secret-17", fetch, wait: noWait }).track(parcel);
