@@ -377,6 +377,30 @@ describe("GET /api/admin/users/{id}", () => {
   });
 });
 
+describe("counts bound to the person, never to the counted table", () => {
+  it("does not count a session whose own id equals its user id for everybody", async () => {
+    // A counted row whose `id` equals its `user_id`: a subquery whose bare "id" bound to the counted table (not the
+    // person) would count it for every person.
+    const at = new Date("2021-03-01T00:00:00Z");
+    const fixture = (id: string) => ({ id, name: id, email: `${id}@example.test`, createdAt: at, updatedAt: at });
+    await handle.db.insert(schema.user).values([fixture("collide-self"), fixture("collide-none")]);
+    await handle.db.insert(schema.session).values({
+      id: "collide-self",
+      userId: "collide-self",
+      token: "collide-token",
+      expiresAt: new Date("2031-01-01T00:00:00Z"),
+      authMethod: "email-otp",
+    });
+    const detail = async (id: string) =>
+      adminUserDetailSchema.parse(await (await get(`/api/admin/users/${id}`, admin.cookie)).json());
+    expect((await detail("collide-self")).sessions).toBe(1);
+    expect((await detail("collide-none")).sessions).toBe(0);
+    expect((await detail("collide-none")).lastActiveAt).toBeNull();
+    const list = adminUserListSchema.parse(await (await get("/api/admin/users?q=collide-", admin.cookie)).json());
+    expect(list.users.find((u) => u.id === "collide-none")?.lastActiveAt ?? null).toBeNull();
+  });
+});
+
 describe("DELETE /api/admin/users/{id}", () => {
   it("deletes every row she owns and her stored photos, and is audited", async () => {
     const account = await session("user", "email-otp");

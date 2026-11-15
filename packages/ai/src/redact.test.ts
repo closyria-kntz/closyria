@@ -182,3 +182,48 @@ describe("redactPersonalData on hostile shapes (relecture n°1)", () => {
     expect(redactPersonalData(text)).toBe(text);
   });
 });
+
+describe("redactPersonalData: Belgian and Swiss addresses, written-out e-mails (Task 8)", () => {
+  const cases: [string, string, string[]][] = [
+    [
+      "Belgian street before its number, then postcode and city",
+      "Rue de la Loi 16, 1000 Bruxelles",
+      ["Loi", "1000", "Bruxelles"],
+    ],
+    [
+      "Swiss street before its number, postcode on the next line",
+      "Bahnhofstrasse 5\n8001 Zürich",
+      ["Bahnhofstrasse", "8001", "Zürich"],
+    ],
+    ["Belgian postcode and city alone", "4000 Liège", ["4000", "Liège"]],
+    ["Swiss city before its postcode", "Genève 1201", ["Genève", "1201"]],
+    ["German-style street word glued to its name", "Hauptstrasse 12", ["Hauptstrasse"]],
+    ["English close", "4 Ashdown Close", ["Ashdown"]],
+    ["e-mail with &#64;", "écris à camille.martin&#64;exemple.test", ["camille", "exemple.test", "&#64;"]],
+    ["e-mail with (at)", "camille.martin (at) exemple.test", ["camille", "exemple.test"]],
+    ["e-mail with [at] and [dot]", "camille [at] exemple [dot] test", ["camille", "exemple"]],
+    ["double-encoded e-mail", "?to=camille.martin%2540exemple.test", ["camille", "%2540", "exemple.test"]],
+    ["e-mail with &#x40;", "camille&#x40;exemple.test", ["camille", "exemple.test"]],
+  ];
+  for (const [label, text, secrets] of cases) {
+    it(`takes out the ${label}`, () => {
+      const out = redactPersonalData(text);
+      for (const secret of secrets) expect(out, `${label}: ${out}`).not.toContain(secret);
+    });
+  }
+
+  it("still keeps 4-digit amounts, years, quantities and order lines", () => {
+    const text = [
+      "Commande 1042 confirmée",
+      "Order #2093 du 9 novembre 2026",
+      "Total 1299 EUR",
+      "Robe Lina 2026 × 1",
+      "Quantité 2 · Taille 38",
+      "Livraison offerte dès 1000 €",
+      "Collection Été 2026",
+      "Commande passée via Shopify 2 articles",
+      "Expédiée le 9 novembre 2026 à 14 h",
+    ].join("\n");
+    expect(redactPersonalData(text)).toBe(text);
+  });
+});

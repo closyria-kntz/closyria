@@ -12,6 +12,13 @@
 
 /** A web link: replaced by its host. */
 const URL_PATTERN = /\bhttps?:\/\/[^\s<>"'()[\]]+/giu;
+/**
+ * E-mail addresses written so that a robot misses them, turned back into plain ones first: HTML entities (« &#64; »,
+ * « &#x40; », « &commat; »), percent-encoding nested any number of times (« %2540 »), « (at) » / « [at] » / « {at} »
+ * and the same for « dot ».
+ */
+const WRITTEN_AT = /&#0*64;|&#x0*40;|&commat;|%(?:25)*40|[ \t]*[([{][ \t]*at[ \t]*[)\]}][ \t]*/giu;
+const WRITTEN_DOT = /[ \t]*[([{][ \t]*dot[ \t]*[)\]}][ \t]*/giu;
 const EMAIL = /(?<![\p{L}\p{N}._%+'-])[\p{L}\p{N}._%+'-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/gu;
 /** 13 digits or more, spaces, dots or dashes between them (« 4970 1012 3456 7890 », « 4970.1012… »): a card. */
 const CARD_SHAPE = /(?<![\p{L}\p{N}])\d(?:[ .-]?\d){12,}(?![\p{L}\p{N}])/gu;
@@ -87,6 +94,46 @@ const STREET_LINE = new RegExp(
   `^.*(?<![\\p{L}\\p{N}])\\d{1,4}[ \\t]*(?:bis|ter|[a-z])?[ \\t]*,?[ \\t]+(?:${STREET_WORDS})(?![\\p{L}\\p{N}]).*$`,
   "gimu",
 );
+/**
+ * Street first, number after (Belgium, Switzerland, Luxembourg: « Rue de la Loi 16 », « Chaussée de Wavre 12 »):
+ * a street word, its name, then the number.
+ */
+const STREET_FIRST_WORDS =
+  "rue|avenue|boulevard|chemin|place|route|quai|all[ée]e|impasse|square|passage|chauss[ée]e|dr[èe]ve|rempart|ruelle|sentier";
+const STREET_FIRST_LINE = new RegExp(
+  `^.*(?<![\\p{L}\\p{N}])(?:${STREET_FIRST_WORDS})[ \\t]+\\p{L}[\\p{L}' .-]*?[ \\t]+\\d{1,4}[ \\t]*(?:bis|ter|[a-z])?(?![\\p{L}\\p{N}]).*$`,
+  "gimu",
+);
+/** German and Dutch street names, the kind of street glued to the name (« Bahnhofstrasse 5 », « Kerkstraat 12 »). */
+const COMPOUND_STREET_LINE =
+  /^.*\p{L}(?:strasse|straße|str\.|gasse|weg|platz|allee|ring|straat|laan|steenweg|dreef|plein|gracht|kade)[ \t]+\d{1,4}[ \t]*[a-z]?(?![\p{L}\p{N}]).*$/gimu;
+/** English addresses, the kind of street last (« 4 Ashdown Close », « 10 Downing Street »), capitalised names. */
+const ENGLISH_STREET_TYPES = [
+  "Street",
+  "Road",
+  "Avenue",
+  "Ave",
+  "Lane",
+  "Drive",
+  "Close",
+  "Way",
+  "Court",
+  "Place",
+  "Crescent",
+  "Terrace",
+  "Gardens",
+  "Grove",
+  "Mews",
+  "Row",
+  "Square",
+  "Boulevard",
+]
+  .flatMap((word) => [word, word.toLowerCase()])
+  .join("|");
+const ENGLISH_STREET_LINE = new RegExp(
+  `^.*(?<![\\p{L}\\p{N}])\\d{1,4}[A-Za-z]?,?[ \\t]+(?:\\p{Lu}[\\p{L}'-]*[ \\t]+){1,3}(?:${ENGLISH_STREET_TYPES})(?![\\p{L}\\p{N}]).*$`,
+  "gmu",
+);
 /** Words a 5-digit number follows when it is no postcode (« Commande 10421 », « Total 10000 »). */
 const NOT_A_CITY =
   "commande|order|n°|no\\.?|#|r[ée]f(?:[ée]rence)?|ref|facture|invoice|total|colis|suivi|num[ée]ro|number|article|code|qt[ée]";
@@ -95,6 +142,21 @@ const POSTCODE_CITY_LINE = new RegExp(
   [
     `^.*(?<!(?:${NOT_A_CITY})[ \\t]*:?[ \\t]*)(?<![#/_.\\p{L}\\p{N}-])\\d{5}[ \\t]+(?!(?:EUR|USD|GBP|CHF)(?![\\p{L}]))\\p{L}[\\p{L}' -]+.*$`,
     `^.*(?<![\\p{L}])(?!(?:${NOT_A_CITY})(?![\\p{L}]))\\p{L}[\\p{L}'-]+[ \\t]+\\d{5}(?![\\p{L}\\p{N}]).*$`,
+  ].join("|"),
+  "gimu",
+);
+/** Months: a year after one (« 9 novembre 2026 à 14 h ») is no postcode. */
+const MONTHS =
+  "janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre|janv|f[ée]vr|avr|juil|sept|oct|nov|d[ée]c|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|dec";
+/**
+ * A line with a Belgian, Swiss, Luxembourgish or Austrian postcode (4 digits) before its city (« 1000 Bruxelles »,
+ * « 8001 Zürich »), not after a month, an order word or a currency; or a city alone on its line before such a
+ * postcode (« Genève 1201 »), never a year (19xx, 20xx: « Collection Été 2026 »).
+ */
+const POSTCODE4_CITY_LINE = new RegExp(
+  [
+    `^.*(?<!(?:${NOT_A_CITY}|${MONTHS})\\.?[ \\t]*:?[ \\t]*)(?<![#/_.,\\p{L}\\p{N}-])\\d{4}[ \\t]+(?!(?:EUR|USD|GBP|CHF|à|a|at|h|x)(?![\\p{L}]))\\p{L}[\\p{L}' -]+.*$`,
+    `^[ \\t]*(?!(?:${NOT_A_CITY})(?![\\p{L}]))\\p{L}[\\p{L}'-]*(?:[ \\t-]\\p{L}[\\p{L}'-]*){0,2}[ \\t]+(?!19\\d\\d|20\\d\\d)\\d{4}[ \\t]*$`,
   ].join("|"),
   "gimu",
 );
@@ -162,7 +224,7 @@ export function redactPersonalData(text: string): string {
     const host = hostOf(url);
     return host ? `[lien ${host}]` : "[lien]";
   });
-  out = out.replace(/%40/gi, "@");
+  out = out.replace(WRITTEN_AT, "@").replace(WRITTEN_DOT, ".");
   out = out.replace(RECIPIENT_HEADER, "[destinataire]");
   out = out.replace(EMAIL, "[e-mail]");
   out = out.replace(IBAN_SHAPE, (m) => (m.replace(/[^a-z0-9]/gi, "").length >= 15 ? "[IBAN]" : m));
@@ -173,7 +235,11 @@ export function redactPersonalData(text: string): string {
   out = out.replace(SEPARATED_DIGITS, (m) => (phoneShaped(m) ? "[téléphone]" : m));
   out = dropAddressBlocks(out);
   out = out.replace(STREET_LINE, "[adresse]");
+  out = out.replace(STREET_FIRST_LINE, "[adresse]");
+  out = out.replace(COMPOUND_STREET_LINE, "[adresse]");
+  out = out.replace(ENGLISH_STREET_LINE, "[adresse]");
   out = out.replace(POSTCODE_CITY_LINE, "[adresse]");
+  out = out.replace(POSTCODE4_CITY_LINE, "[adresse]");
   out = out.replace(POSTCODE_LINE, "[adresse]");
   return out;
 }

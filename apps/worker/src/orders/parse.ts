@@ -45,6 +45,10 @@ type LineRow = Omit<ParsedOrderLine, "productUrl"> & { productId: string | null 
 /**
  * The lines with the product their link names (RF 3): a product already known by that canonical address, of the
  * order's shop when it is known. A product is never created and its page never fetched.
+ *
+ * Without a shop (no plausible domain), the address alone decides: `products.canonical_url` is unique, so it names one
+ * page of one shop at most, the very page the e-mail's line links to (Task 8 review: kept, not unsafe). Only the
+ * known formats keep a line's link (the AI keeps none), and only on that line's own title or photo.
  */
 async function withProducts(db: Database, shopId: string | null, lines: ParsedOrderLine[]): Promise<LineRow[]> {
   const urls = lines.map((line) => (line.productUrl ? canonicalizeUrl(line.productUrl) : null));

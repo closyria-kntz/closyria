@@ -50,6 +50,15 @@ const isGuest = sql<boolean>`coalesce(${u.isAnonymous}, false)`;
 /** A timestamptz as an ISO string (UTC, milliseconds). */
 const iso = (value: SQL) => sql`to_char((${value}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 const countOf = (from: SQL) => sql<number>`(select count(*)::int from ${from})`;
+/**
+ * The person's id, always written `"user"."id"`. Drizzle writes a column at the top level of a selected field without
+ * its table on a single-table select: inside a correlated subquery, a bare `"id"` would bind to the counted table.
+ * The subqueries below use this and qualified inner columns, so their meaning never depends on how they are nested.
+ */
+const personId = sql`${sql.identifier("user")}.${sql.identifier("id")}`;
+/** The person's rows of `table` (a table of `schema` with a `user_id`), `extra` narrowing them. */
+const ownedBy = (table: { userId: Parameters<typeof eq>[0] }, extra?: SQL) =>
+  countOf(sql`${table} where ${table.userId} = ${personId}${extra ? sql` and ${extra}` : sql``}`);
 
 const rowColumns = {
   id: u.id,
@@ -60,10 +69,10 @@ const rowColumns = {
   createdAtText: sql<string>`${u.createdAt}::text`,
   // Better Auth's timestamps have no time zone and hold UTC wall-clock times.
   lastActiveAt: sql<string | null>`${iso(sql`greatest(
-    (select max(${schema.session.updatedAt}) from ${schema.session} where ${schema.session.userId} = ${u.id}) at time zone 'UTC',
-    (select max(${schema.events.occurredAt}) from ${schema.events} where ${schema.events.userId} = ${u.id}))`)}`,
-  itemCount: countOf(sql`${schema.items} where ${schema.items.userId} = ${u.id} and ${schema.items.deletedAt} is null`),
-  pushDevices: countOf(sql`${schema.pushSubscriptions} where ${schema.pushSubscriptions.userId} = ${u.id}`),
+    (select max(${schema.session.updatedAt}) from ${schema.session} where ${schema.session.userId} = ${personId}) at time zone 'UTC',
+    (select max(${schema.events.occurredAt}) from ${schema.events} where ${schema.events.userId} = ${personId}))`)}`,
+  itemCount: ownedBy(schema.items, sql`${schema.items.deletedAt} is null`),
+  pushDevices: ownedBy(schema.pushSubscriptions),
 };
 
 type Row = {
@@ -181,17 +190,17 @@ async function signInMethods(db: Database, id: string, isAnonymous: boolean): Pr
 
 /** One person's facts and counts (`GET /admin/users/{id}`), or null when unknown. */
 async function loadDetail(db: Database, id: string) {
-  const owned = (table: SQL, extra?: SQL) =>
-    countOf(sql`${table} where user_id = ${u.id}${extra ? sql` and ${extra}` : sql``}`);
+  const items = (stage: string) =>
+    ownedBy(schema.items, sql`${schema.items.deletedAt} is null and ${schema.items.stage} = ${stage}`);
   const [found] = await db
     .select({
       ...rowColumns,
       isTester: u.isTester,
-      profiles: owned(sql`${schema.profiles}`),
-      wishlists: owned(sql`${schema.wishlists}`),
-      spottedItems: owned(sql`${schema.items}`, sql`deleted_at is null and stage = 'spotted'`),
-      ownedItems: owned(sql`${schema.items}`, sql`deleted_at is null and stage = 'owned'`),
-      sessions: owned(sql`${schema.session}`),
+      profiles: ownedBy(schema.profiles),
+      wishlists: ownedBy(schema.wishlists),
+      spottedItems: items("spotted"),
+      ownedItems: items("owned"),
+      sessions: ownedBy(schema.session),
     })
     .from(u)
     .where(eq(u.id, id));

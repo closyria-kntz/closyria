@@ -144,9 +144,10 @@ function paidCents(line: OrderLine): number | null {
 const LINKABLE_STAGES = ["spotted", "ordered"];
 
 /**
- * Her article of the same shop and name as the line, when exactly one: still a wish or already ordered, not in the
- * trash, not taken by another line of this order nor by another validated order. Conservative (`pickSameArticle`):
- * a doubt makes a new article rather than a wrong link.
+ * Her article of the same shop and name as the line, when exactly one: of the order's profile (a name alone never
+ * reaches another profile; a product does, `lockActiveItemFor`), still a wish or already ordered, not in the trash,
+ * not taken by another line of this order nor by another validated order. Conservative (`pickSameArticle`): a doubt
+ * makes a new article rather than a wrong link.
  */
 async function sameArticleOfShop(
   tx: Tx,
@@ -177,6 +178,7 @@ async function sameArticleOfShop(
     .where(
       and(
         eq(schema.items.userId, userId),
+        eq(schema.items.profileId, order.profileId),
         isNull(schema.items.deletedAt),
         inArray(schema.items.stage, LINKABLE_STAGES),
         eq(schema.products.shopId, order.shopId),

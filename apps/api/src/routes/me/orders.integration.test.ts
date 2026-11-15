@@ -286,7 +286,7 @@ describe("« C'est bon » (RF 3)", () => {
     expect((await getItem(a, one)).stage).toBe("spotted");
   });
 
-  it("links her wish of another of her profiles, never another account's", async () => {
+  it("links her item of another of her profiles by its product, never by name, never another account's", async () => {
     const a = await account();
     const other = await account();
     const shop = await newShop();
@@ -295,16 +295,30 @@ describe("« C'est bon » (RF 3)", () => {
       await call("POST", "/api/me/profiles", a.cookie, { name: "Léa", audience: "women", color: "plum" }),
       201,
     );
-    const product = await newProduct(shop.id, "Robe Mila");
-    const created = await json<{ item: ItemView }>(
-      await call("POST", "/api/me/items", a.cookie, { productId: product.id, action: "wish", profileId: lea.id }),
-      201,
-    );
-    const orderId = await draft(a, shop.id, [{ name: "Robe Mila" }, { name: "Blouse Aya" }]);
+    const wishOfLea = async (name: string) => {
+      const product = await newProduct(shop.id, name);
+      const created = await json<{ item: ItemView }>(
+        await call("POST", "/api/me/items", a.cookie, { productId: product.id, action: "wish", profileId: lea.id }),
+        201,
+      );
+      return { productId: product.id, itemId: created.item.id };
+    };
+    const byProduct = await wishOfLea("Robe Mila");
+    const byName = await wishOfLea("Jupe Nina");
+    // The order is Moi's: Léa's wish is linked through its product (one active item per product, G2), never by name.
+    const orderId = await draft(a, shop.id, [
+      { name: "Robe Mila", productId: byProduct.productId },
+      { name: "Jupe Nina" },
+      { name: "Blouse Aya" },
+    ]);
     const order = await json<OrderView>(await confirm(a, orderId), 200);
-    expect(order.lines[0]?.itemId).toBe(created.item.id);
-    expect((await getItem(a, created.item.id)).profileId).toBe(lea.id);
-    expect(order.lines[1]?.itemId).not.toBe(theirs);
+    expect(order.lines[0]?.itemId).toBe(byProduct.itemId);
+    expect((await getItem(a, byProduct.itemId)).profileId).toBe(lea.id);
+    const created = order.lines[1]?.itemId;
+    expect(created).not.toBe(byName.itemId);
+    expect((await getItem(a, created as string)).profileId).toBe(a.moi);
+    expect((await getItem(a, byName.itemId)).stage).toBe("spotted");
+    expect(order.lines[2]?.itemId).not.toBe(theirs);
     expect((await getItem(other, theirs)).stage).toBe("spotted");
   });
 
