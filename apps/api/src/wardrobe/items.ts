@@ -57,15 +57,33 @@ export async function lockActiveItemFor(tx: Tx, userId: string, productId: strin
   return row ?? null;
 }
 
+/** The profile an item is created in, or null without `profileId` given: her first one (« Moi » created if needed). */
+const creationProfile = (db: Database, userId: string, profileId: string | undefined) =>
+  profileId ? findOwnProfile(db, userId, profileId) : ensureDefaultProfile(db, userId);
+
+/** Her profile read again under a share lock inside the creation: false when it was deleted meanwhile (404). */
+async function holdProfile(tx: Tx, userId: string, profileId: string): Promise<boolean> {
+  const [held] = await tx
+    .select({ id: schema.profiles.id })
+    .from(schema.profiles)
+    .where(and(eq(schema.profiles.id, profileId), eq(schema.profiles.userId, userId)))
+    .for("share");
+  return held !== undefined;
+}
+
+/** The undo of a creation: the new item goes to the trash, its history rows go. */
+const creationUndo = (itemId: string, removeEventIds: string[]): UndoPayload => ({
+  ops: [{ ids: [itemId], op: "delete" }],
+  removeEventIds,
+});
+
 /**
  * Keeps a product (a wish with its level, priority and opinion; into a list; or as ordered). One active item per
  * user and product (G2): when she already has one, it is returned as is (`created: false`, no undo), whatever the profile asked for.
  * Undo of a creation: send it to the trash (task 7 may turn it into a hard delete) and drop its history row.
  */
 export async function createItem(db: Database, userId: string, input: ItemCreate, now: Date): Promise<ItemOutcome> {
-  const profile = input.profileId
-    ? await findOwnProfile(db, userId, input.profileId)
-    : await ensureDefaultProfile(db, userId);
+  const profile = await creationProfile(db, userId, input.profileId);
   if (!profile) return { error: "not_found" };
   const [product] = await db
     .select({ id: schema.products.id })
@@ -81,12 +99,7 @@ export async function createItem(db: Database, userId: string, input: ItemCreate
   }
   return db.transaction(async (tx): Promise<ItemOutcome> => {
     // Read again under a share lock: a profile or list deleted since the checks above answers 404, not 500.
-    const [heldProfile] = await tx
-      .select({ id: schema.profiles.id })
-      .from(schema.profiles)
-      .where(and(eq(schema.profiles.id, profile.id), eq(schema.profiles.userId, userId)))
-      .for("share");
-    if (!heldProfile) return { error: "not_found" };
+    if (!(await holdProfile(tx, userId, profile.id))) return { error: "not_found" };
     if (input.action === "list" && input.wishlistId) {
       const [heldList] = await tx
         .select({ id: schema.wishlists.id })
@@ -127,7 +140,7 @@ export async function createItem(db: Database, userId: string, input: ItemCreate
     return {
       itemId: item.id,
       itemIds: [item.id],
-      undo: { ops: [{ ids: [item.id], op: "delete" }], removeEventIds },
+      undo: creationUndo(item.id, removeEventIds),
       created: true,
     };
   });
@@ -144,17 +157,10 @@ export async function createInstagramItem(
   input: InstagramItemInput,
   now: Date,
 ): Promise<ItemOutcome> {
-  const profile = input.profileId
-    ? await findOwnProfile(db, userId, input.profileId)
-    : await ensureDefaultProfile(db, userId);
+  const profile = await creationProfile(db, userId, input.profileId);
   if (!profile) return { error: "not_found" };
   return db.transaction(async (tx): Promise<ItemOutcome> => {
-    const [heldProfile] = await tx
-      .select({ id: schema.profiles.id })
-      .from(schema.profiles)
-      .where(and(eq(schema.profiles.id, profile.id), eq(schema.profiles.userId, userId)))
-      .for("share");
-    if (!heldProfile) return { error: "not_found" };
+    if (!(await holdProfile(tx, userId, profile.id))) return { error: "not_found" };
     const ordered = input.action === "ordered";
     const [item] = await tx
       .insert(schema.items)
@@ -188,7 +194,7 @@ export async function createInstagramItem(
     return {
       itemId: item.id,
       itemIds: [item.id],
-      undo: { ops: [{ ids: [item.id], op: "delete" }], removeEventIds },
+      undo: creationUndo(item.id, removeEventIds),
       created: true,
     };
   });

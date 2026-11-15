@@ -218,6 +218,25 @@ describe("safeFetch with the fake shop and loopbackForTests", () => {
     expect((await captureError(safeFetch(`${origin}/page`, options))).code).toBe("invalid_data");
   });
 
+  it("never asks Instagram nor Facebook: refused before any lookup or connection, redirects too", async () => {
+    const calls: string[] = [];
+    const lookup = fakeLookup({}, calls);
+    for (const url of [
+      "https://www.instagram.com/p/C0ffee/",
+      "https://instagr.am/p/C0ffee",
+      "https://scontent-cdg4-1.cdninstagram.com/v/photo.jpg",
+      "https://scontent.xx.fbcdn.net/v/photo.jpg",
+    ]) {
+      const error = await captureError(safeFetch(url, { accept: "image", lookup }));
+      expect(error.code, url).toBe("blocked");
+    }
+    expect(calls).toEqual([]);
+    const { origin, hits } = await serve({ "/r": { redirect: "https://scontent.cdninstagram.com/x.jpg" } });
+    const redirected = await captureError(safeFetch(`${origin}/r`, { accept: "image", policy: loopbackForTests }));
+    expect(redirected.code).toBe("blocked");
+    expect(hits).toEqual(["/r"]);
+  });
+
   it("counts redirects inside the single deadline", async () => {
     const { origin } = await serve({
       "/a": { redirect: "/b", delayMs: 60 },

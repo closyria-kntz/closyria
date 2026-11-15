@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { audienceSchema, childDetailSchema, currencySchema, productViewSchema, seasonSchema } from "./catalog";
+import { isMetaUrl } from "./catalog-url";
 import { sharedGiftStateSchema, sharedGiftsSchema } from "./gifts";
 import { groupOrderStatusSchema, sharedGroupOrderSchema } from "./group-orders";
 import { catalogIllustrationSchema } from "./illustration";
@@ -601,7 +602,9 @@ export const photoImportRequestSchema = z.object({
       } catch {
         return false;
       }
-    }),
+    })
+    // Never Instagram's nor Facebook's photos (anti-bot rule, C5): refused before any request.
+    .refine((value) => !isMetaUrl(value), { message: "Meta host" }),
 });
 export type PhotoImportRequest = z.infer<typeof photoImportRequestSchema>;
 export const photoImportAcceptedSchema = z.object({ importId: z.uuid() });

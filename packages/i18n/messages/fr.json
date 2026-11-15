@@ -2708,7 +2708,7 @@
     "parcel_pickup_readyNoShop": "Ton colis est disponible en point relais",
     "parcel_delivered": "Ton colis {shop} est arrivé",
     "parcel_deliveredNoShop": "Ton colis est arrivé",
-    "return_reminder": "Plus que 3 jours pour retourner {name}",
+    "return_reminder": "{days, plural, one {Plus qu'un jour pour retourner {name}} other {Plus que # jours pour retourner {name}}}",
     "order_received_check": "Tu as reçu ta commande {shop} ?",
     "order_received_checkNoShop": "Tu as reçu ta commande ?",
     "action": "Voir"
@@ -2719,7 +2719,7 @@
     "receivedYes": "Oui",
     "receivedNotYet": "Pas encore",
     "returnUntil": "Retour possible jusqu'au {date}",
-    "returnReminder": "Plus que 3 jours pour retourner {name}",
+    "returnReminder": "{days, plural, one {Plus qu'un jour pour retourner {name}} other {Plus que # jours pour retourner {name}}}",
     "instagram": {
       "title": "Un article vu sur Instagram",
       "intro": "On ne lit pas Instagram : dis-nous ce que tu as vu.",

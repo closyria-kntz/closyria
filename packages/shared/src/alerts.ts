@@ -43,7 +43,7 @@ export const alertKindSchema = z.enum([
 export type AlertKind = z.infer<typeof alertKindSchema>;
 /** The kinds about one item (the others are about a shop or the sales calendar). */
 export const ITEM_ALERT_KINDS = ["size_back", "target_price", "price_drop"] as const satisfies readonly AlertKind[];
-/** The kinds pushed one by one (held in the quiet hours, capped per day); the others go into the digest. */
+/** The kinds pushed one by one (held in the quiet hours; the stock and price ones capped per day); the others go into the digest. */
 export const IMMEDIATE_ALERT_KINDS = [
   "size_back",
   "target_price",
@@ -59,6 +59,18 @@ export const PARCEL_ALERT_KINDS = [
   "parcel_out_for_delivery",
   "parcel_pickup_ready",
   "parcel_delivered",
+] as const satisfies readonly AlertKind[];
+/**
+ * Order and parcel kinds: a few per order at most, so they never count toward the daily cap nor go to the digest
+ * (the cap is for stock and price alerts; founder's ruling, 2026-11-15). Quiet hours still hold them until 8:00.
+ */
+export const UNCAPPED_ALERT_KINDS = [
+  "order_received",
+  "parcel_out_for_delivery",
+  "parcel_pickup_ready",
+  "parcel_delivered",
+  "return_reminder",
+  "order_received_check",
 ] as const satisfies readonly AlertKind[];
 /** An alert waiting for its digest: a digest kind (`pending`) or an immediate one the daily cap sent there. */
 export const DIGEST_WAITING_STATUSES = ["pending", "digest"] as const satisfies readonly AlertStatus[];
@@ -141,6 +153,12 @@ function parisTime(year: number, month: number, day: number, hour: number): Date
   const wall = Date.UTC(year, month - 1, day, hour);
   const first = wall - parisOffsetMs(new Date(wall));
   return new Date(wall - parisOffsetMs(new Date(first)));
+}
+
+/** 00:00 in Paris on a Paris calendar day (`YYYY-MM-DD`). */
+export function parisDayStart(day: string): Date {
+  const [year, month, date] = day.split("-").map(Number);
+  return parisTime(year ?? 0, month ?? 1, date ?? 1, 0);
 }
 
 /** The calendar day in Paris, `YYYY-MM-DD`. */
@@ -257,6 +275,11 @@ export const alertEventViewSchema = z.object({
   salePeriodName: z.string().nullable(),
   startsOn: z.iso.date().nullable(),
   photoUrl: z.string().nullable(),
+  /**
+   * return_reminder: the days left to send the item back when she was told (3, or 2 and 1 for a late reminder), as
+   * its notification said; null for the other kinds.
+   */
+  returnDaysLeft: z.number().int().min(0).nullable(),
   /** Where it leads (the item's sheet or « Nouvelles »). */
   href: z.string().regex(/^\/(?!\/)/),
   createdAt: dateTimeSchema,

@@ -324,6 +324,27 @@ describe("/api/me/items/:id/media/imports", () => {
     expect(await res.json()).toEqual({ status: "queued" });
   });
 
+  it("refuses Instagram's and Facebook's photos: nothing recorded, nothing queued, no request", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { cookie, userId } = await t.signIn();
+    const item = await newItem(cookie);
+    const before = t.calls.length;
+    for (const url of [
+      "https://scontent-cdg4-1.cdninstagram.com/v/t51/photo.jpg",
+      "https://scontent.xx.fbcdn.net/v/photo.jpg",
+      "https://www.instagram.com/p/C0ffee/media/?size=l",
+      "https://FBCDN.NET/photo.jpg",
+    ]) {
+      const res = await call("POST", importPath(item.id), cookie, { url });
+      expect(res.status, url).toBe(400);
+      expect(await res.json()).toEqual({ error: "invalid_request" });
+    }
+    expect(t.calls.slice(before)).toEqual([]);
+    expect(await t.db.select().from(schema.photoImports).where(eq(schema.photoImports.userId, userId))).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
   it("marks the import failed and answers 500 when the queue is down", async () => {
     const { cookie } = await t.signIn();
     const item = await newItem(cookie);

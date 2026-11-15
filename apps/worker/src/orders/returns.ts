@@ -1,9 +1,10 @@
-import { and, type Database, eq, gte, isNull, lte, orderAwaitingNews, schema, sql } from "@closyria/db";
+import { and, asc, type Database, eq, gte, isNull, lte, orderAwaitingNews, schema, sql } from "@closyria/db";
 import {
   ALERT_TIME_ZONE,
   addParisDays,
   nextSendAt,
   parisDay,
+  parisDayStart,
   RECEIVED_QUESTION_DAYS,
   RETURN_REMINDER_DAYS,
   receivedQuestionDue,
@@ -16,9 +17,9 @@ import type { PgBoss } from "pg-boss";
  *   return deadline is 3 Paris days ahead, once per item ever (`alert_events_return_reminder_idx`). A day the job
  *   missed is caught up (deadlines 1 to 3 days ahead never reminded), never a deadline already reached;
  * - « Tu as reçu ta commande {boutique} ? »: her validated orders without news (`orderAwaitingNews`: no parcel
- *   delivered, an article still « Commandé ») 10 days after the shipping — the first parcel's earliest step or
- *   creation —, else after the validation; once more at 20 days after her « Pas encore »; never a third time.
- * Both are immediate alerts: the sending applies the quiet hours and the daily cap (alerts/send.ts).
+ *   delivered, an article still « Commandé ») 10 Paris calendar days after the shipping — the first parcel's earliest
+ *   step or creation —, else after the validation; once more at 20 days after her « Pas encore »; never a third time.
+ * Both are immediate alerts held by the quiet hours, outside the daily cap (alerts/send.ts).
  */
 
 export const ORDER_DAILY_QUEUE = "order-daily";
@@ -27,41 +28,54 @@ export const ORDER_DAILY_CRON = "0 9 * * *";
 /** Orders looked at per run at most (the rest the next morning). */
 const QUESTION_BUDGET = 2000;
 
-/** Creates the return reminders due at `now`; returns how many. */
-export async function remindReturns(db: Database, now: Date): Promise<number> {
+/** Reminders written per statement (well under Postgres' 65 535 parameters), and per run at most. */
+export const REMINDER_BATCH = 500;
+const REMINDER_BUDGET = 20_000;
+
+/** Creates the return reminders due at `now`, by batches; returns how many. */
+export async function remindReturns(db: Database, now: Date, batch = REMINDER_BATCH): Promise<number> {
   const today = parisDay(now);
-  const i = schema.items;
-  const due = await db
-    .select({ id: i.id, userId: i.userId, profileId: i.profileId, productId: i.productId })
-    .from(i)
-    .where(
-      and(
-        eq(i.stage, "owned"),
-        isNull(i.deletedAt),
-        gte(i.returnDeadline, addParisDays(today, 1)),
-        lte(i.returnDeadline, addParisDays(today, RETURN_REMINDER_DAYS)),
-        sql`not exists (select 1 from ${schema.alertEvents} where ${schema.alertEvents.itemId} = ${i.id} and ${schema.alertEvents.kind} = 'return_reminder')`,
-      ),
-    );
-  if (due.length === 0) return 0;
   const sendAfter = nextSendAt(now);
-  const created = await db
-    .insert(schema.alertEvents)
-    .values(
-      due.map((item) => ({
-        userId: item.userId,
-        profileId: item.profileId,
-        itemId: item.id,
-        productId: item.productId,
-        kind: "return_reminder",
-        sendAfter,
-        createdAt: now,
-      })),
-    )
-    // Once per item ever: a concurrent run's reminder stands.
-    .onConflictDoNothing()
-    .returning({ id: schema.alertEvents.id });
-  return created.length;
+  const i = schema.items;
+  let created = 0;
+  for (let looked = 0; looked < REMINDER_BUDGET; ) {
+    const due = await db
+      .select({ id: i.id, userId: i.userId, profileId: i.profileId, productId: i.productId })
+      .from(i)
+      .where(
+        and(
+          eq(i.stage, "owned"),
+          isNull(i.deletedAt),
+          gte(i.returnDeadline, addParisDays(today, 1)),
+          lte(i.returnDeadline, addParisDays(today, RETURN_REMINDER_DAYS)),
+          // Qualified by hand: drizzle writes the outer column bare (`"id"`), which the sub-select would read as its own.
+          sql`not exists (select 1 from "alert_events" as rem where rem.item_id = "items"."id" and rem.kind = 'return_reminder')`,
+        ),
+      )
+      .orderBy(asc(i.returnDeadline), asc(i.id))
+      .limit(batch);
+    if (due.length === 0) break;
+    const rows = await db
+      .insert(schema.alertEvents)
+      .values(
+        due.map((item) => ({
+          userId: item.userId,
+          profileId: item.profileId,
+          itemId: item.id,
+          productId: item.productId,
+          kind: "return_reminder",
+          sendAfter,
+          createdAt: now,
+        })),
+      )
+      // Once per item ever: a concurrent run's reminder stands (and the item is not picked again).
+      .onConflictDoNothing()
+      .returning({ id: schema.alertEvents.id });
+    created += rows.length;
+    looked += due.length;
+    if (due.length < batch) break;
+  }
+  return created;
 }
 
 /**
@@ -69,14 +83,15 @@ export async function remindReturns(db: Database, now: Date): Promise<number> {
  * validation stands for it, else the order's creation).
  */
 const referenceAt = sql<Date>`coalesce(
-  (select min(coalesce((select min(${schema.parcelEvents.at}) from ${schema.parcelEvents} where ${schema.parcelEvents.parcelId} = ${schema.parcels.id}), ${schema.parcels.createdAt}))
-    from ${schema.parcels} where ${schema.parcels.orderId} = ${schema.orders.id}),
-  ${schema.orders.confirmedAt}, ${schema.orders.createdAt})`;
+  (select min(coalesce((select min(ref_e.at) from "parcel_events" as ref_e where ref_e.parcel_id = ref_p.id), ref_p.created_at))
+    from "parcels" as ref_p where ref_p.order_id = "orders"."id"),
+  "orders"."confirmed_at", "orders"."created_at")`;
 
 /** Asks « Tu as reçu ta commande ? » where due at `now`; returns how many questions were asked. */
 export async function askReceived(db: Database, now: Date): Promise<number> {
   const o = schema.orders;
-  const firstDue = new Date(now.getTime() - RECEIVED_QUESTION_DAYS * 86_400_000);
+  // Paris calendar days (`receivedQuestionDue`): shipped before 00:00 Paris RECEIVED_QUESTION_DAYS − 1 days ago.
+  const firstDue = parisDayStart(addParisDays(parisDay(now), -(RECEIVED_QUESTION_DAYS - 1)));
   const candidates = await db
     .select({ id: o.id })
     .from(o)
@@ -84,8 +99,8 @@ export async function askReceived(db: Database, now: Date): Promise<number> {
       and(
         eq(o.status, "confirmed"),
         sql`(${o.receivedAskedAt} is null or (${o.receivedNotYetAt} is not null and ${o.receivedAskedAgainAt} is null))`,
-        sql`${referenceAt} <= ${firstDue.toISOString()}`,
-        orderAwaitingNews(o.id),
+        sql`${referenceAt} < ${firstDue.toISOString()}`,
+        orderAwaitingNews(),
       ),
     )
     .orderBy(o.createdAt)
@@ -121,7 +136,7 @@ async function askOne(db: Database, orderId: string, now: Date): Promise<boolean
         notYetAt: schema.orders.receivedNotYetAt,
         askedAgainAt: schema.orders.receivedAskedAgainAt,
         referenceAt,
-        awaiting: sql<boolean>`${orderAwaitingNews(schema.orders.id)}`,
+        awaiting: sql<boolean>`${orderAwaitingNews()}`,
       })
       .from(schema.orders)
       .where(and(eq(schema.orders.id, orderId), eq(schema.orders.status, "confirmed")))

@@ -16,6 +16,8 @@ import {
   DEFAULT_ALERT_SETTINGS,
   ITEM_ALERT_KINDS,
   type PushSubscriptionView,
+  parisDay,
+  parisDaysBetween,
   pushKeySchema,
   pushSubscriptionInputSchema,
   pushSubscriptionListSchema,
@@ -254,6 +256,7 @@ export async function listAlerts(db: Database, userId: string, cursor: string | 
       itemProfileId: schema.items.profileId,
       itemName: sql<string | null>`coalesce(${schema.items.nameOverride}, ${schema.products.name})`,
       coverMediaId: schema.items.coverMediaId,
+      returnDeadline: schema.items.returnDeadline,
       targetPriceCents: schema.items.targetPriceCents,
       currency: schema.products.currency,
       productImageId: sql<string | null>`(select pi.id from ${schema.productImages} pi
@@ -309,6 +312,10 @@ export async function listAlerts(db: Database, userId: string, cursor: string | 
             ? catalogImageUrl(row.productImageId)
             : null
         : null,
+      returnDaysLeft:
+        kind === "return_reminder" && row.returnDeadline
+          ? Math.max(0, parisDaysBetween(parisDay(row.createdAt), row.returnDeadline))
+          : null,
       href,
       createdAt: row.createdAt.toISOString(),
       readAt: row.readAt?.toISOString() ?? null,

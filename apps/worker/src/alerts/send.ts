@@ -9,6 +9,7 @@ import {
   parisDay,
   parisDaysBetween,
   RETURN_REMINDER_DAYS,
+  UNCAPPED_ALERT_KINDS,
 } from "@closyria/shared";
 import { z } from "zod";
 import { followedItem } from "./detect";
@@ -25,7 +26,10 @@ export const ALERT_SEND_QUEUE_OPTIONS = {
   retryDelay: 60,
   retryBackoff: true,
 } as const;
-/** At most this many immediate notifications per person and Paris day; the next ones go to the digest. */
+/**
+ * At most this many stock and price notifications per person and Paris day; the next ones go to the digest. Order and
+ * parcel kinds are outside the cap.
+ */
 export const DAILY_PUSH_CAP = 5;
 /** Events queued per sweep (the oldest due first); the rest wait for the next minute. */
 const SWEEP_BUDGET = 500;
@@ -177,7 +181,14 @@ const setStatus = (db: Database, id: string, values: Partial<typeof schema.alert
     .set(values)
     .where(and(eq(schema.alertEvents.id, id), eq(schema.alertEvents.status, "pending")));
 
-/** Her immediate notifications already sent on that Paris day (the ones sent in a digest do not count). */
+/** The kinds the daily cap applies to: stock and price alerts (order and parcel kinds are outside it). */
+const CAPPED_KINDS = IMMEDIATE_KINDS.filter((kind) => !(UNCAPPED_ALERT_KINDS as readonly string[]).includes(kind));
+const isCapped = (kind: string) => (CAPPED_KINDS as readonly string[]).includes(kind);
+
+/**
+ * Her capped notifications (stock and price) already sent on that Paris day (the ones sent in a digest do not count,
+ * nor the order and parcel ones).
+ */
 async function sentToday(db: Database, userId: string, day: string): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
@@ -186,7 +197,7 @@ async function sentToday(db: Database, userId: string, day: string): Promise<num
       and(
         eq(schema.alertEvents.userId, userId),
         eq(schema.alertEvents.status, "sent"),
-        inArray(schema.alertEvents.kind, IMMEDIATE_KINDS),
+        inArray(schema.alertEvents.kind, CAPPED_KINDS),
         isNull(schema.alertEvents.digestOn),
         sql`(${schema.alertEvents.sentAt} at time zone ${ALERT_TIME_ZONE})::date = ${day}::date`,
       ),
@@ -199,7 +210,8 @@ async function sentToday(db: Database, userId: string, day: string): Promise<num
  * - `held` in the quiet hours (22:00–8:00 Paris): its `send_after` moves to 8:00, the sweep queues it again then;
  * - `skipped` (kept for « Nouvelles », never pushed) when the item is no longer followed, her setting for the kind is
  *   off, the target price no longer holds, push is off (no VAPID keys), she is a guest or has no device;
- * - `digest` when she already had 5 immediate notifications this Paris day (the day of the send);
+ * - `digest` when she already had 5 stock or price notifications this Paris day (the day of the send); order and
+ *   parcel kinds (`UNCAPPED_ALERT_KINDS`) neither count nor wait for the digest, only for the quiet hours;
  * - `sent` when a device accepted it. A busy push service (429/5xx) throws `PushRetryError` for pg-boss to try again,
  *   until the last attempt (then `skipped`).
  * `none` when the event is not a pending immediate alert (already handled, or gone).
@@ -380,7 +392,7 @@ export async function sendAlert(
       .select({
         shopName: sql<string | null>`coalesce(${schema.shops.name}, ${schema.orders.shopName})`,
         notYetAt: schema.orders.receivedNotYetAt,
-        awaiting: sql<boolean>`${orderAwaitingNews(schema.orders.id)}`,
+        awaiting: sql<boolean>`${orderAwaitingNews()}`,
       })
       .from(schema.orders)
       .leftJoin(schema.shops, eq(schema.shops.id, schema.orders.shopId))
@@ -409,7 +421,7 @@ export async function sendAlert(
   if (!devices || devices.n === 0) return skip();
 
   const today = parisDay(now);
-  if ((await sentToday(db, event.userId, today)) >= DAILY_PUSH_CAP) {
+  if (isCapped(event.kind) && (await sentToday(db, event.userId, today)) >= DAILY_PUSH_CAP) {
     await setStatus(db, event.id, { status: "digest", digestOn: today });
     return "digest";
   }

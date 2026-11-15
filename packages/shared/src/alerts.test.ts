@@ -258,6 +258,7 @@ describe("schemas", () => {
       salePeriodName: null,
       startsOn: null,
       photoUrl: null,
+      returnDaysLeft: null,
       href: "/articles/6f1c1e0e-7a51-4b8f-9a39-0e2a5b1d2c40",
       createdAt: "2026-11-14T10:00:00.000Z",
       readAt: null,

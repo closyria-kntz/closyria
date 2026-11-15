@@ -63,7 +63,8 @@ function useAlertWords() {
       case "parcel_delivered":
         return { line: shop ? t(alert.kind, { shop }) : t(`${alert.kind}NoShop`), detail: "" };
       case "return_reminder":
-        return { line: t("return_reminder", { name }), detail: "" };
+        // The days left when she was told, as the notification said (3, or fewer for a late reminder).
+        return { line: t("return_reminder", { name, days: Math.max(1, alert.returnDaysLeft ?? 3) }), detail: "" };
       case "order_received_check":
         return { line: shop ? t("order_received_check", { shop }) : t("order_received_checkNoShop"), detail: "" };
     }

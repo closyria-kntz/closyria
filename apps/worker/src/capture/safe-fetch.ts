@@ -5,6 +5,7 @@ import { isIP, type LookupFunction } from "node:net";
 import type { Readable } from "node:stream";
 import { pipeline } from "node:stream";
 import { createBrotliDecompress, createGunzip } from "node:zlib";
+import { isMetaHost } from "@closyria/shared";
 import { type AddressPolicy, strictPolicy } from "./address-policy";
 import { CaptureError } from "./capture-error";
 
@@ -123,6 +124,9 @@ function checkUrl(raw: string, policy: AddressPolicy, base?: URL): URL {
   if (url.protocol !== "http:" && url.protocol !== "https:") throw forbidden();
   if (url.username !== "" || url.password !== "") throw forbidden();
   if (!STANDARD_PORTS.has(portOf(url)) && !policy.anyPortOnLoopback) throw forbidden();
+  // Anti-bot rule (« Après la commande » C5): Instagram and Facebook are never fetched, by any path (a capture, a
+  // revisit, a photo import), nor reached through a redirect. Checked before any name lookup or connection.
+  if (isMetaHost(bareHost(url))) throw new CaptureError("blocked");
   return url;
 }
 

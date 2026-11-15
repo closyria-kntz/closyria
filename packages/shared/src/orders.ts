@@ -231,17 +231,18 @@ export function parisDaysBetween(from: string, to: string): number {
 }
 
 /**
- * Which « Tu as reçu ta commande ? » is due for an order still without news: the first at RECEIVED_QUESTION_DAYS after
- * `referenceAt` (its first parcel's earliest step or creation, else its validation); a second at
- * RECEIVED_QUESTION_AGAIN_DAYS only after her « Pas encore »; never a third. Null when none is due.
+ * Which « Tu as reçu ta commande ? » is due for an order still without news, counted in Paris calendar days (the job
+ * runs at 9:00: a parcel shipped at 15:00 on the 5th is asked about on the 15th): the first RECEIVED_QUESTION_DAYS days
+ * after `referenceAt` (its first parcel's earliest step or creation, else its validation); a second
+ * RECEIVED_QUESTION_AGAIN_DAYS days after it, only after her « Pas encore »; never a third. Null when none is due.
  */
 export function receivedQuestionDue(
   order: { referenceAt: Date; askedAt: Date | null; notYetAt: Date | null; askedAgainAt: Date | null },
   now: Date,
 ): "first" | "again" | null {
-  const elapsed = now.getTime() - order.referenceAt.getTime();
-  if (!order.askedAt) return elapsed >= RECEIVED_QUESTION_DAYS * 24 * HOUR_MS ? "first" : null;
-  if (order.notYetAt && !order.askedAgainAt && elapsed >= RECEIVED_QUESTION_AGAIN_DAYS * 24 * HOUR_MS) return "again";
+  const days = parisDaysBetween(parisDay(order.referenceAt), parisDay(now));
+  if (!order.askedAt) return days >= RECEIVED_QUESTION_DAYS ? "first" : null;
+  if (order.notYetAt && !order.askedAgainAt && days >= RECEIVED_QUESTION_AGAIN_DAYS) return "again";
   return null;
 }
 

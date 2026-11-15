@@ -101,3 +101,14 @@ describe("loadMessages", () => {
     expect(loadMessages("es")).toEqual(fr);
   });
 });
+
+describe("return reminder (« Après la commande »)", () => {
+  it("says the days left, as the notification", () => {
+    const news = (fr as unknown as { News: Record<string, string> }).News;
+    const format = (days: number) =>
+      new IntlMessageFormat(news.return_reminder ?? "", "fr").format({ days, name: "Robe Iris" });
+    expect(format(3)).toBe("Plus que 3 jours pour retourner Robe Iris");
+    expect(format(2)).toBe("Plus que 2 jours pour retourner Robe Iris");
+    expect(format(1)).toBe("Plus qu'un jour pour retourner Robe Iris");
+  });
+});

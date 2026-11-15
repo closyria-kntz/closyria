@@ -50,7 +50,7 @@ export {
   sql,
 } from "drizzle-orm";
 export { importNotUnderWay } from "./import-state";
-export { orderAwaitingNews, receivedQuestionOpen, receiveOrderItems } from "./orders";
+export { OUTER_ORDER_ID, orderAwaitingNews, receivedQuestionOpen, receiveOrderItems } from "./orders";
 export type { AuditDetails } from "./schema/audit";
 export { findOrCreateShop, findShopByHost, LostRace, type Shop } from "./shops";
 export { type ActiveSlowdown, readShopifySlowdown, recordShopifyRejection } from "./slowdown";

@@ -15,7 +15,7 @@ import { connectorFor, type TrackingConnectors, TrackingError, type TrackingResu
  * « Après la commande », Task 5: the parcels of her validated orders are asked to their carrier when due
  * (`next_check_at`, every 2 or 6 hours by step), until delivered or `check_until` (30 days). Once every parcel of an
  * order is settled and one at least delivered, her ordered items move to « Reçu » with their return deadline; a pickup point, a delivery (and out for delivery when she
- * wants it) are notified once per parcel through the alerts' sending (quiet hours, daily cap). A carrier that does not
+ * wants it) are notified once per parcel through the alerts' sending (quiet hours; outside the daily cap). A carrier that does not
  * answer, or does not know the number, three times in a row turns the parcel `unknown`, silently (RF 4).
  *
  * Lock order (as « C'est bon » and the e-mail reading): her profiles (`profiles:{user}` advisory lock), the order row,

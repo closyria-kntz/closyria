@@ -159,7 +159,10 @@ const importRoute = (pipeline: MediaPipeline) =>
           description: "Queued",
           content: { "application/json": { schema: photoImportAcceptedSchema } },
         },
-        400: errorContent("Not an http(s) address, or over 2 048 characters (invalid_request)"),
+        400: errorContent(
+          "Not an http(s) address, over 2 048 characters, or an Instagram or Facebook photo — never fetched " +
+            "(invalid_request)",
+        ),
         404: errorContent("Unknown or another account's item (not_found)"),
         409: errorContent("Already 10 photos (too_many_photos) or the item is in the trash (item_deleted)"),
         429: errorContent("Too many uploads (rate_limited)"),

@@ -145,6 +145,16 @@ describe("return reminder", () => {
   });
 });
 
+describe("return reminders by batches", () => {
+  it("writes every due reminder, a few at a time", async () => {
+    const who = await person();
+    const ids = [];
+    for (let n = 0; n < 5; n++) ids.push(await item(who, { returnDeadline: "2026-11-17" }));
+    await remindReturns(handle.db, now, 2);
+    for (const id of ids) expect(await reminders(id)).toHaveLength(1);
+  });
+});
+
 // --- « Tu as reçu ta commande ? » ---------------------------------------------------------------------------------
 
 async function shop(name = "Maison Lune") {
@@ -333,6 +343,43 @@ describe("« Tu as reçu ta commande ? »", () => {
     ).toBe("skipped");
   });
 
+  it("counts Paris days: shipped at 15:00 Paris, asked on the 10th day at 9:00, again on the 20th", async () => {
+    const who = await person();
+    const at9 = (day: string) => new Date(`${day}T09:00:00+01:00`);
+    // Shipped 5 November at 15:00 Paris (its first step); the run of the 14th is too early, the 15th asks.
+    const id = await order(who, {
+      parcels: [
+        {
+          status: "in_transit",
+          createdAt: new Date("2026-11-05T15:00:00+01:00"),
+          eventAt: new Date("2026-11-05T15:00:00+01:00"),
+        },
+      ],
+      confirmedAt: new Date("2026-11-01T10:00:00+01:00"),
+    });
+    await askReceived(handle.db, at9("2026-11-14"));
+    expect(await questions(id)).toHaveLength(0);
+    await askReceived(handle.db, at9("2026-11-15"));
+    expect(await questions(id)).toHaveLength(1);
+    await handle.db
+      .update(schema.orders)
+      .set({ receivedNotYetAt: at9("2026-11-16") })
+      .where(eq(schema.orders.id, id));
+    await askReceived(handle.db, at9("2026-11-24"));
+    expect(await questions(id)).toHaveLength(1);
+    await askReceived(handle.db, at9("2026-11-25"));
+    expect(await questions(id)).toHaveLength(2);
+  });
+
+  it("« Pas encore » given after the 20th day: asked again the next morning", async () => {
+    const who = await person();
+    const ago = (days: number) => new Date(now.getTime() - days * DAY);
+    const id = await order(who, { confirmedAt: ago(25), askedAt: ago(15), notYetAt: ago(0.5) });
+    await askReceived(handle.db, now);
+    expect(await questions(id)).toHaveLength(1);
+    expect((await orderRow(id))?.receivedAskedAgainAt?.toISOString()).toBe(now.toISOString());
+  });
+
   it("the daily job runs both and refuses data", async () => {
     let runs = 0;
     const handler = orderDailyHandler(async () => {
@@ -342,5 +389,131 @@ describe("« Tu as reçu ta commande ? »", () => {
     await handler([{ id: "j", data: {} }]);
     expect(runs).toBe(1);
     await expect(handler([{ id: "j", data: { x: 1 } }])).rejects.toThrow();
+  });
+});
+
+describe("daily cap and quiet hours", () => {
+  const sentAt = new Date(now.getTime() - HOUR);
+
+  async function sizeBacksSent(who: Person, n: number) {
+    const shopId = await shop();
+    for (let k = 0; k < n; k++) {
+      const [product] = await handle.db
+        .insert(schema.products)
+        .values({ shopId, canonicalUrl: `https://cap-${++counter}.test/p`, name: "Robe" })
+        .returning();
+      const [wish] = await handle.db
+        .insert(schema.items)
+        .values({ userId: who.userId, profileId: who.profileId, productId: product?.id as string, stage: "spotted" })
+        .returning();
+      await handle.db.insert(schema.alertEvents).values({
+        userId: who.userId,
+        profileId: who.profileId,
+        itemId: wish?.id as string,
+        productId: product?.id as string,
+        kind: "size_back",
+        status: "sent",
+        sentAt,
+        sendAfter: sentAt,
+        createdAt: sentAt,
+      });
+    }
+    return shopId;
+  }
+
+  it("order and parcel kinds go out after 5 stock alerts today, and never count toward the cap", async () => {
+    const who = await person();
+    const shopId = await sizeBacksSent(who, 5);
+    const id = await item(who, { returnDeadline: "2026-11-18" });
+    await remindReturns(handle.db, now);
+    const [reminder] = await reminders(id);
+    const { push, messages } = fakePush();
+    expect(await sendAlert({ db: handle.db, push }, reminder?.id as string, now, once)).toBe("sent");
+    const orderId = await order(who, { shopId });
+    await askReceived(handle.db, now);
+    const [question] = await questions(orderId);
+    expect(await sendAlert({ db: handle.db, push }, question?.id as string, now, once)).toBe("sent");
+    expect(messages).toHaveLength(2);
+
+    // Six order kinds sent today: a stock alert still goes out (they do not count).
+    const other = await person();
+    const otherShop = await shop();
+    for (let k = 0; k < 6; k++) {
+      const oid = await order(other, { shopId: otherShop });
+      await handle.db.insert(schema.alertEvents).values({
+        userId: other.userId,
+        profileId: other.profileId,
+        orderId: oid,
+        kind: "order_received",
+        status: "sent",
+        sentAt,
+        sendAfter: sentAt,
+        createdAt: sentAt,
+      });
+    }
+    const [product] = await handle.db
+      .insert(schema.products)
+      .values({ shopId: otherShop, canonicalUrl: `https://cap-${++counter}.test/p`, name: "Robe" })
+      .returning();
+    const [wish] = await handle.db
+      .insert(schema.items)
+      .values({ userId: other.userId, profileId: other.profileId, productId: product?.id as string, stage: "spotted" })
+      .returning();
+    const [sizeBack] = await handle.db
+      .insert(schema.alertEvents)
+      .values({
+        userId: other.userId,
+        profileId: other.profileId,
+        itemId: wish?.id as string,
+        productId: product?.id as string,
+        kind: "size_back",
+        sizeLabel: "M",
+        sendAfter: now,
+        createdAt: now,
+      })
+      .returning();
+    expect(await sendAlert({ db: handle.db, push }, sizeBack?.id as string, now, once)).toBe("sent");
+  });
+
+  it("a stock alert past the cap still goes to the digest", async () => {
+    const who = await person();
+    const shopId = await sizeBacksSent(who, 5);
+    const [product] = await handle.db
+      .insert(schema.products)
+      .values({ shopId, canonicalUrl: `https://cap-${++counter}.test/p`, name: "Robe" })
+      .returning();
+    const [wish] = await handle.db
+      .insert(schema.items)
+      .values({ userId: who.userId, profileId: who.profileId, productId: product?.id as string, stage: "spotted" })
+      .returning();
+    const [sixth] = await handle.db
+      .insert(schema.alertEvents)
+      .values({
+        userId: who.userId,
+        profileId: who.profileId,
+        itemId: wish?.id as string,
+        productId: product?.id as string,
+        kind: "size_back",
+        sizeLabel: "M",
+        sendAfter: now,
+        createdAt: now,
+      })
+      .returning();
+    const { push } = fakePush();
+    expect(await sendAlert({ db: handle.db, push }, sixth?.id as string, now, once)).toBe("digest");
+  });
+
+  it("quiet hours still hold them until 8:00 Paris", async () => {
+    const who = await person();
+    const id = await item(who, { returnDeadline: "2026-11-18" });
+    await remindReturns(handle.db, now);
+    const [reminder] = await reminders(id);
+    const night = new Date("2026-11-15T23:30:00+01:00");
+    const { push, messages } = fakePush();
+    expect(await sendAlert({ db: handle.db, push }, reminder?.id as string, night, once)).toBe("held");
+    expect(messages).toHaveLength(0);
+    const [row] = await reminders(id);
+    expect(row?.sendAfter?.toISOString()).toBe(new Date("2026-11-16T08:00:00+01:00").toISOString());
+    expect(row?.status).toBe("pending");
   });
 });

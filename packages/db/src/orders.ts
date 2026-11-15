@@ -3,7 +3,7 @@
  * (her « Oui » to « Tu as reçu ta commande ? », Task 6), so that both move them the same way.
  */
 import { DEFAULT_RETURN_DAYS, returnDeadline } from "@closyria/shared";
-import { type AnyColumn, and, asc, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import type { Database } from "./index";
 import * as schema from "./schema";
 
@@ -76,22 +76,28 @@ export async function receiveOrderItems(
 }
 
 /**
- * An order without news (« Tu as reçu ta commande ? », Task 6): none of its parcels delivered and one of its articles
- * at least still « Commandé » (not in the trash). `orderId` is the order's id column (or value) in the outer query.
+ * The outer query's order id, qualified. Drizzle writes a column bare (`"id"`) in a query on one table; inside a
+ * sub-select on another table that bare name would mean that table's column, so these fragments never use it.
  */
-export function orderAwaitingNews(orderId: AnyColumn | SQL): SQL {
-  return sql`(not exists (select 1 from ${schema.parcels} where ${schema.parcels.orderId} = ${orderId} and ${schema.parcels.status} = 'delivered')
-    and exists (select 1 from ${schema.orderLines} inner join ${schema.items} on ${schema.items.id} = ${schema.orderLines.itemId}
-      where ${schema.orderLines.orderId} = ${orderId} and ${schema.items.deletedAt} is null and ${schema.items.stage} = 'ordered'))`;
+export const OUTER_ORDER_ID: SQL = sql.raw(`"orders"."id"`);
+
+/**
+ * An order without news (« Tu as reçu ta commande ? », Task 6): none of its parcels delivered and one of its articles
+ * at least still « Commandé » (not in the trash). `orderId` is the order's id in the outer query (qualified).
+ */
+export function orderAwaitingNews(orderId: SQL = OUTER_ORDER_ID): SQL {
+  return sql`(not exists (select 1 from "parcels" as news_p where news_p.order_id = ${orderId} and news_p.status = 'delivered')
+    and exists (select 1 from "order_lines" as news_l inner join "items" as news_i on news_i.id = news_l.item_id
+      where news_l.order_id = ${orderId} and news_i.deleted_at is null and news_i.stage = 'ordered'))`;
 }
 
 /**
  * The question asked (at 10 or 20 days) and not answered since, on an order still without news: the order view shows
- * « Oui » / « Pas encore ».
+ * « Oui » / « Pas encore ». For a query on `orders`.
  */
 export function receivedQuestionOpen(): SQL {
-  const o = schema.orders;
-  return sql`(${o.status} = 'confirmed' and ${o.receivedAskedAt} is not null
-    and (${o.receivedNotYetAt} is null or ${o.receivedNotYetAt} < coalesce(${o.receivedAskedAgainAt}, ${o.receivedAskedAt}))
-    and ${orderAwaitingNews(o.id)})`;
+  return sql`("orders"."status" = 'confirmed' and "orders"."received_asked_at" is not null
+    and ("orders"."received_not_yet_at" is null
+      or "orders"."received_not_yet_at" < coalesce("orders"."received_asked_again_at", "orders"."received_asked_at"))
+    and ${orderAwaitingNews()})`;
 }

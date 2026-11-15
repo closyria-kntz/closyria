@@ -43,7 +43,7 @@ et n'a plus rien à faire jusqu'à la réception, puis est prévenue avant la fi
 ### 3.4 Pendant le transport
 - Sur l'article et la commande : « En route » avec la dernière étape (« Pris en charge », « En cours de livraison »,
   « Disponible en point relais »…) et la date estimée ; bouton « Suivre chez le transporteur ».
-- Notifications (mêmes règles que les alertes : calme de nuit, plafond) : « Ton colis {boutique} est en cours de
+- Notifications (calme de nuit comme les alertes, hors plafond du jour : arbitrage du 2026-11-15, §10.5) : « Ton colis {boutique} est en cours de
   livraison » (facultatif, coupé d'office), « Ton colis {boutique} est arrivé » / « disponible en point relais ».
 
 ### 3.5 Livraison et retour
@@ -242,11 +242,11 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   sur (elle, boutique, numéro) et (elle, numéro de suivi), et la commande lue `for update` (une validation en cours
   passe d'abord). Les colis reçoivent leur `next_check_at` (rythme de
   `nextParcelCheck`), la Task 5 les prend.
-- **Notification** : nouvelle sorte d'alerte `order_received` (envoi immédiat, calme de nuit et plafond du chantier 4),
+- **Notification** : nouvelle sorte d'alerte `order_received` (envoi immédiat, calme de nuit du chantier 4, hors plafond du jour depuis §10.5),
   seulement à la création d'une commande et seulement si elle est encore à valider à l'envoi. Titre « Commande reçue de
   {boutique} » (« Commande reçue » sans boutique), texte « Vérifie les articles, puis « C'est bon ». », lien vers
-  « Nouvelles » en attendant la page « Mes commandes » (Task 7). Envoyée au résumé par le plafond du jour, elle n'y
-  figure pas (la carte reste dans « Nouvelles »).
+  « Nouvelles » en attendant la page « Mes commandes » (Task 7). Elle ne compte pas dans le plafond du jour et ne
+  part jamais au résumé (arbitrage du 2026-11-15, §10.5).
 - **File** `order-email-parse` : 3 nouvelles tentatives (IA indisponible, stockage ou base en panne) ; à la dernière,
   l'e-mail passe `failed` plutôt que de rester `queued`. Une seconde exécution du même travail ne fait rien.
 
@@ -354,8 +354,8 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
 - **Robustesse** : un colis dont la mise à jour échoue (interblocage, base occupée) n'arrête pas la passe ; il garde
   son bail et revient après. La Poste : l'étape courante est celle de l'événement le plus récent par sa date, pas le
   premier de la liste.
-- **Notifications** : trois nouvelles sortes d'alerte immédiates (même envoi que le chantier 4 : calme de 22 h à 8 h,
-  5 par jour, le reste au résumé où elles ne figurent pas, comme `order_received`), une fois par colis et par sorte
+- **Notifications** : trois nouvelles sortes d'alerte immédiates (même envoi que le chantier 4 : calme de 22 h à 8 h ;
+  hors plafond du jour, jamais au résumé, comme `order_received` — arbitrage du 2026-11-15, §10.5), une fois par colis et par sorte
   (`alert_events.parcel_id`, index unique colis + sorte) : `parcel_delivered` « Ton colis {boutique} est arrivé »,
   une par colis livré, avec « Ses articles sont dans « Reçu ». » seulement si cette livraison les a fait passer, sinon
   « Encore {n} colis en route. » tant que d'autres colis de la commande sont en route, sinon sans texte (ce que la
@@ -370,8 +370,13 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
 ### 10.5 Retours, question J+10, liens Instagram (Task 6, 2026-11-15)
 
 - **Tâche du matin** (`order-daily`, worker) chaque jour à 9 h, heure de Paris (planification pg-boss avec fuseau),
-  une passe à la fois. Les deux notifications sont immédiates : même envoi que le chantier 4 (calme de 22 h à 8 h,
-  5 par jour, le reste au résumé où elles ne figurent pas, comme les colis).
+  une passe à la fois. Les deux notifications sont immédiates : même envoi que le chantier 4, calme de 22 h à 8 h
+  (retenues la nuit, elles partent à 8 h).
+- **Plafond du jour** (arbitrage de la fondatrice, relecture n°1, 2026-11-15) : les sortes de commande et de colis
+  (`order_received`, `parcel_out_for_delivery`, `parcel_pickup_ready`, `parcel_delivered`, `return_reminder`,
+  `order_received_check` : `UNCAPPED_ALERT_KINDS`) ne comptent plus dans les 5 notifications par jour et ne partent
+  jamais au résumé ; le plafond reste pour le stock et les prix (taille revenue, prix visé). Le calme de nuit vaut
+  pour toutes.
 - **Rappel de retour** (`return_reminder`) « Plus que 3 jours pour retourner {article} », « Retour possible jusqu'au
   {date} » (« 18 novembre ») : ses articles « Reçu » (`owned`, hors corbeille) dont la date limite tombe 3 jours de
   calendrier plus tard (Paris). **Une fois par article, à jamais** (index unique article + sorte) : un article reçu de
@@ -380,10 +385,14 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   passée, jamais. À l'envoi, l'article doit être encore « Reçu », hors corbeille, la date limite 1 à 3 jours plus tard
   (sinon rien n'est envoyé : retourné, vendu, mis à la corbeille entre-temps). Sans nom : « … retourner ton article ».
   Lien : la fiche de l'article, « Nouvelles » pour un article sans produit (en attendant sa fiche, Task 7).
+  « Nouvelles » dit le même nombre de jours que la notification (`returnDaysLeft` : de la date du rappel à la date
+  limite), « Plus que 2 jours… » ou « Plus qu'un jour… » pour un rappel rattrapé. Rappels écrits par lots de 500
+  (20 000 au plus par matin).
 - **« Tu as reçu ta commande {boutique} ? »** (`order_received_check`, « Tu as reçu ta commande ? » sans boutique
   connue ni nom tapé) : ses commandes **validées** sans nouvelle — aucun colis livré et un article au moins encore
   « Commandé » (hors corbeille) ; une commande dont tous les articles ont déjà avancé (reçus à la main…) n'est pas
-  questionnée. Date de départ : la plus ancienne étape de ses colis, sinon la création du premier colis
+  questionnée. Les jours se comptent **en jours de calendrier à Paris** (relecture n°1) : expédiée le 5 à 15 h, elle
+  est questionnée le 15 à 9 h (et le 25 après « Pas encore »), changement d'heure compris. Date de départ : la plus ancienne étape de ses colis, sinon la création du premier colis
   (l'expédition), sinon sa validation (`orders.confirmed_at`, migration 0042 ; les commandes validées avant reprennent
   leur dernière modification), sinon sa création. Posée une fois à 10 jours ; après « Pas encore », une seconde fois à
   20 jours ; sans réponse à la première, ou après la seconde, plus jamais. Les colis tous `unknown` ou sans
@@ -405,6 +414,12 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
 - **Lien Instagram** : `POST /api/captures` avec un lien `instagram.com`, `www.instagram.com` (tout hôte sous
   `instagram.com`) ou `instagr.am` ne crée ni boutique, ni produit, ni capture, et n'appelle rien (le worker n'est
   jamais saisi : règle anti-robot) ; il répond 200 `{ form: "instagram", url }`, l'interface montre le formulaire court.
+  **Jamais de requête vers Meta** (relecture n°1) : `instagram.com`, `instagr.am`, `cdninstagram.com`, `fbcdn.net` et
+  tout hôte sous eux (correspondance stricte : même hôte ou sous-domaine, jamais un simple suffixe ; `isMetaHost`)
+  sont refusés par l'import de photo par lien (400 `invalid_request`, rien d'enregistré ni de mis en file), le test de
+  capture de l'admin (400 `invalid_url`), la capture publique pour une adresse de photo (400 `invalid_url`), et, côté
+  worker, par `safeFetch` lui-même (`blocked`, avant toute résolution de nom, redirections comprises) : une
+  revisite ou un suivi d'un produit Instagram créé avant ne part pas non plus.
   `POST /api/me/items/instagram` crée un article **sans produit** : nom (obligatoire), boutique ou marque
   (`brand_override`), taille, notes, le lien gardé comme source (`items.source_url`, migration 0042, montré par la vue
   de l'article `sourceUrl`) ; `wish` (« Repéré », niveau J'aime) ou `ordered` (« Commandé », avec ce qu'elle a payé et
@@ -413,3 +428,10 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   de photos existant (Task 7 pour l'écran).
 - Textes français prêts pour les écrans (Task 7) : `Orders.*` et `News.return_reminder` / `News.order_received_check`
   dans `fr.json`.
+- **SQL partagé** (relecture n°1) : Drizzle écrit une colonne sans sa table (`"id"`) dans le `select` d'une requête sur
+  une seule table ; dans une sous-requête sur une autre table, ce nom aurait désigné sa propre colonne (la question
+  prenait la validation au lieu de l'expédition comme date de départ, et la vue d'une commande pouvait se tromper sur
+  la question ouverte). Les fragments `orderAwaitingNews`, `receivedQuestionOpen` et la date de départ nomment donc
+  `"orders"."id"` et leurs tables par alias, sans passer par les colonnes Drizzle.
+- **Non retenus** (relecture n°1) : un même lien Instagram envoyé deux fois donne deux articles (deux articles d'une
+  même publication sont possibles ; l'écran de la Task 7 désactive le bouton pendant l'envoi, et l'annulation reste).

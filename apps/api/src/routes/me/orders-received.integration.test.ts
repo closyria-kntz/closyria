@@ -144,6 +144,17 @@ describe("POST /api/me/orders/{id}/received", () => {
     expect(events.filter((e) => e.stage === "owned")).toHaveLength(1);
   });
 
+  it("the question is no longer open once a parcel was delivered", async () => {
+    const a = await account();
+    const { orderId, parcelId } = await confirmed(a, { askedAt: NOW });
+    await t.db
+      .update(schema.parcels)
+      .set({ status: "delivered", deliveredAt: NOW })
+      .where(eq(schema.parcels.id, parcelId));
+    const list = await json<OrderList>(await call("GET", "/api/me/orders", a.cookie), 200);
+    expect(list.orders.find((o) => o.id === orderId)?.receivedQuestion).toBe(false);
+  });
+
   it("« Oui » without a known shop: 14 days; an item received meanwhile keeps its stage, a returned one too", async () => {
     const a = await account();
     const { orderId, itemIds } = await confirmed(a, { returnDays: null });
@@ -219,13 +230,25 @@ describe("« Nouvelles »", () => {
   it("names the item of a return reminder, the shop of a received question", async () => {
     const a = await account();
     const { orderId, itemIds, shopId } = await confirmed(a);
+    await t.db
+      .update(schema.items)
+      .set({ stage: "owned", returnDeadline: "2026-11-18" })
+      .where(eq(schema.items.id, itemIds[0] as string));
+    // A late reminder (the morning job missed a day): 2 days left, as its notification said.
+    await t.db
+      .update(schema.items)
+      .set({ stage: "owned", returnDeadline: "2026-11-17" })
+      .where(eq(schema.items.id, itemIds[1] as string));
     await t.db.insert(schema.alertEvents).values([
       { userId: a.userId, profileId: a.moi, itemId: itemIds[0], kind: "return_reminder", createdAt: NOW },
+      { userId: a.userId, profileId: a.moi, itemId: itemIds[1], kind: "return_reminder", createdAt: NOW },
       { userId: a.userId, profileId: a.moi, orderId, shopId, kind: "order_received_check", createdAt: NOW },
     ]);
     const page = await json<AlertPage>(await call("GET", "/api/me/alerts", a.cookie), 200);
-    const reminder = page.alerts.find((e) => e.kind === "return_reminder");
-    expect(reminder).toMatchObject({ title: "Robe Iris", itemId: itemIds[0], href: "/nouvelles" });
+    const reminder = page.alerts.find((e) => e.kind === "return_reminder" && e.itemId === itemIds[0]);
+    expect(reminder).toMatchObject({ title: "Robe Iris", href: "/nouvelles", returnDaysLeft: 3 });
+    const late = page.alerts.find((e) => e.kind === "return_reminder" && e.itemId === itemIds[1]);
+    expect(late).toMatchObject({ title: "Pull Marin", returnDaysLeft: 2 });
     const question = page.alerts.find((e) => e.kind === "order_received_check");
     expect(question).toMatchObject({ title: "Maison Lune", shopName: "Maison Lune", itemId: null });
   });
@@ -243,6 +266,10 @@ describe("Instagram links", () => {
     ]) {
       const res = await call("POST", "/api/captures", cookie, { url });
       expect(await json(res, 200)).toEqual({ form: "instagram", url });
+    }
+    // Instagram's or Facebook's photo addresses: refused, never read.
+    for (const url of ["https://scontent.cdninstagram.com/v/photo.jpg", "https://scontent.xx.fbcdn.net/p.jpg"]) {
+      expect(await json(await call("POST", "/api/captures", cookie, { url }), 400)).toEqual({ error: "invalid_url" });
     }
     expect(t.calls).toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();

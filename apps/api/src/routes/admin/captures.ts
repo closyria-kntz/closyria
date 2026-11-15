@@ -13,6 +13,7 @@ import {
   type CaptureTrigger,
   canonicalizeUrl,
   captureErrorCodeSchema,
+  isMetaUrl,
 } from "@closyria/shared";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { defineAccess } from "../../access";
@@ -102,7 +103,8 @@ export function adminCapturesRoutes(deps: CatalogDeps) {
     .openapi(testRoute, async (c) => {
       noteAudit(c, { action: "capture.test" });
       const url = canonicalizeUrl(c.req.valid("json").url);
-      if (!url) return c.json({ error: "invalid_url" } as const, 400);
+      // Anti-bot rule (C5): Instagram and Facebook are never fetched, a test capture neither.
+      if (!url || isMetaUrl(url)) return c.json({ error: "invalid_url" } as const, 400);
       const shop = await findOrCreateShop(db, url);
       const [capture] = await db
         .insert(schema.captures)

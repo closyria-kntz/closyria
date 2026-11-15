@@ -401,6 +401,16 @@ describe("captures", () => {
     expect((await call("POST", "/captures/test", { url: "ftp://x" })).status).toBe(400);
   });
 
+  it("never tests an Instagram or Facebook link: no shop, no capture, nothing queued", async () => {
+    const before = t.calls.length;
+    const shops = (await t.db.select({ id: schema.shops.id }).from(schema.shops)).length;
+    for (const url of ["https://www.instagram.com/p/C0ffee/", "https://scontent.cdninstagram.com/x.jpg"]) {
+      expect((await call("POST", "/captures/test", { url })).status, url).toBe(400);
+    }
+    expect(t.calls.slice(before)).toEqual([]);
+    expect(await t.db.select({ id: schema.shops.id }).from(schema.shops)).toHaveLength(shops);
+  });
+
   it("reads a capture", async () => {
     const shop = await newShop();
     const c = await newCapture(shop.id, { method: "jsonld", durationMs: 420, result: { name: "Robe" } });

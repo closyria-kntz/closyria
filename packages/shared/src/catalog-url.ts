@@ -72,21 +72,44 @@ export function nameFromUrl(url: string): string | null {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** Instagram's own hosts (and any under instagram.com): never fetched (spec « Après la commande » C5, anti-bot rule). */
-const INSTAGRAM_HOSTS = ["instagram.com", "instagr.am", "www.instagr.am"] as const;
+/** Instagram's page domains (any host under them too): never fetched (spec « Après la commande » C5, anti-bot rule). */
+const INSTAGRAM_DOMAINS = ["instagram.com", "instagr.am"] as const;
+/** Meta's domains the worker never fetches: Instagram's pages and the photo CDNs of Instagram and Facebook. */
+const META_DOMAINS = [...INSTAGRAM_DOMAINS, "cdninstagram.com", "fbcdn.net"] as const;
+
+/** Whether `host` is one of `domains` or under one of them (lower case, a trailing dot aside); never a mere suffix. */
+function hostUnder(host: string, domains: readonly string[]): boolean {
+  const bare = host.toLowerCase().replace(/\.$/, "");
+  return domains.some((domain) => bare === domain || bare.endsWith(`.${domain}`));
+}
+
+/** The host of an http(s) address, null for anything else. */
+function httpHost(input: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(input.trim());
+  } catch {
+    return null;
+  }
+  return url.protocol === "http:" || url.protocol === "https:" ? url.hostname : null;
+}
 
 /**
  * Whether an address is an Instagram page (`instagram.com`, `www.instagram.com` or any other host under it,
  * `instagr.am`): such a link is never captured, she types its article herself.
  */
 export function isInstagramUrl(input: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(input.trim());
-  } catch {
-    return false;
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
-  const host = url.hostname.toLowerCase().replace(/\.$/, "");
-  return (INSTAGRAM_HOSTS as readonly string[]).includes(host) || host.endsWith(".instagram.com");
+  const host = httpHost(input);
+  return host !== null && hostUnder(host, INSTAGRAM_DOMAINS);
+}
+
+/** Whether a host is Meta's (Instagram, `cdninstagram.com`, `fbcdn.net` or under them): never fetched. */
+export function isMetaHost(host: string): boolean {
+  return hostUnder(host, META_DOMAINS);
+}
+
+/** Whether an http(s) address is on a Meta host (`isMetaHost`): no capture, no photo import, no request at all. */
+export function isMetaUrl(input: string): boolean {
+  const host = httpHost(input);
+  return host !== null && isMetaHost(host);
 }

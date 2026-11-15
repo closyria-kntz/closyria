@@ -6,6 +6,7 @@ import {
   catalogErrorSchema,
   instagramCaptureSchema,
   isInstagramUrl,
+  isMetaUrl,
 } from "@closyria/shared";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
@@ -82,6 +83,8 @@ export function capturesRoutes(deps: CatalogDeps, limiter: MiddlewareHandler<Acc
       if (!url) return c.json(invalidUrl, 400);
       // Anti-bot rule (C5): Instagram is never fetched, not even queued for the worker.
       if (isInstagramUrl(url)) return c.json({ form: "instagram" as const, url: pasted.trim() }, 200);
+      // Instagram's or Facebook's photo addresses are not product pages, and never fetched either.
+      if (isMetaUrl(url)) return c.json(invalidUrl, 400);
 
       const shop = await findOrCreateShop(db, url);
       const capture = await requestProductCapture(db, queue, {
