@@ -305,6 +305,17 @@ describe("« Tu as reçu ta commande ? »", () => {
     expect(await questions(answered)).toHaveLength(1);
   });
 
+  it("never lets orders not due yet fill the day's budget before due ones", async () => {
+    const who = await person();
+    const ago = (days: number) => new Date(now.getTime() - days * DAY);
+    // Older, answered « Pas encore » 12 days after shipping: not due again before 20 days.
+    const waiting = await order(who, { confirmedAt: ago(12), askedAt: ago(2), notYetAt: ago(1), createdAt: ago(40) });
+    const due = await order(who, { confirmedAt: ago(11), createdAt: ago(11) });
+    await askReceived(handle.db, now, 1);
+    expect(await questions(waiting)).toHaveLength(0);
+    expect(await questions(due)).toHaveLength(1);
+  });
+
   it("words it « Tu as reçu ta commande {boutique} ? », and stays quiet once she answered or it arrived", async () => {
     expect(orderReceivedCheckTitle("Maison Lune")).toBe("Tu as reçu ta commande Maison Lune ?");
     expect(orderReceivedCheckTitle(null)).toBe("Tu as reçu ta commande ?");

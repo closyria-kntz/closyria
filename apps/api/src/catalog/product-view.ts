@@ -1,5 +1,6 @@
 import { asc, type Database, eq, inArray, schema } from "@closyria/db";
 import { type ProductTraits, type ProductView, shopDataSchema } from "@closyria/shared";
+import { readAll } from "../read-all";
 
 export const catalogImageUrl = (imageId: string) => `/api/catalog-images/${imageId}`;
 
@@ -13,23 +14,27 @@ export async function loadProductViews(db: Database, productIds: string[]): Prom
   const ids = [...new Set(productIds)];
   const views = new Map<string, ProductView>();
   if (ids.length === 0) return views;
-  const [rows, images, sizes] = await Promise.all([
-    db
-      .select({ product: schema.products, shop: schema.shops })
-      .from(schema.products)
-      .innerJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
-      .where(inArray(schema.products.id, ids)),
-    db
-      .select()
-      .from(schema.productImages)
-      .where(inArray(schema.productImages.productId, ids))
-      .orderBy(asc(schema.productImages.position), asc(schema.productImages.id)),
-    db
-      .select()
-      .from(schema.productSizes)
-      .where(inArray(schema.productSizes.productId, ids))
-      .orderBy(asc(schema.productSizes.position)),
-  ]);
+  // Also called with a transaction (an item's view after a change): its reads then run one after another.
+  const [rows, images, sizes] = await readAll(db, [
+    () =>
+      db
+        .select({ product: schema.products, shop: schema.shops })
+        .from(schema.products)
+        .innerJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
+        .where(inArray(schema.products.id, ids)),
+    () =>
+      db
+        .select()
+        .from(schema.productImages)
+        .where(inArray(schema.productImages.productId, ids))
+        .orderBy(asc(schema.productImages.position), asc(schema.productImages.id)),
+    () =>
+      db
+        .select()
+        .from(schema.productSizes)
+        .where(inArray(schema.productSizes.productId, ids))
+        .orderBy(asc(schema.productSizes.position)),
+  ] as const);
   const reference = await loadReference(
     db,
     rows.map((r) => r.product),
@@ -119,31 +124,35 @@ async function loadReference(
   const materialIds = present(products.map((p) => p.materialId));
   const patternIds = present(products.map((p) => p.patternId));
   const anyCategory = products.some((p) => p.categoryId !== null);
-  const [categories, colors, materials, patterns] = await Promise.all([
-    anyCategory
-      ? db
-          .select({ id: schema.categories.id, parentId: schema.categories.parentId, name: schema.categories.name })
-          .from(schema.categories)
-      : [],
-    colorIds.length
-      ? db
-          .select({ id: schema.colors.id, name: schema.colors.name, hex: schema.colors.hex })
-          .from(schema.colors)
-          .where(inArray(schema.colors.id, colorIds))
-      : [],
-    materialIds.length
-      ? db
-          .select({ id: schema.materials.id, name: schema.materials.name })
-          .from(schema.materials)
-          .where(inArray(schema.materials.id, materialIds))
-      : [],
-    patternIds.length
-      ? db
-          .select({ id: schema.patterns.id, name: schema.patterns.name })
-          .from(schema.patterns)
-          .where(inArray(schema.patterns.id, patternIds))
-      : [],
-  ]);
+  const [categories, colors, materials, patterns] = await readAll(db, [
+    async () =>
+      anyCategory
+        ? await db
+            .select({ id: schema.categories.id, parentId: schema.categories.parentId, name: schema.categories.name })
+            .from(schema.categories)
+        : [],
+    async () =>
+      colorIds.length
+        ? await db
+            .select({ id: schema.colors.id, name: schema.colors.name, hex: schema.colors.hex })
+            .from(schema.colors)
+            .where(inArray(schema.colors.id, colorIds))
+        : [],
+    async () =>
+      materialIds.length
+        ? await db
+            .select({ id: schema.materials.id, name: schema.materials.name })
+            .from(schema.materials)
+            .where(inArray(schema.materials.id, materialIds))
+        : [],
+    async () =>
+      patternIds.length
+        ? await db
+            .select({ id: schema.patterns.id, name: schema.patterns.name })
+            .from(schema.patterns)
+            .where(inArray(schema.patterns.id, patternIds))
+        : [],
+  ] as const);
   return {
     categories: new Map(categories.map((c) => [c.id, c])),
     colors: new Map(colors.map((c) => [c.id, { name: c.name, hex: c.hex }])),

@@ -315,7 +315,10 @@ export async function sendAlert(
   if (event.kind === "order_received" && event.orderId) {
     // Only while it waits for her « C'est bon »: validated or dismissed since, nothing to tell.
     const [order] = await db
-      .select({ status: schema.orders.status, shopName: schema.shops.name })
+      .select({
+        status: schema.orders.status,
+        shopName: sql<string | null>`coalesce(${schema.shops.name}, ${schema.orders.shopName})`,
+      })
       .from(schema.orders)
       .leftJoin(schema.shops, eq(schema.shops.id, schema.orders.shopId))
       .where(and(eq(schema.orders.id, event.orderId), eq(schema.orders.userId, event.userId)));

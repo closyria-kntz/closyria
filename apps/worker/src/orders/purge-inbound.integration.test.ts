@@ -1,5 +1,10 @@
 import { createDb, eq, inArray, schema } from "@closyria/db";
-import { INBOUND_EMAIL_RETENTION_DAYS, ORDER_EMAIL_PARSE_QUEUE, rawEmailKey } from "@closyria/shared";
+import {
+  INBOUND_EMAIL_RETENTION_DAYS,
+  INBOUND_EMAIL_ROW_DAYS,
+  ORDER_EMAIL_PARSE_QUEUE,
+  rawEmailKey,
+} from "@closyria/shared";
 import { memoryStore, type ObjectStore } from "@closyria/storage";
 import { createTestDatabase } from "@closyria/testing/vitest";
 import type { PgBoss } from "pg-boss";
@@ -121,6 +126,61 @@ describe("purgeInboundEmails", () => {
 
     // Nothing left to do: a second run changes nothing.
     expect(await purgeInboundEmails(db, now, store)).toEqual({ deleted: 0, cleared: 0, failed: 0, codes: 0 });
+  });
+
+  it("deletes, 90 days after reception, the rows already without their message; their order stays", async () => {
+    const { db } = handle;
+    const ctx = await setup();
+    expect(INBOUND_EMAIL_ROW_DAYS).toBe(90);
+    const row = async (status: string, days: number) => {
+      const receivedAt = new Date(now.getTime() - days * DAY_MS);
+      const [email] = await db
+        .insert(schema.inboundEmails)
+        .values({
+          inboxId: ctx.inboxId,
+          userId: ctx.userId,
+          queueId: `Q${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`,
+          fromAddress: "marie@example.test",
+          authOk: true,
+          status,
+          receivedAt,
+          purgeAfter: new Date(receivedAt.getTime() + INBOUND_EMAIL_RETENTION_DAYS * DAY_MS),
+        })
+        .returning();
+      return email?.id as string;
+    };
+    const old = await row("parsed", 91);
+    const oldFailed = await row("failed", 91);
+    const recent = await row("parsed", 89);
+    const [order] = await db
+      .insert(schema.orders)
+      .values({
+        userId: ctx.userId,
+        profileId: ctx.profileId,
+        source: "email",
+        parseMethod: "known",
+        inboundEmailId: old,
+      })
+      .returning();
+    await db.insert(schema.orders).values({
+      userId: ctx.userId,
+      profileId: ctx.profileId,
+      source: "manual",
+      parseMethod: "manual",
+      inboundEmailId: oldFailed,
+    });
+
+    expect(await purgeInboundEmails(db, now, memoryStore())).toEqual({ deleted: 2, cleared: 0, failed: 0, codes: 0 });
+    const left = await db
+      .select({ id: schema.inboundEmails.id })
+      .from(schema.inboundEmails)
+      .where(inArray(schema.inboundEmails.id, [old, oldFailed, recent]));
+    expect(left.map((r) => r.id)).toEqual([recent]);
+    const [kept] = await db
+      .select()
+      .from(schema.orders)
+      .where(eq(schema.orders.id, order?.id as string));
+    expect(kept?.inboundEmailId).toBeNull();
   });
 
   it("keeps the key while the object is not deleted (logged), for the next run", async () => {

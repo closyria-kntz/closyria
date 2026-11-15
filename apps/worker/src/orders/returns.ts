@@ -5,6 +5,7 @@ import {
   nextSendAt,
   parisDay,
   parisDayStart,
+  RECEIVED_QUESTION_AGAIN_DAYS,
   RECEIVED_QUESTION_DAYS,
   RETURN_REMINDER_DAYS,
   receivedQuestionDue,
@@ -88,23 +89,27 @@ const referenceAt = sql<Date>`coalesce(
   "orders"."confirmed_at", "orders"."created_at")`;
 
 /** Asks « Tu as reçu ta commande ? » where due at `now`; returns how many questions were asked. */
-export async function askReceived(db: Database, now: Date): Promise<number> {
+export async function askReceived(db: Database, now: Date, budget = QUESTION_BUDGET): Promise<number> {
   const o = schema.orders;
   // Paris calendar days (`receivedQuestionDue`): shipped before 00:00 Paris RECEIVED_QUESTION_DAYS − 1 days ago.
   const firstDue = parisDayStart(addParisDays(parisDay(now), -(RECEIVED_QUESTION_DAYS - 1)));
+  // The second question at 20 days: an order answered « Pas encore » and not due again yet never takes a place in
+  // the day's budget from one that is due.
+  const againDue = parisDayStart(addParisDays(parisDay(now), -(RECEIVED_QUESTION_AGAIN_DAYS - 1)));
   const candidates = await db
     .select({ id: o.id })
     .from(o)
     .where(
       and(
         eq(o.status, "confirmed"),
-        sql`(${o.receivedAskedAt} is null or (${o.receivedNotYetAt} is not null and ${o.receivedAskedAgainAt} is null))`,
-        sql`${referenceAt} < ${firstDue.toISOString()}`,
+        sql`((${o.receivedAskedAt} is null and ${referenceAt} < ${firstDue.toISOString()})
+          or (${o.receivedNotYetAt} is not null and ${o.receivedAskedAgainAt} is null
+            and ${referenceAt} < ${againDue.toISOString()}))`,
         orderAwaitingNews(),
       ),
     )
     .orderBy(o.createdAt)
-    .limit(QUESTION_BUDGET);
+    .limit(budget);
   let asked = 0;
   for (const { id } of candidates) {
     try {

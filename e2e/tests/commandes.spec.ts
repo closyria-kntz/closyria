@@ -168,6 +168,34 @@ test("une invitée crée d'abord son compte pour suivre ses commandes", async ({
   await axeLightAndDark(page);
 });
 
+test("réception pas encore en service : pas d'adresse, un message calme", async ({ page, db, userAgentTag }) => {
+  const who = await account(page, db, userAgentTag);
+  // The environment without INBOUND_EMAIL_SECRET, as the API answers it there (this suite's API receives e-mails).
+  const posts: string[] = [];
+  await page.route("**/api/me/order-inbox", async (route) => {
+    if (route.request().method() !== "GET") {
+      posts.push(route.request().method());
+      return route.fulfill({ status: 409, json: { error: "inbound_off" } });
+    }
+    return route.fulfill({ json: { receiving: false, address: null, autoForward: false, pendingGmailCode: null } });
+  });
+  await page.goto("/reglages/commandes");
+  const soon = main(page).getByTestId("order-inbox-soon");
+  await expect(soon.getByRole("heading", { level: 3, name: "Bientôt disponible" })).toBeVisible();
+  await expect(
+    soon.getByText(
+      "La réception des e-mails de commande arrive bientôt. En attendant, tu peux ajouter une commande à la main ou coller un numéro de suivi.",
+    ),
+  ).toBeVisible();
+  await expect(soon.getByRole("link", { name: "Mes commandes" })).toHaveAttribute("href", "/mes-commandes");
+  await expect(main(page).getByTestId("order-address")).toHaveCount(0);
+  await expect(main(page).getByRole("region", { name: "Comment transférer tes e-mails" })).toHaveCount(0);
+  expect(posts).toEqual([]);
+  const { rows } = await db.query("select 1 from order_inboxes where user_id = $1", [who.userId]);
+  expect(rows).toEqual([]);
+  await axeLightAndDark(page);
+});
+
 test("son adresse de commandes : copier, changer, le code Gmail et l'aide pas à pas", async ({
   page,
   context,

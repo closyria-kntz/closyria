@@ -319,11 +319,21 @@ describe("order schemas", () => {
   });
 
   it("describes her order address", () => {
-    const view = { address: "marie-k7f2@commandes.closyria.com", autoForward: true, pendingGmailCode: "185412963" };
+    const view = {
+      receiving: true,
+      address: "marie-k7f2@commandes.closyria.com",
+      autoForward: true,
+      pendingGmailCode: "185412963",
+    };
     expect(orderInboxViewSchema.parse(view)).toEqual(view);
     expect(
-      orderInboxViewSchema.parse({ address: null, autoForward: false, pendingGmailCode: null }).address,
+      orderInboxViewSchema.parse({ receiving: false, address: null, autoForward: false, pendingGmailCode: null })
+        .address,
     ).toBeNull();
+    // Whether e-mails are received here is always said.
+    expect(orderInboxViewSchema.safeParse({ address: null, autoForward: false, pendingGmailCode: null }).success).toBe(
+      false,
+    );
     expect(orderInboxViewSchema.safeParse({ address: null, pendingGmailCode: null }).success).toBe(false);
     expect(orderInboxViewSchema.safeParse({ ...view, pendingGmailCode: "12ab" }).success).toBe(false);
   });

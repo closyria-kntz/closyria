@@ -543,3 +543,36 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   - **Produit d'une ligne sans boutique** (lecture des e-mails) : gardé tel quel — l'adresse canonique d'un produit
     est unique, elle désigne au plus une page, celle que la ligne de l'e-mail donne ; seuls les formats connus gardent
     un lien, et seulement celui du titre ou de la photo de la ligne.
+
+### 10.8 Relecture finale (2026-11-15)
+
+- **Alertes d'une commande qui change de profil** : `order_received`, `parcel_*` et `order_received_check` (sans
+  article) suivent le profil de leur commande (`alertsFollowOrders`) — à la suppression d'un profil (ses commandes
+  passent au profil de repli, leurs alertes avec, au lieu de partir en cascade) et à « Corriger » qui change le profil
+  d'un brouillon. Un rappel de retour a son article et le suit déjà.
+- **Réception pas encore en service** (pas d'`INBOUND_EMAIL_SECRET`) : `GET /api/me/order-inbox` répond
+  `receiving: false` et aucune adresse (même une ancienne), `POST` répond 409 `inbound_off` sans rien créer ;
+  « Mes commandes par e-mail » montre « Bientôt disponible » (texte ci-dessous) et un lien vers « Mes commandes ».
+- **Ordre des verrous avec la suppression d'un compte** : la réception et la lecture d'un e-mail prennent d'abord la
+  ligne de son compte (`for key share`), comme la suppression (le compte, puis ce qui en dépend) : elles s'attendent
+  au lieu de s'interbloquer ; une lecture qui trouve le compte supprimé ne fait rien.
+- **Titre de « Commande reçue de … »** : la boutique, sinon le nom tapé (`orders.shop_name`), comme les colis.
+- **Saisie à la main d'un e-mail** : seulement un e-mail `failed` (« On n'a pas su lire cet e-mail ») ; un autre → 404.
+- **Code de confirmation Gmail** : gardé seulement si le transfert automatique est accepté (`INBOUND_AUTOFORWARD=on`) ;
+  sinon l'e-mail de Google est ignoré comme un autre.
+- **Lignes des e-mails reçus** : 90 jours après la réception (`INBOUND_EMAIL_ROW_DAYS`), une ligne déjà sans son
+  message (lu, ou non lu relié à une commande) est effacée — son adresse à elle, ses dates, son statut ; la commande
+  garde ce qu'elle a validé (`orders.inbound_email_id` nul). Les chiffres de l'admin portent sur 30 jours : rien n'y
+  change.
+- **Question J+10** : la requête ne prend plus une commande qui a répondu « Pas encore » avant ses 20 jours ; les
+  commandes encore loin de leur seconde question ne prennent plus la place des commandes dues (plafond de 2 000 par jour).
+- **Requêtes d'une transaction** : les lectures d'un article (`loadItemViews`, `loadBareItemFacts`, `loadProductViews`)
+  passent une à une dans une transaction (`readAll`), toutes ensemble hors transaction.
+- **Mise en prod** : migrations 0037 à 0043 à essayer sur une copie de la prod (`deploy/dry-run-prod-migrations.sh`),
+  rappelé dans `deploy/README.md`.
+
+#### Textes à valider (relecture finale)
+
+- « Mes commandes par e-mail », réception pas encore en service : titre « Bientôt disponible » ; « La réception des
+  e-mails de commande arrive bientôt. En attendant, tu peux ajouter une commande à la main ou coller un numéro de
+  suivi. » ; lien « Mes commandes ».

@@ -297,22 +297,24 @@ describe("rule 2, Gmail's automatic forwarding (INBOUND_AUTOFORWARD)", () => {
 describe("Gmail's forwarding confirmation", () => {
   const google = (mailFrom = "forwarding-noreply@google.example") => envelopeFrom("google", mailFrom, TO);
 
-  it("gives the code when the address that asked is hers", async () => {
+  it("gives the code when the address that asked is hers, only while automatic forwarding is accepted", async () => {
     const raw = await signed(gmailConfirmation(TO, HER), "google");
-    expect(await check({ raw, envelope: google(), accountEmail: HER })).toEqual({
+    expect(await checkAuto({ raw, envelope: google(), accountEmail: HER })).toEqual({
       kind: "gmail_confirmation",
       code: "185412963",
     });
+    // INBOUND_AUTOFORWARD off: the code would never be shown, so it is not kept either (the e-mail is ignored).
+    expect((await check({ raw, envelope: google(), accountEmail: HER })).kind).toBe("ignored");
   });
 
   it("her own confirmation for another destination, replayed to her order address: ignored", async () => {
     const raw = await signed(gmailConfirmation("ailleurs@outlook.example", HER), "google");
-    expect((await check({ raw, envelope: google(), accountEmail: HER })).kind).toBe("ignored");
+    expect((await checkAuto({ raw, envelope: google(), accountEmail: HER })).kind).toBe("ignored");
   });
 
   it("asked by someone else: ignored", async () => {
     const raw = await signed(gmailConfirmation(TO, "sophie.autre@gmail.example"), "google");
-    expect((await check({ raw, envelope: google(), accountEmail: HER })).kind).toBe("ignored");
+    expect((await checkAuto({ raw, envelope: google(), accountEmail: HER })).kind).toBe("ignored");
   });
 
   it("not signed by Google, or signed by another domain: ignored", async () => {
@@ -323,7 +325,7 @@ describe("Gmail's forwarding confirmation", () => {
         (await signed(gmailConfirmation(TO, HER), "google")).toString("utf8").replace("185412963", "999999999"),
       ),
     ]) {
-      expect((await check({ raw, envelope: google(), accountEmail: HER })).kind).toBe("ignored");
+      expect((await checkAuto({ raw, envelope: google(), accountEmail: HER })).kind).toBe("ignored");
     }
   });
 });

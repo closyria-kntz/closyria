@@ -19,6 +19,11 @@ export type OrderInboxDeps = {
   db: Database;
   /** The order addresses' domain (`orderInboxDomain`). */
   domain: string;
+  /**
+   * E-mails are received here (INBOUND_EMAIL_SECRET set). False: no address is shown or created, POST answers 409
+   * `inbound_off`.
+   */
+  receiving: boolean;
   /** Gmail's automatic forwarding accepted (INBOUND_AUTOFORWARD=on): its help and confirmation code are shown. */
   autoForward?: boolean;
   /** Clock (the rate limit, the Gmail code's 24 hours), injectable for tests. */
@@ -31,6 +36,7 @@ const ROTATION_LIMIT = { max: 10, windowMs: 60 * 60_000 };
 const MAX_DRAWS = 8;
 
 const accountRequired = { error: "account_required" } as const;
+const inboundOff = { error: "inbound_off" } as const;
 const json = (description: string) => ({
   description,
   content: { "application/json": { schema: orderInboxViewSchema } },
@@ -47,7 +53,8 @@ const getRoute = defineAccess(
     path: "/me/order-inbox",
     summary: "« Mes commandes par e-mail »: her order address",
     description:
-      "Her active address, or null before she asked for one; whether Gmail's automatic forwarding is accepted " +
+      "`receiving`: e-mails are received in this environment; while false, no address is shown (null). Her active " +
+      "address, or null before she asked for one; whether Gmail's automatic forwarding is accepted " +
       "(`autoForward`, INBOUND_AUTOFORWARD) and, only then, Gmail's forwarding confirmation code when one arrived on " +
       "it in the last 24 hours, asked by her own Gmail address (`pendingGmailCode`). Accounts only.",
     responses: { 200: json("Her address"), 403: accountRequiredContent },
@@ -64,7 +71,8 @@ const postRoute = (nowMs?: () => number) =>
       description:
         "`{first name}-{4 characters}` (« commande » without a first name), from an alphabet without look-alike " +
         "characters. With an address already, it is replaced: the former one stops working at once (its e-mails " +
-        "are ignored, nothing kept). Accounts only; 10 an hour.",
+        "are ignored, nothing kept). Accounts only; 10 an hour. 409 `inbound_off` while e-mails are not received " +
+        "in this environment (nothing created).",
       middleware: [
         rateLimit<AccessEnv>(
           { ...ROTATION_LIMIT, key: (c) => `order-inbox:${c.var.session?.user.id ?? ""}` },
@@ -75,6 +83,7 @@ const postRoute = (nowMs?: () => number) =>
       responses: {
         200: json("Her new address"),
         403: accountRequiredContent,
+        409: errorContent("E-mails are not received in this environment (inbound_off): no address created"),
         429: errorContent("Too many changes this hour (rate_limited)"),
       },
     }),
@@ -105,12 +114,15 @@ function drawCode(): string {
 
 export function orderInboxRoutes(deps: OrderInboxDeps) {
   const { db, domain } = deps;
-  const autoForward = deps.autoForward ?? false;
+  const { receiving } = deps;
+  // Automatic forwarding only means something while e-mails are received.
+  const autoForward = receiving && (deps.autoForward ?? false);
   const address = (localPart: string) => `${localPart}@${domain}`;
   return new OpenAPIHono<AccessEnv>()
     .openapi(getRoute, async (c) => {
       const userId = userIdOf(c);
       if (!(await accountOf(db, userId))) return c.json(accountRequired, 403);
+      if (!receiving) return c.json({ receiving, address: null, autoForward, pendingGmailCode: null }, 200);
       const [row] = await db
         .select({
           localPart: schema.orderInboxes.localPart,
@@ -123,12 +135,13 @@ export function orderInboxRoutes(deps: OrderInboxDeps) {
       // The code is only useful to set up Gmail's automatic forwarding: hidden while it is not accepted.
       const pendingGmailCode =
         autoForward && row?.gmailCode && row.gmailCodeAt && row.gmailCodeAt.getTime() > since ? row.gmailCode : null;
-      return c.json({ address: row ? address(row.localPart) : null, autoForward, pendingGmailCode }, 200);
+      return c.json({ receiving, address: row ? address(row.localPart) : null, autoForward, pendingGmailCode }, 200);
     })
     .openapi(postRoute(deps.nowMs), async (c) => {
       const userId = userIdOf(c);
       const account = await accountOf(db, userId);
       if (!account) return c.json(accountRequired, 403);
+      if (!receiving) return c.json(inboundOff, 409);
       const firstName = firstNameOf({ name: account.name, isAnonymous: false });
       for (let draw = 0; draw < MAX_DRAWS; draw++) {
         const localPart = orderInboxLocalPart(firstName, drawCode());
@@ -142,7 +155,7 @@ export function orderInboxRoutes(deps: OrderInboxDeps) {
               .where(and(eq(schema.orderInboxes.userId, userId), eq(schema.orderInboxes.active, true)));
             await tx.insert(schema.orderInboxes).values({ userId, localPart });
           });
-          return c.json({ address: address(localPart), autoForward, pendingGmailCode: null }, 200);
+          return c.json({ receiving, address: address(localPart), autoForward, pendingGmailCode: null }, 200);
         } catch (error) {
           // Taken (by anyone, former addresses included: never given twice), or a change at the same time: again.
           if (pgCode(error) !== "23505") throw error;

@@ -30,3 +30,17 @@ export async function alertsFollowItems(tx: Tx, itemIds: readonly string[]): Pro
 export async function alertsLeaveProfile(tx: Tx, profileId: string): Promise<void> {
   await followItemProfile(tx, sql`e.profile_id = ${profileId}`);
 }
+
+/**
+ * Her order and parcel alerts (`order_received`, `parcel_*`, `order_received_check`: no item) follow the profile of
+ * their order, like the item alerts follow their item: after an order moves to another profile (« Corriger », a
+ * deleted profile), so that deleting the old profile (which cascades) does not take them away. A return reminder has
+ * its item and follows it instead.
+ */
+export async function alertsFollowOrders(tx: Tx, which: SQL): Promise<void> {
+  await tx.execute(sql`
+    update ${schema.alertEvents} as e
+    set profile_id = o.profile_id
+    from ${schema.orders} as o
+    where o.id = e.order_id and e.item_id is null and e.profile_id is distinct from o.profile_id and ${which}`);
+}

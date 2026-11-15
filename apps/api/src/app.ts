@@ -163,7 +163,8 @@ export function createApp(deps: AppDeps) {
       orderInboxRoutes({
         db: deps.wardrobe.db,
         domain: orderInboxDomain(appEnvSchema.parse(deps.env)),
-        // Only while e-mails are received at all.
+        // No address while e-mails are not received here; automatic forwarding only while they are.
+        receiving: deps.inbound !== undefined,
         autoForward: deps.inbound?.autoForward ?? false,
         ...(deps.wardrobe.now ? { nowMs: () => (deps.wardrobe.now as () => Date)().getTime() } : {}),
       }),

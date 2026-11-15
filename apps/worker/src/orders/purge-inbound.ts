@@ -1,6 +1,7 @@
-import { and, type Database, eq, gt, isNotNull, isNull, lt, schema, sql } from "@closyria/db";
+import { and, type Database, eq, gt, inArray, isNotNull, isNull, lt, schema, sql } from "@closyria/db";
 import {
   GMAIL_CODE_HOURS,
+  INBOUND_EMAIL_ROW_DAYS,
   inboundEmailPurge,
   inboundEmailStatusSchema,
   rawEmailKey,
@@ -12,7 +13,7 @@ import type { ObjectStore } from "@closyria/storage";
 const BATCH = 500;
 
 export type InboundPurgeResult = {
-  /** Rows deleted (ignored ones, failed ones no order points to). */
+  /** Rows deleted (ignored ones, failed ones no order points to; any row 90 days old without its message). */
   deleted: number;
   /** Rows kept without their raw message. */
   cleared: number;
@@ -29,6 +30,9 @@ const errorName = (error: unknown) => (error instanceof Error ? error.name : "er
  * ignored one, or a failed one no order points to, is deleted; the others keep their row and lose their raw message.
  * The object goes first: a row changes only once its object is really deleted (a store failure is logged, the row
  * waits for the next night, never an orphan object nobody points to any more).
+ *
+ * Then, 90 days after reception (`INBOUND_EMAIL_ROW_DAYS`), the rows left without their raw message go too (her
+ * own address, dates, status): an order keeps what she validated, its `inbound_email_id` set to null.
  *
  * Also erases Gmail's forwarding confirmation codes past their 24 hours, and fails what the reception left half done: an accepted e-mail still `queued` without its raw message an hour
  * later (the reception could not mark it failed), its object (if any landed) deleted first.
@@ -119,6 +123,31 @@ export async function purgeInboundEmails(db: Database, now: Date, store: ObjectS
     }
     if (rows.length < BATCH) break;
     after = (rows[rows.length - 1] as { id: string }).id;
+  }
+
+  const rowsBefore = new Date(now.getTime() - INBOUND_EMAIL_ROW_DAYS * 86_400_000);
+  for (;;) {
+    const expired = await db
+      .select({ id: e.id })
+      .from(e)
+      // `queued` is left to the stuck rule above: never deleted under a parse.
+      .where(and(isNull(e.rawObjectKey), lt(e.receivedAt, rowsBefore), sql`${e.status} <> 'queued'`))
+      .limit(BATCH);
+    if (expired.length === 0) break;
+    const gone = await db
+      .delete(e)
+      .where(
+        and(
+          inArray(
+            e.id,
+            expired.map((row) => row.id),
+          ),
+          isNull(e.rawObjectKey),
+        ),
+      )
+      .returning({ id: e.id });
+    result.deleted += gone.length;
+    if (expired.length < BATCH || gone.length === 0) break;
   }
   return result;
 }

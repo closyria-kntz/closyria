@@ -194,7 +194,8 @@ export async function decideSender(
   const from = singleFrom(result, fields);
   const mailFrom = lower(envelope.mailFrom);
 
-  if (from) {
+  // Gmail's code only serves its automatic forwarding: while that is not accepted, it is never kept.
+  if (from && policy.autoForward) {
     const code = await gmailConfirmationCode(raw, result, from, own, rcpt, policy.google);
     if (code) return { kind: "gmail_confirmation", code };
   }

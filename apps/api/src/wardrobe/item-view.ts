@@ -30,6 +30,7 @@ import {
 } from "@closyria/shared";
 import { z } from "zod";
 import { loadProductViews } from "../catalog/product-view";
+import { readAll } from "../read-all";
 import type { Tx } from "./events";
 import { isInDressing, isReceived, receivedSince } from "./received";
 
@@ -113,29 +114,32 @@ async function loadBareItemFacts(
   if (items.length === 0) return facts;
   const ids = items.map((i) => i.id);
   const colorIds = [...new Set(items.flatMap((i) => (i.colorId ? [i.colorId] : [])))];
-  const [shops, colors, categories] = await Promise.all([
-    db
-      .selectDistinctOn([schema.orderLines.itemId], {
-        itemId: schema.orderLines.itemId,
-        name: sql<string | null>`coalesce(${schema.shops.name}, ${schema.orders.shopName})`,
-      })
-      .from(schema.orderLines)
-      .innerJoin(schema.orders, eq(schema.orders.id, schema.orderLines.orderId))
-      .leftJoin(schema.shops, eq(schema.shops.id, schema.orders.shopId))
-      .where(inArray(schema.orderLines.itemId, ids))
-      .orderBy(schema.orderLines.itemId, sql`${schema.orders.createdAt} desc`),
-    colorIds.length === 0
-      ? []
-      : db
-          .select({ id: schema.colors.id, hex: schema.colors.hex })
-          .from(schema.colors)
-          .where(inArray(schema.colors.id, colorIds)),
-    items.some((i) => i.categoryId)
-      ? db
-          .select({ id: schema.categories.id, parentId: schema.categories.parentId, slug: schema.categories.slug })
-          .from(schema.categories)
-      : [],
-  ]);
+  const [shops, colors, categories] = await readAll(db, [
+    () =>
+      db
+        .selectDistinctOn([schema.orderLines.itemId], {
+          itemId: schema.orderLines.itemId,
+          name: sql<string | null>`coalesce(${schema.shops.name}, ${schema.orders.shopName})`,
+        })
+        .from(schema.orderLines)
+        .innerJoin(schema.orders, eq(schema.orders.id, schema.orderLines.orderId))
+        .leftJoin(schema.shops, eq(schema.shops.id, schema.orders.shopId))
+        .where(inArray(schema.orderLines.itemId, ids))
+        .orderBy(schema.orderLines.itemId, sql`${schema.orders.createdAt} desc`),
+    async () =>
+      colorIds.length === 0
+        ? []
+        : await db
+            .select({ id: schema.colors.id, hex: schema.colors.hex })
+            .from(schema.colors)
+            .where(inArray(schema.colors.id, colorIds)),
+    async () =>
+      items.some((i) => i.categoryId)
+        ? await db
+            .select({ id: schema.categories.id, parentId: schema.categories.parentId, slug: schema.categories.slug })
+            .from(schema.categories)
+        : [],
+  ] as const);
   const kinds = illustrationKindsByCategory(categories);
   const hex = new Map(colors.map((c) => [c.id, c.hex]));
   const shopOf = new Map(shops.map((s) => [s.itemId, s.name]));
@@ -168,53 +172,64 @@ export async function loadItemViews(
     .where(and(inArray(schema.items.id, itemIds), eq(schema.items.userId, userId)));
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const [products, photos, tags, lists, ownedMoves, alerts, bare] = await Promise.all([
-    loadProductViews(
-      db as Database,
-      rows.flatMap((r) => (r.productId ? [r.productId] : [])),
-    ),
-    db
-      .select({
-        itemId: schema.itemMedia.itemId,
-        id: schema.media.id,
-        width: schema.media.width,
-        height: schema.media.height,
-      })
-      .from(schema.itemMedia)
-      .innerJoin(schema.media, eq(schema.media.id, schema.itemMedia.mediaId))
-      .where(inArray(schema.itemMedia.itemId, ids))
-      .orderBy(asc(schema.itemMedia.position), asc(schema.itemMedia.id)),
-    db
-      .select({ itemId: schema.itemTags.itemId, id: schema.tags.id, name: schema.tags.name, color: schema.tags.color })
-      .from(schema.itemTags)
-      .innerJoin(schema.tags, eq(schema.tags.id, schema.itemTags.tagId))
-      .where(inArray(schema.itemTags.itemId, ids))
-      .orderBy(asc(schema.tags.name)),
-    db
-      .select({ itemId: schema.wishlistItems.itemId, wishlistId: schema.wishlistItems.wishlistId })
-      .from(schema.wishlistItems)
-      .where(inArray(schema.wishlistItems.itemId, ids))
-      .orderBy(asc(schema.wishlistItems.addedAt)),
-    db
-      .select({
-        itemId: schema.itemEvents.itemId,
-        at: sql<Date>`max(${schema.itemEvents.at})`.mapWith(schema.itemEvents.at),
-      })
-      .from(schema.itemEvents)
-      .where(
-        and(
-          inArray(schema.itemEvents.itemId, ids),
-          eq(schema.itemEvents.type, "stage"),
-          eq(schema.itemEvents.stage, "owned"),
-        ),
-      )
-      .groupBy(schema.itemEvents.itemId),
-    loadAlertFacts(db, userId, ids),
-    loadBareItemFacts(
-      db,
-      rows.filter((r) => !r.productId),
-    ),
-  ]);
+  const [products, photos, tags, lists, ownedMoves, alerts, bare] = await readAll(db, [
+    () =>
+      loadProductViews(
+        db as Database,
+        rows.flatMap((r) => (r.productId ? [r.productId] : [])),
+      ),
+    () =>
+      db
+        .select({
+          itemId: schema.itemMedia.itemId,
+          id: schema.media.id,
+          width: schema.media.width,
+          height: schema.media.height,
+        })
+        .from(schema.itemMedia)
+        .innerJoin(schema.media, eq(schema.media.id, schema.itemMedia.mediaId))
+        .where(inArray(schema.itemMedia.itemId, ids))
+        .orderBy(asc(schema.itemMedia.position), asc(schema.itemMedia.id)),
+    () =>
+      db
+        .select({
+          itemId: schema.itemTags.itemId,
+          id: schema.tags.id,
+          name: schema.tags.name,
+          color: schema.tags.color,
+        })
+        .from(schema.itemTags)
+        .innerJoin(schema.tags, eq(schema.tags.id, schema.itemTags.tagId))
+        .where(inArray(schema.itemTags.itemId, ids))
+        .orderBy(asc(schema.tags.name)),
+    () =>
+      db
+        .select({ itemId: schema.wishlistItems.itemId, wishlistId: schema.wishlistItems.wishlistId })
+        .from(schema.wishlistItems)
+        .where(inArray(schema.wishlistItems.itemId, ids))
+        .orderBy(asc(schema.wishlistItems.addedAt)),
+    () =>
+      db
+        .select({
+          itemId: schema.itemEvents.itemId,
+          at: sql<Date>`max(${schema.itemEvents.at})`.mapWith(schema.itemEvents.at),
+        })
+        .from(schema.itemEvents)
+        .where(
+          and(
+            inArray(schema.itemEvents.itemId, ids),
+            eq(schema.itemEvents.type, "stage"),
+            eq(schema.itemEvents.stage, "owned"),
+          ),
+        )
+        .groupBy(schema.itemEvents.itemId),
+    () => loadAlertFacts(db, userId, ids),
+    () =>
+      loadBareItemFacts(
+        db,
+        rows.filter((r) => !r.productId),
+      ),
+  ] as const);
   const since = receivedSince(now).getTime();
   const lastOwned = new Map(ownedMoves.map((m) => [m.itemId, m.at]));
   const byId = new Map<string, ItemView>();

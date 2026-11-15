@@ -76,6 +76,8 @@ export async function startStack(logFile: string): Promise<Stack> {
       // The access page of dev.closyria.com (acces-dev.spec.ts).
       DEV_ACCESS_PASSWORD: E2E_DEV_ACCESS_PASSWORD,
       DEV_ACCESS_TOKEN: E2E_DEV_ACCESS_TOKEN,
+      // E-mail reception on (« Mes commandes par e-mail » gives an address only then); nothing relays e-mails here.
+      INBOUND_EMAIL_SECRET: randomBytes(32).toString("hex"),
     });
     cleanups.push(() => terminate(apiProcess));
     const webProcess = launch(

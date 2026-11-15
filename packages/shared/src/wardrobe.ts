@@ -741,6 +741,7 @@ export const wardrobeErrorCodes = [
   "item_not_ordered",
   "tracking_exists",
   "order_exists",
+  "inbound_off",
   "order_not_confirmed",
   "parcel_delivered",
 ] as const;

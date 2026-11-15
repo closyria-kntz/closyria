@@ -28,6 +28,7 @@ import {
   type TrackingInput,
   type WardrobeErrorCode,
 } from "@closyria/shared";
+import { alertsFollowOrders } from "../wardrobe/alert-events";
 import type { Tx } from "../wardrobe/events";
 import { recordEvent } from "../wardrobe/events";
 import { type Item, insertOrderedItem, lockActiveItemFor, lockOwnItem, lockProductOfUser } from "../wardrobe/items";
@@ -327,6 +328,8 @@ export async function patchOrder(
         updatedAt: now,
       })
       .where(eq(schema.orders.id, order.id));
+    // Its alerts (« Commande reçue de … ») go to its new profile.
+    if (patch.profileId) await alertsFollowOrders(tx, sql`e.order_id = ${order.id}`);
     if (patch.lines) {
       const previous = await tx.delete(schema.orderLines).where(eq(schema.orderLines.orderId, order.id)).returning();
       await insertLines(tx, order.id, patch.lines, previous);
@@ -408,7 +411,14 @@ export async function createManualOrder(
     const [mail] = await db
       .select({ id: schema.inboundEmails.id })
       .from(schema.inboundEmails)
-      .where(and(eq(schema.inboundEmails.id, input.inboundEmailId), eq(schema.inboundEmails.userId, userId)));
+      .where(
+        and(
+          eq(schema.inboundEmails.id, input.inboundEmailId),
+          eq(schema.inboundEmails.userId, userId),
+          // Only « On n'a pas su lire cet e-mail »: one still being read would get a typed order, then a read one.
+          eq(schema.inboundEmails.status, "failed"),
+        ),
+      );
     if (!mail) return { error: "not_found" };
   }
   const shop = await resolveShopName(db, input.shopName);

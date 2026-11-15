@@ -2860,7 +2860,10 @@
         "one": "Dans Mail, ouvre l'e-mail de commande, touche la flèche › « Transférer », colle ton adresse Closyria et envoie.",
         "auto": "Les règles automatiques d'iCloud changent l'expéditeur : leurs e-mails ne sont pas lus. Transfère tes commandes une par une."
       },
-      "ordersLink": "Voir mes commandes"
+      "ordersLink": "Voir mes commandes",
+      "soonTitle": "Bientôt disponible",
+      "soonBody": "La réception des e-mails de commande arrive bientôt. En attendant, tu peux ajouter une commande à la main ou coller un numéro de suivi.",
+      "soonLink": "Mes commandes"
     },
     "page": {
       "metadata": "Mes commandes",

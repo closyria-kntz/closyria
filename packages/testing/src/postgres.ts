@@ -136,9 +136,13 @@ async function withAdminClient<T>(serverUrl: string, fn: (client: pg.Client) => 
 
 type Cluster = TestDatabase & { stopSync(): void };
 
-/** Exported for tests; `config` lines are appended to postgresql.auto.conf. */
-export async function startEphemeralCluster(options: { config?: string[] } = {}): Promise<Cluster> {
-  const root = await mkdtemp(join(tmpdir(), "closyria-pg-"));
+/**
+ * Exported for tests; `config` lines are appended to postgresql.auto.conf. `prefix` names its temporary directory
+ * (`closyria-pg-` by default): a test that checks its own directory is gone gives a prefix of its own, so the
+ * clusters of other suites running at the same time are not counted.
+ */
+export async function startEphemeralCluster(options: { config?: string[]; prefix?: string } = {}): Promise<Cluster> {
+  const root = await mkdtemp(join(tmpdir(), options.prefix ?? "closyria-pg-"));
   const dataDir = join(root, "data");
   const logFile = join(root, "server.log");
   // The port only names the socket file (.s.PGSQL.<port>); pick one unlikely to clash.

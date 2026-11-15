@@ -450,6 +450,21 @@ describe("sendAlert", () => {
     const noShop = await event(who, null, { kind: "order_received", orderId: bare?.id, sendAfter: afternoon });
     expect(await sendAlert({ db, push }, noShop, afternoon, once)).toBe("sent");
     expect(calls[1]?.message.title).toBe("Commande reçue");
+    // A shop name she typed (« Corriger ») when it matches no shop: named like the parcel alerts.
+    const [typed] = await db
+      .insert(schema.orders)
+      .values({
+        userId: who.userId,
+        profileId: who.profileId,
+        shopName: "Atelier Nuit",
+        status: "draft",
+        source: "email",
+        parseMethod: "ai",
+      })
+      .returning();
+    const typedEvent = await event(who, null, { kind: "order_received", orderId: typed?.id, sendAfter: afternoon });
+    expect(await sendAlert({ db, push }, typedEvent, afternoon, once)).toBe("sent");
+    expect(calls[2]?.message.title).toBe("Commande reçue de Atelier Nuit");
   });
 
   it("tells her about her parcel: arrived, at a pickup point, out for delivery (setting on) — while still true", async () => {

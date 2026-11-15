@@ -217,6 +217,14 @@ export async function parseInboundEmail(
       ...order.trackings.map((t) => `parcel:${userId}:${t.trackingNumber}`),
     ].sort();
     for (const key of keys) await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+    // Her account row before her e-mail and orders, in the order an account deletion takes them (user, then what
+    // hangs from it): a deletion under way finishes first, and the e-mail is then gone (no deadlock between them).
+    const [owner] = await tx
+      .select({ id: schema.user.id })
+      .from(schema.user)
+      .where(eq(schema.user.id, userId))
+      .for("key share");
+    if (!owner) return "none";
     const [locked] = await tx.select({ status: e.status }).from(e).where(eq(e.id, inboundEmailId)).for("update");
     if (locked?.status !== "queued") return "none";
 

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +8,9 @@ import { describe, expect, it } from "vitest";
 import { databaseUrl, migrateTestDatabase, startEphemeralCluster, startTestDatabase } from "./postgres";
 import { createTestDatabase } from "./vitest";
 
-const tempDirs = () => new Set(readdirSync(tmpdir()).filter((name) => name.startsWith("closyria-pg-")));
+/** This run's temporary directories only: other suites start clusters in parallel (turbo). */
+const prefix = `closyria-pg-test-${randomUUID().slice(0, 8)}-`;
+const tempDirs = () => new Set(readdirSync(tmpdir()).filter((name) => name.startsWith(prefix)));
 
 async function canConnect(url: string): Promise<boolean> {
   const client = new pg.Client({ connectionString: url, connectionTimeoutMillis: 2000 });
@@ -53,7 +56,7 @@ describe("startTestDatabase", () => {
 describe.skipIf(Boolean(process.env.TEST_DATABASE_URL))("ephemeral cluster", () => {
   it("stops a half-started postmaster, removes its directory and reports the server log on failure", async () => {
     const before = tempDirs();
-    const failure = startEphemeralCluster({ config: ["shared_buffers = 'not a size'"] });
+    const failure = startEphemeralCluster({ config: ["shared_buffers = 'not a size'"], prefix });
     await expect(failure).rejects.toThrow(/server\.log[\s\S]*shared_buffers/);
     expect([...tempDirs()].filter((name) => !before.has(name))).toEqual([]);
   }, 60_000);

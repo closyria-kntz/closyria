@@ -112,10 +112,17 @@ export async function receiveInboundEmail(
 
   const purgeAfter = new Date(now.getTime() + INBOUND_EMAIL_RETENTION_DAYS * DAY_MS);
   // The address is locked (shared) while the row goes in: a rotation or an account deletion waits, and a row is
-  // never filed on an address that just stopped working.
+  // never filed on an address that just stopped working. Her account row first (key share), in the order an account
+  // deletion takes them (user, then her addresses): the two wait for each other, never deadlock.
   let id: string | null;
   try {
     id = await db.transaction(async (tx) => {
+      const [owner] = await tx
+        .select({ id: schema.user.id })
+        .from(schema.user)
+        .where(eq(schema.user.id, inbox.userId))
+        .for("key share");
+      if (!owner) return null;
       const [still] = await tx
         .select({ id: schema.orderInboxes.id })
         .from(schema.orderInboxes)

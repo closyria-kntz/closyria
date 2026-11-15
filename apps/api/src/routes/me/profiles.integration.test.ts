@@ -67,6 +67,21 @@ async function newOrder(userId: string, profileId: string) {
   return order;
 }
 
+/** Her order alerts (« Commande reçue », a parcel delivered, « Tu as reçu ta commande ? ») on that order's profile. */
+async function orderAlerts(userId: string, profileId: string, orderId: string) {
+  const [parcel] = await t.db.select().from(schema.parcels).where(eq(schema.parcels.orderId, orderId));
+  await t.db.insert(schema.alertEvents).values([
+    { userId, profileId, orderId, kind: "order_received" },
+    { userId, profileId, orderId, parcelId: parcel?.id, kind: "parcel_delivered" },
+    { userId, profileId, orderId, kind: "order_received_check" },
+  ]);
+}
+
+const profilesOfOrderAlerts = async (orderId: string) =>
+  (await t.db.select().from(schema.alertEvents).where(eq(schema.alertEvents.orderId, orderId))).map(
+    (a) => `${a.kind}:${a.profileId}`,
+  );
+
 describe("GET /api/me/profiles", () => {
   it("answers 401 without a session", async () => {
     expect((await call("GET", "/api/me/profiles", undefined)).status).toBe(401);
@@ -338,10 +353,15 @@ describe("PATCH, DELETE and order", () => {
       await call("POST", "/api/me/profiles", cookie, { name: "Léa", audience: "women", color: "rose" })
     ).json()) as ProfileJson;
     const order = await newOrder(userId, lea.id);
+    await orderAlerts(userId, lea.id, order.id);
 
     expect((await call("DELETE", `/api/me/profiles/${lea.id}`, cookie)).status).toBe(204);
     const [row] = await t.db.select().from(schema.orders).where(eq(schema.orders.id, order.id));
     expect(row?.profileId).toBe(moi.id);
+    // Its alerts follow the order (the profile's deletion would cascade them away).
+    expect((await profilesOfOrderAlerts(order.id)).sort()).toEqual(
+      [`order_received:${moi.id}`, `order_received_check:${moi.id}`, `parcel_delivered:${moi.id}`].sort(),
+    );
     expect(await t.db.select().from(schema.parcels).where(eq(schema.parcels.orderId, order.id))).toHaveLength(1);
   });
 
@@ -350,6 +370,7 @@ describe("PATCH, DELETE and order", () => {
     const moi = ((await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] })
       .profiles[0] as ProfileJson;
     const order = await newOrder(userId, moi.id);
+    await orderAlerts(userId, moi.id, order.id);
 
     expect((await call("DELETE", `/api/me/profiles/${moi.id}`, cookie)).status).toBe(204);
     const list = (await (await call("GET", "/api/me/profiles", cookie)).json()) as { profiles: ProfileJson[] };
@@ -360,6 +381,9 @@ describe("PATCH, DELETE and order", () => {
     const [row] = await t.db.select().from(schema.orders).where(eq(schema.orders.id, order.id));
     expect(row?.profileId).toBe(fallback.id);
     expect(await t.db.select().from(schema.parcels).where(eq(schema.parcels.orderId, order.id))).toHaveLength(1);
+    expect(await profilesOfOrderAlerts(order.id)).toHaveLength(3);
+    expect(new Set(await profilesOfOrderAlerts(order.id)).size).toBe(3);
+    for (const entry of await profilesOfOrderAlerts(order.id)) expect(entry.endsWith(fallback.id)).toBe(true);
   });
 
   it("reorders the profiles", async () => {

@@ -428,6 +428,7 @@ describe("POST /api/inbound-email: anything else is ignored, without the message
 
 describe("Gmail's forwarding confirmation", () => {
   it("keeps its code for 24 hours when the Gmail address that asked is hers, nothing else stored", async () => {
+    senderControl.autoForward = true;
     const her = `marie.test${++counter}@gmail.example`;
     const { address, cookie } = await account(her);
     const raw = await signed(gmailConfirmation(address, her, "185412963"), "google");
@@ -436,25 +437,42 @@ describe("Gmail's forwarding confirmation", () => {
     expect(await rowsOf(address)).toEqual([]);
     expect(parsed).toEqual([]);
     expect(await (await call("GET", "/api/me/order-inbox", cookie)).json()).toEqual({
+      receiving: true,
       address,
       autoForward: true,
       pendingGmailCode: "185412963",
     });
     clock.now = new Date(NOW.getTime() + 24 * 3_600_000 + 1);
     expect(await (await call("GET", "/api/me/order-inbox", cookie)).json()).toEqual({
+      receiving: true,
       address,
       autoForward: true,
       pendingGmailCode: null,
     });
   });
 
+  it("automatic forwarding off: the code is not kept, the e-mail is ignored", async () => {
+    const her = `marie.test${++counter}@gmail.example`;
+    const { address } = await account(her);
+    const raw = await signed(gmailConfirmation(address, her, "185412963"), "google");
+    const res = await deliver(raw, envelopeFrom("google", "forwarding-noreply@google.example", address));
+    expect(await res.json()).toEqual({ result: "ignored" });
+    const [inbox] = await t.db
+      .select()
+      .from(schema.orderInboxes)
+      .where(eq(schema.orderInboxes.localPart, address.split("@")[0] as string));
+    expect(inbox?.gmailCode).toBeNull();
+  });
+
   it("asked by another address: ignored, no code", async () => {
+    senderControl.autoForward = true;
     const her = mailbox("gmail");
     const { address, cookie } = await account(her);
     const raw = await signed(gmailConfirmation(address, "sophie.autre@gmail.example"), "google");
     const res = await deliver(raw, envelopeFrom("google", "forwarding-noreply@google.example", address));
     expect(await res.json()).toEqual({ result: "ignored" });
     expect(await (await call("GET", "/api/me/order-inbox", cookie)).json()).toEqual({
+      receiving: true,
       address,
       autoForward: true,
       pendingGmailCode: null,
@@ -536,27 +554,33 @@ describe("/api/me/order-inbox", () => {
     expect((await call("GET", "/api/me/order-inbox", undefined)).status).toBe(401);
   });
 
-  it("automatic forwarding off (or no reception): says so, and never shows Gmail's code", async () => {
+  it("no reception here: no address given nor created, even one she had (inbound_off)", async () => {
     const session = await off.signIn();
     await off.db
       .update(schema.user)
       .set({ isAnonymous: false, name: "Marie", email: mailbox("gmail"), emailVerified: true })
       .where(eq(schema.user.id, session.userId));
-    const created = (await (
-      await off.app.request("/api/me/order-inbox", {
-        method: "POST",
-        headers: { origin: BASE_URL, cookie: session.cookie },
-      })
-    ).json()) as OrderInboxView;
-    expect(created).toMatchObject({ autoForward: false, pendingGmailCode: null });
-    await off.db
-      .update(schema.orderInboxes)
-      .set({ gmailCode: "185412963", gmailCodeAt: new Date() }) // this harness keeps the real clock
-      .where(eq(schema.orderInboxes.userId, session.userId));
-    const read = await off.app.request("/api/me/order-inbox", {
-      headers: { origin: BASE_URL, cookie: session.cookie },
+    const request = (method: string) =>
+      off.app.request("/api/me/order-inbox", { method, headers: { origin: BASE_URL, cookie: session.cookie } });
+    const refused = await request("POST");
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({ error: "inbound_off" });
+    expect(
+      await off.db.select().from(schema.orderInboxes).where(eq(schema.orderInboxes.userId, session.userId)),
+    ).toEqual([]);
+    // An address made while reception was on (then turned off) is not shown: nobody reads its e-mails.
+    await off.db.insert(schema.orderInboxes).values({
+      userId: session.userId,
+      localPart: `marie-off${++counter}`,
+      gmailCode: "185412963",
+      gmailCodeAt: new Date(), // this harness keeps the real clock
     });
-    expect(await read.json()).toEqual({ address: created.address, autoForward: false, pendingGmailCode: null });
+    expect(await (await request("GET")).json()).toEqual({
+      receiving: false,
+      address: null,
+      autoForward: false,
+      pendingGmailCode: null,
+    });
   });
 
   it("has none at first, then `{first name}-{4 characters}` on the environment's domain", async () => {
@@ -566,6 +590,7 @@ describe("/api/me/order-inbox", () => {
       .set({ isAnonymous: false, name: "Hélène Martin", email: mailbox("gmail"), emailVerified: true })
       .where(eq(schema.user.id, session.userId));
     expect(await (await call("GET", "/api/me/order-inbox", session.cookie)).json()).toEqual({
+      receiving: true,
       address: null,
       autoForward: true,
       pendingGmailCode: null,
@@ -593,6 +618,7 @@ describe("/api/me/order-inbox", () => {
     const { address: current } = (await res.json()) as OrderInboxView;
     expect(current).not.toBe(former);
     expect(await (await call("GET", "/api/me/order-inbox", cookie)).json()).toEqual({
+      receiving: true,
       address: current,
       autoForward: true,
       pendingGmailCode: null,

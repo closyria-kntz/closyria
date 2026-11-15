@@ -21,20 +21,26 @@ type State = { kind: "loading" } | { kind: "failed" } | { kind: "guest" } | { ki
 /** Her inbox, with an address: her first one is made the first time she opens this page. */
 async function loadInbox(): Promise<OrderInboxView | "guest"> {
   const inbox = await fetchOrderInbox();
-  if (inbox === "guest" || inbox.address) return inbox;
+  // No reception here yet: no address to make (one nobody reads would lose her e-mails).
+  if (inbox === "guest" || inbox.address || !inbox.receiving) return inbox;
   const created = await newOrderInbox();
   if (!created.ok) throw new Error(created.error);
-  return { address: created.address, autoForward: created.autoForward, pendingGmailCode: inbox.pendingGmailCode };
+  return {
+    receiving: created.receiving,
+    address: created.address,
+    autoForward: created.autoForward,
+    pendingGmailCode: inbox.pendingGmailCode,
+  };
 }
 
-function Shell({ children }: { children: ReactNode }) {
+function Shell({ children, intro = true }: { children: ReactNode; intro?: boolean }) {
   const t = useTranslations("Orders.inbox");
   return (
     <section aria-labelledby="order-inbox-title" className="flex max-w-measure flex-col gap-space-4">
       <h2 id="order-inbox-title" className="font-display text-lead font-strong">
         {t("title")}
       </h2>
-      <p>{t("intro")}</p>
+      {intro && <p>{t("intro")}</p>}
       {children}
     </section>
   );
@@ -148,6 +154,21 @@ export function OrderInboxSettings() {
   }
 
   const { inbox } = state;
+  if (!inbox.receiving) {
+    return (
+      <Shell intro={false}>
+        <section aria-labelledby="order-inbox-soon" className={`${cardClass} bg-hint`} data-testid="order-inbox-soon">
+          <h3 id="order-inbox-soon" className={subTitleClass}>
+            {t("soonTitle")}
+          </h3>
+          <p>{t("soonBody")}</p>
+          <Link href="/mes-commandes" className={`${buttonClass} min-h-touch-target self-start`}>
+            {t("soonLink")}
+          </Link>
+        </section>
+      </Shell>
+    );
+  }
   const address = inbox.address ?? "";
   // Gmail's code only matters for its automatic forwarding (the API gives none while it is off).
   const code = inbox.autoForward ? inbox.pendingGmailCode : null;
@@ -174,7 +195,12 @@ export function OrderInboxSettings() {
     if (!result.ok) return setChangeFailed(true);
     setState({
       kind: "ready",
-      inbox: { address: result.address, autoForward: result.autoForward, pendingGmailCode: null },
+      inbox: {
+        receiving: result.receiving,
+        address: result.address,
+        autoForward: result.autoForward,
+        pendingGmailCode: null,
+      },
     });
     setStatus(t("changed"));
   };

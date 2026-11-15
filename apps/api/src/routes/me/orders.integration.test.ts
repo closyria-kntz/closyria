@@ -420,6 +420,9 @@ describe("« Corriger » and « Ce n'est pas une commande »", () => {
     const a = await account();
     const other = await account();
     const orderId = await draft(a, null, [{ name: "Robe" }]);
+    await t.db
+      .insert(schema.alertEvents)
+      .values({ userId: a.userId, profileId: a.moi, orderId, kind: "order_received" });
     expect((await call("PATCH", `/api/me/orders/${orderId}`, a.cookie, { profileId: other.moi })).status).toBe(404);
     const created = await json<{ id: string }>(
       await call("POST", "/api/me/profiles", a.cookie, { name: "Léa", audience: "women", color: "plum" }),
@@ -430,6 +433,9 @@ describe("« Corriger » and « Ce n'est pas une commande »", () => {
       200,
     );
     expect(order.profileId).toBe(created.id);
+    // « Commande reçue de … » goes with it.
+    const alerts = await t.db.select().from(schema.alertEvents).where(eq(schema.alertEvents.orderId, orderId));
+    expect(alerts.map((alert) => alert.profileId)).toEqual([created.id]);
     const confirmed = await json<OrderView>(await confirm(a, orderId), 200);
     const [item] = await itemsOf(a);
     expect(item?.profileId).toBe(created.id);
@@ -551,6 +557,36 @@ describe("POST /api/me/orders (saisie manuelle)", () => {
       inboundEmailId: mail?.id,
     });
     expect(res.status).toBe(404);
+  });
+
+  it("replaces only an e-mail nothing could read (`failed`), never one still being read", async () => {
+    const a = await account();
+    const [inbox] = await t.db
+      .insert(schema.orderInboxes)
+      .values({ userId: a.userId, localPart: `elle-${++counter}` })
+      .returning();
+    for (const status of ["queued", "parsed", "ignored"]) {
+      const [mail] = await t.db
+        .insert(schema.inboundEmails)
+        .values({
+          userId: a.userId,
+          inboxId: inbox?.id as string,
+          queueId: `q${++counter}`,
+          fromAddress: "x@t.local",
+          authOk: true,
+          status,
+          purgeAfter: new Date(Date.now() + 86_400_000),
+        })
+        .returning();
+      const res = await call("POST", "/api/me/orders", a.cookie, {
+        profileId: a.moi,
+        shopName: "X",
+        lines: [{ name: "Robe", quantity: 1 }],
+        inboundEmailId: mail?.id,
+      });
+      expect(res.status, status).toBe(404);
+    }
+    expect(await t.db.select().from(schema.orders).where(eq(schema.orders.userId, a.userId))).toEqual([]);
   });
 });
 

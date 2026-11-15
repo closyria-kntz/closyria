@@ -13,7 +13,7 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { type AccessEnv, defineAccess } from "../../access";
 import { pgCode } from "../../pg-code";
-import { alertsLeaveProfile } from "../../wardrobe/alert-events";
+import { alertsFollowOrders, alertsLeaveProfile } from "../../wardrobe/alert-events";
 import type { WardrobeDeps } from "../../wardrobe/deps";
 import { firstNameOf } from "../../wardrobe/home";
 import {
@@ -234,8 +234,9 @@ export function profilesRoutes(deps: WardrobeDeps) {
             await tx.update(schema.items).set({ profileId: fallback.id }).where(eq(schema.items.profileId, id));
             await tx.update(schema.orders).set({ profileId: fallback.id }).where(eq(schema.orders.profileId, id));
           }
-          // Her alerts of items now in another profile stay (the delete would cascade them away).
+          // Her alerts of items, and of orders, now in another profile stay (the delete would cascade them away).
           await alertsLeaveProfile(tx, id);
+          await alertsFollowOrders(tx, sql`e.profile_id = ${id}`);
           await tx.delete(schema.profiles).where(eq(schema.profiles.id, id));
           return "deleted" as const;
         });

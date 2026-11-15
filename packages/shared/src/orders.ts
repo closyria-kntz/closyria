@@ -58,6 +58,11 @@ export const MIN_TRACKING_NUMBER = 6;
 export const MAX_PARCEL_EVENT_LABEL = 200;
 /** Raw e-mails are kept this long at most (to correct a reading), then purged. */
 export const INBOUND_EMAIL_RETENTION_DAYS = 30;
+/**
+ * A received e-mail's row (her own address, dates, status: no content) is deleted this long after reception, its raw
+ * message long gone; an order it became keeps everything she validated (`orders.inbound_email_id` set to null).
+ */
+export const INBOUND_EMAIL_ROW_DAYS = 90;
 /** Default return delay of a shop, in days from the delivery (`shops.return_days`). */
 export const DEFAULT_RETURN_DAYS = 14;
 export const MAX_RETURN_DAYS = 365;
@@ -467,6 +472,12 @@ export type OrderList = z.infer<typeof orderListSchema>;
 
 /** « Mes commandes par e-mail »: her active address, null before she asked for one. */
 export const orderInboxViewSchema = z.object({
+  /**
+   * E-mails are received in this environment (INBOUND_EMAIL_SECRET set). False: no address is given or created (an
+   * address nobody reads would lose her e-mails), « Mes commandes par e-mail » says it is coming soon.
+   */
+  receiving: z.boolean(),
+  /** Her active address; null before she asked for one, and always null while `receiving` is false. */
   address: z.email().nullable(),
   /**
    * Gmail's automatic forwarding is accepted (INBOUND_AUTOFORWARD=on): the help shows its steps. Off, only « Transférer »
