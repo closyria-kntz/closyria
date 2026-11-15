@@ -6,6 +6,7 @@ import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { focusRing, inputClass, primaryButtonClass } from "@/components/ui";
 import { useOpenAddSheet } from "@/lib/add-sheet-context";
 import { createCapture } from "@/lib/catalog-client";
+import { INSTAGRAM_FORM_PATH } from "@/lib/orders-client";
 
 type ErrorKey = "invalidUrl" | "rateLimited" | "failed";
 
@@ -73,7 +74,11 @@ export function CaptureForm({
         result.error === "failed" ? "failed" : result.error === "rate_limited" ? "rateLimited" : "invalidUrl",
       );
     }
-    const target = `/produits/${result.productId}?capture=${result.captureId}`;
+    // An Instagram link: the short form (Instagram is never read).
+    const target =
+      "instagram" in result
+        ? `${INSTAGRAM_FORM_PATH}?lien=${encodeURIComponent(result.instagram)}`
+        : `/produits/${result.productId}?capture=${result.captureId}`;
     if (replace) router.replace(target);
     else router.push(target);
   };

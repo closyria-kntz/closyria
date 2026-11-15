@@ -67,9 +67,9 @@ export function ItemCard({ item, actions, selection, typeName, linked: linkedPro
     if (open) clearTimeout(openTimer.current);
     setPickerOpen(open);
   };
-  // An article without a product (born from an order) has no sheet yet: its card is not a link.
-  const href = itemHref(item) ?? "";
-  const linked = linkedProp && href !== "";
+  // An article without a product (born from an order or an Instagram link) has its own sheet.
+  const href = itemHref(item);
+  const linked = linkedProp;
   // A click on the photo waits a beat: a second click (double tap) opens the 4 levels instead of the sheet.
   // The keyboard, a middle click and cmd / ctrl / shift clicks keep the link's own behaviour.
   const onPhotoClick =

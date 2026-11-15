@@ -21,7 +21,17 @@ export const phoneNav: readonly PhoneSlot[] = [...appNav.slice(0, 2), addAction,
 const SECTIONS: Record<AppNavKey, readonly string[]> = {
   accueil: [],
   decouvrir: ["/decouvrir"],
-  articles: ["/articles", "/produits", "/listes", "/envies", "/dressing", "/a-vendre", "/commande"],
+  articles: [
+    "/articles",
+    "/produits",
+    "/listes",
+    "/envies",
+    "/dressing",
+    "/a-vendre",
+    "/commande",
+    "/mes-commandes",
+    "/ajouter",
+  ],
   compte: ["/compte", "/moi", "/reglages", "/aide"],
 };
 

@@ -25,9 +25,9 @@ const bare = {
 } as unknown as ItemView;
 
 describe("item display", () => {
-  it("links to the product sheet only when there is one", () => {
+  it("links to the product sheet, or to the article's own sheet without a product", () => {
     expect(itemHref(withProduct)).toBe("/produits/p1");
-    expect(itemHref(bare)).toBeNull();
+    expect(itemHref(bare)).toBe("/articles/i2");
   });
 
   it("shows the shop's price with a product, what she paid without one", () => {

@@ -23,6 +23,7 @@ import {
   type OrderPatch,
   type OrderReceivedAnswer,
   type OrderView,
+  type ParcelCarrierInput,
   parcelCheckUntil,
   type TrackingInput,
   type WardrobeErrorCode,
@@ -589,4 +590,68 @@ export async function answerReceived(
     await tx.update(schema.orders).set({ updatedAt: now }).where(eq(schema.orders.id, order.id));
     return viewOf(tx, userId, order.id);
   });
+}
+
+// --- Carrier correction (Task 7) ----------------------------------------------------------------------------------
+
+/**
+ * « Changer de transporteur » on one of her parcels: the carrier she picked, and the tracking starts again (step
+ * `pending`, no failure counted, next check at the usual rhythm — §10.4: a parcel without a carrier stopped being
+ * checked). A tracking already over (30 days passed) gets a new window from now. A delivered parcel stays as it is
+ * (409 `parcel_delivered`); a parcel of a dismissed order, or of another account, is refused like its order.
+ */
+export async function changeParcelCarrier(
+  db: Database,
+  userId: string,
+  orderId: string,
+  parcelId: string,
+  input: ParcelCarrierInput,
+  now: Date,
+): Promise<OrderOutcome> {
+  return inTransaction(db, async (tx) => {
+    await lockProfilesOf(tx, userId);
+    const order = await lockOwnOrder(tx, userId, orderId);
+    if (!order) return { error: "not_found" };
+    if (order.status === "dismissed") return { error: "order_dismissed" };
+    const [parcel] = await tx
+      .select()
+      .from(schema.parcels)
+      .where(and(eq(schema.parcels.id, parcelId), eq(schema.parcels.orderId, order.id)))
+      .for("update");
+    if (!parcel) return { error: "not_found" };
+    if (parcel.status === "delivered") return { error: "parcel_delivered" };
+    const checkUntil = parcel.checkUntil.getTime() > now.getTime() ? parcel.checkUntil : parcelCheckUntil(now);
+    await tx
+      .update(schema.parcels)
+      .set({
+        carrier: input.carrier,
+        status: "pending",
+        checkFailures: 0,
+        checkUntil,
+        nextCheckAt: nextParcelCheckClamped("pending", now, checkUntil),
+      })
+      .where(eq(schema.parcels.id, parcel.id));
+    await tx.update(schema.orders).set({ updatedAt: now }).where(eq(schema.orders.id, order.id));
+    return viewOf(tx, userId, order.id);
+  });
+}
+
+/**
+ * « Ce n'est pas une commande » on an e-mail nothing could read: no longer listed (its raw message still goes after
+ * its 30 days). Only hers, only a failed one with no order typed from it (404 otherwise). Twice is harmless.
+ */
+export async function dismissUnreadEmail(db: Database, userId: string, emailId: string, now: Date): Promise<boolean> {
+  const rows = await db
+    .update(schema.inboundEmails)
+    .set({ dismissedAt: sql`coalesce(${schema.inboundEmails.dismissedAt}, ${now.toISOString()}::timestamptz)` })
+    .where(
+      and(
+        eq(schema.inboundEmails.id, emailId),
+        eq(schema.inboundEmails.userId, userId),
+        eq(schema.inboundEmails.status, "failed"),
+        sql`not exists (select 1 from ${schema.orders} o where o.inbound_email_id = ${schema.inboundEmails.id} and o.status <> 'dismissed')`,
+      ),
+    )
+    .returning({ id: schema.inboundEmails.id });
+  return rows.length > 0;
 }

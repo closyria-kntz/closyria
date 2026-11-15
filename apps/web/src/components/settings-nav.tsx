@@ -12,6 +12,7 @@ const LINKS = [
   { key: "sizes", href: "/reglages/tailles" },
   { key: "appearance", href: "/reglages/apparence" },
   { key: "notifications", href: "/reglages/notifications" },
+  { key: "orders", href: "/reglages/commandes" },
   { key: "trash", href: "/reglages/corbeille" },
   { key: "account", href: "/reglages/compte" },
   { key: "phone", href: "/aide/telephone" },

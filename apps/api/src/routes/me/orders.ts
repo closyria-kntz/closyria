@@ -4,19 +4,22 @@ import {
   orderPatchSchema,
   orderReceivedAnswerSchema,
   orderViewSchema,
+  parcelCarrierInputSchema,
   trackingInputSchema,
   wardrobeErrorSchema,
 } from "@closyria/shared";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Context, MiddlewareHandler } from "hono";
 import { type AccessEnv, defineAccess } from "../../access";
-import { listOrderViews } from "../../orders/view";
+import { listOrderViews, listUnreadEmails } from "../../orders/view";
 import {
   addItemTracking,
   answerReceived,
+  changeParcelCarrier,
   confirmOrder,
   createManualOrder,
   dismissOrder,
+  dismissUnreadEmail,
   type OrderOutcome,
   patchOrder,
 } from "../../orders/write";
@@ -50,7 +53,10 @@ const listRoute = defineAccess(
     method: "get",
     path: "/me/orders",
     summary: "« Mes commandes »: her orders to validate and her orders",
-    description: `Drafts read from her e-mails and validated orders, newest first (100 at most); dismissed ones are not listed. Accounts only.`,
+    description:
+      "Drafts read from her e-mails and validated orders, newest first (100 at most); dismissed ones are not listed. " +
+      "With her e-mails nothing could read (`unreadEmails`: failed, kept, not set aside, no order typed from them). " +
+      "Accounts only.",
     responses: {
       200: { description: "Her orders", content: { "application/json": { schema: orderListSchema } } },
       403: common[403],
@@ -132,6 +138,39 @@ const receivedRoute = defineAccess(
   "user",
 );
 
+const parcelCarrierRoute = defineAccess(
+  createRoute({
+    method: "patch",
+    path: "/me/orders/{id}/parcels/{parcelId}",
+    summary: "« Changer de transporteur » on one of her parcels",
+    description:
+      "The carrier she picked; the tracking starts again (step `pending`, failures reset, next check at the usual " +
+      "rhythm; a tracking already over gets 30 more days).",
+    request: { params: z.object({ id: z.uuid(), parcelId: z.uuid() }), ...body(parcelCarrierInputSchema) },
+    responses: {
+      200: orderContent("The order with the corrected parcel"),
+      ...common,
+      409: errorContent("Delivered already (parcel_delivered), or the order is dismissed (order_dismissed)"),
+    },
+  }),
+  "user",
+);
+
+const dismissEmailRoute = defineAccess(
+  createRoute({
+    method: "post",
+    path: "/me/order-emails/{id}/dismiss",
+    summary: "« Ce n'est pas une commande » on an e-mail nothing could read",
+    description: "No longer listed in `unreadEmails`; twice is harmless.",
+    request: { params: idParams },
+    responses: {
+      200: { description: "Her orders, as listed", content: { "application/json": { schema: orderListSchema } } },
+      ...common,
+    },
+  }),
+  "user",
+);
+
 const manualRoute = (limiter: MiddlewareHandler<AccessEnv>) =>
   defineAccess(
     createRoute({
@@ -205,6 +244,11 @@ export function ordersRoutes(deps: WardrobeDeps) {
     return (await accountOf(db, userId)) ? userId : null;
   }
 
+  const listAll = async (userId: string) => ({
+    orders: await listOrderViews(db, userId),
+    unreadEmails: await listUnreadEmails(db, userId, now()),
+  });
+
   /** The order (200), or its error: 404 unknown, 409 a state that refuses the action. */
   const answer = <C extends Context<AccessEnv>>(c: C, outcome: OrderOutcome) => {
     if (!("error" in outcome)) return c.json(outcome.order, 200);
@@ -220,7 +264,7 @@ export function ordersRoutes(deps: WardrobeDeps) {
     .openapi(listRoute, async (c) => {
       const userId = await accountIdOf(c);
       if (!userId) return c.json(accountRequired, 403);
-      return c.json({ orders: await listOrderViews(db, userId) }, 200);
+      return c.json(await listAll(userId), 200);
     })
     .openapi(patchRoute, async (c) => {
       const userId = await accountIdOf(c);
@@ -241,6 +285,18 @@ export function ordersRoutes(deps: WardrobeDeps) {
       const userId = await accountIdOf(c);
       if (!userId) return c.json(accountRequired, 403);
       return answer(c, await answerReceived(db, userId, c.req.valid("param").id, c.req.valid("json"), now()));
+    })
+    .openapi(parcelCarrierRoute, async (c) => {
+      const userId = await accountIdOf(c);
+      if (!userId) return c.json(accountRequired, 403);
+      const { id, parcelId } = c.req.valid("param");
+      return answer(c, await changeParcelCarrier(db, userId, id, parcelId, c.req.valid("json"), now()));
+    })
+    .openapi(dismissEmailRoute, async (c) => {
+      const userId = await accountIdOf(c);
+      if (!userId) return c.json(accountRequired, 403);
+      if (!(await dismissUnreadEmail(db, userId, c.req.valid("param").id, now()))) return c.json(notFound, 404);
+      return c.json(await listAll(userId), 200);
     })
     .openapi(manualRoute(limiter), async (c) => {
       const userId = await accountIdOf(c);

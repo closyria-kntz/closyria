@@ -23,12 +23,21 @@ export function facetsRoutes(deps: WardrobeDeps) {
   return app.openapi(facetsRoute, async (c) => {
     const userId = c.var.session?.user.id;
     if (!userId) throw new Error("me route reached without a session");
-    const shops = await db
+    const ofProducts = await db
       .selectDistinct({ id: schema.shops.id, name: schema.shops.name })
       .from(schema.items)
       .innerJoin(schema.products, eq(schema.products.id, schema.items.productId))
       .innerJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
       .where(and(eq(schema.items.userId, userId), isNull(schema.items.deletedAt)));
+    // Her articles without a product: the shop of their orders (« Après la commande »).
+    const ofOrders = await db
+      .selectDistinct({ id: schema.shops.id, name: schema.shops.name })
+      .from(schema.items)
+      .innerJoin(schema.orderLines, eq(schema.orderLines.itemId, schema.items.id))
+      .innerJoin(schema.orders, eq(schema.orders.id, schema.orderLines.orderId))
+      .innerJoin(schema.shops, eq(schema.shops.id, schema.orders.shopId))
+      .where(and(eq(schema.items.userId, userId), isNull(schema.items.deletedAt), isNull(schema.items.productId)));
+    const shops = [...new Map([...ofProducts, ...ofOrders].map((s) => [s.id, s])).values()];
     shops.sort((a, b) => byName.compare(a.name, b.name) || a.id.localeCompare(b.id));
     return c.json({ shops }, 200);
   });

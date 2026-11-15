@@ -1,11 +1,12 @@
 import { and, type Database, eq, inArray, isNull, lte, orderAwaitingNews, schema, sql } from "@closyria/db";
 import {
   ALERT_TIME_ZONE,
-  ALERTS_PAGE_HREF,
   alertItemHref,
+  bareItemHref,
   DEFAULT_ALERT_SETTINGS,
   IMMEDIATE_ALERT_KINDS,
   nextSendAt,
+  orderHref,
   parisDay,
   parisDaysBetween,
   RETURN_REMINDER_DAYS,
@@ -319,11 +320,10 @@ export async function sendAlert(
       .leftJoin(schema.shops, eq(schema.shops.id, schema.orders.shopId))
       .where(and(eq(schema.orders.id, event.orderId), eq(schema.orders.userId, event.userId)));
     if (order?.status === "draft") {
-      // TODO(Task 7): lead to « Mes commandes » once the page exists.
       message = {
         title: orderReceivedTitle(order.shopName),
         body: "Vérifie les articles, puis « C'est bon ».",
-        url: ALERTS_PAGE_HREF,
+        url: orderHref(event.orderId),
       };
     }
   }
@@ -350,10 +350,9 @@ export async function sendAlert(
       event.kind !== "parcel_out_for_delivery" ||
       (event.parcelOutForDeliveryOn ?? DEFAULT_ALERT_SETTINGS.parcelOutForDelivery);
     if (parcel?.status === words.status && wanted) {
-      // TODO(Task 7): lead to the order (« Mes commandes ») once the page exists.
       const body =
         event.kind === "parcel_delivered" ? parcelDeliveredBody(event.itemsReceived, event.parcelsLeft) : words.body;
-      message = { title: parcelTitle(event.kind, parcel.shopName), body, url: ALERTS_PAGE_HREF };
+      message = { title: parcelTitle(event.kind, parcel.shopName), body, url: orderHref(event.orderId) };
     }
   }
   if (event.kind === "return_reminder" && event.itemId) {
@@ -381,8 +380,8 @@ export async function sendAlert(
       message = {
         title: returnReminderTitle(event.name, daysLeft),
         body: returnDeadlineSentence(item.returnDeadline),
-        // An article without a product has no sheet yet (Task 7): « Nouvelles ».
-        url: item.productId ? itemUrl(item.productId, item.profileId) : ALERTS_PAGE_HREF,
+        // An article without a product has its own sheet.
+        url: item.productId ? itemUrl(item.productId, item.profileId) : bareItemHref(event.itemId),
       };
     }
   }
@@ -404,11 +403,10 @@ export async function sendAlert(
         ),
       );
     if (order?.awaiting && (!order.notYetAt || order.notYetAt.getTime() < event.createdAt.getTime())) {
-      // TODO(Task 7): lead to the order (« Mes commandes ») once the page exists.
       message = {
         title: orderReceivedCheckTitle(order.shopName),
         body: "Réponds « Oui » ou « Pas encore ».",
-        url: ALERTS_PAGE_HREF,
+        url: orderHref(event.orderId),
       };
     }
   }

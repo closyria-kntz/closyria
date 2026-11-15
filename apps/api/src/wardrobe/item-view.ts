@@ -6,7 +6,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  or,
   type SQL,
   schema,
   sql,
@@ -255,6 +254,7 @@ export async function loadItemViews(
       nameOverride: item.nameOverride,
       brandOverride: item.brandOverride,
       sourceUrl: item.sourceUrl,
+      returnDeadline: item.returnDeadline,
       categoryId: item.categoryId,
       colorId: item.colorId,
       coverMediaId: item.coverMediaId,
@@ -457,10 +457,15 @@ export async function listItems(
   if (query.shop) {
     // The filter menu sends the shop's id; a slug is still accepted (and a slug may look like a UUID).
     const byId = z.uuid().safeParse(query.shop).success;
+    const shopIs = (id: SQL | typeof schema.shops.id, slug: SQL | typeof schema.shops.slug) =>
+      byId ? sql`(${id} = ${query.shop} or ${slug} = ${query.shop})` : sql`${slug} = ${query.shop}`;
+    // An article without a product: the shop of one of its orders.
     conditions.push(
-      (byId
-        ? or(eq(schema.shops.id, query.shop), eq(schema.shops.slug, query.shop))
-        : eq(schema.shops.slug, query.shop)) as SQL,
+      sql`(${shopIs(schema.shops.id, schema.shops.slug)} or (${isNull(schema.items.productId)} and exists (
+        select 1 from ${schema.orderLines}
+        join ${schema.orders} on ${schema.orders.id} = ${schema.orderLines.orderId}
+        join ${schema.shops} as order_shop on order_shop.id = ${schema.orders.shopId}
+        where ${schema.orderLines.itemId} = ${schema.items.id} and ${shopIs(sql`order_shop.id`, sql`order_shop.slug`)})))`,
     );
   }
   if (query.category) {

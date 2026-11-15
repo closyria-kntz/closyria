@@ -99,6 +99,8 @@ export const inboundEmails = pgTable(
     status: text("status").notNull(),
     rawObjectKey: text("raw_object_key"),
     purgeAfter: at("purge_after").notNull(),
+    /** « Ce n'est pas une commande » on an e-mail nothing could read: no longer shown to her (Task 7). */
+    dismissedAt: at("dismissed_at"),
   },
   (t) => [
     index("inbound_emails_inbox_id_idx").on(t.inboxId),

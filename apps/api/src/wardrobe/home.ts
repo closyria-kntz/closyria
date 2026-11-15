@@ -2,12 +2,15 @@ import { and, asc, type Database, desc, eq, gte, inArray, isNull, lt, ne, or, sc
 import {
   ALERTS_PAGE_HREF,
   alertItemHref,
+  bareItemHref,
   HOME_NEWS_DAYS,
   HOME_NEWS_LIMIT,
   HOME_WISHES_LIMIT,
   type HomeNews,
   type HomeView,
   type ItemView,
+  parisDay,
+  parisDaysBetween,
 } from "@closyria/shared";
 import { parisDayStart } from "./budgets";
 import { loadItemViews } from "./item-view";
@@ -29,6 +32,8 @@ const EMPTY_FACTS = {
   count: null,
   groupOrderStatus: null,
   startsOn: null,
+  returnDeadline: null,
+  returnDaysLeft: null,
 } as const;
 
 /** The first point of the last run of `points` (oldest first) where `same` holds against the latest one. */
@@ -245,9 +250,10 @@ async function listNews(db: Database, userId: string, now: Date): Promise<Draft[
 
 /**
  * Her alerts of the last HOME_NEWS_DAYS days (whatever became of their push): her target prices reached (one news per
- * item, the newest, on her item's sheet), the sales and the shop promos (one news per sales period and per shop).
+ * item, the newest, on her item's sheet), the sales and the shop promos (one news per sales period and per shop), and
+ * her return reminders while the item can still go back (still « Reçu », not in the trash, the deadline not passed).
  */
-async function alertNews(db: Database, userId: string, since: Date): Promise<Draft[]> {
+async function alertNews(db: Database, userId: string, since: Date, now: Date): Promise<Draft[]> {
   const rows = await db
     .select({
       kind: schema.alertEvents.kind,
@@ -261,6 +267,9 @@ async function alertNews(db: Database, userId: string, since: Date): Promise<Dra
       salePeriodId: schema.alertEvents.salePeriodId,
       salePeriodName: schema.salePeriods.name,
       startsOn: schema.salePeriods.startsOn,
+      stage: schema.items.stage,
+      deletedAt: schema.items.deletedAt,
+      returnDeadline: schema.items.returnDeadline,
     })
     .from(schema.alertEvents)
     // Her item only, in its profile of now (never another person's).
@@ -273,13 +282,31 @@ async function alertNews(db: Database, userId: string, since: Date): Promise<Dra
     .where(
       and(
         eq(schema.alertEvents.userId, userId),
-        inArray(schema.alertEvents.kind, ["target_price", "sale_period", "shop_promo"]),
+        inArray(schema.alertEvents.kind, ["target_price", "sale_period", "shop_promo", "return_reminder"]),
         gte(schema.alertEvents.createdAt, since),
       ),
     )
     .orderBy(desc(schema.alertEvents.createdAt), desc(schema.alertEvents.id));
   const byKey = new Map<string, Draft>();
+  const today = parisDay(now);
   for (const row of rows) {
+    if (row.kind === "return_reminder") {
+      const key = `return:${row.itemId}`;
+      const deadline = row.returnDeadline;
+      if (!row.itemId || !row.profileId || !deadline || byKey.has(key)) continue;
+      if (row.stage !== "owned" || row.deletedAt !== null || deadline < today) continue;
+      byKey.set(key, {
+        ...EMPTY_FACTS,
+        kind: "return_reminder",
+        itemId: row.itemId,
+        href: row.productId ? alertItemHref(row.productId, row.profileId) : bareItemHref(row.itemId),
+        at: row.createdAt.toISOString(),
+        returnDeadline: deadline,
+        // As its notification said: from the day of the reminder.
+        returnDaysLeft: Math.max(0, parisDaysBetween(parisDay(row.createdAt), deadline)),
+      });
+      continue;
+    }
     if (row.kind === "target_price") {
       const key = `target:${row.itemId}`;
       if (!row.itemId || !row.productId || !row.profileId || row.priceCents === null || byKey.has(key)) continue;
@@ -331,7 +358,7 @@ const newestFirst = (a: HomeNews, b: HomeNews) => b.at.localeCompare(a.at) || a.
 /**
  * What « Accueil » shows (refonte Boudoir, spec R3), from data the app already keeps: price drops and sizes back on
  * her wishes (last HOME_NEWS_DAYS days), friends' opinions she has not seen, her running group orders, the gift
- * reminders that are due, and her target price, sales and shop promo alerts (last HOME_NEWS_DAYS days). The « une » is the newest news with a photo; with it, at most HOME_NEWS_LIMIT news.
+ * reminders that are due, and her target price, sales and shop promo alerts (last HOME_NEWS_DAYS days). The « une » is a return reminder, else the newest news with a photo; with it, at most HOME_NEWS_LIMIT news.
  */
 export async function homeView(db: Database, userId: string, now: Date): Promise<HomeView> {
   const since = new Date(now.getTime() - HOME_NEWS_DAYS * 86_400_000);
@@ -349,7 +376,7 @@ export async function homeView(db: Database, userId: string, now: Date): Promise
     opinionNews(db, userId),
     listNews(db, userId, now),
     wishesOf(db, userId, now),
-    alertNews(db, userId, since),
+    alertNews(db, userId, since, now),
   ]);
   const drafts = [...catalog, ...opinions, ...lists, ...alerts];
   const itemIds = [...new Set(drafts.flatMap((d) => (d.itemId ? [d.itemId] : [])))];
@@ -376,7 +403,8 @@ export async function homeView(db: Database, userId: string, now: Date): Promise
       ];
     })
     .sort(newestFirst);
-  const une = all.find((news) => news.photoUrl !== null) ?? null;
+  // A return reminder is the une first (spec §3.5), with or without a photo; else the newest news with a photo.
+  const une = all.find((news) => news.kind === "return_reminder") ?? all.find((news) => news.photoUrl !== null) ?? null;
   const news = all.filter((n) => n !== une).slice(0, HOME_NEWS_LIMIT - (une ? 1 : 0));
   return { greetingName: firstNameOf(account), hasItems: kept !== undefined, une, news, wishes };
 }

@@ -435,3 +435,50 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   `"orders"."id"` et leurs tables par alias, sans passer par les colonnes Drizzle.
 - **Non retenus** (relecture n°1) : un même lien Instagram envoyé deux fois donne deux articles (deux articles d'une
   même publication sont possibles ; l'écran de la Task 7 désactive le bouton pendant l'envoi, et l'annulation reste).
+
+### 10.6 Écrans (Task 7, 2026-11-15)
+
+- **Adresses des pages** : Compte → « Mes commandes par e-mail » `/reglages/commandes` (aussi dans le menu des
+  réglages), « Mes commandes » `/mes-commandes` (lignes « Mes commandes » et « Mes commandes par e-mail » dans
+  « Compte » ; marquée sous « Mes articles » dans le menu), fiche d'un article sans produit `/articles/{id}` (un article
+  avec produit y est renvoyé vers sa fiche produit), formulaire Instagram `/ajouter/instagram?lien=…`.
+- **Adresse** : créée à la première ouverture de la page (pas de bouton « Créer » de plus) ; « Copier » ; « Changer
+  d'adresse » demande d'abord (« L'ancienne adresse cessera aussitôt de fonctionner. »). Le code de confirmation Gmail
+  (`pendingGmailCode`) s'affiche sous l'adresse et dans l'étape Gmail de l'aide. Aide pas à pas par messagerie (Gmail,
+  Outlook, iCloud), un e-mail à la fois puis automatiquement ; la règle de §10.1 y est dite (« Transférer », jamais Cci,
+  alias ni « redirection ») ; iCloud : transfert un par un seulement (ses règles changent l'expéditeur). Invitée : « Crée
+  ton compte pour suivre tes commandes ».
+- **À valider** (Accueil, en tête, et « Mes commandes ») : carte rose (comme la une) « Commande reçue de {boutique} »,
+  articles (taille, couleur, quantité, prix d'une pièce), colis, « C'est bon » / « Corriger » (formulaire en place :
+  boutique et articles) / « Ce n'est pas une commande ». Les e-mails illisibles ont leur carte « On n'a pas su lire cet
+  e-mail » : « Saisir la commande » (boutique, articles, numéro et transporteur facultatifs) ou « Ce n'est pas une
+  commande ». « Tu as reçu ta commande {boutique} ? » « Oui » / « Pas encore » sur l'Accueil et sur la commande.
+  Pas de photo d'article sur la carte : la vue d'une commande n'en donne pas (à ajouter si la fondatrice le veut).
+- **API ajoutée** : `GET /api/me/orders` donne aussi `unreadEmails` (e-mails `failed` à elle, gardés, non écartés, sans
+  commande saisie, 20 au plus) ; `POST /api/me/order-emails/{id}/dismiss` les écarte (`inbound_emails.dismissed_at`,
+  migration 0043) ; `PATCH /api/me/orders/{id}/parcels/{parcelId}` `{ carrier }` corrige le transporteur : étape
+  `pending`, `check_failures` à 0, prochain contrôle au rythme de `nextParcelCheckClamped` (un suivi déjà fini repart
+  pour 30 jours), 409 `parcel_delivered` pour un colis livré. La vue d'un article donne `returnDeadline`.
+- **Colis** (commande et fiche) : transporteur et numéro, étape en étiquette (« En route », « En cours de livraison »,
+  « Disponible en point relais », « Livré le … »…), dernière étape du transporteur, « Arrivée prévue le … »,
+  « Suivre chez le transporteur » pour **chaque** colis (page de suivi du transporteur ; transporteur inconnu :
+  recherche 17TRACK, `carrierTrackingUrl`), « Changer de transporteur » (ouvert d'office sans transporteur connu).
+  Correction de la Task 3 : la dernière étape d'un colis (`lastEventLabel`) était toujours vide (même piège Drizzle que
+  §10.5, colonne écrite sans sa table) ; la requête nomme ses tables par alias.
+- **Fiche d'un article** : bloc « Commande / colis » (badge « Retour possible jusqu'au … » une fois reçu, ses commandes
+  validées et leurs colis, « Voir la commande », « Ajouter un numéro de suivi » tant qu'il est « Commandé »).
+- **Articles sans produit** : leur carte et leur ligne du tableau mènent à leur fiche (photos, nom, boutique ou
+  marque, « Payé … », étapes, « Que veux-tu faire ? » sans « Voir chez … » ni « Partager », « Commande / colis », ses
+  blocs à elle ; ni alerte ni suivi du prix) ; ils sont dans ses listes, le filtre « Boutique » (boutique de leur
+  commande), la vue de ses amies (son nom pour l'article, la boutique de la commande, sans lien, sans photo : ses
+  photos privées ne sont jamais partagées) et les commandes groupées de la boutique de leur commande (sans tailles).
+- **Notifications** : `order_received`, colis et `order_received_check` mènent à `/mes-commandes#commande-{id}` ; le
+  rappel de retour d'un article sans produit à sa fiche ; « Nouvelles » de même.
+- **Une de l'Accueil** : un rappel de retour en cours (article encore « Reçu », hors corbeille, date limite non
+  passée, 7 derniers jours) est la une avant toute autre nouvelle, avec ou sans photo.
+- **Instagram** : « Coller un lien » avec un lien Instagram ouvre le formulaire court (« Je le veux » / « Je l'ai
+  commandé », nom, boutique ou marque, taille, prix payé seulement si commandé, photo de sa galerie, notes) ; le bouton
+  est désactivé pendant l'envoi ; « Annuler » dans le bandeau ; la fiche de l'article s'ouvre ensuite avec « Voir la
+  publication Instagram ».
+- **À trancher** : l'aide Gmail décrit le transfert automatique (filtre), mais `INBOUND_AUTOFORWARD` est coupé par
+  défaut (§10.1) : tant qu'il l'est, ces e-mails sont ignorés. Retirer l'étape ou activer le réglage après l'essai réel.

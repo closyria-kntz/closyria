@@ -87,8 +87,8 @@
 
 **Files:** `reglages/commandes` (adresse + aide Gmail/Outlook/iCloud), page « Mes commandes », carte à valider sur l'Accueil, bloc « Commande / colis » sur la fiche d'un article, « Ajouter un numéro de suivi », formulaire Instagram, `fr.json`, e2e `e2e/tests/commandes.spec.ts`.
 
-- [ ] e2e d'abord (3 appareils, axe clair/sombre) : adresse et copie, carte à valider (corriger, valider, ignorer), numéro collé, en route puis reçu avec date limite, rappel J-3 en « une », lien Instagram ; captures iPhone + ordinateur clair/sombre.
-- [ ] Commit « feat(commandes): écrans ».
+- [x] e2e d'abord (3 appareils, axe clair/sombre) : adresse et copie, carte à valider (corriger, valider, ignorer), numéro collé, en route puis reçu avec date limite, rappel J-3 en « une », lien Instagram ; captures iPhone + ordinateur clair/sombre.
+- [x] Commit « feat(commandes): écrans ».
 
 ### Task 8: Admin et mise en service
 

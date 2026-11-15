@@ -72,6 +72,14 @@ export const UNCAPPED_ALERT_KINDS = [
   "return_reminder",
   "order_received_check",
 ] as const satisfies readonly AlertKind[];
+/** The kinds about one of her orders or its parcels: they lead to the order on « Mes commandes ». */
+export const ORDER_ALERT_KINDS: readonly AlertKind[] = [
+  "order_received",
+  "parcel_out_for_delivery",
+  "parcel_pickup_ready",
+  "parcel_delivered",
+  "order_received_check",
+];
 /** An alert waiting for its digest: a digest kind (`pending`) or an immediate one the daily cap sent there. */
 export const DIGEST_WAITING_STATUSES = ["pending", "digest"] as const satisfies readonly AlertStatus[];
 

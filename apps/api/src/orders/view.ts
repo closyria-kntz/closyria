@@ -6,11 +6,12 @@ import {
   eq,
   getTableColumns,
   inArray,
+  isNull,
   receivedQuestionOpen,
   schema,
   sql,
 } from "@closyria/db";
-import type { Carrier, OrderView, ParcelStatus } from "@closyria/shared";
+import type { Carrier, OrderView, ParcelStatus, UnreadEmailView } from "@closyria/shared";
 import type { Tx } from "../wardrobe/events";
 
 type OrderRow = typeof schema.orders.$inferSelect & { receivedQuestion: boolean };
@@ -41,11 +42,12 @@ async function viewsOf(db: Database | Tx, rows: OrderRow[]): Promise<OrderView[]
   const parcels = await db
     .select({
       parcel: schema.parcels,
-      // The carrier's latest step (« Pris en charge », « Disponible en point relais »…).
+      // The carrier's latest step (« Pris en charge », « Disponible en point relais »…). Tables named by alias: in a
+      // select on one table Drizzle writes its columns without their table, and `"id"` would be the step's own (§10.5).
       lastEventLabel: sql<string | null>`(
-        select ${schema.parcelEvents.label} from ${schema.parcelEvents}
-        where ${schema.parcelEvents.parcelId} = ${schema.parcels.id}
-        order by ${schema.parcelEvents.at} desc, ${schema.parcelEvents.id} desc limit 1)`,
+        select pe.label from ${schema.parcelEvents} pe
+        where pe.parcel_id = "parcels"."id"
+        order by pe.at desc, pe.id desc limit 1)`,
     })
     .from(schema.parcels)
     .where(inArray(schema.parcels.orderId, ids))
@@ -118,4 +120,30 @@ export async function listOrderViews(db: Database, userId: string): Promise<Orde
     .orderBy(desc(schema.orders.createdAt), desc(schema.orders.id))
     .limit(MAX_LISTED_ORDERS);
   return viewsOf(db, rows);
+}
+
+/** Her e-mails nothing could read listed on « Mes commandes » at most. */
+export const MAX_LISTED_UNREAD_EMAILS = 20;
+
+/**
+ * « On n'a pas su lire cet e-mail »: her failed e-mails still kept (before their purge), not set aside, and with no
+ * order typed from them (a dismissed one aside), newest first.
+ */
+export async function listUnreadEmails(db: Database, userId: string, now: Date): Promise<UnreadEmailView[]> {
+  const e = schema.inboundEmails;
+  const rows = await db
+    .select({ id: e.id, receivedAt: e.receivedAt })
+    .from(e)
+    .where(
+      and(
+        eq(e.userId, userId),
+        eq(e.status, "failed"),
+        isNull(e.dismissedAt),
+        sql`${e.purgeAfter} > ${now.toISOString()}::timestamptz`,
+        sql`not exists (select 1 from ${schema.orders} o where o.inbound_email_id = ${e.id} and o.status <> 'dismissed')`,
+      ),
+    )
+    .orderBy(desc(e.receivedAt), desc(e.id))
+    .limit(MAX_LISTED_UNREAD_EMAILS);
+  return rows.map((r) => ({ id: r.id, receivedAt: r.receivedAt.toISOString() }));
 }

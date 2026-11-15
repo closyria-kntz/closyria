@@ -4,6 +4,7 @@ import type { ItemView, LoveLevelView } from "@closyria/shared";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useId } from "react";
+import { itemHref } from "@/lib/item-display";
 import { levelOf } from "@/lib/love-levels";
 import { priceDropCents } from "@/lib/price";
 import { ItemOpinionsSection } from "./item-opinions-section";
@@ -160,14 +161,12 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
               </dl>
             )}
             <ItemOpinionsSection itemId={item.id} />
-            {item.product && (
-              <Link
-                href={`/produits/${item.product.id}`}
-                className={`self-start rounded-sm text-sm text-ink-muted underline underline-offset-2 hover:text-ink ${focusRing}`}
-              >
-                {t("full")}
-              </Link>
-            )}
+            <Link
+              href={itemHref(item)}
+              className={`self-start rounded-sm text-sm text-ink-muted underline underline-offset-2 hover:text-ink ${focusRing}`}
+            >
+              {t("full")}
+            </Link>
           </div>
         </>
       )}

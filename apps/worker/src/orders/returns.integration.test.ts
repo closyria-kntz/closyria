@@ -118,10 +118,11 @@ describe("return reminder", () => {
     const [event] = await reminders(id);
     const { push, messages } = fakePush();
     expect(await sendAlert({ db: handle.db, push }, event?.id as string, now, once)).toBe("sent");
+    // An article without a product: its own sheet (Task 7).
     expect(messages[0]).toEqual({
       title: "Plus que 3 jours pour retourner Pull Marin",
       body: "Retour possible jusqu'au 18 novembre",
-      url: "/nouvelles",
+      url: `/articles/${id}`,
     });
   });
 
@@ -325,7 +326,7 @@ describe("« Tu as reçu ta commande ? »", () => {
     expect(messages[0]).toEqual({
       title: "Tu as reçu ta commande Maison Lune ?",
       body: "Réponds « Oui » ou « Pas encore ».",
-      url: "/nouvelles",
+      url: `/mes-commandes#commande-${known}`,
     });
     expect(await send(typed)).toBe("sent");
     expect(messages[1]?.title).toBe("Tu as reçu ta commande Atelier Nuit ?");

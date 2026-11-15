@@ -85,7 +85,10 @@ async function orderShopRoot(db: Database | Tx, order: OrderRow): Promise<string
   return (await rootShops(db, [order.shopId])).get(order.shopId) ?? order.shopId;
 }
 
-/** Her items on the list (not in the trash), in list order, with their product and the product's shop root. */
+/**
+ * Her items on the list (not in the trash), in list order, with their product and the product's shop root. An article
+ * without a product (« Après la commande ») belongs to its latest order's shop; without one it is in no shop's order.
+ */
 async function listItems(db: Database | Tx, wishlistId: string) {
   const rows = await db
     .select({
@@ -94,18 +97,24 @@ async function listItems(db: Database | Tx, wishlistId: string) {
       productId: schema.products.id,
       productName: schema.products.name,
       currency: schema.products.currency,
-      shopId: schema.products.shopId,
+      shopId: sql<string | null>`coalesce(${schema.products.shopId}, (
+        select o.shop_id from ${schema.orderLines} ol join ${schema.orders} o on o.id = ol.order_id
+        where ol.item_id = ${schema.items.id} and o.shop_id is not null order by o.created_at desc limit 1))`,
     })
     .from(schema.wishlistItems)
     .innerJoin(schema.items, eq(schema.items.id, schema.wishlistItems.itemId))
-    .innerJoin(schema.products, eq(schema.products.id, schema.items.productId))
+    .leftJoin(schema.products, eq(schema.products.id, schema.items.productId))
     .where(and(eq(schema.wishlistItems.wishlistId, wishlistId), isNull(schema.items.deletedAt)))
     .orderBy(asc(schema.wishlistItems.position), asc(schema.wishlistItems.addedAt), asc(schema.wishlistItems.itemId));
   const roots = await rootShops(
     db,
-    rows.map((r) => r.shopId),
+    rows.flatMap((r) => (r.shopId ? [r.shopId] : [])),
   );
-  return rows.map((r) => ({ ...r, shopId: roots.get(r.shopId) ?? r.shopId, name: r.nameOverride ?? r.productName }));
+  return rows.map((r) => ({
+    ...r,
+    shopId: r.shopId ? (roots.get(r.shopId) ?? r.shopId) : null,
+    name: r.nameOverride ?? r.productName,
+  }));
 }
 
 /** First shop photo of each product. */
@@ -296,16 +305,8 @@ async function toOwnerView(db: Database | Tx, order: OrderRow): Promise<OwnerGro
   const paymentOf = new Map(payments.map((p) => [p.buyerNameKey, p]));
   const totals = totalsOf(people, order, new Map(payments.map((p) => [p.buyerNameKey, p.amountCents])));
   const own = items.filter((i) => i.shopId === root);
-  const [sizes, images] = await Promise.all([
-    sizesOf(
-      db,
-      own.map((i) => i.productId),
-    ),
-    firstImages(
-      db,
-      own.map((i) => i.productId),
-    ),
-  ]);
+  const ownProducts = own.flatMap((i) => (i.productId ? [i.productId] : []));
+  const [sizes, images] = await Promise.all([sizesOf(db, ownProducts), firstImages(db, ownProducts)]);
   return {
     id: order.id,
     wishlistId: order.wishlistId,
@@ -328,8 +329,8 @@ async function toOwnerView(db: Database | Tx, order: OrderRow): Promise<OwnerGro
     ownItems: own.map((i) => ({
       itemId: i.itemId,
       name: i.name ?? "",
-      imageUrl: images.get(i.productId) ?? null,
-      sizes: sizes.filter((s) => s.productId === i.productId).map((s) => s.label),
+      imageUrl: (i.productId && images.get(i.productId)) ?? null,
+      sizes: i.productId ? sizes.filter((s) => s.productId === i.productId).map((s) => s.label) : [],
     })),
     orderedAt: order.orderedAt?.toISOString() ?? null,
     cancelledAt: order.cancelledAt?.toISOString() ?? null,
@@ -1099,11 +1100,11 @@ export async function sharedGroupOrderView(
   const sizesByProduct = new Map<string, string[]>();
   for (const size of await sizesOf(
     db,
-    eligible.map((i) => i.productId),
+    eligible.flatMap((i) => (i.productId ? [i.productId] : [])),
   ))
     sizesByProduct.set(size.productId, [...(sizesByProduct.get(size.productId) ?? []), size.label]);
   for (const item of eligible) {
-    const sizes = sizesByProduct.get(item.productId);
+    const sizes = item.productId ? sizesByProduct.get(item.productId) : undefined;
     if (sizes) itemSizes[item.itemId] = sizes;
   }
   const people = peopleOf(lines);

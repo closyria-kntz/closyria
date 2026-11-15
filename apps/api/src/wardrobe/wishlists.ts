@@ -156,15 +156,21 @@ export type SharedList = Pick<
 >;
 
 // Narrow: only the public columns. The size, stage and gift marker are for the gifts only (never sent otherwise).
+// An article without a product (« Après la commande »): her name and brand for it, its order's shop, no price, no
+// link, no photo (her private photos never reach a shared list).
 const sharedItemColumns = {
   itemId: schema.items.id,
   productId: schema.products.id,
-  name: schema.products.name,
-  brand: schema.products.brand,
+  name: sql<string | null>`coalesce(${schema.products.name}, ${schema.items.nameOverride})`,
+  brand: sql<string | null>`coalesce(${schema.products.brand}, ${schema.items.brandOverride})`,
   priceCents: schema.products.priceCents,
   currency: schema.products.currency,
-  url: schema.products.canonicalUrl,
-  shopName: schema.shops.name,
+  url: sql<string>`coalesce(${schema.products.canonicalUrl}, '')`,
+  shopName: sql<string>`coalesce(${schema.shops.name}, (
+    select coalesce(order_shop.name, o.shop_name) from ${schema.orderLines} ol
+    join ${schema.orders} o on o.id = ol.order_id
+    left join ${schema.shops} order_shop on order_shop.id = o.shop_id
+    where ol.item_id = ${schema.items.id} order by o.created_at desc limit 1), '')`,
   loveLevel: schema.items.loveLevel,
   priority: schema.items.priority,
   why: schema.items.why,
@@ -189,8 +195,8 @@ export async function loadSharedView(
     .select(sharedItemColumns)
     .from(schema.wishlistItems)
     .innerJoin(schema.items, eq(schema.items.id, schema.wishlistItems.itemId))
-    .innerJoin(schema.products, eq(schema.products.id, schema.items.productId))
-    .innerJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
+    .leftJoin(schema.products, eq(schema.products.id, schema.items.productId))
+    .leftJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
     .where(and(eq(schema.wishlistItems.wishlistId, list.id), isNull(schema.items.deletedAt)))
     .orderBy(asc(schema.wishlistItems.position), asc(schema.wishlistItems.addedAt), asc(schema.wishlistItems.itemId));
   // Her own link: no state, no name, no device of hers (spec: she never sees who before « Reçu en cadeau »).
@@ -210,8 +216,8 @@ export async function loadSharedView(
       : await db
           .select(sharedItemColumns)
           .from(schema.items)
-          .innerJoin(schema.products, eq(schema.products.id, schema.items.productId))
-          .innerJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
+          .leftJoin(schema.products, eq(schema.products.id, schema.items.productId))
+          .leftJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
           .where(
             and(
               inArray(schema.items.id, removedIds),
@@ -222,7 +228,7 @@ export async function loadSharedView(
           .orderBy(asc(schema.items.id));
   const given = list.allowGifts ? onList.filter(wasGiven) : [];
   const members = [...(list.allowGifts ? onList.filter((m) => !wasGiven(m)) : onList), ...removed];
-  const productIds = [...new Set(members.map((m) => m.productId))];
+  const productIds = [...new Set(members.flatMap((m) => (m.productId ? [m.productId] : [])))];
   const firstImages =
     productIds.length === 0
       ? []
@@ -286,9 +292,9 @@ export async function loadSharedView(
       brand: m.brand,
       priceCents: m.priceCents,
       currency: m.currency,
-      imageUrl: imageUrlOf(imageOf.get(m.productId)),
-      imageWidth: imageOf.get(m.productId)?.width ?? null,
-      imageHeight: imageOf.get(m.productId)?.height ?? null,
+      imageUrl: m.productId ? imageUrlOf(imageOf.get(m.productId)) : null,
+      imageWidth: (m.productId && imageOf.get(m.productId)?.width) || null,
+      imageHeight: (m.productId && imageOf.get(m.productId)?.height) || null,
       gift: list.allowGifts ? (viewerIsOwner ? { state: "hidden" } : (gifts.get(m.itemId) ?? { state: "free" })) : null,
       size: list.allowGifts ? m.sizeLabel : null,
       shopName: m.shopName,

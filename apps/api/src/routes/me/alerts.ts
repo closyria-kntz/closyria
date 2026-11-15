@@ -13,8 +13,11 @@ import {
   alertReadResultSchema,
   alertSettingsPatchSchema,
   alertSettingsSchema,
+  bareItemHref,
   DEFAULT_ALERT_SETTINGS,
   ITEM_ALERT_KINDS,
+  ORDER_ALERT_KINDS,
+  orderHref,
   type PushSubscriptionView,
   parisDay,
   parisDaysBetween,
@@ -245,6 +248,8 @@ export async function listAlerts(db: Database, userId: string, cursor: string | 
       id: e.id,
       kind: e.kind,
       itemId: e.itemId,
+      // Her order only (the join checks it is hers).
+      orderId: schema.orders.id,
       productId: schema.items.productId,
       sizeLabel: e.sizeLabel,
       priceCents: e.priceCents,
@@ -286,7 +291,11 @@ export async function listAlerts(db: Database, userId: string, cursor: string | 
     const href =
       aboutItem && row.productId && row.itemProfileId
         ? alertItemHref(row.productId, row.itemProfileId)
-        : ALERTS_PAGE_HREF;
+        : aboutItem && row.itemId && row.itemProfileId
+          ? bareItemHref(row.itemId)
+          : ORDER_ALERT_KINDS.includes(kind) && row.orderId
+            ? orderHref(row.orderId)
+            : ALERTS_PAGE_HREF;
     const title = aboutItem
       ? (row.itemName ?? "")
       : kind === "sale_period"

@@ -1,11 +1,12 @@
 "use client";
 
-import type { HomeView, ShopCard } from "@closyria/shared";
+import type { HomeView, OrderList, OrderView, ShopCard } from "@closyria/shared";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useCallback, useEffect, useId, useState } from "react";
 import { ARTICLES_PATH, STEP_PARAM } from "@/lib/articles-address";
 import { useLiveRefresh } from "@/lib/live-changes";
+import { fetchOrders } from "@/lib/orders-client";
 import { useDesktop } from "@/lib/use-desktop";
 import { fetchHome, fetchShopDirectory } from "@/lib/wardrobe-client";
 import { CaptureForm } from "./capture-form";
@@ -14,6 +15,8 @@ import { HomeNewsList, moreClass, sectionTitleClass } from "./home-news";
 import { HomeUne } from "./home-une";
 import { ItemCard } from "./item-card";
 import { GRID_CLASS } from "./item-grid";
+import { DraftOrderCard, ReceivedQuestionCard, UnreadEmailCard } from "./order-card";
+import { withOrder } from "./orders-screen";
 import { RecentProducts } from "./recent-products";
 import { Tip } from "./tip";
 import { blockClass, focusRing } from "./ui";
@@ -160,6 +163,48 @@ function Wishes({ wishes }: { wishes: HomeView["wishes"] }) {
   );
 }
 
+/**
+ * « À valider » (« Après la commande », spec §3.2 and §3.5): the orders read from her e-mails, the e-mails nothing could
+ * read and « Tu as reçu ta commande … ? », first on her home; each card leaves once she acted.
+ */
+function OrdersToValidate({ list, onChange }: { list: OrderList; onChange: (list: OrderList) => void }) {
+  const t = useTranslations("Home.orders");
+  const titleId = useId();
+  const drafts = list.orders.filter((o) => o.status === "draft");
+  const questions = list.orders.filter((o) => o.status === "confirmed" && o.receivedQuestion);
+  if (drafts.length + questions.length + list.unreadEmails.length === 0) return null;
+  const update = (order: OrderView) => onChange(withOrder(list, order));
+  return (
+    <section aria-labelledby={titleId} className="flex flex-col gap-space-2-5">
+      <Row
+        titleId={titleId}
+        title={t("title")}
+        link={
+          <Link href="/mes-commandes" className={moreClass}>
+            {t("all")}
+          </Link>
+        }
+      />
+      {drafts.map((order) => (
+        <DraftOrderCard key={order.id} order={order} onChange={update} />
+      ))}
+      {list.unreadEmails.map((email) => (
+        <UnreadEmailCard
+          key={email.id}
+          email={email}
+          onDone={(order) => {
+            const rest = { ...list, unreadEmails: list.unreadEmails.filter((e) => e.id !== email.id) };
+            onChange(order ? withOrder(rest, order) : rest);
+          }}
+        />
+      ))}
+      {questions.map((order) => (
+        <ReceivedQuestionCard key={order.id} order={order} onChange={update} />
+      ))}
+    </section>
+  );
+}
+
 /** A new account: the add box first, then what Closyria does, in three points (spec R8: an empty screen explains). */
 function Start({ fieldId }: { fieldId: string }) {
   const t = useTranslations("Home.start");
@@ -192,11 +237,15 @@ export function HomeScreen({ fieldId }: { fieldId: string }) {
   const desktop = useDesktop();
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
   const [shops, setShops] = useState<ShopCard[]>([]);
+  const [orders, setOrders] = useState<OrderList | null>(null);
 
   const load = useCallback(async () => {
     try {
       const home = await fetchHome();
       setLoaded({ status: "ready", home, now: new Date() });
+      // Her orders to validate (accounts only; a guest or a failed read shows none).
+      const list = await fetchOrders().catch(() => null);
+      setOrders(list && list !== "guest" ? list : null);
       // Only once she keeps something (the row is not on a new account's home): a visit alone opens no session.
       if (!home.hasItems) return;
       const directory = await fetchShopDirectory().catch(() => null);
@@ -227,10 +276,12 @@ export function HomeScreen({ fieldId }: { fieldId: string }) {
   }
 
   const { home, now } = loaded;
+  const toValidate = orders && <OrdersToValidate list={orders} onChange={setOrders} />;
   if (!home.hasItems) {
     return (
       <div className="flex flex-col gap-space-4-5">
         <Hello name={home.greetingName} title={t("welcome")} />
+        {toValidate}
         <Start fieldId={fieldId} />
         {recents}
       </div>
@@ -252,6 +303,7 @@ export function HomeScreen({ fieldId }: { fieldId: string }) {
         {hello}
         <div className="grid grid-cols-(--grid-home) items-start gap-space-5">
           <div className="flex min-w-space-0 flex-col gap-space-5">
+            {toValidate}
             {une}
             {wishes}
           </div>
@@ -269,6 +321,7 @@ export function HomeScreen({ fieldId }: { fieldId: string }) {
   return (
     <div className="flex flex-col gap-space-4-5">
       {hello}
+      {toValidate}
       {une}
       {news}
       {add}

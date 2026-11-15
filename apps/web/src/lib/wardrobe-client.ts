@@ -34,6 +34,7 @@ import {
   itemMutationResultSchema,
   itemOpinionsSchema,
   itemPageSchema,
+  itemViewSchema,
   type LoveLevel,
   type LoveLevelView,
   loveLevelsSchema,
@@ -77,7 +78,7 @@ import { type ZodType, z } from "zod";
 import type { ClientDeps } from "./catalog-client";
 
 /** Browser calls to `/api/me/…`; every answer is validated with the shared schemas. */
-const defaultDeps: ClientDeps = {
+export const defaultDeps: ClientDeps = {
   fetch: (...args) => fetch(...args),
   ensure: () => ensureSession(createAuthClient(window.location.origin)),
 };
@@ -86,14 +87,14 @@ const KNOWN_ERRORS: readonly string[] = [...wardrobeErrorCodes, ...mediaErrorCod
 export type ClientError = (typeof wardrobeErrorCodes)[number] | (typeof mediaErrorCodes)[number] | "failed";
 export type Result<T> = ({ ok: true } & T) | { ok: false; error: ClientError };
 
-const jsonInit = (method: string, body: unknown): RequestInit => ({
+export const jsonInit = (method: string, body: unknown): RequestInit => ({
   method,
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify(body),
 });
 
 /** Runs a mutation: a session first, then the call; an API error code is kept, anything else is « failed ». */
-async function call<T extends object>(
+export async function call<T extends object>(
   deps: ClientDeps,
   path: string,
   init: RequestInit,
@@ -222,6 +223,14 @@ export async function fetchItemForProduct(
   if (response.status === 401) return null;
   if (!response.ok) throw new Error(`items ${response.status}`);
   return itemPageSchema.parse(await response.json()).items[0] ?? null;
+}
+
+/** One of her items by its id (an article without a product has no product sheet); null when unknown. */
+export async function fetchItem(id: string, deps: ClientDeps = defaultDeps): Promise<ItemView | null> {
+  const response = await deps.fetch(`/api/me/items/${id}`, { cache: "no-store" });
+  if (response.status === 404 || response.status === 401) return null;
+  if (!response.ok) throw new Error(`item ${response.status}`);
+  return itemViewSchema.parse(await response.json());
 }
 
 /** A product's price history over the last `days` days. Throws on a network error or a malformed answer. */

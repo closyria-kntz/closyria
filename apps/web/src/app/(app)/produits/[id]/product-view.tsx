@@ -4,6 +4,7 @@ import type { CaptureView, ItemView, PriceHistory, ProductView as Product } from
 import Link from "next/link";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ItemOrderBlock } from "@/components/item-order-block";
 import { PriceCurve } from "@/components/price-curve";
 import { blockClass, blockTitleClass, buttonClass, focusRing } from "@/components/ui";
 import { formatAmount } from "@/lib/budget";
@@ -408,6 +409,7 @@ export function ProductView({ productId, captureId }: { productId: string; captu
                 <>
                   {sizesBlock}
                   {actions}
+                  <ItemOrderBlock item={item} />
                 </>
               }
               shop={shopSheet}

@@ -3,6 +3,7 @@ import {
   type CaptureView,
   captureAcceptedSchema,
   captureViewSchema,
+  instagramCaptureSchema,
   type ManualEntry,
   type ProductView,
   productViewSchema,
@@ -26,6 +27,8 @@ const jsonInit = (method: string, body: unknown): RequestInit => ({
 
 export type CreateCaptureResult =
   | { ok: true; productId: string; captureId: string }
+  /** An Instagram link: nothing is read, she types its article in the short form. */
+  | { ok: true; instagram: string }
   | { ok: false; error: "invalid_url" | "rate_limited" | "failed" };
 
 export async function createCapture(url: string, deps: ClientDeps = defaultDeps): Promise<CreateCaptureResult> {
@@ -35,6 +38,10 @@ export async function createCapture(url: string, deps: ClientDeps = defaultDeps)
     if (response.status === 202) {
       const parsed = captureAcceptedSchema.safeParse(await response.json());
       if (parsed.success) return { ok: true, productId: parsed.data.productId, captureId: parsed.data.captureId };
+    }
+    if (response.status === 200) {
+      const parsed = instagramCaptureSchema.safeParse(await response.json());
+      if (parsed.success) return { ok: true, instagram: parsed.data.url };
     }
     if (response.status === 400 || response.status === 429) {
       const body = (await response.json()) as { error?: string };

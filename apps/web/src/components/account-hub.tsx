@@ -74,6 +74,11 @@ export function AccountHub() {
         <AppearanceSettings headingClassName={sectionTitleClass} />
       </div>
 
+      <Section title={t("orders.title")}>
+        <Row href={href("/mes-commandes")} label={t("orders.row")} hint={t("orders.rowHint")} />
+        <Row href={href("/reglages/commandes")} label={t("orders.inbox")} hint={t("orders.inboxHint")} />
+      </Section>
+
       <Section title={t("settings.title")}>
         <Row
           href={href("/reglages/notifications")}

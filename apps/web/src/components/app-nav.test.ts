@@ -25,7 +25,16 @@ describe("app navigation", () => {
 
   it("marks « Mes articles » on its sub-pages: sheets, lists, preparing an order", () => {
     const articles = place("articles");
-    for (const path of ["/articles", "/produits/abc", "/listes", "/listes/abc", "/envies/commande"]) {
+    for (const path of [
+      "/articles",
+      "/produits/abc",
+      "/listes",
+      "/listes/abc",
+      "/envies/commande",
+      "/mes-commandes",
+      "/articles/abc",
+      "/ajouter/instagram",
+    ]) {
       expect(isCurrent(articles, path), path).toBe(true);
     }
     expect(isCurrent(articles, "/listesx")).toBe(false);

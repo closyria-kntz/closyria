@@ -1,4 +1,4 @@
-import { type ItemView, isHttpUrl } from "@closyria/shared";
+import { bareItemHref, type ItemView, isHttpUrl } from "@closyria/shared";
 
 /**
  * What a card or a sheet shows of one of her items, product or not. An article born from an order line that matched
@@ -6,9 +6,9 @@ import { type ItemView, isHttpUrl } from "@closyria/shared";
  * follow-up; it shows what she paid and its order's shop.
  */
 
-/** Its product sheet; null without a product. */
-export function itemHref(item: ItemView): string | null {
-  return item.product ? `/produits/${item.product.id}` : null;
+/** Its sheet: its product's, or its own for an article without a product. */
+export function itemHref(item: Pick<ItemView, "id" | "product">): string {
+  return item.product ? `/produits/${item.product.id}` : bareItemHref(item.id);
 }
 
 /** The shop's current price (and its crossed one); without a product, what she paid, in euros. */

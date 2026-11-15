@@ -421,17 +421,19 @@ describe("sendAlert", () => {
       return row?.id as string;
     };
     const { push, calls } = fakePush();
+    const draftId = await order("draft");
     const draft = await event(who, null, {
       kind: "order_received",
-      orderId: await order("draft"),
+      orderId: draftId,
       shopId,
       sendAfter: afternoon,
     });
     expect(await sendAlert({ db, push }, draft, afternoon, once)).toBe("sent");
+    // Straight to the order on « Mes commandes » (Task 7).
     expect(calls[0]?.message).toEqual({
       title: "Commande reçue de Maison Lune",
       body: "Vérifie les articles, puis « C'est bon ».",
-      url: "/nouvelles",
+      url: `/mes-commandes#commande-${draftId}`,
     });
     const confirmed = await event(who, null, {
       kind: "order_received",
@@ -486,10 +488,11 @@ describe("sendAlert", () => {
     ) => event(her, null, { kind, ...ids, shopId, sendAfter: afternoon, ...extra });
     const { push, calls } = fakePush();
 
+    const delivered = await parcel("delivered");
     expect(
       await sendAlert(
         { db, push },
-        await parcelEvent("parcel_delivered", await parcel("delivered"), { itemsReceived: true, parcelsLeft: 0 }),
+        await parcelEvent("parcel_delivered", delivered, { itemsReceived: true, parcelsLeft: 0 }),
         afternoon,
         once,
       ),
@@ -497,7 +500,7 @@ describe("sendAlert", () => {
     expect(calls.at(-1)?.message).toEqual({
       title: "Ton colis Maison Lune est arrivé",
       body: "Ses articles sont dans « Reçu ».",
-      url: "/nouvelles",
+      url: `/mes-commandes#commande-${delivered.orderId}`,
     });
     expect(
       await sendAlert(

@@ -43,7 +43,8 @@
         "price_drop": "Voir l’article",
         "size_back": "Voir l’article",
         "target_price": "Voir l’article",
-        "opinion": "Lire l’avis"
+        "opinion": "Lire l’avis",
+        "return_reminder": "Voir l’article"
       }
     },
     "news": {
@@ -77,8 +78,10 @@
         "group_order": "Ouvrir",
         "gift_reminder": "Ouvrir",
         "sale_period": "Voir",
-        "shop_promo": "Voir"
-      }
+        "shop_promo": "Voir",
+        "return_reminder": "Voir"
+      },
+      "return_reminder": "{days, plural, one {Plus qu'un jour pour retourner <b>{name}</b>} other {Plus que # jours pour retourner <b>{name}</b>}}"
     },
     "add": {
       "title": "Tu as vu un vêtement qui te plaît ?",
@@ -105,6 +108,10 @@
       "body": "Crée ton compte pour garder tes articles sur tous tes appareils",
       "action": "Créer mon compte",
       "dismiss": "Fermer"
+    },
+    "orders": {
+      "title": "À valider",
+      "all": "Mes commandes"
     }
   },
   "Shell": {
@@ -155,6 +162,13 @@
       "title": "Aide",
       "phone": "Ajouter depuis ton téléphone",
       "phoneHint": "Sur iPhone et sur Android"
+    },
+    "orders": {
+      "title": "Mes commandes",
+      "row": "Mes commandes",
+      "rowHint": "À valider, en route, reçues",
+      "inbox": "Mes commandes par e-mail",
+      "inboxHint": "Ton adresse pour transférer tes e-mails de commande"
     }
   },
   "Add": {
@@ -2190,7 +2204,8 @@
       "notifications": "Notifications",
       "trash": "Corbeille",
       "account": "Mon compte",
-      "phone": "Ajouter depuis le téléphone"
+      "phone": "Ajouter depuis le téléphone",
+      "orders": "Commandes par e-mail"
     },
     "colors": {
       "plum": "Prune",
@@ -2730,7 +2745,193 @@
       "notes": "Notes",
       "wish": "Je le veux",
       "ordered": "Je l'ai commandé",
-      "save": "Ajouter"
+      "save": "Ajouter",
+      "metadata": "Un article vu sur Instagram",
+      "choice": "Ce que tu veux faire",
+      "photo": "Photo (depuis ta galerie, facultative)",
+      "busy": "Ajout…",
+      "badLink": "Ce lien n'est pas un lien Instagram. Colle-le depuis l'accueil.",
+      "errors": {
+        "name": "Écris le nom de l'article.",
+        "price": "Écris un prix, par exemple 45 ou 45,90.",
+        "rate_limited": "Beaucoup d'ajouts d'un coup : réessaie dans une heure.",
+        "failed": "L'article n'a pas été ajouté. Réessaie dans un instant.",
+        "photo": "L'article est ajouté, mais pas sa photo : ajoute-la depuis sa fiche."
+      },
+      "home": "Retour à l'accueil"
+    },
+    "inbox": {
+      "metadata": "Mes commandes par e-mail",
+      "title": "Mes commandes par e-mail",
+      "intro": "Transfère tes e-mails de commande à ton adresse Closyria : on prépare la commande, tu n'as plus qu'à la valider.",
+      "loading": "Chargement de ton adresse…",
+      "failed": "Ton adresse ne s'est pas affichée. Réessaie dans un instant.",
+      "retry": "Réessayer",
+      "guestTitle": "Tes commandes demandent un compte",
+      "guestBody": "Ton adresse de commandes est liée à ton compte : c'est elle qui reconnaît tes e-mails.",
+      "createAccount": "Crée ton compte pour suivre tes commandes",
+      "addressTitle": "Ton adresse",
+      "addressHint": "Seuls les e-mails que tu transfères depuis ta propre adresse e-mail sont lus. Les autres sont ignorés.",
+      "copy": "Copier",
+      "copied": "Adresse copiée",
+      "copyFailed": "La copie n'a pas marché : sélectionne l'adresse pour la copier.",
+      "change": "Changer d'adresse",
+      "changeTitle": "Changer d'adresse ?",
+      "changeBody": "L'ancienne adresse cessera aussitôt de fonctionner.",
+      "changeHint": "Utile si quelqu'un d'autre la connaît. Pense à mettre la nouvelle dans tes règles de transfert.",
+      "cancel": "Annuler",
+      "changed": "Nouvelle adresse prête",
+      "changeFailed": "L'adresse n'a pas changé. Réessaie dans un instant.",
+      "gmailCodeTitle": "Code de confirmation Gmail",
+      "gmailCodeBody": "Recopie ce code dans les réglages de Gmail pour confirmer le transfert.",
+      "helpTitle": "Comment transférer tes e-mails",
+      "helpRule": "Utilise toujours « Transférer », avec ton adresse Closyria en destinataire. Une copie cachée (Cci), un alias ou une « redirection » ne marchent pas.",
+      "oneByOne": "Un e-mail à la fois",
+      "automatic": "Tous tes e-mails de commande, automatiquement",
+      "gmail": {
+        "name": "Gmail",
+        "one": "Ouvre l'e-mail de commande, touche « Transférer », colle ton adresse Closyria et envoie.",
+        "auto1": "Sur un ordinateur, ouvre Gmail, puis la roue dentée › « Voir tous les paramètres ».",
+        "auto2": "Onglet « Transfert et POP/IMAP » › « Ajouter une adresse de transfert » : colle {address}.",
+        "auto3": "Gmail envoie un code de confirmation : il s'affiche en haut de cette page. Recopie-le dans Gmail.",
+        "auto3Code": "Gmail envoie un code de confirmation : recopie {code} dans Gmail.",
+        "auto4": "Crée un filtre : cherche par exemple « commande OR expédition », touche « Créer un filtre », puis coche « Transférer à » et choisis ton adresse Closyria."
+      },
+      "outlook": {
+        "name": "Outlook",
+        "one": "Ouvre l'e-mail de commande, choisis « Transférer » (pas « Rediriger »), colle ton adresse Closyria et envoie.",
+        "auto1": "Sur outlook.com, ouvre la roue dentée › « Courrier » › « Règles » › « Ajouter une règle ».",
+        "auto2": "Condition : « L'objet contient » « commande » (ou l'adresse d'une boutique).",
+        "auto3": "Action : « Transférer à » (pas « Rediriger vers ») {address}, puis enregistre."
+      },
+      "icloud": {
+        "name": "iCloud",
+        "one": "Dans Mail, ouvre l'e-mail de commande, touche la flèche › « Transférer », colle ton adresse Closyria et envoie.",
+        "auto": "Les règles automatiques d'iCloud changent l'expéditeur : leurs e-mails ne sont pas lus. Transfère tes commandes une par une."
+      },
+      "ordersLink": "Voir mes commandes"
+    },
+    "page": {
+      "metadata": "Mes commandes",
+      "title": "Mes commandes",
+      "intro": "Tes commandes transférées par e-mail ou saisies à la main, et où en sont tes colis.",
+      "loading": "Chargement de tes commandes…",
+      "failed": "Tes commandes ne se sont pas affichées. Réessaie dans un instant.",
+      "retry": "Réessayer",
+      "guestTitle": "Tes commandes demandent un compte",
+      "guestBody": "Crée ton compte : tu pourras transférer tes e-mails de commande et suivre tes colis.",
+      "toValidate": "À valider",
+      "orders": "Tes commandes",
+      "emptyTitle": "Pas encore de commande",
+      "emptyBody": "Transfère un e-mail de commande à ton adresse Closyria, ou ajoute un numéro de suivi sur un article « Commandé ».",
+      "settings": "Mes commandes par e-mail",
+      "manual": "Saisir une commande à la main",
+      "manualTitle": "Une commande saisie à la main"
+    },
+    "card": {
+      "toValidate": "À valider",
+      "received": "Commande reçue de {shop}",
+      "receivedNoShop": "Commande reçue",
+      "noShop": "Ta commande",
+      "orderedOn": "Commandée le {date}",
+      "ref": "n° {ref}",
+      "quantity": "× {count}",
+      "ok": "C'est bon",
+      "fix": "Corriger",
+      "dismiss": "Ce n'est pas une commande",
+      "done": "Commande validée",
+      "dismissed": "Mise de côté",
+      "failed": "Ça n'a pas marché. Réessaie dans un instant.",
+      "unreadTitle": "On n'a pas su lire cet e-mail",
+      "unreadBody": "Reçu le {date}. Saisis la commande toi-même : la boutique, les articles et le numéro de suivi.",
+      "unreadEnter": "Saisir la commande",
+      "returnUntil": "Retour possible jusqu'au {date}",
+      "articles": "Articles",
+      "parcels": "Colis"
+    },
+    "form": {
+      "shop": "Boutique",
+      "article": "Article {n}",
+      "name": "Nom de l'article",
+      "size": "Taille",
+      "color": "Couleur",
+      "quantity": "Quantité",
+      "price": "Prix (€)",
+      "addLine": "Ajouter un article",
+      "removeLine": "Retirer l'article {n}",
+      "tracking": "Numéro de suivi (facultatif)",
+      "carrier": "Transporteur",
+      "carrierGuess": "Deviné d'après le numéro",
+      "save": "Enregistrer",
+      "cancel": "Annuler",
+      "errors": {
+        "shop": "Écris le nom de la boutique.",
+        "name": "Écris le nom de chaque article.",
+        "price": "Écris un prix, par exemple 59 ou 59,90.",
+        "tracking": "Ce numéro de suivi ne semble pas complet : vérifie-le.",
+        "tracking_exists": "Ce numéro est déjà sur une autre de tes commandes.",
+        "order_exists": "Cette commande est déjà saisie.",
+        "rate_limited": "Beaucoup d'ajouts d'un coup : réessaie dans une heure.",
+        "failed": "Ça n'a pas marché. Réessaie dans un instant."
+      }
+    },
+    "parcel": {
+      "carrier": {
+        "colissimo": "Colissimo",
+        "lettre_suivie": "Lettre suivie",
+        "chronopost": "Chronopost",
+        "mondial_relay": "Mondial Relay",
+        "gls": "GLS",
+        "dpd": "DPD",
+        "colis_prive": "Colis Privé",
+        "ups": "UPS",
+        "dhl": "DHL",
+        "unknown": "Transporteur inconnu"
+      },
+      "status": {
+        "pending": "En attente du transporteur",
+        "in_transit": "En route",
+        "out_for_delivery": "En cours de livraison",
+        "pickup_ready": "Disponible en point relais",
+        "delivered": "Livré",
+        "exception": "Incident de livraison",
+        "unknown": "Pas de nouvelles du transporteur"
+      },
+      "deliveredOn": "Livré le {date}",
+      "estimated": "Arrivée prévue le {date}",
+      "follow": "Suivre chez le transporteur",
+      "newTab": "(s'ouvre dans un nouvel onglet)",
+      "pickCarrier": "Transporteur",
+      "carrierHint": "Pas le bon transporteur ? Choisis-le : le suivi reprend.",
+      "pickPlaceholder": "Choisir…",
+      "saveCarrier": "Enregistrer le transporteur",
+      "carrierSaved": "Transporteur enregistré : le suivi reprend.",
+      "addTracking": "Ajouter un numéro de suivi",
+      "trackingField": "Numéro de suivi",
+      "carrierOptional": "Transporteur (facultatif)",
+      "carrierAuto": "Deviner d'après le numéro",
+      "add": "Ajouter",
+      "added": "Numéro ajouté : on suit ton colis.",
+      "cancel": "Annuler",
+      "changeCarrier": "Changer de transporteur"
+    },
+    "item": {
+      "title": "Commande / colis",
+      "viewOrder": "Voir la commande",
+      "orderOf": "Commande {shop}",
+      "orderNoShop": "Ta commande",
+      "orderedOn": "Commandée le {date}",
+      "noParcel": "Pas encore de numéro de suivi.",
+      "guest": "Crée ton compte pour suivre tes commandes",
+      "loadFailed": "Ta commande ne s'est pas affichée."
+    },
+    "sheet": {
+      "back": "Mes articles",
+      "paid": "Payé {price}",
+      "instagram": "Voir la publication Instagram",
+      "notFound": "Cet article n'existe plus.",
+      "loadFailed": "Cet article ne s'est pas affiché. Réessaie dans un instant.",
+      "retry": "Réessayer"
     }
   },
   "Listing": {

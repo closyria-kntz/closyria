@@ -22,6 +22,7 @@ export const homeNewsKindSchema = z.enum([
   "gift_reminder",
   "sale_period",
   "shop_promo",
+  "return_reminder",
 ]);
 export type HomeNewsKind = z.infer<typeof homeNewsKindSchema>;
 
@@ -56,6 +57,9 @@ export const homeNewsSchema = z.object({
   groupOrderStatus: groupOrderStatusSchema.nullable(),
   /** sale_period: the first day of the sales (`title` is their name). */
   startsOn: z.iso.date().nullable(),
+  /** return_reminder: the last day to send the item back, and how many days were left when she was reminded. */
+  returnDeadline: z.iso.date().nullable(),
+  returnDaysLeft: z.number().int().nonnegative().nullable(),
 });
 export type HomeNews = z.infer<typeof homeNewsSchema>;
 

@@ -18,6 +18,12 @@ describe("createCapture", () => {
     );
   });
 
+  it("tells an Instagram link apart: the short form, nothing captured", async () => {
+    const url = "https://www.instagram.com/p/abc/";
+    expect(await createCapture(url, deps(json({ form: "instagram", url }, 200)))).toEqual({ ok: true, instagram: url });
+    expect(await createCapture(url, deps(json({ form: "other" }, 200)))).toEqual({ ok: false, error: "failed" });
+  });
+
   it("maps 400 and 429 to their error", async () => {
     expect(await createCapture("x", deps(json({ error: "invalid_url" }, 400)))).toEqual({
       ok: false,

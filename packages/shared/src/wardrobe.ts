@@ -444,6 +444,8 @@ export const itemViewSchema = z.object({
   brandOverride: z.string().nullable(),
   /** Where she found an article without a product: its Instagram link (never read); null otherwise. */
   sourceUrl: z.string().nullable(),
+  /** « Retour possible jusqu'au … »: the last day to send it back (Paris, `YYYY-MM-DD`), set at its delivery. */
+  returnDeadline: z.iso.date().nullable(),
   categoryId: z.uuid().nullable(),
   colorId: z.uuid().nullable(),
   coverMediaId: z.uuid().nullable(),
@@ -740,6 +742,7 @@ export const wardrobeErrorCodes = [
   "tracking_exists",
   "order_exists",
   "order_not_confirmed",
+  "parcel_delivered",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];

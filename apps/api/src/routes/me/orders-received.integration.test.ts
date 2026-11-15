@@ -246,11 +246,17 @@ describe("« Nouvelles »", () => {
     ]);
     const page = await json<AlertPage>(await call("GET", "/api/me/alerts", a.cookie), 200);
     const reminder = page.alerts.find((e) => e.kind === "return_reminder" && e.itemId === itemIds[0]);
-    expect(reminder).toMatchObject({ title: "Robe Iris", href: "/nouvelles", returnDaysLeft: 3 });
+    // Articles without a product: their own sheet (Task 7).
+    expect(reminder).toMatchObject({ title: "Robe Iris", href: `/articles/${itemIds[0]}`, returnDaysLeft: 3 });
     const late = page.alerts.find((e) => e.kind === "return_reminder" && e.itemId === itemIds[1]);
     expect(late).toMatchObject({ title: "Pull Marin", returnDaysLeft: 2 });
     const question = page.alerts.find((e) => e.kind === "order_received_check");
-    expect(question).toMatchObject({ title: "Maison Lune", shopName: "Maison Lune", itemId: null });
+    expect(question).toMatchObject({
+      title: "Maison Lune",
+      shopName: "Maison Lune",
+      itemId: null,
+      href: `/mes-commandes#commande-${orderId}`,
+    });
   });
 });
 

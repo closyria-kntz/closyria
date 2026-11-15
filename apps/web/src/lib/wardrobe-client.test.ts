@@ -85,6 +85,7 @@ const item = {
   nameOverride: null,
   brandOverride: null,
   sourceUrl: null,
+  returnDeadline: null,
   categoryId: null,
   colorId: null,
   coverMediaId: null,

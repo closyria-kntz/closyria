@@ -7,6 +7,7 @@ import { type ReactNode, useId, useState } from "react";
 import { saleDayWords } from "@/lib/alert-words";
 import { formatPrice } from "@/lib/price";
 import { relativeDate } from "@/lib/relative-date";
+import { useCalendarDay } from "./order-parts";
 import { focusRing } from "./ui";
 
 /** « Ce qui a changé » shows this many; « Tout voir » the rest. */
@@ -22,6 +23,7 @@ export const NEWS_ICONS: Record<HomeNewsKind, string> = {
   gift_reminder: "🎁",
   sale_period: "🗓️",
   shop_promo: "🏬",
+  return_reminder: "↩️",
 };
 
 /** The title of a section of « Accueil » (mockup .t3) and the link or button on its right (mockup .more). */
@@ -46,6 +48,8 @@ export function useSaleSentence() {
 /** A news in words: its sentence (with `strong` around the name) and its second line. */
 export function useNewsWords() {
   const t = useTranslations("Home.news");
+  const tOrders = useTranslations("Orders");
+  const calendarDay = useCalendarDay();
   const locale = useLocale();
   const saleSentence = useSaleSentence();
   const price = (cents: number | null, currency: string | null) =>
@@ -100,6 +104,11 @@ export function useNewsWords() {
         return { line: saleSentence(news.startsOn, strong), detail: name };
       case "shop_promo":
         return { line: t.rich("shop_promo", { shop: name, b: strong }), detail: "" };
+      case "return_reminder":
+        return {
+          line: t.rich("return_reminder", { days: news.returnDaysLeft ?? 0, name, b: strong }),
+          detail: news.returnDeadline ? tOrders("returnUntil", { date: calendarDay(news.returnDeadline) }) : "",
+        };
     }
   };
 }

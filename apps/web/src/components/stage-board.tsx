@@ -127,9 +127,8 @@ export function StageBoard({
 
 const boardRowClass = "flex items-center gap-space-2-5 rounded-board-row bg-surface-raised p-space-1-5";
 
-/** A row of the board: a link to its sheet, or plain for an article without a product (born from an order). */
-function BoardRow({ href, children }: { href: string | null; children: ReactNode }) {
-  if (!href) return <div className={boardRowClass}>{children}</div>;
+/** A row of the board: a link to its sheet (its product's, or its own without a product). */
+function BoardRow({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link href={href} className={`${boardRowClass} ${focusRing}`}>
       {children}

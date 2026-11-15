@@ -452,7 +452,15 @@ export const orderViewSchema = z.object({
 });
 export type OrderView = z.infer<typeof orderViewSchema>;
 
-export const orderListSchema = z.object({ orders: z.array(orderViewSchema) });
+/** An e-mail of hers nothing could read (« On n'a pas su lire cet e-mail »): she types the order, or sets it aside. */
+export const unreadEmailViewSchema = z.object({ id: uuidSchema, receivedAt: dateTimeSchema });
+export type UnreadEmailView = z.infer<typeof unreadEmailViewSchema>;
+
+export const orderListSchema = z.object({
+  orders: z.array(orderViewSchema),
+  /** Her e-mails of the last 30 days nothing could read, newest first; those she typed or set aside are not listed. */
+  unreadEmails: z.array(unreadEmailViewSchema),
+});
 export type OrderList = z.infer<typeof orderListSchema>;
 
 /** « Mes commandes par e-mail »: her active address, null before she asked for one. */
@@ -661,3 +669,50 @@ export const instagramItemInputSchema = z
     path: ["priceCents"],
   });
 export type InstagramItemInput = z.infer<typeof instagramItemInputSchema>;
+
+// --- Screens (Task 7) --------------------------------------------------------------------------------------------
+
+/** « Mes commandes »: her orders to validate and her orders. */
+export const ORDERS_PAGE_HREF = "/mes-commandes";
+
+/** One order on « Mes commandes » (where its notifications lead). */
+export const orderHref = (orderId: string) => `${ORDERS_PAGE_HREF}#commande-${orderId}`;
+
+/** The sheet of an article without a product (born from an order line or an Instagram link). */
+export const bareItemHref = (itemId: string) => `/articles/${itemId}`;
+
+/**
+ * « Suivre chez le transporteur » (RF 4): the carrier's own tracking page for the number; for a carrier not known, a
+ * tracking search on every carrier.
+ */
+export function carrierTrackingUrl(carrier: Carrier | null, trackingNumber: string): string {
+  const n = encodeURIComponent(trackingNumber);
+  switch (carrier) {
+    case "colissimo":
+    case "lettre_suivie":
+      return `https://www.laposte.fr/outils/suivre-vos-envois?code=${n}`;
+    case "chronopost":
+      return `https://www.chronopost.fr/tracking-no-cms/suivi-page?listeNumerosLT=${n}`;
+    case "mondial_relay":
+      return `https://www.mondialrelay.fr/suivi-de-colis/?numeroExpedition=${n}`;
+    case "gls":
+      return `https://gls-group.com/FR/fr/suivi-colis?match=${n}`;
+    case "dpd":
+      return `https://trace.dpd.fr/fr/trace/${n}`;
+    case "colis_prive":
+      return `https://www.colisprive.com/moncolis/pages/detailColis.aspx?numColis=${n}`;
+    case "ups":
+      return `https://www.ups.com/track?loc=fr_FR&tracknum=${n}`;
+    case "dhl":
+      return `https://www.dhl.com/fr-fr/home/suivi.html?tracking-id=${n}`;
+    case null:
+      return `https://t.17track.net/fr#nums=${n}`;
+  }
+}
+
+/**
+ * « Changer de transporteur » on one of her parcels (`PATCH /api/me/orders/{id}/parcels/{parcelId}`): the tracking
+ * starts again with that carrier (step `pending`, no failure counted, next check at the usual rhythm).
+ */
+export const parcelCarrierInputSchema = z.object({ carrier: carrierSchema });
+export type ParcelCarrierInput = z.infer<typeof parcelCarrierInputSchema>;
