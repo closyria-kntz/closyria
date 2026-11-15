@@ -384,6 +384,77 @@ describe("parseInboundEmail — the AI's turn", () => {
     expect(texts).toHaveLength(1);
   });
 
+  it("keeps the shop's name the AI read on the order, never renaming the catalogue's shop (2026-11-15)", async () => {
+    const store = memoryStore();
+    const who = await person();
+    const ai = async () => ({ ...aiOrder, shopName: "  Les Petites   Mailles  " });
+    const id = await received(store, who, fixture("unknown-handmade"));
+    expect(await parseInboundEmail(deps(store, ai), id, now)).toBe("parsed");
+    const [order] = await ordersOf(who.userId);
+    expect(order?.shopName).toBe("Les Petites Mailles");
+    const [shop] = await handle.db
+      .select()
+      .from(schema.shops)
+      .where(eq(schema.shops.id, order?.shopId as string));
+    // The shared catalogue keeps the domain as the pending shop's name.
+    expect(shop).toMatchObject({ name: "petites-mailles.example", status: "pending" });
+  });
+
+  it("keeps a name too long to 80 characters, and none when the e-mail gives none", async () => {
+    const store = memoryStore();
+    const who = await person();
+    const long = `${"Atelier ".repeat(14)}Fin`;
+    await parseInboundEmail(
+      deps(store, async () => ({ ...aiOrder, shopName: long })),
+      await received(store, who, fixture("unknown-handmade")),
+      now,
+    );
+    expect((await ordersOf(who.userId))[0]?.shopName?.length).toBeLessThanOrEqual(80);
+    const other = await person();
+    await parseInboundEmail(
+      deps(store, async () => ({ ...aiOrder, shopName: null })),
+      await received(store, other, fixture("unknown-handmade")),
+      now,
+    );
+    expect((await ordersOf(other.userId))[0]?.shopName).toBeNull();
+  });
+
+  it("a later e-mail of the order fills a missing name, never the one she typed (« Corriger »)", async () => {
+    const store = memoryStore();
+    const tracked = (shopName: string | null) => async () => ({
+      ...aiOrder,
+      shopName,
+      trackings: [{ trackingNumber: "6A18537412398", carrier: "colissimo" as const }],
+    });
+    // No name in the first e-mail: the second one gives it.
+    const who = await person();
+    await parseInboundEmail(deps(store, tracked(null)), await received(store, who, fixture("unknown-handmade")), now);
+    await parseInboundEmail(
+      deps(store, tracked("Les Petites Mailles")),
+      await received(store, who, fixture("unknown-handmade")),
+      now,
+    );
+    const [filled, ...more] = await ordersOf(who.userId);
+    expect(more).toHaveLength(0);
+    expect(filled?.shopName).toBe("Les Petites Mailles");
+    // A name she typed, matching no shop: kept.
+    const her = await person();
+    await parseInboundEmail(deps(store, tracked(null)), await received(store, her, fixture("unknown-handmade")), now);
+    const [typed] = await ordersOf(her.userId);
+    await handle.db
+      .update(schema.orders)
+      .set({ shopId: null, shopName: "Mailles de Lou" })
+      .where(eq(schema.orders.id, typed?.id as string));
+    await parseInboundEmail(
+      deps(store, tracked("Les Petites Mailles")),
+      await received(store, her, fixture("unknown-handmade")),
+      now,
+    );
+    const [kept, ...again] = await ordersOf(her.userId);
+    expect(again).toHaveLength(0);
+    expect(kept?.shopName).toBe("Mailles de Lou");
+  });
+
   it("leaves the shop empty rather than guess one", async () => {
     const store = memoryStore();
     const who = await person();

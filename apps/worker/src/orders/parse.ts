@@ -10,6 +10,7 @@ import {
   type ParsedOrder,
   type ParsedOrderLine,
   parcelCheckUntil,
+  parsedShopName,
 } from "@closyria/shared";
 import { ObjectNotFoundError, type ObjectStore } from "@closyria/storage";
 import { isLastAttempt, type MetadataJob } from "../alerts/send";
@@ -157,7 +158,7 @@ async function completeLines(tx: Tx, orderId: string, lines: LineRow[]) {
 /**
  * Reads one accepted e-mail (`queued`) into a draft order (spec C2, Task 3): known formats first
  * (`parseOrderEmail`), the AI when they fail and it is on. The shop is the one owning the e-mail's site (created as
- * `pending`, like a capture, when unknown). An e-mail of an order she already has (same shop and order number, or
+ * `pending`, like a capture, when unknown); the name the e-mail gives is kept on the order (`orders.shop_name`). An e-mail of an order she already has (same shop and order number, or
  * one of its tracking numbers) completes it instead (RF 2): parcels added, a draft's missing articles and date
  * filled. A new order is announced (« Commande reçue de {boutique} », alert `order_received`, same rules as the
  * other alerts). The e-mail ends `parsed`, or `failed` when nothing was read (« On n'a pas su lire cet e-mail »).
@@ -210,6 +211,9 @@ export async function parseInboundEmail(
 
   const shop = parsed.shopHost ? await findOrCreateShop(db, `https://${parsed.shopHost}/`) : null;
   const order = parsed;
+  // The shop's name as the e-mail writes it (« Lola & Co »), kept on the order: shown while its shop is still pending
+  // (named after its domain), never written on the shared catalogue (2026-11-15).
+  const shopName = parsedShopName(parsed.shopName);
   const lines = await withProducts(db, shop?.id ?? null, parsed.lines);
   return db.transaction(async (tx) => {
     const keys = [
@@ -240,7 +244,12 @@ export async function parseInboundEmail(
         }
       }
       await addParcels(tx, existing.id, order, now);
-      await tx.update(schema.orders).set({ updatedAt: now }).where(eq(schema.orders.id, existing.id));
+      // A name the order lacks, when this e-mail is of the same shop; never one she typed (« Corriger »).
+      const named = existing.shopName === null && shopName !== null && existing.shopId === (shop?.id ?? null);
+      await tx
+        .update(schema.orders)
+        .set({ updatedAt: now, ...(named ? { shopName } : {}) })
+        .where(eq(schema.orders.id, existing.id));
     } else {
       const [created] = await tx
         .insert(schema.orders)
@@ -248,6 +257,7 @@ export async function parseInboundEmail(
           userId,
           profileId: profile.id,
           shopId: shop?.id ?? null,
+          shopName,
           externalRef: order.externalRef,
           orderedAt: order.orderedAt ? new Date(order.orderedAt) : null,
           status: "draft",

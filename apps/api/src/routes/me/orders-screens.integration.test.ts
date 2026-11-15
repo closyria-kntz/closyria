@@ -1,4 +1,4 @@
-import { eq, schema } from "@closyria/db";
+import { eq, inArray, schema } from "@closyria/db";
 import type { HomeView, ItemView, OrderList, OrderView, OwnerGroupOrder, WishlistView } from "@closyria/shared";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { BASE_URL, createCatalogHarness } from "../../catalog/test-app";
@@ -108,6 +108,71 @@ describe("GET /api/me/orders", () => {
     const list = await json<OrderList>(await call("GET", "/api/me/orders", a.cookie), 200);
     const parcel = list.orders.flatMap((o) => o.parcels).find((p) => p.id === parcelId);
     expect(parcel?.lastEventLabel).toBe("En cours d'acheminement");
+  });
+});
+
+describe("the shop's name read in the e-mail (2026-11-15)", () => {
+  it("shows it while the order's shop is still pending, the catalogue's name once approved", async () => {
+    const a = await account();
+    const [pending] = await t.db
+      .insert(schema.shops)
+      .values({ name: "lolaandco.example", slug: `screens-pending-${++counter}`, status: "pending" })
+      .returning();
+    const approvedId = await shop("Lola & Co Paris");
+    const fromEmail = await orderWithParcel(a, { carrier: "colissimo", status: "pending" }, pending?.id as string);
+    const approved = await orderWithParcel(a, { carrier: "colissimo", status: "pending" }, approvedId);
+    const plain = await orderWithParcel(a, { carrier: "colissimo", status: "pending" }, pending?.id as string);
+    await t.db
+      .update(schema.orders)
+      .set({ shopName: "Lola & Co" })
+      .where(inArray(schema.orders.id, [fromEmail.orderId, approved.orderId]));
+
+    const list = await json<OrderList>(await call("GET", "/api/me/orders", a.cookie), 200);
+    const nameOf = (id: string) => list.orders.find((o) => o.id === id)?.shopName;
+    expect(nameOf(fromEmail.orderId)).toBe("Lola & Co");
+    expect(nameOf(approved.orderId)).toBe("Lola & Co Paris");
+    // No name read: the pending shop's own (its domain).
+    expect(nameOf(plain.orderId)).toBe("lolaandco.example");
+    // Never written on the shared catalogue.
+    expect(
+      (
+        await t.db
+          .select()
+          .from(schema.shops)
+          .where(eq(schema.shops.id, pending?.id as string))
+      )[0]?.name,
+    ).toBe("lolaandco.example");
+
+    // « Nouvelles » names it the same way.
+    await t.db.insert(schema.alertEvents).values([
+      {
+        userId: a.userId,
+        profileId: a.moi,
+        kind: "parcel_delivered",
+        orderId: fromEmail.orderId,
+        parcelId: fromEmail.parcelId,
+        shopId: pending?.id as string,
+        status: "sent",
+      },
+      {
+        userId: a.userId,
+        profileId: a.moi,
+        kind: "parcel_delivered",
+        orderId: approved.orderId,
+        parcelId: approved.parcelId,
+        shopId: approvedId,
+        status: "sent",
+      },
+    ]);
+    const news = await json<{ alerts: { kind: string; title: string; shopName: string | null }[] }>(
+      await call("GET", "/api/me/alerts", a.cookie),
+      200,
+    );
+    expect(news.alerts.map((n) => n.shopName).sort()).toEqual(["Lola & Co", "Lola & Co Paris"]);
+
+    // The sheet of an article without a product names its order's shop the same way.
+    const sheet = await json<ItemView>(await call("GET", `/api/me/items/${fromEmail.itemId}`, a.cookie), 200);
+    expect(sheet.shopName).toBe("Lola & Co");
   });
 });
 

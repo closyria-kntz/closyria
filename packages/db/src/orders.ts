@@ -3,7 +3,7 @@
  * (her « Oui » to « Tu as reçu ta commande ? », Task 6), so that both move them the same way.
  */
 import { DEFAULT_RETURN_DAYS, returnDeadline } from "@closyria/shared";
-import { and, asc, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import type { Database } from "./index";
 import * as schema from "./schema";
 
@@ -100,4 +100,19 @@ export function receivedQuestionOpen(): SQL {
     and ("orders"."received_not_yet_at" is null
       or "orders"."received_not_yet_at" < coalesce("orders"."received_asked_again_at", "orders"."received_asked_at"))
     and ${orderAwaitingNews()})`;
+}
+
+/**
+ * The shop's name an order shows, in SQL (`orderShopDisplayName` of `packages/shared`): the catalogue's name, except
+ * while the shop is still `pending` (named after its domain, never looked at by the admin), when the order's own name
+ * (read in the e-mail, or typed) is shown; without a shop, the order's own name. Pass the columns qualified (joined
+ * tables, or aliases written out).
+ */
+export function orderShopNameSql(
+  shopName: SQLWrapper,
+  shopStatus: SQLWrapper,
+  orderShopName: SQLWrapper,
+): SQL<string | null> {
+  return sql<string | null>`(case when ${shopStatus} = 'pending' and ${orderShopName} is not null then ${orderShopName}
+    else coalesce(${shopName}, ${orderShopName}) end)`;
 }

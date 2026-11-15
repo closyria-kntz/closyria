@@ -327,6 +327,12 @@ describe("« Tu as reçu ta commande ? »", () => {
     const typed = await order(who, { shopName: "Atelier Nuit" });
     const bare = await order(who);
     const answered = await order(who);
+    // A shop still pending (named after its domain): the name read in the e-mail (2026-11-15).
+    const [pending] = await handle.db
+      .insert(schema.shops)
+      .values({ name: "lolaandco.example", slug: `returns-pending-${++counter}`, status: "pending" })
+      .returning();
+    const fromEmail = await order(who, { shopId: pending?.id as string, shopName: "Lola & Co" });
     await askReceived(handle.db, now);
     const { push, messages } = fakePush();
     const send = async (orderId: string) => {
@@ -343,6 +349,8 @@ describe("« Tu as reçu ta commande ? »", () => {
     expect(messages[1]?.title).toBe("Tu as reçu ta commande Atelier Nuit ?");
     expect(await send(bare)).toBe("sent");
     expect(messages[2]?.title).toBe("Tu as reçu ta commande ?");
+    expect(await send(fromEmail)).toBe("sent");
+    expect(messages[3]?.title).toBe("Tu as reçu ta commande Lola & Co ?");
 
     // Answered « Pas encore » before the send (held at night): nothing to ask.
     await handle.db

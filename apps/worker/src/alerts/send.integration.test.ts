@@ -577,6 +577,77 @@ describe("sendAlert", () => {
     ).toBe("skipped");
   });
 
+  it("names a pending shop by the name read in the e-mail, an approved one by the catalogue's (2026-11-15)", async () => {
+    const { db } = handle;
+    const her = await person();
+    const shop = async (status: string, name: string) => {
+      const [row] = await db
+        .insert(schema.shops)
+        .values({ name, slug: `send-pending-${++counter}`, status })
+        .returning();
+      return row?.id as string;
+    };
+    const pendingId = await shop("pending", "lolaandco.example");
+    const approvedId = await shop("published", "Lola & Co Paris");
+    const order = async (shopId: string, status: string) => {
+      const [row] = await db
+        .insert(schema.orders)
+        .values({
+          userId: her.userId,
+          profileId: her.profileId,
+          shopId,
+          shopName: "Lola & Co",
+          status,
+          source: "email",
+          parseMethod: "ai",
+        })
+        .returning();
+      return row?.id as string;
+    };
+    const { push, calls } = fakePush();
+    const received = async (shopId: string) => {
+      const orderId = await order(shopId, "draft");
+      await sendAlert(
+        { db, push },
+        await event(her, null, { kind: "order_received", orderId, shopId, sendAfter: afternoon }),
+        afternoon,
+        once,
+      );
+      return calls.at(-1)?.message.title;
+    };
+    expect(await received(pendingId)).toBe("Commande reçue de Lola & Co");
+    expect(await received(approvedId)).toBe("Commande reçue de Lola & Co Paris");
+
+    const delivered = async (shopId: string) => {
+      const orderId = await order(shopId, "confirmed");
+      const [parcel] = await db
+        .insert(schema.parcels)
+        .values({
+          orderId,
+          carrier: "gls",
+          trackingNumber: `L${++counter}`,
+          status: "delivered",
+          checkUntil: afternoon,
+        })
+        .returning();
+      await sendAlert(
+        { db, push },
+        await event(her, null, {
+          kind: "parcel_delivered",
+          orderId,
+          parcelId: parcel?.id,
+          shopId,
+          sendAfter: afternoon,
+        }),
+        afternoon,
+        once,
+      );
+      return calls.at(-1)?.message.title;
+    };
+    expect(await delivered(pendingId)).toBe("Ton colis Lola & Co est arrivé");
+    expect(await delivered(approvedId)).toBe("Ton colis Lola & Co Paris est arrivé");
+  });
+
   it("words a parcel's notification", () => {
     expect(parcelTitle("parcel_delivered", "Maison Lune")).toBe("Ton colis Maison Lune est arrivé");
     expect(parcelTitle("parcel_pickup_ready", null)).toBe("Ton colis est disponible en point relais");

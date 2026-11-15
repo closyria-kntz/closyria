@@ -1,4 +1,15 @@
-import { and, type Database, eq, inArray, isNull, lte, orderAwaitingNews, schema, sql } from "@closyria/db";
+import {
+  and,
+  type Database,
+  eq,
+  inArray,
+  isNull,
+  lte,
+  orderAwaitingNews,
+  orderShopNameSql,
+  schema,
+  sql,
+} from "@closyria/db";
 import {
   ALERT_TIME_ZONE,
   alertItemHref,
@@ -317,7 +328,7 @@ export async function sendAlert(
     const [order] = await db
       .select({
         status: schema.orders.status,
-        shopName: sql<string | null>`coalesce(${schema.shops.name}, ${schema.orders.shopName})`,
+        shopName: orderShopNameSql(schema.shops.name, schema.shops.status, schema.orders.shopName),
       })
       .from(schema.orders)
       .leftJoin(schema.shops, eq(schema.shops.id, schema.orders.shopId))
@@ -337,7 +348,7 @@ export async function sendAlert(
     const [parcel] = await db
       .select({
         status: schema.parcels.status,
-        shopName: sql<string | null>`coalesce(${schema.shops.name}, ${schema.orders.shopName})`,
+        shopName: orderShopNameSql(schema.shops.name, schema.shops.status, schema.orders.shopName),
       })
       .from(schema.parcels)
       .innerJoin(schema.orders, eq(schema.orders.id, schema.parcels.orderId))
@@ -392,7 +403,7 @@ export async function sendAlert(
     // Only while still without news and not answered since it was asked.
     const [order] = await db
       .select({
-        shopName: sql<string | null>`coalesce(${schema.shops.name}, ${schema.orders.shopName})`,
+        shopName: orderShopNameSql(schema.shops.name, schema.shops.status, schema.orders.shopName),
         notYetAt: schema.orders.receivedNotYetAt,
         awaiting: sql<boolean>`${orderAwaitingNews()}`,
       })

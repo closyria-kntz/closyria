@@ -637,6 +637,28 @@ export type ParsedOrderDraft = {
   trackingNumbers?: ReadonlyArray<{ number: string; carrierHint?: Carrier | null }>;
 };
 
+/** Longest shop name kept from an e-mail on its order (`orders.shop_name`). */
+export const MAX_PARSED_SHOP_NAME = 80;
+
+/** The shop's name an e-mail gives, kept on its order: on one line, trimmed, 80 characters at most; null when blank. */
+export function parsedShopName(name: string | null | undefined): string | null {
+  return squash(name, MAX_PARSED_SHOP_NAME);
+}
+
+/**
+ * The shop's name an order shows (views, notifications, « Nouvelles »): the catalogue's name, except while its shop is
+ * still `pending` — created from the e-mail's domain, never looked at by the admin — when the order's own name (read
+ * in the e-mail, or typed by her) is shown instead; without a shop, the order's own name. The catalogue itself is
+ * never renamed by an e-mail (founder's ruling, 2026-11-15). Same rule in SQL: `orderShopNameSql` of `packages/db`.
+ */
+export function orderShopDisplayName(
+  shop: { name: string; status: string } | null | undefined,
+  orderShopName: string | null,
+): string | null {
+  if (!shop) return orderShopName;
+  return shop.status === "pending" && orderShopName ? orderShopName : shop.name;
+}
+
 const squash = (v: string | null | undefined, max: number): string | null => {
   const text = (v ?? "").replace(/\s+/g, " ").trim();
   if (!text) return null;

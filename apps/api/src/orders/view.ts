@@ -11,7 +11,14 @@ import {
   schema,
   sql,
 } from "@closyria/db";
-import type { Carrier, ItemStage, OrderView, ParcelStatus, UnreadEmailView } from "@closyria/shared";
+import {
+  type Carrier,
+  type ItemStage,
+  type OrderView,
+  orderShopDisplayName,
+  type ParcelStatus,
+  type UnreadEmailView,
+} from "@closyria/shared";
 import type { Tx } from "../wardrobe/events";
 
 type OrderRow = typeof schema.orders.$inferSelect & { receivedQuestion: boolean };
@@ -31,7 +38,12 @@ async function viewsOf(db: Database | Tx, rows: OrderRow[]): Promise<OrderView[]
     shopIds.length === 0
       ? []
       : await db
-          .select({ id: schema.shops.id, name: schema.shops.name, returnsUrl: schema.shops.returnsUrl })
+          .select({
+            id: schema.shops.id,
+            name: schema.shops.name,
+            status: schema.shops.status,
+            returnsUrl: schema.shops.returnsUrl,
+          })
           .from(schema.shops)
           .where(inArray(schema.shops.id, shopIds));
   const lines = await db
@@ -64,7 +76,8 @@ async function viewsOf(db: Database | Tx, rows: OrderRow[]): Promise<OrderView[]
       id: order.id,
       profileId: order.profileId,
       shop: shop ? { id: shop.id, name: shop.name, returnsUrl: shop.returnsUrl } : null,
-      shopName: shop?.name ?? order.shopName,
+      // A shop still pending (named after its domain): the name read in the e-mail, or typed (2026-11-15).
+      shopName: orderShopDisplayName(shop, order.shopName),
       externalRef: order.externalRef,
       orderedAt: iso(order.orderedAt),
       status: order.status as OrderView["status"],

@@ -1,4 +1,16 @@
-import { and, type Database, desc, eq, gte, inArray, isNull, type SQL, schema, sql } from "@closyria/db";
+import {
+  and,
+  type Database,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  orderShopNameSql,
+  type SQL,
+  schema,
+  sql,
+} from "@closyria/db";
 import {
   ALERTS_DAYS,
   ALERTS_PAGE_HREF,
@@ -267,7 +279,11 @@ export async function listAlerts(db: Database, userId: string, cursor: string | 
       productImageId: sql<string | null>`(select pi.id from ${schema.productImages} pi
         where pi.product_id = ${schema.products.id} order by pi.position, pi.id limit 1)`,
       // An order's or parcel's alert without a known shop: the name she typed (as its notification).
-      shopName: sql<string | null>`coalesce(${schema.shops.name}, item_shop.name, ${schema.orders.shopName})`,
+      // A shop still pending (named after its domain): the name read in the e-mail, or typed (2026-11-15).
+      shopName: sql<
+        string | null
+      >`(case when ${schema.orders.id} is not null then ${orderShopNameSql(schema.shops.name, schema.shops.status, schema.orders.shopName)}
+        else coalesce(${schema.shops.name}, item_shop.name) end)`,
       salePeriodName: schema.salePeriods.name,
       startsOn: schema.salePeriods.startsOn,
     })

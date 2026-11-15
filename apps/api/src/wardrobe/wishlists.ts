@@ -1,4 +1,4 @@
-import { and, asc, type Database, eq, gt, inArray, isNull, or, schema, sql } from "@closyria/db";
+import { and, asc, type Database, eq, gt, inArray, isNull, or, orderShopNameSql, schema, sql } from "@closyria/db";
 import type { GroupOrderStatus, SharedGiftState, SharedWishlistView, WishlistView } from "@closyria/shared";
 
 import { catalogImageUrl } from "../catalog/product-view";
@@ -168,7 +168,7 @@ const sharedItemColumns = {
   currency: schema.products.currency,
   url: sql<string>`coalesce(${schema.products.canonicalUrl}, '')`,
   shopName: sql<string>`coalesce(${schema.shops.name}, (
-    select coalesce(order_shop.name, o.shop_name) from ${schema.orderLines} ol
+    select ${orderShopNameSql(sql`order_shop.name`, sql`order_shop.status`, sql`o.shop_name`)} from ${schema.orderLines} ol
     join ${schema.orders} o on o.id = ol.order_id
     left join ${schema.shops} order_shop on order_shop.id = o.shop_id
     where ol.item_id = ${schema.items.id} order by o.created_at desc limit 1), '')`,
