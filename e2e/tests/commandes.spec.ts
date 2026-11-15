@@ -599,6 +599,81 @@ test("un numéro de suivi modifié puis un suivi supprimé, la commande et l'art
   await expect(card.getByRole("listitem").filter({ hasText: "8R04217735096" })).toHaveCount(0);
 });
 
+/** A draft order validated through the API (« C'est bon »): its lines get their articles « Commandé ». */
+async function confirmedOrder(page: Page, db: Db, who: Account, name: string, ref: string) {
+  const orderId = await draftOrder(db, who, [{ name }], {
+    trackingNumber: `6A${ref}12345678`,
+    carrier: "colissimo",
+    ref,
+  });
+  const status = await page.evaluate(
+    async (id) => (await fetch(`/api/me/orders/${id}/confirm`, { method: "POST" })).status,
+    orderId,
+  );
+  expect(status).toBe(200);
+  const { rows } = await db.query<{ item_id: string }>("select item_id from order_lines where order_id = $1", [
+    orderId,
+  ]);
+  return { orderId, itemId: rows[0]?.item_id ?? "" };
+}
+
+test("une commande supprimée disparaît avec ses colis, ses articles restent", async ({
+  page,
+  db,
+  userAgentTag,
+}, testInfo) => {
+  const who = await account(page, db, userAgentTag);
+  const kept = await confirmedOrder(page, db, who, "Chemise lin", "5001");
+  const gone = await confirmedOrder(page, db, who, "Pantalon large", "5002");
+  await page.goto("/mes-commandes");
+  const card = main(page).getByRole("article", { name: AUTO_SHOP.name }).filter({ hasText: "Pantalon large" });
+
+  // Asked first; « Annuler » keeps it.
+  await card.getByRole("button", { name: "Supprimer la commande" }).click();
+  const dialog = page.getByRole("dialog", { name: "Supprimer cette commande ?" });
+  await expect(dialog).toContainText("La commande et ses colis disparaissent. Les articles restent dans tes articles.");
+  await axeLightAndDark(page);
+  await shots(page, testInfo, "supprimer-commande");
+  await dialog.getByRole("button", { name: "Annuler" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(card).toHaveCount(1);
+
+  await card.getByRole("button", { name: "Supprimer la commande" }).click();
+  await dialog.getByRole("button", { name: "Supprimer", exact: true }).click();
+  await expect(card).toHaveCount(0);
+  await expect(main(page).getByRole("status").filter({ hasText: "Commande supprimée" })).toBeVisible();
+  await expect(main(page).getByRole("heading", { name: "Tes commandes" })).toBeFocused();
+  await expect(main(page).getByRole("article", { name: AUTO_SHOP.name })).toHaveCount(1);
+  const { rows: left } = await db.query<{ orders: number; parcels: number }>(
+    `select (select count(*)::int from orders where id = $1) as orders,
+            (select count(*)::int from parcels where order_id = $1) as parcels`,
+    [gone.orderId],
+  );
+  expect(left).toEqual([{ orders: 0, parcels: 0 }]);
+  // Her article stays « Commandé », its sheet no longer tied to the order.
+  const { rows: items } = await db.query<{ stage: string; deleted: boolean }>(
+    "select stage, deleted_at is not null as deleted from items where id = $1",
+    [gone.itemId],
+  );
+  expect(items).toEqual([{ stage: "ordered", deleted: false }]);
+  await page.goto(`/articles/${gone.itemId}`);
+  const block = main(page).getByRole("region", { name: "Commande / colis" });
+  await expect(block.getByRole("button", { name: "Ajouter un numéro de suivi" })).toBeVisible();
+  await expect(block.getByRole("link", { name: "Voir la commande" })).toHaveCount(0);
+
+  // From the article's sheet too: the block says it, the focus stays in it.
+  await page.goto(`/articles/${kept.itemId}`);
+  await block.getByRole("button", { name: "Supprimer la commande" }).click();
+  await page
+    .getByRole("dialog", { name: "Supprimer cette commande ?" })
+    .getByRole("button", { name: "Supprimer", exact: true })
+    .click();
+  await expect(block.getByRole("status")).toHaveText("Commande supprimée");
+  await expect(block.getByRole("heading", { name: "Commande / colis" })).toBeFocused();
+  await expect(block.getByRole("link", { name: "Voir la commande" })).toHaveCount(0);
+  await axeLightAndDark(page);
+});
+
 test("le rappel de retour à 3 jours est la une de l'Accueil", async ({ page, db, userAgentTag }) => {
   const who = await account(page, db, userAgentTag);
   const wish = await pasteAndWish(page, db, who.userId);

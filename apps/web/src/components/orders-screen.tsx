@@ -3,7 +3,7 @@
 import type { OrderList, OrderView } from "@closyria/shared";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useEffect, useId, useState } from "react";
+import { type ReactNode, type Ref, useEffect, useId, useRef, useState } from "react";
 import { createManualOrder, fetchOrders } from "@/lib/orders-client";
 import { useCurrentProfile } from "@/lib/profile-context";
 import { sectionTitleClass } from "./home-news";
@@ -24,11 +24,25 @@ export function withOrder(list: OrderList, order: OrderView): OrderList {
   return { ...list, orders: orders.filter((o) => o.status !== "dismissed") };
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  headingRef,
+  children,
+}: {
+  title: string;
+  /** Where the focus goes once an order of the section is deleted. */
+  headingRef?: Ref<HTMLHeadingElement>;
+  children: ReactNode;
+}) {
   const id = useId();
   return (
     <section aria-labelledby={id} className="flex flex-col gap-space-3">
-      <h2 id={id} className={sectionTitleClass}>
+      <h2
+        id={id}
+        ref={headingRef}
+        tabIndex={headingRef ? -1 : undefined}
+        className={`${sectionTitleClass} ${focusRing}`}
+      >
         {title}
       </h2>
       {children}
@@ -76,8 +90,14 @@ function ManualEntry({ onSaved }: { onSaved: (order: OrderView) => void }) {
 export function OrdersScreen() {
   const t = useTranslations("Orders.page");
   const tInbox = useTranslations("Orders.inbox");
+  const tManage = useTranslations("Orders.manage");
   const [state, setState] = useState<State>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
+  // « Commande supprimée », said aloud; the focus then goes to the list's heading (the page's when it is empty).
+  const [notice, setNotice] = useState<string | null>(null);
+  const [deletions, setDeletions] = useState(0);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const ordersRef = useRef<HTMLHeadingElement>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: read once, and on « Réessayer ».
   useEffect(() => {
@@ -102,10 +122,28 @@ export function OrdersScreen() {
   const update = (change: (list: OrderList) => OrderList) =>
     setState((current) => (current.kind === "ready" ? { kind: "ready", list: change(current.list) } : current));
 
+  const deleted = (orderId: string) => {
+    update((l) => ({ ...l, orders: l.orders.filter((o) => o.id !== orderId) }));
+    setNotice(tManage("deleted"));
+    setDeletions((n) => n + 1);
+  };
+  useEffect(() => {
+    if (deletions > 0) (ordersRef.current ?? titleRef.current)?.focus();
+  }, [deletions]);
+
   const header = (
     <div className="flex flex-col gap-space-2">
-      <h1 className="font-title text-page-title leading-none font-regular">{t("title")}</h1>
+      <h1
+        ref={titleRef}
+        tabIndex={-1}
+        className={`rounded-button font-title text-page-title leading-none font-regular ${focusRing}`}
+      >
+        {t("title")}
+      </h1>
       <p className="text-ink-muted">{t("intro")}</p>
+      <p role="status" className="text-sm font-strong empty:hidden">
+        {notice}
+      </p>
     </div>
   );
 
@@ -164,9 +202,14 @@ export function OrdersScreen() {
           </Section>
         )}
         {confirmed.length > 0 ? (
-          <Section title={t("orders")}>
+          <Section title={t("orders")} headingRef={ordersRef}>
             {confirmed.map((order) => (
-              <OrderCard key={order.id} order={order} onChange={(next) => update((l) => withOrder(l, next))} />
+              <OrderCard
+                key={order.id}
+                order={order}
+                onChange={(next) => update((l) => withOrder(l, next))}
+                onDeleted={deleted}
+              />
             ))}
           </Section>
         ) : (

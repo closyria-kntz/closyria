@@ -756,3 +756,18 @@ l'inscription) à comparer avec TrackingMore avant la prod, selon le volume atte
   plus. »
 - Repris tels quels : « Numéro de suivi », « Transporteur (facultatif) », « Deviner d'après le numéro », « Ce numéro de
   suivi ne semble pas complet : vérifie-le. », « Ce numéro est déjà sur une autre de tes commandes. »
+
+### 11.5 Supprimer, modifier une commande, annuler un changement de transporteur (retours de la fondatrice, 2026-11-15)
+
+- **« Supprimer la commande »** (`DELETE /api/me/orders/{id}`, 204, quel que soit son statut : à valider, validée,
+  écartée) : la commande part avec ses lignes, ses colis (et leurs étapes) et ses notifications (`order_received`,
+  `parcel_*`, `order_received_check` : `on delete cascade`). **Ses articles restent tels quels** (même étape, plus
+  reliés : le bloc « Commande / colis » de leur fiche n'en parle plus ; un article « Commandé » garde « Ajouter un numéro
+  de suivi »). Le rappel de retour d'un article reste (il est à l'article). L'e-mail d'où elle venait reste, délié,
+  jusqu'à sa purge ; un e-mail illisible dont elle avait saisi la commande est écarté (`dismissed_at`), pour que « On
+  n'a pas su lire cet e-mail » ne revienne pas. Comptes seulement (invitée 403), commande d'un autre compte ou déjà
+  supprimée 404 ; verrous : ses profils, la commande, ses colis, puis les articles. Écran : « Supprimer la commande »
+  sur chaque commande validée de « Mes commandes » et dans le bloc « Commande / colis » d'une fiche, après « Supprimer
+  cette commande ? » « La commande et ses colis disparaissent. Les articles restent dans tes articles. » « Supprimer » /
+  « Annuler ». Ensuite « Commande supprimée » est dit (zone `status`) et le focus va au titre de la liste (« Tes
+  commandes », celui de la page quand la liste est vide ; sur une fiche, le titre du bloc).

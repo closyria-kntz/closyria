@@ -17,6 +17,7 @@ import {
   answerReceived,
   confirmOrder,
   createManualOrder,
+  deleteOrder,
   deleteParcel,
   dismissOrder,
   dismissUnreadEmail,
@@ -80,6 +81,20 @@ const patchRoute = defineAccess(
       ...common,
       409: errorContent("Already validated or dismissed (order_not_draft)"),
     },
+  }),
+  "user",
+);
+
+const deleteRoute = defineAccess(
+  createRoute({
+    method: "delete",
+    path: "/me/orders/{id}",
+    summary: "« Supprimer la commande »",
+    description:
+      "Whatever its status: the order goes with its lines, its parcels and its notifications. Her articles stay as " +
+      "they are (same stage, no longer tied to the order); the e-mail it came from stays until its purge.",
+    request: { params: idParams },
+    responses: { 204: { description: "Deleted" }, ...common },
   }),
   "user",
 );
@@ -311,6 +326,12 @@ export function ordersRoutes(deps: WardrobeDeps) {
       const userId = await accountIdOf(c);
       if (!userId) return c.json(accountRequired, 403);
       return answer(c, await patchOrder(db, userId, c.req.valid("param").id, c.req.valid("json"), now()));
+    })
+    .openapi(deleteRoute, async (c) => {
+      const userId = await accountIdOf(c);
+      if (!userId) return c.json(accountRequired, 403);
+      if (!(await deleteOrder(db, userId, c.req.valid("param").id, now()))) return c.json(notFound, 404);
+      return c.body(null, 204);
     })
     .openapi(confirmRoute, async (c) => {
       const userId = await accountIdOf(c);

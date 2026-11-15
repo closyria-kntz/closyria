@@ -683,3 +683,117 @@ describe("articles after their order", () => {
     expect(await stageOf()).toBeNull();
   });
 });
+
+/** An e-mail of hers, `failed` (nothing could read it) unless told otherwise. */
+async function inboundEmail(a: Account, status = "failed") {
+  const [inbox] = await t.db
+    .insert(schema.orderInboxes)
+    .values({ userId: a.userId, localPart: `marie-d${++counter}`, active: false })
+    .returning();
+  const [row] = await t.db
+    .insert(schema.inboundEmails)
+    .values({
+      userId: a.userId,
+      inboxId: inbox?.id as string,
+      queueId: `qd${counter}`,
+      fromAddress: "marie@example.com",
+      authOk: true,
+      status,
+      receivedAt: new Date(NOW.getTime() - HOUR),
+      purgeAfter: new Date(NOW.getTime() + 29 * DAY),
+    })
+    .returning();
+  return row?.id as string;
+}
+
+describe("« Supprimer la commande » (2026-11-15)", () => {
+  const orderPath = (id: string) => `/api/me/orders/${id}`;
+  const orderRow = async (id: string) => (await t.db.select().from(schema.orders).where(eq(schema.orders.id, id)))[0];
+
+  it("deletes the order, its lines, parcels and notifications; her articles and the e-mail stay", async () => {
+    const a = await account();
+    const o = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" });
+    const second = await addParcelRow(o.orderId);
+    const emailId = await inboundEmail(a, "parsed");
+    await t.db.update(schema.orders).set({ inboundEmailId: emailId }).where(eq(schema.orders.id, o.orderId));
+    await t.db.insert(schema.parcelEvents).values({
+      parcelId: o.parcelId,
+      at: new Date(NOW.getTime() - HOUR),
+      status: "in_transit",
+      label: "Pris en charge",
+    });
+    await t.db.insert(schema.alertEvents).values([
+      { userId: a.userId, profileId: a.moi, kind: "order_received", orderId: o.orderId },
+      { userId: a.userId, profileId: a.moi, kind: "order_received_check", orderId: o.orderId },
+      { userId: a.userId, profileId: a.moi, kind: "parcel_pickup_ready", orderId: o.orderId, parcelId: o.parcelId },
+      { userId: a.userId, profileId: a.moi, kind: "return_reminder", itemId: o.itemId },
+    ]);
+
+    const res = await call("DELETE", orderPath(o.orderId), a.cookie);
+    expect(res.status, await res.clone().text()).toBe(204);
+
+    expect(await orderRow(o.orderId)).toBeUndefined();
+    expect(await t.db.select().from(schema.orderLines).where(eq(schema.orderLines.orderId, o.orderId))).toHaveLength(0);
+    expect(await parcelRow(o.parcelId)).toBeUndefined();
+    expect(await parcelRow(second)).toBeUndefined();
+    expect(await eventsOf(o.parcelId)).toHaveLength(0);
+    const alerts = await t.db.select().from(schema.alertEvents).where(eq(schema.alertEvents.userId, a.userId));
+    // Only the article's own reminder is left.
+    expect(alerts.map((alert) => alert.kind)).toEqual(["return_reminder"]);
+    // Her article stays as it is, no longer tied to an order.
+    const [item] = await t.db.select().from(schema.items).where(eq(schema.items.id, o.itemId));
+    expect(item).toMatchObject({ stage: "ordered", deletedAt: null });
+    const list = await json<OrderList>(await call("GET", "/api/me/orders", a.cookie), 200);
+    expect(list.orders.map((order) => order.id)).not.toContain(o.orderId);
+    // The e-mail stays (purged on its own schedule).
+    const [mail] = await t.db.select().from(schema.inboundEmails).where(eq(schema.inboundEmails.id, emailId));
+    expect(mail?.purgeAfter).toEqual(new Date(NOW.getTime() + 29 * DAY));
+
+    // Twice: gone already.
+    expect(await json(await call("DELETE", orderPath(o.orderId), a.cookie), 404)).toEqual({ error: "not_found" });
+  });
+
+  it("deletes an order to validate and one set aside, whatever its status", async () => {
+    const a = await account();
+    for (const status of ["draft", "dismissed"]) {
+      const o = await orderWithParcel(a, { carrier: "colissimo", status: "pending" });
+      await t.db.update(schema.orders).set({ status }).where(eq(schema.orders.id, o.orderId));
+      expect((await call("DELETE", orderPath(o.orderId), a.cookie)).status).toBe(204);
+      expect(await orderRow(o.orderId)).toBeUndefined();
+    }
+  });
+
+  it("keeps an e-mail she typed the order of out of « On n'a pas su lire cet e-mail »", async () => {
+    const a = await account();
+    const emailId = await inboundEmail(a);
+    const typed = await json<OrderView>(
+      await call("POST", "/api/me/orders", a.cookie, {
+        profileId: a.moi,
+        shopName: "Atelier Mona",
+        lines: [{ name: "Pull marin", quantity: 1 }],
+        inboundEmailId: emailId,
+      }),
+      201,
+    );
+    expect((await call("DELETE", orderPath(typed.id), a.cookie)).status).toBe(204);
+    const list = await json<OrderList>(await call("GET", "/api/me/orders", a.cookie), 200);
+    expect(list.unreadEmails).toEqual([]);
+    expect(list.orders).toEqual([]);
+    // Her article « Pull marin » stays.
+    const items = await t.db.select().from(schema.items).where(eq(schema.items.userId, a.userId));
+    expect(items.map((i) => [i.nameOverride, i.stage])).toEqual([["Pull marin", "ordered"]]);
+  });
+
+  it("refuses another account's order, a guest and a bad id", async () => {
+    const a = await account();
+    const other = await account();
+    const theirs = await orderWithParcel(other, { carrier: "colissimo", status: "pending" });
+    expect(await json(await call("DELETE", orderPath(theirs.orderId), a.cookie), 404)).toEqual({ error: "not_found" });
+    expect(await orderRow(theirs.orderId)).toBeDefined();
+    const guest = await t.signIn();
+    expect(await json(await call("DELETE", orderPath(theirs.orderId), guest.cookie), 403)).toEqual({
+      error: "account_required",
+    });
+    expect(await json(await call("DELETE", orderPath("nope"), a.cookie), 400)).toEqual({ error: "invalid_request" });
+  });
+});

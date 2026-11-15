@@ -2950,6 +2950,15 @@
       "articles": "Articles",
       "parcels": "Colis"
     },
+    "manage": {
+      "delete": "Supprimer la commande",
+      "deleteTitle": "Supprimer cette commande ?",
+      "deleteBody": "La commande et ses colis disparaissent. Les articles restent dans tes articles.",
+      "deleteConfirm": "Supprimer",
+      "cancel": "Annuler",
+      "deleted": "Commande supprimée",
+      "failed": "Ça n'a pas marché. Réessaie dans un instant."
+    },
     "form": {
       "shop": "Boutique",
       "article": "Article {n}",

@@ -3,10 +3,11 @@
 import { type ItemView, type OrderView, orderHref } from "@closyria/shared";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { fetchOrders } from "@/lib/orders-client";
+import { DeleteOrderAction } from "./order-actions";
 import { linkActionClass, OrderMeta, orderShop, ParcelList, TrackingForm, useCalendarDay } from "./order-parts";
-import { blockClass, blockTitleClass, buttonClass } from "./ui";
+import { blockClass, blockTitleClass, buttonClass, focusRing } from "./ui";
 
 type Orders = { kind: "loading" } | { kind: "guest" } | { kind: "failed" } | { kind: "ready"; orders: OrderView[] };
 
@@ -25,6 +26,13 @@ export function ItemOrderBlock({ item }: { item: ItemView }) {
   const calendarDay = useCalendarDay();
   const [state, setState] = useState<Orders>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
+  // « Commande supprimée », said aloud; the focus goes back to the block's title.
+  const [deletedNotice, setDeletedNotice] = useState(false);
+  const [deletions, setDeletions] = useState(0);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (deletions > 0) titleRef.current?.focus();
+  }, [deletions]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: read again when the article changes step (a « Oui » elsewhere, a delivery), and on « Réessayer ».
   useEffect(() => {
@@ -45,7 +53,7 @@ export function ItemOrderBlock({ item }: { item: ItemView }) {
   const ordered = item.stage === "ordered";
   const deadline = item.stage === "owned" && item.returnDeadline ? item.returnDeadline : null;
   const orders = state.kind === "ready" ? state.orders : [];
-  if (!ordered && !deadline && orders.length === 0) return null;
+  if (!ordered && !deadline && orders.length === 0 && !deletedNotice) return null;
 
   const merge = (order: OrderView) =>
     setState((current) => {
@@ -54,11 +62,22 @@ export function ItemOrderBlock({ item }: { item: ItemView }) {
       return { kind: "ready", orders: ordersOf([order, ...others], item.id) };
     });
 
+  const deleted = (orderId: string) => {
+    setState((current) =>
+      current.kind === "ready" ? { kind: "ready", orders: current.orders.filter((o) => o.id !== orderId) } : current,
+    );
+    setDeletedNotice(true);
+    setDeletions((n) => n + 1);
+  };
+
   return (
     <section aria-labelledby={titleId} data-block className={blockClass}>
-      <h2 id={titleId} className={blockTitleClass}>
+      <h2 id={titleId} ref={titleRef} tabIndex={-1} className={`${blockTitleClass} rounded-button ${focusRing}`}>
         {t("item.title")}
       </h2>
+      <p role="status" className="text-sm font-strong empty:hidden">
+        {deletedNotice ? t("manage.deleted") : null}
+      </p>
       {deadline && (
         <p className="clothing-tag relative self-start">{t("returnUntil", { date: calendarDay(deadline) })}</p>
       )}
@@ -71,9 +90,12 @@ export function ItemOrderBlock({ item }: { item: ItemView }) {
                 <span className="font-strong">{shop ? t("item.orderOf", { shop }) : t("item.orderNoShop")}</span>
                 <OrderMeta order={order} />
               </span>
-              <Link href={orderHref(order.id)} className={linkActionClass}>
-                {t("item.viewOrder")}
-              </Link>
+              <span className="flex flex-wrap items-center gap-x-space-4">
+                <Link href={orderHref(order.id)} className={linkActionClass}>
+                  {t("item.viewOrder")}
+                </Link>
+                <DeleteOrderAction order={order} onDeleted={deleted} />
+              </span>
             </div>
             {order.parcels.length > 0 ? (
               <ParcelList order={order} onChange={merge} raised />

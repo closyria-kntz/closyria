@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   addSenderAddress,
+  deleteOrder,
   deleteParcel,
   fetchOrderInbox,
   fetchOrders,
@@ -131,5 +132,21 @@ describe("« Modifier le numéro » and « Supprimer ce suivi »", () => {
     const [path, init] = d.fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(path).toBe(`/api/me/orders/${orderId}/parcels/${parcelId}`);
     expect(init.method).toBe("DELETE");
+  });
+});
+
+describe("« Supprimer la commande »", () => {
+  const orderId = "7a0c3c58-7c3b-4d0e-9a5e-1f7d1b0f3c11";
+
+  it("deletes the order (204) and keeps the API's reason for a refusal", async () => {
+    const d = deps(new Response(null, { status: 204 }));
+    expect(await deleteOrder(orderId, d)).toEqual({ ok: true });
+    const [path, init] = d.fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(path).toBe(`/api/me/orders/${orderId}`);
+    expect(init.method).toBe("DELETE");
+    expect(await deleteOrder(orderId, deps(json({ error: "not_found" }, 404)))).toEqual({
+      ok: false,
+      error: "not_found",
+    });
   });
 });

@@ -723,6 +723,48 @@ export async function deleteParcel(
   });
 }
 
+// --- « Supprimer la commande » (2026-11-15) ------------------------------------------------------------------------
+
+/**
+ * « Supprimer la commande », whatever its status: the order goes with its lines, its parcels (their steps) and its
+ * notifications (`order_received`, `parcel_*`, `order_received_check`: `on delete cascade`). Her articles stay as they
+ * are (same stage, only no longer tied to it: the « Commande / colis » block of their sheet goes). The e-mail it was
+ * read from stays, unlinked, until its purge; one nothing could read, which she typed this order from, is set aside
+ * so that « On n'a pas su lire cet e-mail » does not come back. Lock order: her profiles, the order, its parcels, then
+ * the items. False when unknown or another account's.
+ */
+export async function deleteOrder(db: Database, userId: string, orderId: string, now: Date): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    await lockProfilesOf(tx, userId);
+    const order = await lockOwnOrder(tx, userId, orderId);
+    if (!order) return false;
+    await tx
+      .select({ id: schema.parcels.id })
+      .from(schema.parcels)
+      .where(eq(schema.parcels.orderId, order.id))
+      .orderBy(asc(schema.parcels.id))
+      .for("update");
+    const linked = tx
+      .select({ itemId: schema.orderLines.itemId })
+      .from(schema.orderLines)
+      .where(eq(schema.orderLines.orderId, order.id));
+    await tx
+      .select({ id: schema.items.id })
+      .from(schema.items)
+      .where(and(eq(schema.items.userId, userId), inArray(schema.items.id, linked)))
+      .orderBy(asc(schema.items.id))
+      .for("update");
+    await tx.delete(schema.orders).where(eq(schema.orders.id, order.id));
+    if (order.inboundEmailId) {
+      await tx
+        .update(schema.inboundEmails)
+        .set({ dismissedAt: sql`coalesce(${schema.inboundEmails.dismissedAt}, ${now.toISOString()}::timestamptz)` })
+        .where(and(eq(schema.inboundEmails.id, order.inboundEmailId), eq(schema.inboundEmails.status, "failed")));
+    }
+    return true;
+  });
+}
+
 /**
  * « Ce n'est pas une commande » on an e-mail nothing could read: no longer listed (its raw message still goes after
  * its 30 days). Only hers, only a failed one with no order typed from it (404 otherwise). Twice is harmless.

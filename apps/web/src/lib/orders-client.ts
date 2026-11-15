@@ -151,6 +151,10 @@ export const changeParcelCarrier = (
 export const deleteParcel = (orderId: string, parcelId: string, deps: ClientDeps = defaultDeps) =>
   orderCall(deps, `/api/me/orders/${orderId}/parcels/${parcelId}`, { method: "DELETE" });
 
+/** « Supprimer la commande »: the order goes with its parcels; her articles stay. */
+export const deleteOrder = (id: string, deps: ClientDeps = defaultDeps) =>
+  callNoContent(deps, `/api/me/orders/${id}`, { method: "DELETE" });
+
 /** « Ce n'est pas une commande » on an e-mail nothing could read. */
 export const dismissUnreadEmail = (id: string, deps: ClientDeps = defaultDeps) =>
   call(deps, `/api/me/order-emails/${id}/dismiss`, { method: "POST" }, orderListSchema);
