@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { checkLines, emptyLine, isTrackingInput, lineDraftOf, lineHref, trackableItem } from "./orders-form";
+import {
+  checkLines,
+  checkOrderEdit,
+  emptyLine,
+  isTrackingInput,
+  lineDraftOf,
+  lineHref,
+  orderEditDraftOf,
+  parisDay,
+  trackableItem,
+} from "./orders-form";
 
 const id = "00000000-0000-4000-8000-000000000001";
 
@@ -85,5 +95,57 @@ describe("trackableItem", () => {
     ).toBe(other);
     expect(trackableItem({ lines: [{ itemId: id, itemStage: "owned" }] })).toBeNull();
     expect(trackableItem({ lines: [] })).toBeNull();
+  });
+});
+
+describe("« Modifier » a validated order", () => {
+  const NOW = new Date("2026-11-15T09:00:00Z");
+  const order = { shopName: "Maison Lune", externalRef: "1042", orderedAt: "2026-11-09T23:30:00.000Z" };
+
+  it("reads a Paris day (the order of 23:30 UTC was on the 10th in Paris)", () => {
+    expect(parisDay("2026-11-09T23:30:00.000Z")).toBe("2026-11-10");
+    expect(orderEditDraftOf(order)).toEqual({ shopName: "Maison Lune", externalRef: "1042", orderedOn: "2026-11-10" });
+    expect(orderEditDraftOf({ shopName: null, externalRef: null, orderedAt: null })).toEqual({
+      shopName: "",
+      externalRef: "",
+      orderedOn: "",
+    });
+  });
+
+  it("sends only what changed: a new name, a cleared number, a new day (noon in Paris)", () => {
+    expect(checkOrderEdit(order, orderEditDraftOf(order), NOW)).toEqual({ ok: true, patch: {} });
+    expect(
+      checkOrderEdit(order, { shopName: " Lune  Paris ", externalRef: " ", orderedOn: "2026-11-12" }, NOW),
+    ).toEqual({
+      ok: true,
+      patch: { shopName: "Lune Paris", externalRef: null, orderedAt: "2026-11-12T11:00:00.000Z" },
+    });
+    expect(checkOrderEdit(order, { shopName: "Maison Lune", externalRef: "1042", orderedOn: "" }, NOW)).toEqual({
+      ok: true,
+      patch: { orderedAt: null },
+    });
+  });
+
+  it("refuses an emptied shop name, a day to come and a number the shops never write", () => {
+    expect(checkOrderEdit(order, { ...orderEditDraftOf(order), shopName: "  " }, NOW)).toEqual({
+      ok: false,
+      error: "shop",
+    });
+    // No name before, none now: nothing to send.
+    expect(checkOrderEdit({ ...order, shopName: null }, { ...orderEditDraftOf(order), shopName: "" }, NOW)).toEqual({
+      ok: true,
+      patch: {},
+    });
+    expect(checkOrderEdit(order, { ...orderEditDraftOf(order), orderedOn: "2026-11-16" }, NOW)).toEqual({
+      ok: false,
+      error: "date",
+    });
+    expect(checkOrderEdit(order, { ...orderEditDraftOf(order), orderedOn: "2026-11-15" }, NOW)).toMatchObject({
+      ok: true,
+    });
+    expect(checkOrderEdit(order, { ...orderEditDraftOf(order), externalRef: "x".repeat(65) }, NOW)).toEqual({
+      ok: false,
+      error: "ref",
+    });
   });
 });

@@ -400,7 +400,13 @@ export const orderLineInputSchema = z
   });
 export type OrderLineInput = z.infer<typeof orderLineInputSchema>;
 
-/** « Corriger » on an order to validate: only the fields given change; `lines` replaces them all. */
+/** Longest shop name she types with « Modifier » on a validated order (kept on her order, `orders.shop_name`). */
+export const MAX_ORDER_SHOP_NAME = 80;
+
+/**
+ * « Corriger » on an order to validate, « Modifier » on a validated one (shop name of 80 characters at most, number and
+ * date only): only the fields given change; `lines` replaces them all.
+ */
 export const orderPatchSchema = z.object({
   profileId: uuidSchema.optional(),
   shopName: z.string().trim().min(1).max(MAX_SHOP_NAME).optional(),
@@ -673,15 +679,17 @@ export function parsedShopName(name: string | null | undefined): string | null {
 /**
  * The shop's name an order shows (views, notifications, « Nouvelles »): the catalogue's name, except while its shop is
  * still `pending` — created from the e-mail's domain, never looked at by the admin — when the order's own name (read
- * in the e-mail, or typed by her) is shown instead; without a shop, the order's own name. The catalogue itself is
- * never renamed by an e-mail (founder's ruling, 2026-11-15). Same rule in SQL: `orderShopNameSql` of `packages/db`.
+ * in the e-mail, or typed by her) is shown instead; without a shop, the order's own name. A name she typed herself
+ * (`typed`: « Modifier » on a validated order) is shown whatever the shop's status: on her order only. The catalogue
+ * itself is never renamed (founder's rulings, 2026-11-15). Same rule in SQL: `orderShopNameSql` of `packages/db`.
  */
 export function orderShopDisplayName(
   shop: { name: string; status: string } | null | undefined,
   orderShopName: string | null,
+  typed = false,
 ): string | null {
   if (!shop) return orderShopName;
-  return shop.status === "pending" && orderShopName ? orderShopName : shop.name;
+  return (typed || shop.status === "pending") && orderShopName ? orderShopName : shop.name;
 }
 
 const squash = (v: string | null | undefined, max: number): string | null => {

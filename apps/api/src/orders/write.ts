@@ -17,6 +17,7 @@ import {
   type Carrier,
   detectCarrier,
   MAX_ORDER_LINE_NAME,
+  MAX_ORDER_SHOP_NAME,
   type ManualOrderInput,
   nameFromUrl,
   nextParcelCheckClamped,
@@ -304,7 +305,43 @@ export async function confirmOrder(db: Database, userId: string, orderId: string
 
 // --- « Corriger » and « Ce n'est pas une commande » ---------------------------------------------------------------
 
-/** « Corriger » a draft: only the fields given change; `lines` replaces them all. */
+/** Same lock key as the e-mail reading (Task 3): an order number of a shop is filed, or changed, one at a time. */
+async function lockOrderRef(tx: Tx, userId: string, shopId: string, externalRef: string) {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${`order:${userId}:${shopId}:${externalRef}`}, 0))`,
+  );
+}
+
+/**
+ * The shop of an order she names: on a validated order already tied to a shop (« Modifier »), the shop stays (its
+ * returns, the next e-mails of the order) and her name is kept for her order only — none when it is the catalogue's
+ * own, case and accents aside; the catalogue is never renamed. Otherwise as `resolveShopName`.
+ */
+async function shopFor(
+  tx: Tx,
+  order: Order,
+  name: string,
+): Promise<{ shopId: string | null; shopName: string | null; shopNameTyped: boolean }> {
+  if (order.status === "confirmed" && order.shopId) {
+    const typed = name.trim().replace(/\s+/g, " ");
+    const [shop] = await tx
+      .select({ name: schema.shops.name })
+      .from(schema.shops)
+      .where(eq(schema.shops.id, order.shopId));
+    const own = shop && foldShopName(shop.name) === foldShopName(typed);
+    return { shopId: order.shopId, shopName: own ? null : typed, shopNameTyped: !own };
+  }
+  const resolved = await resolveShopName(tx, name);
+  return { ...resolved, shopNameTyped: resolved.shopName !== null };
+}
+
+/**
+ * « Corriger » a draft, or « Modifier » a validated order (2026-11-15): only the fields given change. A draft takes
+ * its shop, number, date, profile and lines (`lines` replaces them all); a validated order only its shop's name (80
+ * characters at most, `shopFor`), its number and its date — its articles are changed on their own sheets (409
+ * `order_not_draft` with `lines` or `profileId`, and for a dismissed order). The number of another of her open orders
+ * of the same shop — the one the e-mail reading would complete — is refused (409 `order_exists`).
+ */
 export async function patchOrder(
   db: Database,
   userId: string,
@@ -312,13 +349,39 @@ export async function patchOrder(
   patch: OrderPatch,
   now: Date,
 ): Promise<OrderOutcome> {
-  const shop = patch.shopName === undefined ? undefined : await resolveShopName(db, patch.shopName);
   return inTransaction(db, async (tx) => {
     await lockProfilesOf(tx, userId);
     const order = await lockOwnOrder(tx, userId, orderId);
     if (!order) return { error: "not_found" };
-    if (order.status !== "draft") return { error: "order_not_draft" };
+    const confirmed = order.status === "confirmed";
+    if (order.status !== "draft" && !confirmed) return { error: "order_not_draft" };
+    if (confirmed && (patch.lines || patch.profileId)) return { error: "order_not_draft" };
+    if (confirmed && patch.shopName !== undefined && patch.shopName.length > MAX_ORDER_SHOP_NAME) {
+      return { error: "invalid_request" };
+    }
     if (patch.profileId && !(await findOwnProfile(tx, userId, patch.profileId))) return { error: "not_found" };
+    const shop = patch.shopName === undefined ? undefined : await shopFor(tx, order, patch.shopName);
+
+    const shopId = shop ? shop.shopId : order.shopId;
+    const externalRef = patch.externalRef !== undefined ? patch.externalRef : order.externalRef;
+    if (shopId && externalRef && (shopId !== order.shopId || externalRef !== order.externalRef)) {
+      await lockOrderRef(tx, userId, shopId, externalRef);
+      const [twin] = await tx
+        .select({ id: schema.orders.id })
+        .from(schema.orders)
+        .where(
+          and(
+            eq(schema.orders.userId, userId),
+            eq(schema.orders.shopId, shopId),
+            eq(schema.orders.externalRef, externalRef),
+            inArray(schema.orders.status, ["draft", "confirmed"]),
+            ne(schema.orders.id, order.id),
+          ),
+        )
+        .limit(1);
+      if (twin) return { error: "order_exists" };
+    }
+
     await tx
       .update(schema.orders)
       .set({
@@ -452,6 +515,7 @@ export async function createManualOrder(
         userId,
         profileId: input.profileId,
         ...shop,
+        shopNameTyped: shop.shopName !== null,
         externalRef: input.externalRef ?? null,
         orderedAt: input.orderedAt ? new Date(input.orderedAt) : null,
         status: "draft",

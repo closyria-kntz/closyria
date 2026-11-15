@@ -40,6 +40,13 @@ describe("orderShopDisplayName", () => {
     }
   });
 
+  it("shows the name she typed (« Modifier ») whatever the shop's status, for her only", () => {
+    for (const status of ["pending", "draft", "published", "refused"]) {
+      expect(orderShopDisplayName({ name: "Lola & Co Paris", status }, "Chez Lola", true)).toBe("Chez Lola");
+    }
+    expect(orderShopDisplayName({ name: "Lola & Co Paris", status: "published" }, null, true)).toBe("Lola & Co Paris");
+  });
+
   it("falls back on the shop's name, then on the order's own name", () => {
     expect(orderShopDisplayName({ name: "lolaandco.com", status: "pending" }, null)).toBe("lolaandco.com");
     expect(orderShopDisplayName(null, "Ma boutique")).toBe("Ma boutique");

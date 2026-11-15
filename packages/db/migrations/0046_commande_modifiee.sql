@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD COLUMN "shop_name_typed" boolean DEFAULT false NOT NULL;

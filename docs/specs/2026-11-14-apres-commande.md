@@ -771,3 +771,22 @@ l'inscription) à comparer avec TrackingMore avant la prod, selon le volume atte
   cette commande ? » « La commande et ses colis disparaissent. Les articles restent dans tes articles. » « Supprimer » /
   « Annuler ». Ensuite « Commande supprimée » est dit (zone `status`) et le focus va au titre de la liste (« Tes
   commandes », celui de la page quand la liste est vide ; sur une fiche, le titre du bloc).
+- **« Modifier » une commande validée** (`PATCH /api/me/orders/{id}`, celui de « Corriger ») : le nom de la boutique
+  (80 caractères au plus, sinon 400), le numéro de commande (64 au plus, vide = aucun) et la date (pas dans le futur :
+  le champ s'arrête à aujourd'hui, l'API garde sa marge d'un jour ; vide = aucune, enregistrée à midi heure de Paris).
+  **Les articles ne s'y modifient pas** (chacun sur sa fiche) : `lines` ou `profileId` pour une commande validée → 409
+  `order_not_draft`, comme toute modification d'une commande écartée. Une commande reliée à une boutique du catalogue
+  **garde sa boutique** (délai de retour, e-mails suivants de la même commande) : le nom tapé est gardé sur la commande
+  (`orders.shop_name`) avec `orders.shop_name_typed` (**migration 0046**, booléen `false` par défaut : sans lui, rien ne
+  distinguait le nom tapé du nom lu dans l'e-mail, que §11.4 n'affiche que tant que la boutique est `pending`) et il
+  passe avant le nom du catalogue **pour elle seule**, quel que soit l'état de la boutique : vues de commande,
+  « Nouvelles », notifications, fiche d'un article sans produit, filtre texte (`orderShopDisplayName` /
+  `orderShopNameSql` prennent ce drapeau) ; la vue de ses amies garde le nom du catalogue. Le catalogue n'est jamais
+  renommé. Retaper le nom du catalogue (casse et accents mis à part) efface son nom à elle. Une commande validée sans
+  boutique : comme « Corriger » (la boutique de ce nom exact, sinon le nom tapé). Doublon (même règle que la lecture
+  des e-mails, Task 3, même verrou par boutique et numéro) : le numéro d'une autre de ses commandes ouvertes (à valider
+  ou validée) de la même boutique → 409 `order_exists`. Les commandes lues avant le correctif du nom de boutique
+  (§11.4) gardent `shop_name` vide et montrent le domaine : pas de rattrapage, elle passe par « Modifier ». Écran :
+  « Modifier » à côté de « Supprimer la commande » (« Mes commandes », bloc « Commande / colis »), formulaire en place
+  « Boutique », « Numéro de commande », « Date de commande », « Enregistrer » / « Annuler » ; seuls les champs changés
+  partent ; ensuite « Commande modifiée. » (zone `status`) et le focus revient sur « Modifier ».

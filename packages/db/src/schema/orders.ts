@@ -185,6 +185,11 @@ export const orders = pgTable(
      * name. Null when the shop is known or unnamed.
      */
     shopName: text("shop_name"),
+    /**
+     * `shop_name` was typed by her on a validated order (« Modifier »): shown before the catalogue's name whatever the
+     * shop's status, on her order only (2026-11-15). False for a name read in an e-mail.
+     */
+    shopNameTyped: boolean("shop_name_typed").notNull().default(false),
     /** The shop's order number (« #1042 »): with the shop, finds the order a second e-mail completes. */
     externalRef: text("external_ref"),
     orderedAt: at("ordered_at"),

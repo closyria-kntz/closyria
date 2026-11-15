@@ -442,13 +442,16 @@ describe("« Corriger » and « Ce n'est pas une commande »", () => {
     expect(confirmed.lines[0]?.itemId).toBe(item?.id);
   });
 
-  it("changes only drafts (order_not_draft)", async () => {
+  it("changes the lines of drafts only (order_not_draft)", async () => {
     const a = await account();
     const orderId = await draft(a, null, [{ name: "Robe" }]);
     await json(await confirm(a, orderId), 200);
-    expect(await json(await call("PATCH", `/api/me/orders/${orderId}`, a.cookie, { externalRef: "2" }), 409)).toEqual({
-      error: "order_not_draft",
-    });
+    expect(
+      await json(
+        await call("PATCH", `/api/me/orders/${orderId}`, a.cookie, { lines: [{ name: "Jupe", quantity: 1 }] }),
+        409,
+      ),
+    ).toEqual({ error: "order_not_draft" });
     expect(await json(await call("POST", `/api/me/orders/${orderId}/dismiss`, a.cookie), 409)).toEqual({
       error: "order_not_draft",
     });

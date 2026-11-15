@@ -282,7 +282,7 @@ export async function listAlerts(db: Database, userId: string, cursor: string | 
       // A shop still pending (named after its domain): the name read in the e-mail, or typed (2026-11-15).
       shopName: sql<
         string | null
-      >`(case when ${schema.orders.id} is not null then ${orderShopNameSql(schema.shops.name, schema.shops.status, schema.orders.shopName)}
+      >`(case when ${schema.orders.id} is not null then ${orderShopNameSql(schema.shops.name, schema.shops.status, schema.orders.shopName, schema.orders.shopNameTyped)}
         else coalesce(${schema.shops.name}, item_shop.name) end)`,
       salePeriodName: schema.salePeriods.name,
       startsOn: schema.salePeriods.startsOn,

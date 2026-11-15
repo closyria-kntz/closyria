@@ -328,7 +328,12 @@ export async function sendAlert(
     const [order] = await db
       .select({
         status: schema.orders.status,
-        shopName: orderShopNameSql(schema.shops.name, schema.shops.status, schema.orders.shopName),
+        shopName: orderShopNameSql(
+          schema.shops.name,
+          schema.shops.status,
+          schema.orders.shopName,
+          schema.orders.shopNameTyped,
+        ),
       })
       .from(schema.orders)
       .leftJoin(schema.shops, eq(schema.shops.id, schema.orders.shopId))
@@ -348,7 +353,12 @@ export async function sendAlert(
     const [parcel] = await db
       .select({
         status: schema.parcels.status,
-        shopName: orderShopNameSql(schema.shops.name, schema.shops.status, schema.orders.shopName),
+        shopName: orderShopNameSql(
+          schema.shops.name,
+          schema.shops.status,
+          schema.orders.shopName,
+          schema.orders.shopNameTyped,
+        ),
       })
       .from(schema.parcels)
       .innerJoin(schema.orders, eq(schema.orders.id, schema.parcels.orderId))
@@ -403,7 +413,12 @@ export async function sendAlert(
     // Only while still without news and not answered since it was asked.
     const [order] = await db
       .select({
-        shopName: orderShopNameSql(schema.shops.name, schema.shops.status, schema.orders.shopName),
+        shopName: orderShopNameSql(
+          schema.shops.name,
+          schema.shops.status,
+          schema.orders.shopName,
+          schema.orders.shopNameTyped,
+        ),
         notYetAt: schema.orders.receivedNotYetAt,
         awaiting: sql<boolean>`${orderAwaitingNews()}`,
       })

@@ -13,7 +13,7 @@ import {
 } from "@/lib/orders-client";
 import { lineDraftOf, lineHref, trackableItem } from "@/lib/orders-form";
 import { useCurrentProfile } from "@/lib/profile-context";
-import { DeleteOrderAction } from "./order-actions";
+import { OrderActions } from "./order-actions";
 import { OrderForm, type OrderFormValues } from "./order-form";
 import { errorText, OrderLines, OrderMeta, orderShop, ParcelList, TrackingForm, useDay } from "./order-parts";
 import { cardPrimaryClass, cardSoftClass, moreButtonClass } from "./ui";
@@ -260,8 +260,8 @@ export function ReceivedQuestionCard({ order, onChange }: { order: OrderView; on
 
 /**
  * A validated order on « Mes commandes »: its shop, its articles (each a link to its sheet), its parcels, the question
- * when it waits for her answer, « Ajouter un numéro de suivi » while nothing is delivered, and « Supprimer la
- * commande ».
+ * when it waits for her answer, « Ajouter un numéro de suivi » while nothing is delivered, « Modifier » and « Supprimer
+ * la commande ».
  */
 export function OrderCard({
   order,
@@ -293,8 +293,8 @@ export function OrderCard({
       <OrderLines order={order} hrefOf={lineHref} />
       <ParcelList order={order} onChange={onChange} />
       {tracked && <TrackingForm itemId={tracked} onAdded={onChange} />}
-      <div className="flex flex-wrap gap-x-space-4 gap-y-space-2 border-t border-line pt-space-3">
-        <DeleteOrderAction order={order} onDeleted={onDeleted} />
+      <div className="border-t border-line pt-space-3">
+        <OrderActions order={order} onChange={onChange} onDeleted={onDeleted} />
       </div>
     </article>
   );

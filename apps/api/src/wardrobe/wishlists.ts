@@ -167,8 +167,9 @@ const sharedItemColumns = {
   priceCents: schema.products.priceCents,
   currency: schema.products.currency,
   url: sql<string>`coalesce(${schema.products.canonicalUrl}, '')`,
+  // A shop name she typed on a validated order (« Modifier ») is hers only: her friends see the catalogue's.
   shopName: sql<string>`coalesce(${schema.shops.name}, (
-    select ${orderShopNameSql(sql`order_shop.name`, sql`order_shop.status`, sql`o.shop_name`)} from ${schema.orderLines} ol
+    select ${orderShopNameSql(sql`order_shop.name`, sql`order_shop.status`, sql`o.shop_name`, sql`false`)} from ${schema.orderLines} ol
     join ${schema.orders} o on o.id = ol.order_id
     left join ${schema.shops} order_shop on order_shop.id = o.shop_id
     where ol.item_id = ${schema.items.id} order by o.created_at desc limit 1), '')`,

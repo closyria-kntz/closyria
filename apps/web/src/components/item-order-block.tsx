@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { fetchOrders } from "@/lib/orders-client";
-import { DeleteOrderAction } from "./order-actions";
+import { OrderActions } from "./order-actions";
 import { linkActionClass, OrderMeta, orderShop, ParcelList, TrackingForm, useCalendarDay } from "./order-parts";
 import { blockClass, blockTitleClass, buttonClass, focusRing } from "./ui";
 
@@ -85,18 +85,20 @@ export function ItemOrderBlock({ item }: { item: ItemView }) {
         const shop = orderShop(order);
         return (
           <div key={order.id} className="flex flex-col gap-space-2">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-space-3">
-              <span className="flex flex-col">
-                <span className="font-strong">{shop ? t("item.orderOf", { shop }) : t("item.orderNoShop")}</span>
-                <OrderMeta order={order} />
-              </span>
-              <span className="flex flex-wrap items-center gap-x-space-4">
+            <span className="flex flex-col">
+              <span className="font-strong">{shop ? t("item.orderOf", { shop }) : t("item.orderNoShop")}</span>
+              <OrderMeta order={order} />
+            </span>
+            <OrderActions
+              order={order}
+              onChange={merge}
+              onDeleted={deleted}
+              lead={
                 <Link href={orderHref(order.id)} className={linkActionClass}>
                   {t("item.viewOrder")}
                 </Link>
-                <DeleteOrderAction order={order} onDeleted={deleted} />
-              </span>
-            </div>
+              }
+            />
             {order.parcels.length > 0 ? (
               <ParcelList order={order} onChange={merge} raised />
             ) : (

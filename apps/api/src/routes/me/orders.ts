@@ -71,15 +71,21 @@ const patchRoute = defineAccess(
   createRoute({
     method: "patch",
     path: "/me/orders/{id}",
-    summary: "« Corriger » an order to validate",
+    summary: "« Corriger » an order to validate, « Modifier » a validated one",
     description:
-      "Only the fields given change; `lines` replaces them all. `shopName` finds the shop of exactly that name (case " +
-      "and accents aside); otherwise the order keeps no shop and her name for it — a typed name never creates a shop.",
+      "Only the fields given change. A draft: `lines` replaces them all; `shopName` finds the shop of exactly that " +
+      "name (case and accents aside), otherwise the order keeps no shop and her name for it — a typed name never " +
+      "creates a shop. A validated order: only `shopName` (80 characters at most), `externalRef` and `orderedAt`; " +
+      "tied to a shop, the shop stays and her name is shown on her order only (the catalogue is never renamed).",
     request: { params: idParams, ...body(orderPatchSchema) },
     responses: {
       200: orderContent("Corrected"),
       ...common,
-      409: errorContent("Already validated or dismissed (order_not_draft)"),
+      400: errorContent("Invalid body or id, or a shop name over 80 characters on a validated order (invalid_request)"),
+      409: errorContent(
+        "Dismissed, or lines or profile for a validated order (order_not_draft); the number of another of her open " +
+          "orders of the same shop (order_exists)",
+      ),
     },
   }),
   "user",
@@ -305,9 +311,10 @@ export function ordersRoutes(deps: WardrobeDeps) {
     unreadEmails: await listUnreadEmails(db, userId, now()),
   });
 
-  /** The order (200), or its error: 404 unknown, 409 a state that refuses the action. */
+  /** The order (200), or its error: 400 a field its status refuses, 404 unknown, 409 a state that refuses the action. */
   const answer = <C extends Context<AccessEnv>>(c: C, outcome: OrderOutcome) => {
     if (!("error" in outcome)) return c.json(outcome.order, 200);
+    if (outcome.error === "invalid_request") return c.json(invalidRequest, 400);
     return outcome.error === "not_found"
       ? c.json({ error: outcome.error }, 404)
       : c.json({ error: outcome.error }, 409);

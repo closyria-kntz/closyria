@@ -373,7 +373,7 @@ test("la carte à valider : corriger, « C'est bon », « Ce n'est pas une comma
   await card.getByRole("button", { name: "Corriger" }).click();
   const form = card.getByRole("group", { name: "Article 1" });
   await form.getByLabel("Taille").fill("S");
-  await card.getByRole("button", { name: "Enregistrer" }).click();
+  await card.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await expect(card).toContainText("S · Rouge");
   await card.getByRole("button", { name: "C'est bon" }).click();
   await expect(card).toHaveCount(0);
@@ -440,7 +440,7 @@ test("la carte à valider : corriger, « C'est bon », « Ce n'est pas une comma
   await unread.getByLabel("Boutique").fill("Atelier Mona");
   await unread.getByRole("group", { name: "Article 1" }).getByLabel("Nom de l'article").fill("Pull marin");
   await unread.getByLabel("Numéro de suivi (facultatif)").fill("6A99999999999");
-  await unread.getByRole("button", { name: "Enregistrer" }).click();
+  await unread.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await expect(unread).toHaveCount(0);
   const typed = main(page).getByRole("article", { name: "Atelier Mona" });
   await expect(typed).toContainText("Pull marin");
@@ -671,6 +671,65 @@ test("une commande supprimée disparaît avec ses colis, ses articles restent", 
   await expect(block.getByRole("status")).toHaveText("Commande supprimée");
   await expect(block.getByRole("heading", { name: "Commande / colis" })).toBeFocused();
   await expect(block.getByRole("link", { name: "Voir la commande" })).toHaveCount(0);
+  await axeLightAndDark(page);
+});
+
+test("une commande validée modifiée : boutique pour elle seule, numéro et date", async ({
+  page,
+  db,
+  userAgentTag,
+}, testInfo) => {
+  const who = await account(page, db, userAgentTag);
+  await confirmedOrder(page, db, who, "Veste en jean", "6001");
+  const edited = await confirmedOrder(page, db, who, "Top rayé", "6002");
+  await page.goto("/mes-commandes");
+  const card = main(page).getByRole("article", { name: AUTO_SHOP.name }).filter({ hasText: "Top rayé" });
+
+  // « Annuler » closes the form, nothing changed.
+  await card.getByRole("button", { name: "Modifier", exact: true }).click();
+  await expect(card.getByLabel("Boutique")).toHaveValue(AUTO_SHOP.name);
+  await expect(card.getByLabel("Numéro de commande")).toHaveValue("6002");
+  await card.getByLabel("Boutique").fill("Autre chose");
+  await card.getByRole("button", { name: "Annuler" }).click();
+  await expect(card.getByLabel("Boutique")).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "Modifier", exact: true })).toBeFocused();
+
+  // The number of her other order of the same shop is refused, said in words.
+  await card.getByRole("button", { name: "Modifier", exact: true }).click();
+  await card.getByLabel("Numéro de commande").fill("6001");
+  await card.getByRole("button", { name: "Enregistrer", exact: true }).click();
+  await expect(card.getByRole("alert")).toHaveText("Une autre de tes commandes de cette boutique a déjà ce numéro.");
+  await expect(card.getByLabel("Numéro de commande")).toHaveAttribute("aria-invalid", "true");
+  await axeLightAndDark(page);
+  await shots(page, testInfo, "modifier-commande");
+
+  const day = await parisDayPlus(db, -3);
+  await card.getByLabel("Boutique").fill("Ma boutique du marais");
+  await card.getByLabel("Numéro de commande").fill("A-77");
+  await card.getByLabel("Date de commande").fill(day);
+  await card.getByRole("button", { name: "Enregistrer", exact: true }).click();
+  const renamed = main(page).getByRole("article", { name: "Ma boutique du marais" });
+  await expect(renamed).toContainText(`Commandée le ${frenchDay(day)} · n° A-77`);
+  await expect(renamed.getByRole("status")).toHaveText("Commande modifiée.");
+  await expect(renamed.getByRole("button", { name: "Modifier", exact: true })).toBeFocused();
+  // Her name on her order only: the catalogue keeps its own.
+  const { rows } = await db.query<{ shop: string; ref: string; typed: boolean; catalogue: string }>(
+    `select o.shop_name as shop, o.external_ref as ref, o.shop_name_typed as typed, s.name as catalogue
+     from orders o join shops s on s.id = o.shop_id where o.id = $1`,
+    [edited.orderId],
+  );
+  expect(rows).toEqual([{ shop: "Ma boutique du marais", ref: "A-77", typed: true, catalogue: AUTO_SHOP.name }]);
+  await expect(main(page).getByRole("article", { name: AUTO_SHOP.name })).toContainText("Veste en jean");
+
+  // From the article's sheet, the same form.
+  await page.goto(`/articles/${edited.itemId}`);
+  const block = main(page).getByRole("region", { name: "Commande / colis" });
+  await expect(block).toContainText("Commande Ma boutique du marais");
+  await block.getByRole("button", { name: "Modifier", exact: true }).click();
+  await block.getByLabel("Numéro de commande").fill("A-78");
+  await block.getByRole("button", { name: "Enregistrer", exact: true }).click();
+  await expect(block).toContainText("n° A-78");
+  await expect(block.getByRole("status").filter({ hasText: "Commande modifiée." })).toBeVisible();
   await axeLightAndDark(page);
 });
 

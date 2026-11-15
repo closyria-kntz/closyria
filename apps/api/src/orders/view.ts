@@ -77,7 +77,7 @@ async function viewsOf(db: Database | Tx, rows: OrderRow[]): Promise<OrderView[]
       profileId: order.profileId,
       shop: shop ? { id: shop.id, name: shop.name, returnsUrl: shop.returnsUrl } : null,
       // A shop still pending (named after its domain): the name read in the e-mail, or typed (2026-11-15).
-      shopName: orderShopDisplayName(shop, order.shopName),
+      shopName: orderShopDisplayName(shop, order.shopName, order.shopNameTyped),
       externalRef: order.externalRef,
       orderedAt: iso(order.orderedAt),
       status: order.status as OrderView["status"],

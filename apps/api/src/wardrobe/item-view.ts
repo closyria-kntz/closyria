@@ -120,7 +120,12 @@ async function loadBareItemFacts(
       db
         .selectDistinctOn([schema.orderLines.itemId], {
           itemId: schema.orderLines.itemId,
-          name: orderShopNameSql(schema.shops.name, schema.shops.status, schema.orders.shopName),
+          name: orderShopNameSql(
+            schema.shops.name,
+            schema.shops.status,
+            schema.orders.shopName,
+            schema.orders.shopNameTyped,
+          ),
         })
         .from(schema.orderLines)
         .innerJoin(schema.orders, eq(schema.orders.id, schema.orderLines.orderId))
@@ -437,7 +442,7 @@ const orderShopMatches = (pattern: string) => sql`exists (
   join ${schema.orders} on ${schema.orders.id} = ${schema.orderLines.orderId}
   left join ${schema.shops} as order_shop on order_shop.id = ${schema.orders.shopId}
   where ${schema.orderLines.itemId} = ${schema.items.id}
-    and ${orderShopNameSql(sql`order_shop.name`, sql`order_shop.status`, schema.orders.shopName)} ilike ${pattern})`;
+    and ${orderShopNameSql(sql`order_shop.name`, sql`order_shop.status`, schema.orders.shopName, schema.orders.shopNameTyped)} ilike ${pattern})`;
 
 /**
  * One page (48) of her items, filtered and sorted, with a cursor on the sort keys: `(created_at, id)` descending by

@@ -104,17 +104,20 @@ export function receivedQuestionOpen(): SQL {
 
 /**
  * The shop's name an order shows, in SQL (`orderShopDisplayName` of `packages/shared`): the catalogue's name, except
- * while the shop is still `pending` (named after its domain, never looked at by the admin), when the order's own name
- * (read in the e-mail, or typed) is shown; without a shop, the order's own name. Pass the columns qualified (joined
- * tables, or aliases written out).
+ * while the shop is still `pending` (named after its domain, never looked at by the admin), or when she typed the
+ * order's own name herself (`orders.shop_name_typed`, « Modifier »), when the order's own name is shown; without a
+ * shop, the order's own name. Pass the columns qualified (joined tables, or aliases written out).
  */
 export function orderShopNameSql(
   shopName: SQLWrapper,
   shopStatus: SQLWrapper,
   orderShopName: SQLWrapper,
+  orderShopNameTyped: SQLWrapper,
 ): SQL<string | null> {
-  return sql<string | null>`(case when ${shopStatus} = 'pending' and ${orderShopName} is not null then ${orderShopName}
-    else coalesce(${shopName}, ${orderShopName}) end)`;
+  return sql<
+    string | null
+  >`(case when (${shopStatus} = 'pending' or ${orderShopNameTyped}) and ${orderShopName} is not null
+    then ${orderShopName} else coalesce(${shopName}, ${orderShopName}) end)`;
 }
 
 /** A parcel done with: delivered, `unknown` (the carrier gave up on it, or we did), or at the end of its tracking. */

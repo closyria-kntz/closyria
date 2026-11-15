@@ -797,3 +797,156 @@ describe("« Supprimer la commande » (2026-11-15)", () => {
     expect(await json(await call("DELETE", orderPath("nope"), a.cookie), 400)).toEqual({ error: "invalid_request" });
   });
 });
+
+describe("« Modifier » a validated order (2026-11-15)", () => {
+  const orderPath = (id: string) => `/api/me/orders/${id}`;
+  const orderRow = async (id: string) => (await t.db.select().from(schema.orders).where(eq(schema.orders.id, id)))[0];
+  const shopRow = async (id: string) => (await t.db.select().from(schema.shops).where(eq(schema.shops.id, id)))[0];
+
+  it("changes the shop's name for her order only, its number and its date; never the catalogue", async () => {
+    const a = await account();
+    const shopId = await shop("Maison Lune");
+    const o = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" }, shopId);
+    const view = await json<OrderView>(
+      await call("PATCH", orderPath(o.orderId), a.cookie, {
+        shopName: "  Lune   Paris ",
+        externalRef: "A-12",
+        orderedAt: "2026-11-10T11:00:00.000Z",
+      }),
+      200,
+    );
+    expect(view).toMatchObject({
+      status: "confirmed",
+      shopName: "Lune Paris",
+      shop: { id: shopId, name: "Maison Lune" },
+      externalRef: "A-12",
+      orderedAt: "2026-11-10T11:00:00.000Z",
+    });
+    expect(view.lines).toHaveLength(1);
+    expect(view.parcels).toHaveLength(1);
+    expect(await orderRow(o.orderId)).toMatchObject({ shopId, shopName: "Lune Paris", shopNameTyped: true });
+    expect((await shopRow(shopId))?.name).toBe("Maison Lune");
+    // Her article's sheet and « Nouvelles » name it the same way.
+    const sheet = await json<ItemView>(await call("GET", `/api/me/items/${o.itemId}`, a.cookie), 200);
+    expect(sheet.shopName).toBe("Lune Paris");
+    await t.db.insert(schema.alertEvents).values({
+      userId: a.userId,
+      profileId: a.moi,
+      kind: "parcel_delivered",
+      orderId: o.orderId,
+      parcelId: o.parcelId,
+      shopId,
+      status: "sent",
+    });
+    const news = await json<{ alerts: { shopName: string | null }[] }>(
+      await call("GET", "/api/me/alerts", a.cookie),
+      200,
+    );
+    expect(news.alerts.map((n) => n.shopName)).toEqual(["Lune Paris"]);
+
+    // The catalogue's own name typed back: the catalogue's name again, nothing of hers kept.
+    const back = await json<OrderView>(
+      await call("PATCH", orderPath(o.orderId), a.cookie, { shopName: "maison lune" }),
+      200,
+    );
+    expect(back.shopName).toBe("Maison Lune");
+    expect(await orderRow(o.orderId)).toMatchObject({ shopId, shopName: null, shopNameTyped: false });
+
+    // Only the fields given change; an empty number or date clears it.
+    const cleared = await json<OrderView>(
+      await call("PATCH", orderPath(o.orderId), a.cookie, { externalRef: "", orderedAt: null }),
+      200,
+    );
+    expect(cleared).toMatchObject({ shopName: "Maison Lune", externalRef: null, orderedAt: null });
+  });
+
+  it("finds the shop she names for an order without one, as « Corriger » does", async () => {
+    const a = await account();
+    const shopId = await shop(`Atelier Mona ${++counter}`);
+    const o = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" });
+    const [shopName] = (await t.db.select().from(schema.shops).where(eq(schema.shops.id, shopId))).map((s) => s.name);
+    const linked = await json<OrderView>(
+      await call("PATCH", orderPath(o.orderId), a.cookie, { shopName: shopName?.toUpperCase() }),
+      200,
+    );
+    expect(linked.shop?.id).toBe(shopId);
+    expect(linked.shopName).toBe(shopName);
+    const typed = await json<OrderView>(
+      await call("PATCH", orderPath(o.orderId), a.cookie, { shopName: "Une boutique de Lyon" }),
+      200,
+    );
+    // Her shop stays linked; her name is shown.
+    expect(typed).toMatchObject({ shop: { id: shopId }, shopName: "Une boutique de Lyon" });
+  });
+
+  it("refuses the number of another of her orders at the same shop (order_exists)", async () => {
+    const a = await account();
+    const shopId = await shop();
+    const otherShopId = await shop("Autre boutique");
+    const first = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" }, shopId);
+    const second = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" }, shopId);
+    const elsewhere = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" }, otherShopId);
+    const dismissed = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" }, shopId);
+    await t.db.update(schema.orders).set({ externalRef: "1042" }).where(eq(schema.orders.id, first.orderId));
+    await t.db
+      .update(schema.orders)
+      .set({ externalRef: "2001", status: "dismissed" })
+      .where(eq(schema.orders.id, dismissed.orderId));
+    expect(await json(await call("PATCH", orderPath(second.orderId), a.cookie, { externalRef: "1042" }), 409)).toEqual({
+      error: "order_exists",
+    });
+    expect((await orderRow(second.orderId))?.externalRef).toBeNull();
+    // Another shop, a dismissed order, or its own number: fine.
+    await json(await call("PATCH", orderPath(elsewhere.orderId), a.cookie, { externalRef: "1042" }), 200);
+    await json(await call("PATCH", orderPath(second.orderId), a.cookie, { externalRef: "2001" }), 200);
+    await json(await call("PATCH", orderPath(first.orderId), a.cookie, { externalRef: "1042" }), 200);
+    // Another account's order of the same number is not hers.
+    const b = await account();
+    const theirs = await orderWithParcel(b, { carrier: "colissimo", status: "in_transit" }, shopId);
+    await json(await call("PATCH", orderPath(theirs.orderId), b.cookie, { externalRef: "1042" }), 200);
+  });
+
+  it("keeps the articles for their own sheets: lines and profile only on an order to validate", async () => {
+    const a = await account();
+    const o = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" });
+    expect(
+      await json(
+        await call("PATCH", orderPath(o.orderId), a.cookie, { lines: [{ name: "Autre robe", quantity: 1 }] }),
+        409,
+      ),
+    ).toEqual({ error: "order_not_draft" });
+    expect(await json(await call("PATCH", orderPath(o.orderId), a.cookie, { profileId: a.moi }), 409)).toEqual({
+      error: "order_not_draft",
+    });
+    const [line] = await t.db.select().from(schema.orderLines).where(eq(schema.orderLines.orderId, o.orderId));
+    expect(line?.name).toBe("Robe Iris");
+  });
+
+  it("refuses a name over 80 characters, a date to come, a dismissed order, another account's and a guest", async () => {
+    const a = await account();
+    const o = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" });
+    expect(await json(await call("PATCH", orderPath(o.orderId), a.cookie, { shopName: "x".repeat(81) }), 400)).toEqual({
+      error: "invalid_request",
+    });
+    expect(
+      await json(
+        await call("PATCH", orderPath(o.orderId), a.cookie, {
+          orderedAt: new Date(Date.now() + 3 * DAY).toISOString(),
+        }),
+        400,
+      ),
+    ).toEqual({ error: "invalid_request" });
+    const other = await account();
+    expect(await json(await call("PATCH", orderPath(o.orderId), other.cookie, { externalRef: "9" }), 404)).toEqual({
+      error: "not_found",
+    });
+    const guest = await t.signIn();
+    expect(await json(await call("PATCH", orderPath(o.orderId), guest.cookie, { externalRef: "9" }), 403)).toEqual({
+      error: "account_required",
+    });
+    await t.db.update(schema.orders).set({ status: "dismissed" }).where(eq(schema.orders.id, o.orderId));
+    expect(await json(await call("PATCH", orderPath(o.orderId), a.cookie, { externalRef: "9" }), 409)).toEqual({
+      error: "order_not_draft",
+    });
+  });
+});

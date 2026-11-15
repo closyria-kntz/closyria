@@ -1,10 +1,14 @@
 import {
   bareItemHref,
+  MAX_EXTERNAL_REF,
+  MAX_ORDER_SHOP_NAME,
   MAX_TRACKING_NUMBER,
   MIN_TRACKING_NUMBER,
   normalizeTrackingNumber,
   type OrderLineInput,
   type OrderLineView,
+  type OrderPatch,
+  type OrderView,
 } from "@closyria/shared";
 import { parsePriceCents } from "./price";
 
@@ -79,3 +83,58 @@ export function lineHref(line: Pick<OrderLineView, "itemId" | "productId">): str
  */
 export const trackableItem = (order: { lines: readonly Pick<OrderLineView, "itemId" | "itemStage">[] }) =>
   order.lines.find((l) => l.itemId !== null && l.itemStage === "ordered")?.itemId ?? null;
+
+// --- « Modifier » a validated order (2026-11-15) -------------------------------------------------------------------
+
+const PARIS = "Europe/Paris";
+const parisDayFormat = new Intl.DateTimeFormat("en-CA", {
+  timeZone: PARIS,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+const parisHourFormat = new Intl.DateTimeFormat("en-GB", { timeZone: PARIS, hour: "2-digit", hourCycle: "h23" });
+
+/** `YYYY-MM-DD`: the Paris day of an instant (what a date field shows). */
+export const parisDay = (at: string | Date) => parisDayFormat.format(new Date(at));
+
+/** Noon in Paris on `day` (`YYYY-MM-DD`), as an instant: the same day whatever the time zone it is read in. */
+function parisNoon(day: string): string {
+  const noonUtc = new Date(`${day}T12:00:00Z`);
+  const offsetHours = Number(parisHourFormat.format(noonUtc)) - 12;
+  return new Date(noonUtc.getTime() - offsetHours * 3_600_000).toISOString();
+}
+
+/** What « Modifier » holds: texts as she typed them, the day as a date field gives it (`""`: none). */
+export type OrderEditDraft = { shopName: string; externalRef: string; orderedOn: string };
+type EditedOrder = Pick<OrderView, "shopName" | "externalRef" | "orderedAt">;
+
+export const orderEditDraftOf = (order: EditedOrder): OrderEditDraft => ({
+  shopName: order.shopName ?? "",
+  externalRef: order.externalRef ?? "",
+  orderedOn: order.orderedAt ? parisDay(order.orderedAt) : "",
+});
+
+export type OrderEditCheck = { ok: true; patch: OrderPatch } | { ok: false; error: "shop" | "date" | "ref" };
+
+/**
+ * The fields of « Modifier » that changed, as the API takes them; an emptied shop name (the order had one), a day to
+ * come (in Paris) or an over-long number is refused before sending.
+ */
+export function checkOrderEdit(order: EditedOrder, draft: OrderEditDraft, now: Date): OrderEditCheck {
+  const before = orderEditDraftOf(order);
+  const patch: OrderPatch = {};
+  const shopName = draft.shopName.trim().replace(/\s+/g, " ");
+  if (shopName !== before.shopName.trim()) {
+    if (!shopName) return { ok: false, error: "shop" };
+    patch.shopName = shopName.slice(0, MAX_ORDER_SHOP_NAME);
+  }
+  const externalRef = draft.externalRef.trim();
+  if (externalRef.length > MAX_EXTERNAL_REF) return { ok: false, error: "ref" };
+  if (externalRef !== before.externalRef) patch.externalRef = externalRef || null;
+  if (draft.orderedOn !== before.orderedOn) {
+    if (draft.orderedOn && draft.orderedOn > parisDay(now)) return { ok: false, error: "date" };
+    patch.orderedAt = draft.orderedOn ? parisNoon(draft.orderedOn) : null;
+  }
+  return { ok: true, patch };
+}
