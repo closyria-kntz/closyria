@@ -141,27 +141,33 @@ const receivedRoute = defineAccess(
 
 const parcelParams = z.object({ id: z.uuid(), parcelId: z.uuid() });
 
-const parcelPatchRoute = defineAccess(
-  createRoute({
-    method: "patch",
-    path: "/me/orders/{id}/parcels/{parcelId}",
-    summary: "« Changer de transporteur » or « Modifier le numéro » on one of her parcels",
-    description:
-      "The carrier she picked, a new number, or both; the tracking starts again (step `pending`, failures reset, " +
-      "asked at the next sweep; a tracking already over gets 30 more days). A new number drops the old one's steps " +
-      "and notifications, and its carrier is read from its format unless she picked one (none: `unknown`).",
-    request: { params: parcelParams, ...body(parcelPatchInputSchema) },
-    responses: {
-      200: orderContent("The order with the corrected parcel"),
-      ...common,
-      409: errorContent(
-        "Delivered already (parcel_delivered), the order is dismissed (order_dismissed), the number is on another " +
-          "parcel of the order (parcel_exists) or on another of her orders (tracking_exists)",
-      ),
-    },
-  }),
-  "user",
-);
+/** Carrier or number corrections per account and day. */
+const PARCEL_EDITS_PER_DAY = 30;
+
+const parcelPatchRoute = (limiter: MiddlewareHandler<AccessEnv>) =>
+  defineAccess(
+    createRoute({
+      method: "patch",
+      path: "/me/orders/{id}/parcels/{parcelId}",
+      summary: "« Changer de transporteur » or « Modifier le numéro » on one of her parcels",
+      description:
+        "The carrier she picked, a new number, or both; the tracking starts again (step `pending`, failures reset, " +
+        "asked at the next sweep; a tracking already over gets 30 more days). A new number drops the old one's steps " +
+        "and notifications, and its carrier is read from its format unless she picked one (none: `unknown`).",
+      request: { params: parcelParams, ...body(parcelPatchInputSchema) },
+      responses: {
+        200: orderContent("The order with the corrected parcel"),
+        ...common,
+        409: errorContent(
+          "Delivered already (parcel_delivered), the order is dismissed (order_dismissed), the number is on another " +
+            "parcel of the order (parcel_exists) or on another of her orders (tracking_exists)",
+        ),
+        429: errorContent("Too many corrections (rate_limited): each new number costs one tracking registration"),
+      },
+      middleware: [limiter],
+    }),
+    "user",
+  );
 
 const parcelDeleteRoute = defineAccess(
   createRoute({
@@ -264,6 +270,15 @@ export function ordersRoutes(deps: WardrobeDeps) {
   const limiter = rateLimit<AccessEnv>({ ...entries, key: (c) => `orders:${c.var.session?.user.id ?? ""}` }, (c) =>
     c.json({ error: "rate_limited" } as const, 429),
   );
+  // Each new number is one registration at the tracking aggregator (a paid quota): corrections are few.
+  const parcelLimiter = rateLimit<AccessEnv>(
+    {
+      max: PARCEL_EDITS_PER_DAY,
+      windowMs: 24 * 60 * 60 * 1000,
+      key: (c) => `parcel-edits:${c.var.session?.user.id ?? ""}`,
+    },
+    (c) => c.json({ error: "rate_limited" } as const, 429),
+  );
   /** Her account id, or null for a guest: orders are for accounts only, like her order address (spec §3.1). */
   async function accountIdOf(c: Context<AccessEnv>): Promise<string | null> {
     const userId = userIdOf(c);
@@ -312,7 +327,7 @@ export function ordersRoutes(deps: WardrobeDeps) {
       if (!userId) return c.json(accountRequired, 403);
       return answer(c, await answerReceived(db, userId, c.req.valid("param").id, c.req.valid("json"), now()));
     })
-    .openapi(parcelPatchRoute, async (c) => {
+    .openapi(parcelPatchRoute(parcelLimiter), async (c) => {
       const userId = await accountIdOf(c);
       if (!userId) return c.json(accountRequired, 403);
       const { id, parcelId } = c.req.valid("param");

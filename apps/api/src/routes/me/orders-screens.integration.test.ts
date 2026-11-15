@@ -208,6 +208,23 @@ describe("PATCH /api/me/orders/{id}/parcels/{parcelId}", () => {
     expect(row?.nextCheckAt?.toISOString()).toBe(NOW.toISOString());
   });
 
+  it("limits corrections to 30 a day per account (each new number costs a tracking registration)", async () => {
+    const a = await account();
+    const { orderId, parcelId } = await orderWithParcel(a, { carrier: null, status: "unknown" });
+    const path = `/api/me/orders/${orderId}/parcels/${parcelId}`;
+    for (let i = 0; i < 30; i++) {
+      const res = await call("PATCH", path, a.cookie, { carrier: i % 2 ? "gls" : "dpd" });
+      expect(res.status).toBe(200);
+    }
+    expect((await call("PATCH", path, a.cookie, { carrier: "gls" })).status).toBe(429);
+    const b = await account();
+    const other = await orderWithParcel(b, { carrier: null, status: "unknown" });
+    expect(
+      (await call("PATCH", `/api/me/orders/${other.orderId}/parcels/${other.parcelId}`, b.cookie, { carrier: "gls" }))
+        .status,
+    ).toBe(200);
+  });
+
   it("refuses a delivered parcel, a dismissed order, another account's parcel, a guest and a bad carrier", async () => {
     const a = await account();
     const delivered = await orderWithParcel(a, { carrier: "colissimo", status: "delivered" });
