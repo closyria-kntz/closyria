@@ -790,3 +790,21 @@ l'inscription) à comparer avec TrackingMore avant la prod, selon le volume atte
   « Modifier » à côté de « Supprimer la commande » (« Mes commandes », bloc « Commande / colis »), formulaire en place
   « Boutique », « Numéro de commande », « Date de commande », « Enregistrer » / « Annuler » ; seuls les champs changés
   partent ; ensuite « Commande modifiée. » (zone `status`) et le focus revient sur « Modifier ».
+- **« Changer de transporteur » s'annule** : le choix du transporteur d'un colis a son « Annuler » (il se ferme, le
+  choix revient au transporteur actuel, le focus revient sur le bouton qui l'a ouvert). Un colis sans transporteur
+  ouvre toujours ce choix d'office ; « Annuler » le ferme et « Choisir le transporteur » le rouvre. « Modifier le
+  numéro » avait déjà son « Annuler » ; le focus y revient de même sur « Modifier le numéro ». « Enregistrer le
+  transporteur » devient le bouton principal du choix, comme « Enregistrer le numéro ».
+
+#### Textes à valider (supprimer, modifier, annuler)
+
+- « Supprimer la commande », « Commande supprimée » ; repris tels quels de la décision : « Supprimer cette
+  commande ? », « La commande et ses colis disparaissent. Les articles restent dans tes articles. », « Supprimer »,
+  « Annuler ».
+- « Modifier », « Boutique », « Le nom change sur ta commande seulement. » (sous le champ, pour une commande reliée à
+  une boutique du catalogue), « Numéro de commande », « Date de commande », « Enregistrer », « Annuler »,
+  « Commande modifiée. ».
+- « Écris le nom de la boutique. » (repris de « Corriger »), « Ce numéro de commande est trop long. », « La date de
+  commande ne peut pas être dans le futur. », « Une autre de tes commandes de cette boutique a déjà ce numéro. »,
+  « Ça n'a pas marché. Réessaie dans un instant. » (repris).
+- « Choisir le transporteur » ; « Annuler » (repris).

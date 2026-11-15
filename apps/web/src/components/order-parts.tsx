@@ -11,7 +11,7 @@ import {
 } from "@closyria/shared";
 import Link from "next/link";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
-import { type FormEvent, useId, useState } from "react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { addItemTracking, changeParcelCarrier, deleteParcel, patchParcel } from "@/lib/orders-client";
 import { type ClientError, isTrackingInput } from "@/lib/orders-form";
 import { formatPrice } from "@/lib/price";
@@ -172,6 +172,13 @@ export function ParcelRow({
   const [numberError, setNumberError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
+  // « Annuler » gives the focus back to the button that opened the form, once it is shown again.
+  const carrierButton = useRef<HTMLButtonElement>(null);
+  const numberButton = useRef<HTMLButtonElement>(null);
+  const [refocus, setRefocus] = useState<{ to: "carrier" | "number"; n: number } | null>(null);
+  useEffect(() => {
+    if (refocus) (refocus.to === "carrier" ? carrierButton : numberButton).current?.focus();
+  }, [refocus]);
   const name = parcel.carrier ? t(`carrier.${parcel.carrier}`) : t("carrier.unknown");
   const open = order.status !== "dismissed";
   const canFix = parcel.status !== "delivered" && open;
@@ -187,6 +194,18 @@ export function ParcelRow({
     onChange(result.order);
     setFixing(false);
     setMessage({ ok: true, text: t("carrierSaved") });
+  };
+
+  const cancelCarrier = () => {
+    setCarrier(parcel.carrier ?? "");
+    setFixing(false);
+    setRefocus((r) => ({ to: "carrier", n: (r?.n ?? 0) + 1 }));
+  };
+
+  const cancelNumber = () => {
+    setEditing(false);
+    setNumberError(null);
+    setRefocus((r) => ({ to: "number", n: (r?.n ?? 0) + 1 }));
   };
 
   const openEditing = () => {
@@ -249,12 +268,12 @@ export function ParcelRow({
       {open && !editing && (
         <span className="flex flex-wrap gap-x-space-4 gap-y-space-2">
           {canFix && !fixing && (
-            <button type="button" onClick={() => setFixing(true)} className={moreButtonClass}>
-              {t("changeCarrier")}
+            <button ref={carrierButton} type="button" onClick={() => setFixing(true)} className={moreButtonClass}>
+              {parcel.carrier ? t("changeCarrier") : t("chooseCarrier")}
             </button>
           )}
           {canFix && (
-            <button type="button" onClick={openEditing} className={moreButtonClass}>
+            <button ref={numberButton} type="button" onClick={openEditing} className={moreButtonClass}>
               {t("editNumber")}
             </button>
           )}
@@ -291,13 +310,18 @@ export function ParcelRow({
               ))}
             </select>
           </span>
-          <button
-            type="submit"
-            disabled={busy || !carrier || carrier === parcel.carrier}
-            className={`${buttonClass} min-h-touch-target disabled:opacity-60`}
-          >
-            {t("saveCarrier")}
-          </button>
+          <span className="flex flex-wrap gap-space-2">
+            <button
+              type="submit"
+              disabled={busy || !carrier || carrier === parcel.carrier}
+              className={`${primaryButtonClass} min-h-touch-target`}
+            >
+              {t("saveCarrier")}
+            </button>
+            <button type="button" onClick={cancelCarrier} className={`${buttonClass} min-h-touch-target`}>
+              {t("cancel")}
+            </button>
+          </span>
           <p id={ids.hint} className="w-full text-meta text-ink-muted">
             {t("carrierHint")}
           </p>
@@ -349,7 +373,7 @@ export function ParcelRow({
             <button type="submit" disabled={busy} className={`${primaryButtonClass} min-h-touch-target`}>
               {t("saveNumber")}
             </button>
-            <button type="button" onClick={() => setEditing(false)} className={`${buttonClass} min-h-touch-target`}>
+            <button type="button" onClick={cancelNumber} className={`${buttonClass} min-h-touch-target`}>
               {t("cancel")}
             </button>
           </span>

@@ -733,6 +733,62 @@ test("une commande validée modifiée : boutique pour elle seule, numéro et dat
   await axeLightAndDark(page);
 });
 
+test("changer de transporteur ou de numéro s'annule ; sans transporteur, le choix se rouvre", async ({
+  page,
+  db,
+  userAgentTag,
+}) => {
+  const who = await account(page, db, userAgentTag);
+  const orderId = await draftOrder(db, who, [{ name: "Gilet court" }], { trackingNumber: "12345678", ref: "7001" });
+  await db.query("update orders set status = 'confirmed', confirmed_at = now() where id = $1", [orderId]);
+  await db.query("update parcels set status = 'unknown', next_check_at = null where order_id = $1", [orderId]);
+  await db.query(
+    `insert into parcels (order_id, carrier, tracking_number, status, next_check_at, check_until)
+     values ($1, 'colissimo', '6A18537412398', 'in_transit', now() + interval '6 hours', now() + interval '30 days')`,
+    [orderId],
+  );
+  await page.goto("/mes-commandes");
+  const card = main(page).getByRole("article", { name: AUTO_SHOP.name });
+
+  // No carrier: the choice is open at once; « Annuler » closes it, « Choisir le transporteur » opens it again.
+  const unknown = card.getByRole("listitem").filter({ hasText: "12345678" });
+  await expect(unknown.getByLabel("Transporteur")).toBeVisible();
+  await unknown.getByLabel("Transporteur").selectOption({ label: "GLS" });
+  await unknown.getByRole("button", { name: "Annuler" }).click();
+  await expect(unknown.getByLabel("Transporteur")).toHaveCount(0);
+  const choose = unknown.getByRole("button", { name: "Choisir le transporteur" });
+  await expect(choose).toBeFocused();
+  await choose.click();
+  await expect(unknown.getByLabel("Transporteur")).toHaveValue("");
+  await axeLightAndDark(page);
+
+  // A known carrier: « Changer de transporteur » then « Annuler » keeps it, the choice reset.
+  const known = card.getByRole("listitem").filter({ hasText: "6A18537412398" });
+  await known.getByRole("button", { name: "Changer de transporteur" }).click();
+  await known.getByLabel("Transporteur").selectOption({ label: "DPD" });
+  await known.getByRole("button", { name: "Annuler" }).click();
+  await expect(known.getByLabel("Transporteur")).toHaveCount(0);
+  await expect(known.getByRole("button", { name: "Changer de transporteur" })).toBeFocused();
+  await known.getByRole("button", { name: "Changer de transporteur" }).click();
+  await expect(known.getByLabel("Transporteur")).toHaveValue("colissimo");
+  await known.getByRole("button", { name: "Annuler" }).click();
+
+  // « Modifier le numéro » has its « Annuler » too.
+  await known.getByRole("button", { name: "Modifier le numéro" }).click();
+  await known.getByLabel("Numéro de suivi").fill("8R04217735096");
+  await known.getByRole("button", { name: "Annuler" }).click();
+  await expect(known.getByLabel("Numéro de suivi")).toHaveCount(0);
+  await expect(known.getByRole("button", { name: "Modifier le numéro" })).toBeFocused();
+  const { rows } = await db.query<{ carrier: string | null; tracking_number: string }>(
+    "select carrier, tracking_number from parcels where order_id = $1 order by tracking_number",
+    [orderId],
+  );
+  expect(rows).toEqual([
+    { carrier: null, tracking_number: "12345678" },
+    { carrier: "colissimo", tracking_number: "6A18537412398" },
+  ]);
+});
+
 test("le rappel de retour à 3 jours est la une de l'Accueil", async ({ page, db, userAgentTag }) => {
   const who = await account(page, db, userAgentTag);
   const wish = await pasteAndWish(page, db, who.userId);
