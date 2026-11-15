@@ -15,6 +15,9 @@ export const envSchema = appEnvObject({
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   // Web Push (alerts): all three or none; without them, push is off and alerts only show in « Nouvelles ».
   ...vapidEnvShape,
+  // The AI that reads order e-mails no known format could (« Après la commande »). Without it, such an e-mail is
+  // marked unread (« On n'a pas su lire cet e-mail ») and she types the order in.
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
 }).superRefine((env, ctx) => {
   for (const issue of vapidEnvIssues(env)) ctx.addIssue({ code: "custom", path: [issue.path], message: issue.message });
   // The memory store is for development only; a partial S3 configuration is always a mistake.

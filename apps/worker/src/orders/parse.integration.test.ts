@@ -1,0 +1,371 @@
+import { readFileSync } from "node:fs";
+import { and, createDb, eq, schema } from "@closyria/db";
+import { INBOUND_EMAIL_RETENTION_DAYS, nextSendAt, type ParsedOrder, rawEmailKey } from "@closyria/shared";
+import { memoryStore, type ObjectStore } from "@closyria/storage";
+import { createTestDatabase } from "@closyria/testing/vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { orderEmailParseHandler, type ParseDeps, parseInboundEmail } from "./parse";
+
+let database: Awaited<ReturnType<typeof createTestDatabase>>;
+let handle: ReturnType<typeof createDb>;
+let counter = 0;
+
+beforeAll(async () => {
+  database = await createTestDatabase();
+  handle = createDb(database.url, { max: 8 });
+}, 60_000);
+
+afterAll(async () => {
+  await handle?.pool.end();
+  await database?.stop();
+});
+
+// Winter, 11:00 in Paris: an alert may go out at once.
+const now = new Date("2026-11-14T10:00:00Z");
+const HOUR = 3_600_000;
+/** The e-mails of packages/extract's tests: invented, in the shapes shops send. */
+const fixture = (name: string) =>
+  readFileSync(new URL(`../../../../packages/extract/src/order-email/fixtures/${name}.eml`, import.meta.url));
+
+async function person() {
+  const { db } = handle;
+  const n = ++counter;
+  const userId = `parse-user-${n}`;
+  const address = `camille.martin+${n}@exemple.test`;
+  await db.insert(schema.user).values({ id: userId, name: "Camille", email: address, emailVerified: true });
+  const [second] = await db
+    .insert(schema.profiles)
+    .values({ userId, name: "Léo", audience: "men", color: "plum", position: 1 })
+    .returning();
+  const [profile] = await db
+    .insert(schema.profiles)
+    .values({ userId, name: "Moi", audience: "women", color: "plum", position: 0 })
+    .returning();
+  const [inbox] = await db
+    .insert(schema.orderInboxes)
+    .values({ userId, localPart: `camille-p${n}` })
+    .returning();
+  return {
+    userId,
+    address,
+    profileId: profile?.id as string,
+    otherProfileId: second?.id as string,
+    inboxId: inbox?.id as string,
+  };
+}
+type Person = Awaited<ReturnType<typeof person>>;
+
+/** An accepted e-mail as the reception leaves it: `queued`, its raw message stored. */
+async function received(store: ObjectStore, who: Person, raw: Buffer | string) {
+  const { db } = handle;
+  const [row] = await db
+    .insert(schema.inboundEmails)
+    .values({
+      inboxId: who.inboxId,
+      userId: who.userId,
+      queueId: `Q${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`,
+      fromAddress: who.address,
+      authOk: true,
+      status: "queued",
+      purgeAfter: new Date(now.getTime() + INBOUND_EMAIL_RETENTION_DAYS * 24 * HOUR),
+    })
+    .returning();
+  const id = row?.id as string;
+  const key = rawEmailKey(who.userId, id);
+  await store.put(key, Buffer.from(raw), "message/rfc822");
+  await db.update(schema.inboundEmails).set({ rawObjectKey: key }).where(eq(schema.inboundEmails.id, id));
+  return id;
+}
+
+const ordersOf = (userId: string) =>
+  handle.db.select().from(schema.orders).where(eq(schema.orders.userId, userId)).orderBy(schema.orders.createdAt);
+const linesOf = (orderId: string) =>
+  handle.db
+    .select()
+    .from(schema.orderLines)
+    .where(eq(schema.orderLines.orderId, orderId))
+    .orderBy(schema.orderLines.position);
+const parcelsOf = (orderId: string) =>
+  handle.db.select().from(schema.parcels).where(eq(schema.parcels.orderId, orderId));
+const statusOf = async (id: string) =>
+  (await handle.db.select().from(schema.inboundEmails).where(eq(schema.inboundEmails.id, id)))[0]?.status;
+const alertsOf = (userId: string) =>
+  handle.db.select().from(schema.alertEvents).where(eq(schema.alertEvents.userId, userId));
+
+const deps = (store: ObjectStore, ai: ParseDeps["ai"] = null): ParseDeps => ({ db: handle.db, store, ai });
+
+describe("parseInboundEmail", () => {
+  it("makes a draft order of a Shopify confirmation, in her first profile, and tells her", async () => {
+    const store = memoryStore();
+    const who = await person();
+    const id = await received(store, who, fixture("shopify-fr-confirmation"));
+
+    expect(await parseInboundEmail(deps(store), id, now)).toBe("parsed");
+
+    const [order, ...others] = await ordersOf(who.userId);
+    expect(others).toHaveLength(0);
+    expect(order).toMatchObject({
+      profileId: who.profileId,
+      externalRef: "1042",
+      status: "draft",
+      source: "email",
+      parseMethod: "known",
+      inboundEmailId: id,
+      orderedAt: new Date("2026-11-09T13:32:00Z"),
+    });
+    const [shop] = await handle.db
+      .select()
+      .from(schema.shops)
+      .where(eq(schema.shops.id, order?.shopId as string));
+    expect(shop?.name).toBe("maison-lune.example");
+    expect(
+      (await linesOf(order?.id as string)).map((l) => [l.name, l.sizeLabel, l.color, l.quantity, l.priceCents]),
+    ).toEqual([
+      ["Robe Lina", "M", "Écru", 1, 8900],
+      ["Pull Côme", "S", null, 2, 6000],
+    ]);
+    expect(await parcelsOf(order?.id as string)).toHaveLength(0);
+    expect(await statusOf(id)).toBe("parsed");
+    expect(await alertsOf(who.userId)).toMatchObject([
+      {
+        kind: "order_received",
+        orderId: order?.id,
+        shopId: order?.shopId,
+        status: "pending",
+        sendAfter: nextSendAt(now),
+      },
+    ]);
+  });
+
+  it("completes the order with the shipping e-mail: one order, one parcel, one notification (RF 2)", async () => {
+    const store = memoryStore();
+    const who = await person();
+    const first = await received(store, who, fixture("shopify-fr-confirmation"));
+    const second = await received(store, who, fixture("shopify-fr-shipping"));
+    await parseInboundEmail(deps(store), first, now);
+    expect(await parseInboundEmail(deps(store), second, now)).toBe("parsed");
+
+    const orders = await ordersOf(who.userId);
+    expect(orders).toHaveLength(1);
+    const orderId = orders[0]?.id as string;
+    expect(await linesOf(orderId)).toHaveLength(2);
+    expect(await parcelsOf(orderId)).toMatchObject([
+      {
+        trackingNumber: "6A12345678901",
+        carrier: "colissimo",
+        status: "pending",
+        nextCheckAt: new Date(now.getTime() + 6 * HOUR),
+        checkUntil: new Date(now.getTime() + 30 * 24 * HOUR),
+      },
+    ]);
+    expect(await alertsOf(who.userId)).toHaveLength(1);
+    expect(await statusOf(second)).toBe("parsed");
+    // The same shipping e-mail forwarded again: still one order and one parcel.
+    const again = await received(store, who, fixture("shopify-fr-shipping"));
+    expect(await parseInboundEmail(deps(store), again, now)).toBe("parsed");
+    expect(await ordersOf(who.userId)).toHaveLength(1);
+    expect(await parcelsOf(orderId)).toHaveLength(1);
+  });
+
+  it("fills the prices and the date when the confirmation comes after the shipping e-mail", async () => {
+    const store = memoryStore();
+    const who = await person();
+    await parseInboundEmail(deps(store), await received(store, who, fixture("shopify-fr-shipping")), now);
+    await parseInboundEmail(deps(store), await received(store, who, fixture("shopify-fr-confirmation")), now);
+    const [order, ...others] = await ordersOf(who.userId);
+    expect(others).toHaveLength(0);
+    expect(order?.orderedAt).toEqual(new Date("2026-11-09T13:32:00Z"));
+    expect((await linesOf(order?.id as string)).map((l) => [l.name, l.priceCents, l.currency])).toEqual([
+      ["Robe Lina", 8900, "EUR"],
+      ["Pull Côme", 6000, "EUR"],
+    ]);
+    expect(await parcelsOf(order?.id as string)).toHaveLength(1);
+  });
+
+  it("reads two e-mails of one order at the same moment into one order", async () => {
+    const store = memoryStore();
+    const who = await person();
+    const ids = [
+      await received(store, who, fixture("shopify-en-confirmation")),
+      await received(store, who, fixture("shopify-en-shipping")),
+      await received(store, who, fixture("shopify-en-shipping")),
+    ];
+    await Promise.all(ids.map((id) => parseInboundEmail(deps(store), id, now)));
+    const orders = await ordersOf(who.userId);
+    expect(orders).toHaveLength(1);
+    expect(await parcelsOf(orders[0]?.id as string)).toMatchObject([
+      { trackingNumber: "1Z999AA10123456784", carrier: "ups" },
+    ]);
+    expect(await linesOf(orders[0]?.id as string)).toHaveLength(2);
+  });
+
+  it("adds a parcel to a confirmed order without touching its articles", async () => {
+    const store = memoryStore();
+    const who = await person();
+    await parseInboundEmail(deps(store), await received(store, who, fixture("shopify-en-confirmation")), now);
+    const [order] = await ordersOf(who.userId);
+    await handle.db
+      .update(schema.orders)
+      .set({ status: "confirmed" })
+      .where(eq(schema.orders.id, order?.id as string));
+    await handle.db.delete(schema.orderLines).where(eq(schema.orderLines.name, "Canvas Tote"));
+    await parseInboundEmail(deps(store), await received(store, who, fixture("shopify-en-shipping")), now);
+    expect(await ordersOf(who.userId)).toHaveLength(1);
+    expect(await linesOf(order?.id as string)).toHaveLength(1);
+    expect(await parcelsOf(order?.id as string)).toHaveLength(1);
+  });
+
+  it("never completes a dismissed order, nor another person's", async () => {
+    const store = memoryStore();
+    const who = await person();
+    const other = await person();
+    await parseInboundEmail(deps(store), await received(store, other, fixture("shopify-fr-confirmation")), now);
+    await parseInboundEmail(deps(store), await received(store, who, fixture("shopify-fr-confirmation")), now);
+    const [dismissed] = await ordersOf(who.userId);
+    await handle.db
+      .update(schema.orders)
+      .set({ status: "dismissed" })
+      .where(eq(schema.orders.id, dismissed?.id as string));
+    await parseInboundEmail(deps(store), await received(store, who, fixture("shopify-fr-shipping")), now);
+    expect((await ordersOf(who.userId)).map((o) => o.status)).toEqual(["dismissed", "draft"]);
+    expect(await ordersOf(other.userId)).toHaveLength(1);
+    // Both orders point to the shop the first e-mail created.
+    expect((await ordersOf(other.userId))[0]?.shopId).toBe((await ordersOf(who.userId))[1]?.shopId);
+  });
+
+  it("reuses the shop that owns the e-mail's domain", async () => {
+    const store = memoryStore();
+    const who = await person();
+    const [shop] = await handle.db
+      .insert(schema.shops)
+      .values({ name: "Atelier Pivoine", slug: `atelier-pivoine-${counter}` })
+      .returning();
+    await handle.db
+      .insert(schema.shopDomains)
+      .values({ domain: "atelier-pivoine.example", shopId: shop?.id as string });
+    await parseInboundEmail(deps(store), await received(store, who, fixture("structured-order-parcel")), now);
+    const [order] = await ordersOf(who.userId);
+    expect(order).toMatchObject({
+      shopId: shop?.id,
+      externalRef: "AP-558812",
+      orderedAt: new Date("2026-11-08T20:47:00Z"),
+    });
+    expect(await parcelsOf(order?.id as string)).toMatchObject([
+      { trackingNumber: "EE123456785FR", carrier: "chronopost" },
+    ]);
+  });
+
+  it("does nothing twice when the job runs again", async () => {
+    const store = memoryStore();
+    const who = await person();
+    const id = await received(store, who, fixture("shopify-fr-confirmation"));
+    expect(await parseInboundEmail(deps(store), id, now)).toBe("parsed");
+    expect(await parseInboundEmail(deps(store), id, now)).toBe("none");
+    expect(await ordersOf(who.userId)).toHaveLength(1);
+    expect(await parseInboundEmail(deps(store), crypto.randomUUID(), now)).toBe("none");
+  });
+});
+
+describe("parseInboundEmail — the AI's turn", () => {
+  const aiOrder: ParsedOrder = {
+    shopName: "Les Petites Mailles",
+    shopHost: null,
+    externalRef: null,
+    orderedAt: null,
+    lines: [
+      {
+        name: "Gilet Margaux",
+        sizeLabel: "Taille unique",
+        color: "miel",
+        quantity: 1,
+        priceCents: 6500,
+        currency: "EUR",
+      },
+    ],
+    trackings: [],
+  };
+
+  it("asks the AI only when no known format reads it, and keeps the shop of the original sender", async () => {
+    const store = memoryStore();
+    const who = await person();
+    const texts: string[] = [];
+    const ai = async (text: string) => {
+      texts.push(text);
+      return aiOrder;
+    };
+    await parseInboundEmail(deps(store, ai), await received(store, who, fixture("shopify-fr-confirmation")), now);
+    expect(texts).toHaveLength(0);
+    const id = await received(store, who, fixture("unknown-handmade"));
+    expect(await parseInboundEmail(deps(store, ai), id, now)).toBe("parsed");
+    expect(texts[0]).toContain("gilet Margaux");
+    const order = (await ordersOf(who.userId))[1];
+    expect(order).toMatchObject({ parseMethod: "ai", externalRef: null });
+    const [shop] = await handle.db
+      .select()
+      .from(schema.shopDomains)
+      .where(eq(schema.shopDomains.shopId, order?.shopId as string));
+    expect(shop?.domain).toBe("petites-mailles.example");
+  });
+
+  it("fails it (« On n'a pas su lire cet e-mail ») without AI, past the cap, or for what is no order", async () => {
+    const store = memoryStore();
+    const who = await person();
+    for (const ai of [null, async () => null]) {
+      const id = await received(store, who, fixture("unknown-handmade"));
+      expect(await parseInboundEmail(deps(store, ai), id, now)).toBe("failed");
+      expect(await statusOf(id)).toBe("failed");
+    }
+    const junk = await received(store, who, "Subject: Coucou\nContent-Type: text/plain\n\nOn se voit samedi ?");
+    expect(await parseInboundEmail(deps(store), junk, now)).toBe("failed");
+    expect(await ordersOf(who.userId)).toHaveLength(0);
+    expect(await alertsOf(who.userId)).toHaveLength(0);
+  });
+
+  it("fails an e-mail whose raw message is gone, and one with no profile to put it in", async () => {
+    const store = memoryStore();
+    const who = await person();
+    const id = await received(store, who, fixture("shopify-fr-confirmation"));
+    await store.delete(rawEmailKey(who.userId, id));
+    expect(await parseInboundEmail(deps(store), id, now)).toBe("failed");
+
+    const none = await person();
+    await handle.db.delete(schema.profiles).where(eq(schema.profiles.userId, none.userId));
+    const lonely = await received(store, none, fixture("shopify-fr-confirmation"));
+    expect(await parseInboundEmail(deps(store), lonely, now)).toBe("failed");
+  });
+});
+
+describe("orderEmailParseHandler", () => {
+  it("fails a job with bad data, retries a passing error, and marks the e-mail failed on the last attempt", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const store = memoryStore();
+    const who = await person();
+    const handler = orderEmailParseHandler(
+      deps(store, async () => {
+        throw new Error("model unavailable");
+      }),
+      () => now,
+    );
+    await expect(handler([{ id: "j1", data: { inboundEmailId: "nope" } }])).rejects.toThrow(/invalid job data/);
+
+    const id = await received(store, who, fixture("unknown-handmade"));
+    await expect(handler([{ id: "j2", data: { inboundEmailId: id }, retryCount: 0, retryLimit: 3 }])).rejects.toThrow(
+      /model unavailable/,
+    );
+    expect(await statusOf(id)).toBe("queued");
+    await handler([{ id: "j3", data: { inboundEmailId: id }, retryCount: 3, retryLimit: 3 }]);
+    expect(await statusOf(id)).toBe("failed");
+
+    const ok = await received(store, who, fixture("shopify-fr-confirmation"));
+    await handler([{ id: "j4", data: { inboundEmailId: ok } }]);
+    expect(await statusOf(ok)).toBe("parsed");
+    expect(
+      await handle.db
+        .select()
+        .from(schema.orders)
+        .where(and(eq(schema.orders.userId, who.userId), eq(schema.orders.inboundEmailId, ok))),
+    ).toHaveLength(1);
+    expect(logged).toHaveBeenCalledTimes(2);
+    logged.mockRestore();
+  });
+});

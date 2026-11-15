@@ -15,11 +15,12 @@ type Json = Record<string, unknown>;
 const isObject = (v: unknown): v is Json => typeof v === "object" && v !== null && !Array.isArray(v);
 const asArray = (v: unknown): unknown[] => (v === undefined || v === null ? [] : Array.isArray(v) ? v : [v]);
 
-function hasType(node: Json, type: string): boolean {
+export function hasType(node: Json, type: string): boolean {
   return asArray(node["@type"]).some((t) => typeof t === "string" && t.endsWith(type));
 }
 
-function parseBlocks(html: string): unknown[] {
+/** The JSON-LD blocks of a page or an e-mail (an invalid block is skipped). */
+export function parseBlocks(html: string): unknown[] {
   const blocks: unknown[] = [];
   const re = /<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script\s*>/gi;
   for (const m of html.matchAll(re)) {
@@ -32,7 +33,8 @@ function parseBlocks(html: string): unknown[] {
   return blocks;
 }
 
-function collectNodes(value: unknown, out: Json[]): void {
+/** Every object of a JSON-LD value, `@graph` included. */
+export function collectNodes(value: unknown, out: Json[]): void {
   if (Array.isArray(value)) {
     for (const v of value) collectNodes(v, out);
   } else if (isObject(value)) {

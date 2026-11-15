@@ -410,3 +410,151 @@ export const orderInboxViewSchema = z.object({
     .nullable(),
 });
 export type OrderInboxView = z.infer<typeof orderInboxViewSchema>;
+
+// --- Reading an e-mail -------------------------------------------------------------------------------------------
+
+/** Tracking numbers kept from one e-mail at most. */
+export const MAX_PARSED_TRACKING_NUMBERS = 10;
+
+export const parsedOrderLineSchema = z.object({
+  name: z.string().min(1).max(MAX_ORDER_LINE_NAME),
+  sizeLabel: z.string().min(1).max(MAX_SIZE_LABEL).nullable(),
+  color: z.string().min(1).max(MAX_ORDER_LINE_COLOR).nullable(),
+  quantity: z.number().int().min(1).max(MAX_ORDER_LINE_QUANTITY),
+  priceCents: centsSchema.nullable(),
+  currency: currencySchema.nullable(),
+});
+export type ParsedOrderLine = z.infer<typeof parsedOrderLineSchema>;
+
+export const parsedTrackingSchema = z.object({
+  trackingNumber: z
+    .string()
+    .min(MIN_TRACKING_NUMBER)
+    .max(MAX_TRACKING_NUMBER)
+    .regex(/^[0-9A-Z]+$/),
+  carrier: carrierSchema.nullable(),
+});
+export type ParsedTracking = z.infer<typeof parsedTrackingSchema>;
+
+/**
+ * What an order or shipping e-mail says (known formats in `packages/extract`, the AI in `packages/ai`): only what it
+ * says, every unknown field null. `shopHost` is the shop's own site when the e-mail names it (a link of its header,
+ * the merchant of its structured data). At least one line, tracking number or order number, or it is no order.
+ */
+export const parsedOrderSchema = z
+  .object({
+    shopName: z.string().min(1).max(MAX_SHOP_NAME).nullable(),
+    shopHost: z.string().min(1).max(253).nullable(),
+    externalRef: z.string().min(1).max(MAX_EXTERNAL_REF).nullable(),
+    orderedAt: dateTimeSchema.nullable(),
+    lines: z.array(parsedOrderLineSchema).max(MAX_ORDER_LINES),
+    trackings: z.array(parsedTrackingSchema).max(MAX_PARSED_TRACKING_NUMBERS),
+  })
+  .refine((o) => o.lines.length > 0 || o.trackings.length > 0 || o.externalRef !== null, {
+    message: "nothing read",
+  });
+export type ParsedOrder = z.infer<typeof parsedOrderSchema>;
+
+/** A reading before cleaning: any field may be missing, too long, blank or malformed. */
+export type ParsedOrderDraft = {
+  shopName?: string | null;
+  shopHost?: string | null;
+  externalRef?: string | null;
+  orderedAt?: Date | string | null;
+  lines?: ReadonlyArray<{
+    name?: string | null;
+    sizeLabel?: string | null;
+    color?: string | null;
+    quantity?: number | null;
+    priceCents?: number | null;
+    currency?: string | null;
+  }>;
+  trackingNumbers?: ReadonlyArray<{ number: string; carrierHint?: Carrier | null }>;
+};
+
+const squash = (v: string | null | undefined, max: number): string | null => {
+  const text = (v ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  return text.length > max ? text.slice(0, max).trimEnd() : text;
+};
+
+/** An order number as shops write it (« #1042 », « FR-2026-000123 »): letters, digits and `-_/.`, no leading `#`. */
+function cleanExternalRef(v: string | null | undefined): string | null {
+  const ref = (v ?? "").trim().replace(/^(?:n°|no\.?|#)\s*/i, "");
+  return /^[0-9A-Za-z][0-9A-Za-z\-_/.]*$/.test(ref) && ref.length <= MAX_EXTERNAL_REF ? ref : null;
+}
+
+/**
+ * The cleaned reading, or null when nothing useful is left: blank and over-long texts cut or dropped, quantities
+ * outside 1–99 read as 1 (a line with a quantity of 0 is not bought), a price without currency dropped, tracking
+ * numbers normalised, deduplicated and their carrier guessed (`detectCarrier`, the e-mail's carrier name as hint),
+ * an order date outside 2000 – tomorrow dropped.
+ */
+export function cleanParsedOrder(draft: ParsedOrderDraft, now: Date = new Date()): ParsedOrder | null {
+  const lines: ParsedOrderLine[] = [];
+  for (const line of draft.lines ?? []) {
+    const name = squash(line.name, MAX_ORDER_LINE_NAME);
+    if (!name || lines.length >= MAX_ORDER_LINES) continue;
+    const q = line.quantity;
+    const quantity = typeof q === "number" && Number.isInteger(q) && q >= 1 && q <= MAX_ORDER_LINE_QUANTITY ? q : 1;
+    const currency = line.currency && /^[A-Z]{3}$/.test(line.currency) ? line.currency : null;
+    const price = line.priceCents;
+    const priceOk = typeof price === "number" && centsSchema.safeParse(price).success && currency !== null;
+    lines.push({
+      name,
+      sizeLabel: squash(line.sizeLabel, MAX_SIZE_LABEL),
+      color: squash(line.color, MAX_ORDER_LINE_COLOR),
+      quantity,
+      priceCents: priceOk ? price : null,
+      currency: priceOk ? currency : null,
+    });
+  }
+  const trackings: ParsedTracking[] = [];
+  for (const t of draft.trackingNumbers ?? []) {
+    const trackingNumber = normalizeTrackingNumber(t.number);
+    if (!parsedTrackingSchema.shape.trackingNumber.safeParse(trackingNumber).success) continue;
+    if (trackings.some((k) => k.trackingNumber === trackingNumber)) continue;
+    if (trackings.length >= MAX_PARSED_TRACKING_NUMBERS) break;
+    trackings.push({ trackingNumber, carrier: detectCarrier(trackingNumber, t.carrierHint ?? null) });
+  }
+  let orderedAt: string | null = null;
+  if (draft.orderedAt) {
+    const at = draft.orderedAt instanceof Date ? draft.orderedAt : new Date(draft.orderedAt);
+    const ms = at.getTime();
+    if (Number.isFinite(ms) && ms >= EARLIEST_ORDER && ms <= now.getTime() + 24 * HOUR_MS) orderedAt = at.toISOString();
+  }
+  const host = (draft.shopHost ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^www\./, "")
+    .replace(/\.$/, "");
+  const parsed = {
+    shopName: squash(draft.shopName, MAX_SHOP_NAME),
+    shopHost: /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host) && host.length <= 253 ? host : null,
+    externalRef: cleanExternalRef(draft.externalRef),
+    orderedAt,
+    lines,
+    trackings,
+  };
+  const result = parsedOrderSchema.safeParse(parsed);
+  return result.success ? result.data : null;
+}
+
+/** Carrier names as e-mails write them, most specific first (« Chronopost » before « La Poste »). */
+const CARRIER_NAMES: ReadonlyArray<readonly [RegExp, Carrier]> = [
+  [/\bchronopost\b/i, "chronopost"],
+  [/\bcolissimo\b/i, "colissimo"],
+  [/\blettre\s+suivie\b/i, "lettre_suivie"],
+  [/\bmondial\s*relay\b/i, "mondial_relay"],
+  [/\bcolis\s*priv[ée](?!\p{L})/iu, "colis_prive"],
+  [/\bgls\b/i, "gls"],
+  [/\bdpd\b/i, "dpd"],
+  [/\bups\b/i, "ups"],
+  [/\bdhl\b/i, "dhl"],
+];
+
+/** The carrier a text names (« Expédié avec Mondial Relay »), the first one found; null when none. */
+export function carrierFromName(text: string | null | undefined): Carrier | null {
+  if (!text) return null;
+  return CARRIER_NAMES.find(([re]) => re.test(text))?.[1] ?? null;
+}

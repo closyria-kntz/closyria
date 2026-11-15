@@ -208,3 +208,39 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
 - journaux : Postfix écrit les adresses et les IP de chaque e-mail ; son journal va dans
   `/var/log/postfix-closyria.log`, effacé après 30 jours, pas dans journald (partagé, sans limite de durée). L'API et le
   relais n'écrivent ni adresse ni contenu.
+
+### 10.2 Lecture des e-mails (Task 3, 2026-11-15)
+
+- **Formats connus d'abord** (`packages/extract/src/order-email`) : données structurées schema.org (`Order`,
+  `ParcelDelivery`, celles que lit Gmail), puis les notifications Shopify par défaut (confirmation et expédition, en
+  français et en anglais), lues sur le texte de l'e-mail (HTML ramené à des lignes). Rien d'autre n'est deviné : un
+  champ absent reste vide. La date de commande est la date de l'e-mail d'origine pour une confirmation Shopify (lue
+  dans l'en-tête du transfert, heure de Paris), inconnue pour une expédition. Le prix d'une ligne est celui **d'une
+  pièce** (le total de la ligne divisé par la quantité). Liens jamais suivis, pièces jointes jamais lues.
+- **IA en secours** (`packages/ai`, SDK officiel, modèle `claude-haiku-5-5`, sortie JSON imposée par le schéma Zod,
+  revérifiée ensuite) seulement si aucun format connu ne lit l'e-mail et si `ANTHROPIC_API_KEY` est là. Avant l'envoi :
+  adresses postales (lignes de rue, de code postal, blocs « Adresse de livraison »…), téléphones, cartes (contrôle de
+  Luhn), IBAN (contrôle mod 97), adresses e-mail et lignes « À : » / « Cc : » remplacés par des marques ; 40 000
+  caractères au plus. Sans clé, plafond atteint ou réponse inutilisable : e-mail `failed` (« On n'a pas su lire cet
+  e-mail »).
+- **Plafond** : réglage `ai_monthly_cap_cents` de la table `app_settings` (10 € sans réglage, modifiable par l'admin à
+  la Task 8). Coût de chaque appel compté sur l'usage en jetons (prix Haiku 5.5 : 0,10 $ / 0,50 $ le million en entrée /
+  sortie), par mois de Paris, dans `ai_usage_months`. Un appel réserve d'abord son coût le plus haut possible, en une
+  seule requête qui refuse de dépasser le plafond (deux appels simultanés ne le dépassent pas ensemble), puis le
+  remplace par le coût réel. Un dollar est compté pour un euro (le plafond est atteint un peu tôt, jamais tard).
+- **Boutique** : le premier lien de l'e-mail vers un site qui n'est ni une messagerie, ni un transporteur, ni une
+  plateforme, ni un réseau social (l'en-tête d'une notification Shopify), sinon le domaine de l'expéditeur d'origine
+  (jamais celui de son adresse à elle) ; la boutique qui possède ce domaine, sinon créée `pending` à son nom de domaine,
+  comme pour une capture.
+- **Doublons (RF 2)** : même titulaire + même boutique + même numéro de commande, ou un même numéro de suivi → la
+  commande existante (brouillon ou validée, jamais une écartée) est complétée : colis ajoutés ; pour un brouillon,
+  articles manquants ajoutés et taille, couleur, prix et date manquants remplis. Verrous consultatifs de transaction
+  sur (elle, boutique, numéro) et (elle, numéro de suivi). Les colis reçoivent leur `next_check_at` (rythme de
+  `nextParcelCheck`), la Task 5 les prend.
+- **Notification** : nouvelle sorte d'alerte `order_received` (envoi immédiat, calme de nuit et plafond du chantier 4),
+  seulement à la création d'une commande et seulement si elle est encore à valider à l'envoi. Titre « Commande reçue de
+  {boutique} » (« Commande reçue » sans boutique), texte « Vérifie les articles, puis « C'est bon ». », lien vers
+  « Nouvelles » en attendant la page « Mes commandes » (Task 7). Envoyée au résumé par le plafond du jour, elle n'y
+  figure pas (la carte reste dans « Nouvelles »).
+- **File** `order-email-parse` : 3 nouvelles tentatives (IA indisponible, stockage ou base en panne) ; à la dernière,
+  l'e-mail passe `failed` plutôt que de rester `queued`. Une seconde exécution du même travail ne fait rien.

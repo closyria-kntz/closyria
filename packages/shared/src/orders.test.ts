@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  carrierFromName,
   carrierSchema,
+  cleanParsedOrder,
   detectCarrier,
   inboundEmailPurge,
   isOrderInboxCode,
+  MAX_ORDER_LINE_NAME,
+  MAX_ORDER_LINES,
+  MAX_PARSED_TRACKING_NUMBERS,
   manualOrderInputSchema,
   nextParcelCheck,
   nextParcelCheckClamped,
@@ -362,5 +367,93 @@ describe("order addresses", () => {
     expect(orderEmailParseJobSchema.parse({ inboundEmailId: id })).toEqual({ inboundEmailId: id });
     expect(orderEmailParseJobSchema.safeParse({ inboundEmailId: "x" }).success).toBe(false);
     expect(orderEmailParseJobSchema.safeParse({ inboundEmailId: id, raw: "…" }).success).toBe(false);
+  });
+});
+
+describe("cleanParsedOrder", () => {
+  const now = new Date("2026-11-14T10:00:00Z");
+
+  it("keeps only what is usable, never filling a field in", () => {
+    expect(
+      cleanParsedOrder(
+        {
+          shopName: "  Maison   Lune ",
+          shopHost: "WWW.Maison-Lune.example.",
+          externalRef: "#1042",
+          orderedAt: "2026-11-09T13:32:00Z",
+          lines: [
+            { name: " Robe  Lina ", sizeLabel: " M ", color: "", quantity: 0, priceCents: 8900, currency: "EUR" },
+            { name: "Pull", quantity: 2, priceCents: 6000, currency: null },
+            { name: "   " },
+          ],
+          trackingNumbers: [
+            { number: "6a 1234-5678 901" },
+            { number: "6A12345678901" },
+            { number: "12345678", carrierHint: "mondial_relay" },
+            { number: "abc" },
+          ],
+        },
+        now,
+      ),
+    ).toEqual({
+      shopName: "Maison Lune",
+      shopHost: "maison-lune.example",
+      externalRef: "1042",
+      orderedAt: "2026-11-09T13:32:00.000Z",
+      lines: [
+        { name: "Robe Lina", sizeLabel: "M", color: null, quantity: 1, priceCents: 8900, currency: "EUR" },
+        // A price without its currency is dropped.
+        { name: "Pull", sizeLabel: null, color: null, quantity: 2, priceCents: null, currency: null },
+      ],
+      trackings: [
+        { trackingNumber: "6A12345678901", carrier: "colissimo" },
+        { trackingNumber: "12345678", carrier: "mondial_relay" },
+      ],
+    });
+  });
+
+  it("drops a bad host, reference or date, and gives null when nothing is left", () => {
+    expect(
+      cleanParsedOrder(
+        {
+          shopHost: "localhost",
+          externalRef: "commande 12",
+          orderedAt: "2031-01-01T00:00:00Z",
+          lines: [{ name: "A" }],
+        },
+        now,
+      ),
+    ).toMatchObject({ shopHost: null, externalRef: null, orderedAt: null });
+    expect(
+      cleanParsedOrder({ orderedAt: new Date("1999-12-31T00:00:00Z"), lines: [{ name: "A" }] }, now)?.orderedAt,
+    ).toBeNull();
+    expect(cleanParsedOrder({ shopName: "Oya", orderedAt: "pas une date" }, now)).toBeNull();
+    expect(cleanParsedOrder({ externalRef: "N°55" }, now)?.externalRef).toBe("55");
+  });
+
+  it("keeps at most 30 articles and 10 tracking numbers, cuts long texts", () => {
+    const parsed = cleanParsedOrder(
+      {
+        lines: Array.from({ length: 40 }, (_, i) => ({ name: `${"x".repeat(250)}${i}` })),
+        trackingNumbers: Array.from({ length: 12 }, (_, i) => ({ number: `AB${String(i).padStart(8, "0")}` })),
+      },
+      now,
+    );
+    expect(parsed?.lines).toHaveLength(MAX_ORDER_LINES);
+    expect(parsed?.lines[0]?.name).toHaveLength(MAX_ORDER_LINE_NAME);
+    expect(parsed?.trackings).toHaveLength(MAX_PARSED_TRACKING_NUMBERS);
+  });
+});
+
+describe("carrierFromName", () => {
+  it("finds the carrier a text names", () => {
+    expect(carrierFromName("Numéro de suivi Colissimo :")).toBe("colissimo");
+    expect(carrierFromName("Chronopost (La Poste)")).toBe("chronopost");
+    expect(carrierFromName("Mondial Relay")).toBe("mondial_relay");
+    expect(carrierFromName("Colis Privé")).toBe("colis_prive");
+    expect(carrierFromName("UPS tracking number")).toBe("ups");
+    expect(carrierFromName("Lettre suivie")).toBe("lettre_suivie");
+    expect(carrierFromName("groups")).toBeNull();
+    expect(carrierFromName(null)).toBeNull();
   });
 });

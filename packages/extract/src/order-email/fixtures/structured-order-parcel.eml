@@ -1,0 +1,71 @@
+From: Atelier Pivoine <commandes@atelier-pivoine.example>
+To: camille-k7f2@commandes.dev.closyria.com
+Subject: Votre commande AP-558812 est =?utf-8?q?exp=C3=A9di=C3=A9e?=
+Date: Mon, 09 Nov 2026 10:12:00 +0100
+Message-ID: <structured-order-parcel@mail.exemple.test>
+MIME-Version: 1.0
+X-Forwarded-For:
+ camille.martin@exemple.test camille-k7f2@commandes.dev.closyria.com
+X-Forwarded-To: camille-k7f2@commandes.dev.closyria.com
+Delivered-To: camille.martin@exemple.test
+Content-Type: multipart/alternative;
+ boundary="===============2111005679202165842=="
+
+--===============2111005679202165842==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Bonjour Camille,
+Votre commande AP-558812 a été expédiée avec Chronopost.
+
+--===============2111005679202165842==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<html><head><script type=3D"application/ld+json">
+[{
+  "@context": "http://schema.org",
+  "@type": "Order",
+  "merchant": { "@type": "Organization", "name": "Atelier Pivoine", "url": "h=
+ttps://www.atelier-pivoine.example/" },
+  "orderNumber": "AP-558812",
+  "orderDate": "2026-11-08T21:47:00+01:00",
+  "orderStatus": "http://schema.org/OrderProcessing",
+  "priceCurrency": "EUR",
+  "price": "158.00",
+  "customer": { "@type": "Person", "name": "Camille Martin" },
+  "acceptedOffer": [
+    { "@type": "Offer", "itemOffered": { "@type": "Product", "name": "Pantalo=
+n Arlo", "color": "Sauge", "size": "38", "image": "https://www.atelier-pivoin=
+e.example/img/arlo.jpg" },
+      "price": "79.00", "priceCurrency": "EUR", "eligibleQuantity": { "@type"=
+: "QuantitativeValue", "value": "2" } }
+  ],
+  "billingAddress": { "@type": "PostalAddress", "name": "Camille Martin", "st=
+reetAddress": "12 rue des Lilas", "addressLocality": "Lyon", "postalCode": "6=
+9003", "addressCountry": "FR" }
+},
+{
+  "@context": "http://schema.org",
+  "@type": "ParcelDelivery",
+  "deliveryAddress": { "@type": "PostalAddress", "name": "Camille Martin", "s=
+treetAddress": "12 rue des Lilas", "addressLocality": "Lyon", "postalCode": "=
+69003", "addressCountry": "FR" },
+  "carrier": { "@type": "Organization", "name": "Chronopost" },
+  "trackingNumber": "EE123456785FR",
+  "itemShipped": { "@type": "Product", "name": "Pantalon Arlo" },
+  "partOfOrder": { "@type": "Order", "orderNumber": "AP-558812", "merchant": =
+{ "@type": "Organization", "name": "Atelier Pivoine" } }
+}]
+</script></head><body><div style=3D"font-family:Georgia,serif">
+<p><img src=3D"https://www.atelier-pivoine.example/mail/logo.png" alt=3D"Atel=
+ier Pivoine"></p>
+<p>Bonjour Camille,</p><p>Votre commande AP-558812 a =C3=A9t=C3=A9 exp=C3=A9d=
+i=C3=A9e avec Chronopost.</p>
+<p><a href=3D"https://www.atelier-pivoine.example/compte/commandes/AP-558812"=
+>Suivre ma commande</a></p>
+<p>Livraison : Camille Martin, 12 rue des Lilas, 69003 Lyon</p></div></body><=
+/html>
+
+--===============2111005679202165842==--

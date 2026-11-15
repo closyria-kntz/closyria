@@ -58,8 +58,8 @@
 
 **Produces:** `parseOrderEmail(raw): ParsedOrder | null` (formats connus : confirmations et expéditions Shopify FR/EN, données structurées schema.org Order / ParcelDelivery), `aiParseOrderEmail(redactedText)` (sortie Zod, null si plafond atteint) ; le worker crée ou complète une commande `draft` (même boutique + même référence de commande → complète, RF 2) et notifie « Commande reçue de {boutique} ».
 
-- [ ] Tests d'abord : chaque fixture, rédaction (aucune adresse/téléphone/carte dans le texte envoyé), plafond, doublon confirmation + expédition.
-- [ ] Commit « feat(commandes): lecture des e-mails ».
+- [x] Tests d'abord : chaque fixture, rédaction (aucune adresse/téléphone/carte dans le texte envoyé), plafond, doublon confirmation + expédition.
+- [x] Commit « feat(commandes): lecture des e-mails ». Décisions : spec §10.2.
 
 ### Task 4: Valider une commande et relier les articles
 

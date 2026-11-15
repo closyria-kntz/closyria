@@ -1,6 +1,7 @@
 import { and, type Database, eq, inArray, isNull, lte, schema, sql } from "@closyria/db";
 import {
   ALERT_TIME_ZONE,
+  ALERTS_PAGE_HREF,
   alertItemHref,
   DEFAULT_ALERT_SETTINGS,
   IMMEDIATE_ALERT_KINDS,
@@ -68,6 +69,12 @@ export function sizeBackSentence(name: string | null, size: string | null, shop:
 /** « {Nom} : {prix} (tu visais {seuil}) ». */
 export function targetPriceSentence(name: string | null, cents: number, target: number, currency: string | null) {
   return `${itemName(name)} : ${formatAlertPrice(cents, currency)} (tu visais ${formatAlertPrice(target, currency)})`;
+}
+
+/** « Commande reçue de {boutique} », « Commande reçue » when the shop is unknown. */
+export function orderReceivedTitle(shop: string | null): string {
+  const name = shop?.trim();
+  return name ? `Commande reçue de ${cut(name)}` : "Commande reçue";
 }
 
 /** The item's sheet, in the item's profile. */
@@ -155,6 +162,7 @@ export async function sendAlert(
       // The item's profile now (it may have moved since the event): the link opens it there.
       profileId: schema.items.profileId,
       productId: schema.alertEvents.productId,
+      orderId: schema.alertEvents.orderId,
       sizeLabel: schema.alertEvents.sizeLabel,
       priceCents: schema.alertEvents.priceCents,
       sendAfter: schema.alertEvents.sendAfter,
@@ -220,6 +228,22 @@ export async function sendAlert(
         title: "Prix visé",
         body: targetPriceSentence(event.name, event.priceCents, event.targetPriceCents, event.currency),
         url,
+      };
+    }
+  }
+  if (event.kind === "order_received" && event.orderId) {
+    // Only while it waits for her « C'est bon »: validated or dismissed since, nothing to tell.
+    const [order] = await db
+      .select({ status: schema.orders.status, shopName: schema.shops.name })
+      .from(schema.orders)
+      .leftJoin(schema.shops, eq(schema.shops.id, schema.orders.shopId))
+      .where(and(eq(schema.orders.id, event.orderId), eq(schema.orders.userId, event.userId)));
+    if (order?.status === "draft") {
+      // TODO(Task 7): lead to « Mes commandes » once the page exists.
+      message = {
+        title: orderReceivedTitle(order.shopName),
+        body: "Vérifie les articles, puis « C'est bon ».",
+        url: ALERTS_PAGE_HREF,
       };
     }
   }

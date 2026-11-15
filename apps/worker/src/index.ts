@@ -1,3 +1,4 @@
+import { aiParseOrderEmail, anthropicModel, databaseBudget } from "@closyria/ai";
 import { createDb } from "@closyria/db";
 import { vapidConfig } from "@closyria/shared";
 import { memoryStore, s3Store } from "@closyria/storage";
@@ -37,6 +38,12 @@ const vapid = vapidConfig(env);
 if (!vapid) console.warn("alerts: push off (no VAPID_* variables), alerts are marked skipped");
 const push = vapid ? webPushSender(vapid) : null;
 
+// env.ts allows no key: without it, an e-mail no known format reads is marked unread (she types the order in).
+const model = env.ANTHROPIC_API_KEY ? anthropicModel(env.ANTHROPIC_API_KEY) : null;
+if (!model) console.warn("order e-mails: AI off (no ANTHROPIC_API_KEY), unknown formats are marked unread");
+const budget = databaseBudget(db);
+const ai = model ? (text: string) => aiParseOrderEmail(text, { model, budget }) : null;
+
 const barrier = await checkNetworkBarrier();
 if (barrier.state === "active") {
   console.log(`network barrier: active (${barrier.reason})`);
@@ -62,7 +69,7 @@ await registerCaptureQueues(boss, { db, store });
 await registerWardrobeQueues(boss, { db, store });
 await registerSalePeriodQueue(boss, db);
 await registerAlertSendQueues(boss, { db, push });
-await registerOrderQueues(boss, { db, store });
+await registerOrderQueues(boss, { db, store, ai });
 
 console.log(`worker ${env.APP_VERSION} (${env.APP_ENV}) started`);
 

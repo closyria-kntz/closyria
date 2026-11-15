@@ -56,9 +56,14 @@ function useAlertWords() {
         return { line: saleSentence(alert.startsOn, (chunks) => chunks), detail: alert.salePeriodName ?? "" };
       case "shop_promo":
         return { line: tHome.rich("shop_promo", { shop: name, b: (chunks) => chunks }), detail: "" };
+      case "order_received":
+        return { line: shop ? t("order_received", { shop }) : t("order_receivedNoShop"), detail: "" };
     }
   };
 }
+
+/** The icon of each kind of alert: the news ones, and a parcel for an order read from an e-mail. */
+const ALERT_ICONS: Record<AlertEventView["kind"], string> = { ...NEWS_ICONS, order_received: "📦" };
 
 function AlertRow({ alert, unread, now }: { alert: AlertEventView; unread: boolean; now: Date }) {
   const t = useTranslations("News");
@@ -87,7 +92,7 @@ function AlertRow({ alert, unread, now }: { alert: AlertEventView; unread: boole
             aria-hidden="true"
             className="grid size-touch-target shrink-0 place-items-center rounded-full bg-hint text-heading"
           >
-            {NEWS_ICONS[alert.kind]}
+            {ALERT_ICONS[alert.kind]}
           </span>
         )}
         <span className="flex min-w-space-0 flex-1 flex-col gap-space-0-5">

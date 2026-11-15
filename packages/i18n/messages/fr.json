@@ -26,7 +26,8 @@
       "group_order": "Commande groupée",
       "gift_reminder": "Rappel des cadeaux",
       "sale_period": "Soldes",
-      "shop_promo": "Promo"
+      "shop_promo": "Promo",
+      "order_received": "Commande"
     },
     "une": {
       "price_drop": "{name} passe à {price}",
@@ -2692,6 +2693,8 @@
     "price_drop": "{name} passe à {price}",
     "priceDropDetail": "−{drop} chez {shop}",
     "priceDropNoShop": "−{drop}",
+    "order_received": "Commande reçue de {shop}",
+    "order_receivedNoShop": "Commande reçue",
     "action": "Voir"
   },
   "Listing": {

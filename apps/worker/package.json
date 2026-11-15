@@ -15,6 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@closyria/ai": "workspace:*",
     "@closyria/db": "workspace:*",
     "@closyria/extract": "workspace:*",
     "@closyria/shared": "workspace:*",

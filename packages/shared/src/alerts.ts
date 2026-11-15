@@ -22,12 +22,24 @@ export const DEFAULT_DIGEST_HOUR = 18;
 export const MAX_SALE_PERIOD_NAME = 80;
 export const MAX_PUSH_ENDPOINT = 2048;
 
-export const alertKindSchema = z.enum(["size_back", "target_price", "price_drop", "sale_period", "shop_promo"]);
+export const alertKindSchema = z.enum([
+  "size_back",
+  "target_price",
+  "price_drop",
+  "sale_period",
+  "shop_promo",
+  // « Commande reçue de {boutique} » (« Après la commande »): an order read from a forwarded e-mail, to validate.
+  "order_received",
+]);
 export type AlertKind = z.infer<typeof alertKindSchema>;
 /** The kinds about one item (the others are about a shop or the sales calendar). */
 export const ITEM_ALERT_KINDS = ["size_back", "target_price", "price_drop"] as const satisfies readonly AlertKind[];
 /** The kinds pushed one by one (held in the quiet hours, capped per day); the others go into the digest. */
-export const IMMEDIATE_ALERT_KINDS = ["size_back", "target_price"] as const satisfies readonly AlertKind[];
+export const IMMEDIATE_ALERT_KINDS = [
+  "size_back",
+  "target_price",
+  "order_received",
+] as const satisfies readonly AlertKind[];
 /** An alert waiting for its digest: a digest kind (`pending`) or an immediate one the daily cap sent there. */
 export const DIGEST_WAITING_STATUSES = ["pending", "digest"] as const satisfies readonly AlertStatus[];
 

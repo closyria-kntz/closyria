@@ -1,5 +1,14 @@
 export { parsePriceCents } from "./clean";
 export { type ExtractInput, type ExtractResult, extract } from "./extract";
+export {
+  type DecodedEmail,
+  decodeEmail,
+  type OriginalHeader,
+  originalHeader,
+  parseHeaderDate,
+  parseOrderEmail,
+  shopHostOf,
+} from "./order-email";
 export { type DetectedPlatform, detectPlatform } from "./platform";
 export { extractShopifyCatalogPage, isShopifyPage, type ShopifyCatalogPage, shopifyJsUrl } from "./shopify";
 export { extractSitemap, type Sitemap } from "./sitemap";

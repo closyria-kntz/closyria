@@ -1,5 +1,5 @@
 import { createDb, eq, inArray, schema } from "@closyria/db";
-import { INBOUND_EMAIL_RETENTION_DAYS, rawEmailKey } from "@closyria/shared";
+import { INBOUND_EMAIL_RETENTION_DAYS, ORDER_EMAIL_PARSE_QUEUE, rawEmailKey } from "@closyria/shared";
 import { memoryStore, type ObjectStore } from "@closyria/storage";
 import { createTestDatabase } from "@closyria/testing/vitest";
 import type { PgBoss } from "pg-boss";
@@ -230,10 +230,11 @@ describe("purgeInboundEmails: Gmail confirmation codes", () => {
 });
 
 describe("order-email-purge queue", () => {
-  it("is created, processed and scheduled every night", async () => {
+  it("is created, processed and scheduled every night; order-email-parse is worked with its retries", async () => {
     const calls: unknown[][] = [];
     const boss = {
       createQueue: vi.fn(async () => {}),
+      updateQueue: vi.fn(async () => {}),
       work: vi.fn(async () => "id"),
       schedule: vi.fn(async (...args: unknown[]) => {
         calls.push(args);
@@ -243,6 +244,10 @@ describe("order-email-purge queue", () => {
     expect(boss.createQueue).toHaveBeenCalledWith(ORDER_EMAIL_PURGE_QUEUE);
     expect(boss.work).toHaveBeenCalledWith(ORDER_EMAIL_PURGE_QUEUE, expect.any(Function));
     expect(calls).toEqual([["order-email-purge", "45 3 * * *"]]);
+    const retries = { retryLimit: 3, retryDelay: 60, retryBackoff: true };
+    expect(boss.createQueue).toHaveBeenCalledWith(ORDER_EMAIL_PARSE_QUEUE, retries);
+    expect(boss.updateQueue).toHaveBeenCalledWith(ORDER_EMAIL_PARSE_QUEUE, retries);
+    expect(boss.work).toHaveBeenCalledWith(ORDER_EMAIL_PARSE_QUEUE, { includeMetadata: true }, expect.any(Function));
   });
 
   it("fails a job that carries data", async () => {

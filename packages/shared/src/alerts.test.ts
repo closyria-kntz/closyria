@@ -143,7 +143,14 @@ describe("parisDay", () => {
 
 describe("schemas", () => {
   it("alert kinds", () => {
-    expect(alertKindSchema.options).toEqual(["size_back", "target_price", "price_drop", "sale_period", "shop_promo"]);
+    expect(alertKindSchema.options).toEqual([
+      "size_back",
+      "target_price",
+      "price_drop",
+      "sale_period",
+      "shop_promo",
+      "order_received",
+    ]);
   });
   it("settings: digest hour between 8 and 21, out of the quiet hours", () => {
     const base = { sizeBack: true, targetPrice: true, digest: true };

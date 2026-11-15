@@ -407,6 +407,47 @@ describe("sendAlert", () => {
     expect(sizeBackSentence(null, "M", "Maison Iris")).toBe("Ton article : de retour en M chez Maison Iris");
   });
 
+  it("tells her « Commande reçue de {boutique} » for a draft order, nothing once validated (Après la commande)", async () => {
+    const { db } = handle;
+    const who = await person();
+    const { shopId } = await wish(who, { shopName: "Maison Lune" });
+    const order = async (status: string) => {
+      const [row] = await db
+        .insert(schema.orders)
+        .values({ userId: who.userId, profileId: who.profileId, shopId, status, source: "email", parseMethod: "known" })
+        .returning();
+      return row?.id as string;
+    };
+    const { push, calls } = fakePush();
+    const draft = await event(who, null, {
+      kind: "order_received",
+      orderId: await order("draft"),
+      shopId,
+      sendAfter: afternoon,
+    });
+    expect(await sendAlert({ db, push }, draft, afternoon, once)).toBe("sent");
+    expect(calls[0]?.message).toEqual({
+      title: "Commande reçue de Maison Lune",
+      body: "Vérifie les articles, puis « C'est bon ».",
+      url: "/nouvelles",
+    });
+    const confirmed = await event(who, null, {
+      kind: "order_received",
+      orderId: await order("confirmed"),
+      shopId,
+      sendAfter: afternoon,
+    });
+    expect(await sendAlert({ db, push }, confirmed, afternoon, once)).toBe("skipped");
+    // Without a shop: « Commande reçue ».
+    const [bare] = await db
+      .insert(schema.orders)
+      .values({ userId: who.userId, profileId: who.profileId, status: "draft", source: "email", parseMethod: "ai" })
+      .returning();
+    const noShop = await event(who, null, { kind: "order_received", orderId: bare?.id, sendAfter: afternoon });
+    expect(await sendAlert({ db, push }, noShop, afternoon, once)).toBe("sent");
+    expect(calls[1]?.message.title).toBe("Commande reçue");
+  });
+
   it("an event already handled is left alone", async () => {
     const her = await person();
     const id = await sizeBack(her, await wish(her));

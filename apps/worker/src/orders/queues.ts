@@ -1,6 +1,8 @@
 import type { Database } from "@closyria/db";
+import { ORDER_EMAIL_PARSE_QUEUE } from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
 import type { PgBoss } from "pg-boss";
+import { type AiReader, ORDER_EMAIL_PARSE_QUEUE_OPTIONS, orderEmailParseHandler } from "./parse";
 import { type InboundPurgeResult, purgeInboundEmails } from "./purge-inbound";
 
 export const ORDER_EMAIL_PURGE_QUEUE = "order-email-purge";
@@ -30,8 +32,21 @@ export function orderEmailPurgeHandler(run: () => Promise<InboundPurgeResult>) {
   };
 }
 
-/** Creates order-email-purge, processes it and schedules it every night at 03:45 (after the wardrobe purge). */
-export async function registerOrderQueues(boss: PgBoss, deps: { db: Database; store: ObjectStore }): Promise<void> {
+/**
+ * Creates order-email-purge, processes it and schedules it every night at 03:45 (after the wardrobe purge); works
+ * order-email-parse (filled by the API), its retries set here: the API may have created the queue first, bare.
+ */
+export async function registerOrderQueues(
+  boss: PgBoss,
+  deps: { db: Database; store: ObjectStore; ai?: AiReader },
+): Promise<void> {
+  await boss.createQueue(ORDER_EMAIL_PARSE_QUEUE, { ...ORDER_EMAIL_PARSE_QUEUE_OPTIONS });
+  await boss.updateQueue(ORDER_EMAIL_PARSE_QUEUE, { ...ORDER_EMAIL_PARSE_QUEUE_OPTIONS });
+  await boss.work(
+    ORDER_EMAIL_PARSE_QUEUE,
+    { includeMetadata: true },
+    orderEmailParseHandler({ db: deps.db, store: deps.store, ai: deps.ai ?? null }),
+  );
   await boss.createQueue(ORDER_EMAIL_PURGE_QUEUE);
   await boss.work(
     ORDER_EMAIL_PURGE_QUEUE,

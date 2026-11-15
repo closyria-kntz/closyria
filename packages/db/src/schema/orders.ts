@@ -156,6 +156,7 @@ export const orderLines = pgTable(
     sizeLabel: text("size_label"),
     color: text("color"),
     quantity: integer("quantity").notNull().default(1),
+    /** One piece's price (an e-mail's line total is divided by its quantity). */
     priceCents: integer("price_cents"),
     currency: text("currency"),
     position: integer("position").notNull().default(0),
