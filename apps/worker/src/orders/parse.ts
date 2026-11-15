@@ -40,7 +40,9 @@ const sameArticle = (a: { name: string; sizeLabel: string | null }, b: ParsedOrd
 
 /**
  * The order this e-mail completes (RF 2): hers, not dismissed, from the same shop with the same order number, or
- * holding one of its tracking numbers (the same shipping e-mail forwarded twice). The caller holds the locks.
+ * holding one of its tracking numbers (the same shipping e-mail forwarded twice). The caller holds the advisory locks;
+ * the order row is locked here (`for update`), so a « C'est bon » under way (Task 4) finishes first and its status is
+ * the one read: a validated order then gets no article.
  */
 async function existingOrder(tx: Tx, userId: string, shopId: string | null, parsed: ParsedOrder) {
   const o = schema.orders;
@@ -57,7 +59,8 @@ async function existingOrder(tx: Tx, userId: string, shopId: string | null, pars
         ),
       )
       .orderBy(asc(o.createdAt))
-      .limit(1);
+      .limit(1)
+      .for("update");
     if (byRef) return byRef;
   }
   const numbers = parsed.trackings.map((t) => t.trackingNumber);
@@ -68,7 +71,8 @@ async function existingOrder(tx: Tx, userId: string, shopId: string | null, pars
     .innerJoin(o, eq(o.id, schema.parcels.orderId))
     .where(and(eq(o.userId, userId), inArray(schema.parcels.trackingNumber, numbers), inArray(o.status, OPEN_ORDER)))
     .orderBy(asc(o.createdAt))
-    .limit(1);
+    .limit(1)
+    .for("update", { of: o });
   return byParcel?.order ?? null;
 }
 
@@ -149,18 +153,6 @@ export async function parseInboundEmail(
     if (error instanceof ObjectNotFoundError) return markFailed(db, inboundEmailId);
     throw error;
   }
-  const email = await decodeEmail(raw);
-  let parsed = parseOrderEmail(email, { now, ownAddress: row.from });
-  let method: OrderParseMethod = "known";
-  if (!parsed && deps.ai) {
-    const read = await deps.ai(email.text);
-    if (read) {
-      parsed = { ...read, shopHost: read.shopHost ?? shopHostOf(email, row.from) };
-      method = "ai";
-    }
-  }
-  if (!parsed) return markFailed(db, inboundEmailId);
-
   const [profile] = await db
     .select({ id: schema.profiles.id })
     .from(schema.profiles)
@@ -168,6 +160,18 @@ export async function parseInboundEmail(
     .orderBy(asc(schema.profiles.position), asc(schema.profiles.createdAt), asc(schema.profiles.id))
     .limit(1);
   if (!profile) return markFailed(db, inboundEmailId);
+  const email = await decodeEmail(raw);
+  let parsed = parseOrderEmail(email, { now, ownAddress: row.from });
+  let method: OrderParseMethod = "known";
+  if (!parsed && deps.ai) {
+    // The subject often holds the order number (« Commande #1042 confirmée »).
+    const read = await deps.ai(email.subject ? `Objet : ${email.subject}\n${email.text}` : email.text);
+    if (read) {
+      parsed = { ...read, shopHost: read.shopHost ?? shopHostOf(email, row.from) };
+      method = "ai";
+    }
+  }
+  if (!parsed) return markFailed(db, inboundEmailId);
 
   const shop = parsed.shopHost ? await findOrCreateShop(db, `https://${parsed.shopHost}/`) : null;
   const order = parsed;

@@ -215,6 +215,37 @@ describe("parseInboundEmail", () => {
     expect(await parcelsOf(order?.id as string)).toHaveLength(1);
   });
 
+  it("waits for a « C'est bon » under way, then adds no article to the order it validated", async () => {
+    const store = memoryStore();
+    const who = await person();
+    await parseInboundEmail(deps(store), await received(store, who, fixture("shopify-fr-confirmation")), now);
+    const [order] = await ordersOf(who.userId);
+    const orderId = order?.id as string;
+    const shipping = await received(store, who, fixture("shopify-fr-shipping"));
+    // She removed every article while correcting it, then Task 4's confirm runs in its own transaction: it locks the
+    // order and validates it. The shipping e-mail read meanwhile must not put the articles back.
+    await handle.db.delete(schema.orderLines).where(eq(schema.orderLines.orderId, orderId));
+    const client = await handle.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select id from orders where id = $1 for update", [orderId]);
+      await client.query("update orders set status = 'confirmed' where id = $1", [orderId]);
+      let done = false;
+      const reading = parseInboundEmail(deps(store), shipping, now).then((r) => {
+        done = true;
+        return r;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(done).toBe(false);
+      await client.query("commit");
+      expect(await reading).toBe("parsed");
+    } finally {
+      client.release();
+    }
+    expect(await linesOf(orderId)).toHaveLength(0);
+    expect(await parcelsOf(orderId)).toHaveLength(1);
+  });
+
   it("never completes a dismissed order, nor another person's", async () => {
     const store = memoryStore();
     const who = await person();
@@ -305,6 +336,40 @@ describe("parseInboundEmail — the AI's turn", () => {
       .from(schema.shopDomains)
       .where(eq(schema.shopDomains.shopId, order?.shopId as string));
     expect(shop?.domain).toBe("petites-mailles.example");
+  });
+
+  it("sends the subject with the text, and never asks the AI for a person with no profile", async () => {
+    const store = memoryStore();
+    const texts: string[] = [];
+    const ai = async (text: string) => {
+      texts.push(text);
+      return aiOrder;
+    };
+    const who = await person();
+    await parseInboundEmail(deps(store, ai), await received(store, who, fixture("unknown-handmade")), now);
+    expect(texts[0]?.split("\n")[0]).toBe("Objet : TR: Merci Camille !");
+    const none = await person();
+    await handle.db.delete(schema.profiles).where(eq(schema.profiles.userId, none.userId));
+    const id = await received(store, none, fixture("unknown-handmade"));
+    expect(await parseInboundEmail(deps(store, ai), id, now)).toBe("failed");
+    expect(texts).toHaveLength(1);
+  });
+
+  it("leaves the shop empty rather than guess one", async () => {
+    const store = memoryStore();
+    const who = await person();
+    const ai = async () => aiOrder;
+    const raw = [
+      "From: Lou <lou.oya@gmail.com>",
+      "Subject: Merci !",
+      "Content-Type: text/html; charset=utf-8",
+      "",
+      '<p>Ton gilet part lundi.</p><a href="https://xyz.mjt.lu/lnk/1">a</a><a href="https://xyz.mjt.lu/lnk/2">b</a><a href="https://boutique-oya.example/">c</a>',
+    ].join("\n");
+    const before = await handle.db.select({ id: schema.shops.id }).from(schema.shops);
+    expect(await parseInboundEmail(deps(store, ai), await received(store, who, raw), now)).toBe("parsed");
+    expect((await ordersOf(who.userId))[0]?.shopId).toBeNull();
+    expect(await handle.db.select({ id: schema.shops.id }).from(schema.shops)).toHaveLength(before.length);
   });
 
   it("fails it (« On n'a pas su lire cet e-mail ») without AI, past the cap, or for what is no order", async () => {

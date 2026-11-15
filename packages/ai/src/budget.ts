@@ -8,8 +8,8 @@ import {
 
 /**
  * Claude Haiku 5.5's prices (claude-api skill, cached 2026-11-03), in billionths of a dollar per token: $0.10 / $0.50
- * per million input / output tokens for a prompt up to 100 000 tokens, $0.50 / $2.50 beyond. A cache write is billed
- * 1.25 times an input token, a cache read 0.1 times (we cache nothing; counted anyway).
+ * per million input / output tokens for a prompt up to 100 000 tokens, $0.50 / $2.50 beyond. A cache write is counted
+ * at 2 times an input token (the 1-hour rate, the dearer one), a cache read 0.1 times (we cache nothing; counted anyway).
  */
 export const MODEL_PRICES = {
   inputNano: 100,
@@ -41,7 +41,7 @@ export function callCostNanoUsd(usage: TokenUsage): number {
   const input = long ? MODEL_PRICES.longInputNano : MODEL_PRICES.inputNano;
   const output = long ? MODEL_PRICES.longOutputNano : MODEL_PRICES.outputNano;
   return Math.ceil(
-    usage.input_tokens * input + cacheWrite * input * 1.25 + cacheRead * input * 0.1 + usage.output_tokens * output,
+    usage.input_tokens * input + cacheWrite * input * 2 + cacheRead * input * 0.1 + usage.output_tokens * output,
   );
 }
 
@@ -93,9 +93,15 @@ export function databaseBudget(db: Database, clock: () => Date = () => new Date(
           if (settled) return;
           settled = true;
           const delta = Math.ceil(costNanoUsd) - reserved;
+          // A call given back (nothing billed) is not counted either.
+          const given = costNanoUsd === 0 ? 1 : 0;
           await db
             .update(t)
-            .set({ costNanoUsd: sql`greatest(0, ${t.costNanoUsd} + ${delta}::bigint)`, updatedAt: sql`now()` })
+            .set({
+              costNanoUsd: sql`greatest(0, ${t.costNanoUsd} + ${delta}::bigint)`,
+              calls: sql`greatest(0, ${t.calls} - ${given})`,
+              updatedAt: sql`now()`,
+            })
             .where(eq(t.month, month));
         },
       };

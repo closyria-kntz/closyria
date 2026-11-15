@@ -91,8 +91,8 @@ describe("redactPersonalData", () => {
     expect(out).toContain("[destinataire]");
   });
 
-  it("keeps a digits-only number that is not a valid card (a DPD-like parcel number)", () => {
-    expect(redactPersonalData("Colis 0123456789012345")).toBe("Colis 0123456789012345");
+  it("takes out any card-shaped number, even one that fails the Luhn check (it might be a card)", () => {
+    expect(redactPersonalData("Colis 0123456789012345")).toBe("Colis [carte]");
   });
 });
 
@@ -104,5 +104,81 @@ describe("redactPersonalData on huge lines", () => {
     expect(out).not.toContain("@");
     expect(out).not.toContain("xxxx");
     expect(out).toContain("[…]");
+  });
+});
+
+describe("redactPersonalData on hostile shapes (relecture n°1)", () => {
+  const cases: [string, string][] = [
+    ["IBAN followed by its BIC", "IBAN : FR76 3000 6000 0112 3456 7890 189 BIC AGRIFRPP"],
+    ["IBAN in lowercase", "iban fr76 3000 6000 0112 3456 7890 189"],
+    ["IBAN with a wrong checksum", "IBAN FR00 1234 5678 9012 3456 7890 123"],
+    ["IBAN written in one piece", "virement sur CH9300762011623852957."],
+    ["card followed by more digits", "Carte 4970 1012 3456 7893 12"],
+    ["card with dots", "Carte 4970.1012.3456.7893"],
+    ["card with a wrong checksum", "Carte 4970 1012 3456 7890"],
+    ["Swiss phone", "Appelle-nous au 079 123 45 67 !"],
+    ["UK phone", "Call 020 7946 0958 today"],
+    ["US phone", "Questions? (212) 555-0199"],
+    ["phone glued to its label", "Tél06 12 34 56 78"],
+    ["phone after a label", "Mobile : 6 12 34 56 78"],
+    ["encoded e-mail in a link", "https://maison-lune.example/a?email=camille.martin%40exemple.test&t=9f"],
+    ["encoded e-mail in text", "camille.martin%40exemple.test"],
+    ["street: passage", "12 passage des Lilas"],
+    ["street: faubourg", "3 faubourg Saint-Antoine"],
+    ["street: cité, villa, ruelle", "5 cité Riverin · 8 villa Médicis · 2 ruelle des Chats"],
+    ["street: esplanade, promenade", "1 esplanade du Lac / 4 promenade des Anglais"],
+    [
+      "street: lotissement, voie, sentier, montée",
+      "9 lotissement Les Pins, 3 voie Romaine, 7 sentier Vert, 1 montée du Gourguillon",
+    ],
+    ["city in lowercase", "69003 lyon"],
+    ["city before the postcode", "Lyon 69003"],
+  ];
+  const secrets: Record<string, string[]> = {
+    "IBAN followed by its BIC": ["3000 6000", "FR76"],
+    "IBAN in lowercase": ["fr76", "3000 6000"],
+    "IBAN with a wrong checksum": ["FR00", "1234 5678"],
+    "IBAN written in one piece": ["CH9300762011623852957"],
+    "card followed by more digits": ["4970", "7893"],
+    "card with dots": ["4970.1012"],
+    "card with a wrong checksum": ["4970 1012"],
+    "Swiss phone": ["079 123", "45 67"],
+    "UK phone": ["7946", "0958"],
+    "US phone": ["555-0199", "(212)"],
+    "phone glued to its label": ["06 12 34", "56 78"],
+    "phone after a label": ["12 34 56 78"],
+    "encoded e-mail in a link": ["camille", "%40", "9f"],
+    "encoded e-mail in text": ["camille", "%40"],
+    "street: passage": ["passage des Lilas"],
+    "street: faubourg": ["Saint-Antoine"],
+    "street: cité, villa, ruelle": ["Riverin", "Médicis", "Chats"],
+    "street: esplanade, promenade": ["du Lac", "Anglais"],
+    "street: lotissement, voie, sentier, montée": ["Les Pins", "Romaine", "Vert", "Gourguillon"],
+    "city in lowercase": ["69003", "lyon"],
+    "city before the postcode": ["69003", "Lyon"],
+  };
+  for (const [label, text] of cases) {
+    it(`takes out the ${label}`, () => {
+      const out = redactPersonalData(text);
+      for (const secret of secrets[label] ?? []) expect(out, `${label}: ${out}`).not.toContain(secret);
+    });
+  }
+
+  it("keeps a link's host only", () => {
+    expect(redactPersonalData("Suivre : https://www.maison-lune.example/orders/abc?key=1")).toBe(
+      "Suivre : [lien www.maison-lune.example]",
+    );
+  });
+
+  it("still keeps order numbers, prices and compact tracking numbers", () => {
+    const text = [
+      "Commande 10421 confirmée",
+      "Ta commande n° CMD-88213 passée le 9 novembre 2026",
+      "Order #20931",
+      "Total 1 299,00 € · 89.90 EUR · 10000 EUR",
+      "Suivi : 6A12345678901 · CB123456785FR · 1Z999AA10123456784 · JJD000390007781234567",
+      "Le 09/11/2026 à 14:32",
+    ].join("\n");
+    expect(redactPersonalData(text)).toBe(text);
   });
 });

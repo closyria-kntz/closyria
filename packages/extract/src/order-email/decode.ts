@@ -10,7 +10,22 @@ export type DecodedEmail = {
   /** Its text: the HTML part as lines when there is one (it says more than the text part), else the text part. */
   text: string;
   html: string | null;
+  /**
+   * The `d=` domains of its DKIM-Signature headers, lower case, as written (not verified here: only a hint of the
+   * shop, like a link). An automatic forward keeps the shop's; a manual one carries her mailbox's.
+   */
+  signers: string[];
 };
+
+/** `d=` of each DKIM-Signature header. */
+function dkimSigners(headers: { key: string; value: string }[]): string[] {
+  return headers
+    .filter((h) => h.key.toLowerCase() === "dkim-signature")
+    .flatMap((h) => {
+      const d = /(?:^|;)\s*d\s*=\s*([^;\s]+)/i.exec(h.value.replace(/\s+/g, " "))?.[1];
+      return d ? [d.toLowerCase().replace(/\.$/, "")] : [];
+    });
+}
 
 /** Decodes a raw message (MIME). Attachments are left aside, links never fetched. */
 export async function decodeEmail(raw: Uint8Array | ArrayBuffer | string): Promise<DecodedEmail> {
@@ -23,5 +38,6 @@ export async function decodeEmail(raw: Uint8Array | ArrayBuffer | string): Promi
     date: date && Number.isFinite(date.getTime()) ? date : null,
     text: html ? htmlToText(html) : cleanLines(email.text ?? ""),
     html,
+    signers: dkimSigners(email.headers ?? []),
   };
 }

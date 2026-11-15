@@ -11,6 +11,7 @@ const email = (text: string, html: string | null = null): DecodedEmail => ({
   date: null,
   text,
   html,
+  signers: [],
 });
 const ld = (value: unknown) => `<script type="application/ld+json">${JSON.stringify(value)}</script>`;
 
@@ -149,6 +150,7 @@ describe("decodeEmail", () => {
       date: null,
       text: "Bonjour",
       html: null,
+      signers: [],
     });
   });
 });

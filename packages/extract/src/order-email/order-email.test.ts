@@ -176,15 +176,68 @@ describe("parseOrderEmail — edges", () => {
 });
 
 describe("shopHostOf", () => {
-  it("skips mail, carrier and Shopify hosts, and falls back to the sender's domain", async () => {
-    const links =
-      '<a href="https://www.laposte.fr/x">a</a><a href="mailto:a@b.example">m</a><a href="https://cdn.shopify.com/y">c</a><a href="https://www.instagram.com/z">i</a><a href="http://www.boutique-oya.example/c">o</a>';
-    expect(shopHostOf(await decodeEmail(mime(links)))).toBe("boutique-oya.example");
-    // Not forwarded: the outer sender is the shop (an automatic forward keeps it), unless it is a mailbox.
+  const withFrom = (from: string, html: string, extra = "") =>
+    mime(html)
+      .replace("From: Camille <camille@exemple.test>", `From: ${from}`)
+      .replace("MIME-Version: 1.0", `MIME-Version: 1.0${extra}`);
+  const link = (url: string, times = 1) => `<a href="${url}">x</a>`.repeat(times);
+
+  it("prefers the original sender's domain to any link", async () => {
+    const email = await decodeEmail(
+      withFrom(
+        "Oya <bonjour@boutique-oya.example>",
+        link("https://click.mjt.lu/x", 4) + link("https://autre.example/a", 3),
+      ),
+    );
+    expect(shopHostOf(email)).toBe("boutique-oya.example");
+  });
+
+  it("takes the DKIM signer when the sender is a mailer", async () => {
+    const email = await decodeEmail(
+      withFrom(
+        "Maison Lune <store+61234@t.shopifyemail.com>",
+        "<p>rien</p>",
+        "\nDKIM-Signature: v=1; a=rsa-sha256; d=gmail.com; s=x; b=abc\nDKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=Maison-Lune.example; s=shopify; b=abc",
+      ),
+    );
+    expect(shopHostOf(email)).toBe("maison-lune.example");
+  });
+
+  it("else the site most linked to (twice at least), never a mailer, tracker or shortener", async () => {
+    const mailers = [
+      "https://xyz.mjt.lu/lnk/a",
+      "https://email.mailgun.net/c/a",
+      "https://mandrillapp.com/track/click/a",
+      "https://t.sparkpostmail.com/a",
+      "https://track.hubspot.com/a",
+      "https://e.customeriomail.com/a",
+      "https://bit.ly/a",
+      "https://d1234.cloudfront.net/a.png",
+      "https://s3.amazonaws.com/a.png",
+      "https://trk.klclick.com/a",
+      "https://r.sendibt3.com/a",
+    ]
+      .map((url) => link(url, 3))
+      .join("");
+    const html = mailers + link("https://www.laposte.fr/x", 3) + link("https://boutique-oya.example/c", 2);
+    expect(shopHostOf(await decodeEmail(withFrom("Lou <lou.oya@gmail.com>", html)))).toBe("boutique-oya.example");
+    // One link alone is no proof: no shop rather than a wrong one.
+    const once = withFrom("Lou <lou.oya@gmail.com>", mailers + link("https://boutique-oya.example/c"));
+    expect(shopHostOf(await decodeEmail(once))).toBeNull();
+  });
+
+  it("never takes her own domain, nor a mailbox", async () => {
     expect(shopHostOf(await decodeEmail(mime("<p>rien</p>")))).toBe("exemple.test");
     expect(shopHostOf(await decodeEmail(mime("<p>rien</p>")), "camille@exemple.test")).toBeNull();
     expect(
-      shopHostOf({ subject: "", from: { name: "", address: "x@gmail.com" }, date: null, text: "", html: null }),
+      shopHostOf({
+        subject: "",
+        from: { name: "", address: "x@gmail.com" },
+        date: null,
+        text: "",
+        html: null,
+        signers: [],
+      }),
     ).toBeNull();
   });
 });

@@ -37,7 +37,7 @@ describe("callCostNanoUsd", () => {
         cache_creation_input_tokens: 10,
         cache_read_input_tokens: 10,
       }),
-    ).toBe(1_350);
+    ).toBe(2_100);
   });
 });
 
@@ -50,6 +50,12 @@ describe("databaseBudget", () => {
     await reservation?.settle(270_000);
     await reservation?.settle(999_999_999); // once only
     expect(await month()).toMatchObject({ costNanoUsd: 270_000, calls: 1 });
+  });
+
+  it("does not count a call that was given back (nothing billed)", async () => {
+    const budget = databaseBudget(handle.db, () => at);
+    await (await budget.reserve(4_000_000))?.settle(0);
+    expect(await month()).toMatchObject({ costNanoUsd: 0, calls: 0 });
   });
 
   it("refuses a call that would pass the cap (10 € by default), the admin's cap otherwise", async () => {

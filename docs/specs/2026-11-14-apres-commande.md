@@ -218,24 +218,29 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   dans l'en-tête du transfert, heure de Paris), inconnue pour une expédition. Le prix d'une ligne est celui **d'une
   pièce** (le total de la ligne divisé par la quantité). Liens jamais suivis, pièces jointes jamais lues.
 - **IA en secours** (`packages/ai`, SDK officiel, modèle `claude-haiku-5-5`, sortie JSON imposée par le schéma Zod,
-  revérifiée ensuite) seulement si aucun format connu ne lit l'e-mail et si `ANTHROPIC_API_KEY` est là. Avant l'envoi :
-  adresses postales (lignes de rue, de code postal, blocs « Adresse de livraison »…), téléphones, cartes (contrôle de
-  Luhn), IBAN (contrôle mod 97), adresses e-mail et lignes « À : » / « Cc : » remplacés par des marques ; 40 000
-  caractères au plus. Sans clé, plafond atteint ou réponse inutilisable : e-mail `failed` (« On n'a pas su lire cet
-  e-mail »).
+  revérifiée ensuite) seulement si aucun format connu ne lit l'e-mail et si `ANTHROPIC_API_KEY` est là. Avant l'envoi,
+  dans le doute on retire : liens (seul leur domaine reste), adresses e-mail (`%40` compris), tout ce qui a la forme
+  d'un IBAN (toute casse) ou d'une carte (13 chiffres et plus, espaces, points ou tirets), contrôle réussi ou non,
+  téléphones (français, `+`, nationaux de tout pays : 9 chiffres et plus avec séparateurs, ou après « Tél », « Mobile »…),
+  adresses postales (lignes de rue, code postal avant ou après la ville, blocs « Adresse de livraison »…), lignes
+  « À : » / « Cc : » ; un numéro de suivi écrit avec des espaces peut partir aussi (le colis s'ajoute à la main).
+  40 000 caractères au plus, l'objet de l'e-mail en tête. Sans clé, plafond atteint ou réponse inutilisable : e-mail
+  `failed` (« On n'a pas su lire cet e-mail »).
 - **Plafond** : réglage `ai_monthly_cap_cents` de la table `app_settings` (10 € sans réglage, modifiable par l'admin à
   la Task 8). Coût de chaque appel compté sur l'usage en jetons (prix Haiku 5.5 : 0,10 $ / 0,50 $ le million en entrée /
   sortie), par mois de Paris, dans `ai_usage_months`. Un appel réserve d'abord son coût le plus haut possible, en une
   seule requête qui refuse de dépasser le plafond (deux appels simultanés ne le dépassent pas ensemble), puis le
   remplace par le coût réel. Un dollar est compté pour un euro (le plafond est atteint un peu tôt, jamais tard).
-- **Boutique** : le premier lien de l'e-mail vers un site qui n'est ni une messagerie, ni un transporteur, ni une
-  plateforme, ni un réseau social (l'en-tête d'une notification Shopify), sinon le domaine de l'expéditeur d'origine
-  (jamais celui de son adresse à elle) ; la boutique qui possède ce domaine, sinon créée `pending` à son nom de domaine,
-  comme pour une capture.
+- **Boutique** : le domaine de l'expéditeur d'origine, sinon un signataire DKIM du message, sinon le site le plus lié
+  (deux liens au moins) ; jamais une messagerie, un transporteur, une plateforme, un routeur d'e-mails ou de clics
+  (Mailjet, Mailgun, Klaviyo…), un raccourcisseur, un réseau social, ni le domaine de son adresse à elle. La boutique
+  qui possède ce domaine, sinon créée `pending` à son nom de domaine, comme pour une capture ; aucun domaine plausible :
+  commande sans boutique (pas de boutique devinée).
 - **Doublons (RF 2)** : même titulaire + même boutique + même numéro de commande, ou un même numéro de suivi → la
   commande existante (brouillon ou validée, jamais une écartée) est complétée : colis ajoutés ; pour un brouillon,
   articles manquants ajoutés et taille, couleur, prix et date manquants remplis. Verrous consultatifs de transaction
-  sur (elle, boutique, numéro) et (elle, numéro de suivi). Les colis reçoivent leur `next_check_at` (rythme de
+  sur (elle, boutique, numéro) et (elle, numéro de suivi), et la commande lue `for update` (une validation en cours
+  passe d'abord). Les colis reçoivent leur `next_check_at` (rythme de
   `nextParcelCheck`), la Task 5 les prend.
 - **Notification** : nouvelle sorte d'alerte `order_received` (envoi immédiat, calme de nuit et plafond du chantier 4),
   seulement à la création d'une commande et seulement si elle est encore à valider à l'envoi. Titre « Commande reçue de

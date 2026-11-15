@@ -1,7 +1,7 @@
 import { cleanParsedOrder, type ParsedOrder } from "@closyria/shared";
 import type { DecodedEmail } from "./decode";
 import { originalHeader } from "./forwarded";
-import { shopHostOf } from "./hosts";
+import { isShopHost, shopHostOf } from "./hosts";
 import { readShopify } from "./shopify";
 import { readStructured } from "./structured";
 
@@ -24,7 +24,9 @@ export function parseOrderEmail(
   const shopHost = shopHostOf(email, options.ownAddress);
   for (const draft of [readStructured(email.html), readShopify(email, header)]) {
     if (!draft) continue;
-    const parsed = cleanParsedOrder({ ...draft, shopHost: draft.shopHost ?? shopHost }, now);
+    // The merchant site of structured data counts only when it is a shop's (never a platform or a mailer).
+    const own = draft.shopHost ? draft.shopHost.toLowerCase().replace(/^www\./, "") : null;
+    const parsed = cleanParsedOrder({ ...draft, shopHost: own && isShopHost(own) ? own : shopHost }, now);
     if (parsed) return parsed;
   }
   return null;
