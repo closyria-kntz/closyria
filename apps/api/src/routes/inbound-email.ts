@@ -7,6 +7,7 @@ import { type InboundDeps, receiveInboundEmail } from "../inbound/receive";
 import {
   decodeEnvelope,
   ENVELOPE_HEADER,
+  envelopeProblem,
   SIGNATURE_HEADER,
   TIMESTAMP_HEADER,
   verifySignature,
@@ -67,7 +68,10 @@ export function inboundEmailRoutes(deps: InboundEmailDeps) {
   const app = new OpenAPIHono<AccessEnv>();
   // The body and the envelope are never logged: only the error's name.
   app.onError((error, c) => {
-    if (error instanceof HTTPException) return c.json({ error: "invalid_request" }, 400);
+    if (error instanceof HTTPException) {
+      console.error(`inbound e-mail: refused as malformed: HTTP ${error.status}`);
+      return c.json({ error: "invalid_request" }, 400);
+    }
     console.error(`inbound e-mail: request failed (${error instanceof Error ? error.name : "error"})`);
     return c.json({ error: "internal" }, 500);
   });
@@ -82,7 +86,16 @@ export function inboundEmailRoutes(deps: InboundEmailDeps) {
     if (!verifySignature(deps.secret, headers, body, nowS)) return c.json({ error: "invalid_signature" }, 401);
     const envelope = decodeEnvelope(headers.envelope ?? "");
     const type = c.req.header("content-type")?.split(";")[0]?.trim().toLowerCase();
-    if (!envelope || type !== "message/rfc822" || body.length === 0) return c.json({ error: "invalid_request" }, 400);
+    if (!envelope || type !== "message/rfc822" || body.length === 0) {
+      // Field names and sizes only: never a value of the envelope or the message.
+      const why = !envelope
+        ? `envelope (${envelopeProblem(headers.envelope ?? "")})`
+        : type !== "message/rfc822"
+          ? "content type"
+          : "empty body";
+      console.error(`inbound e-mail: refused as malformed: ${why}`);
+      return c.json({ error: "invalid_request" }, 400);
+    }
     const result = await receiveInboundEmail(deps, { raw: Buffer.from(body), envelope });
     if (result === "retry") return c.json({ error: "temporary" }, 503);
     return c.json({ result }, 202);

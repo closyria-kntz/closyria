@@ -36,6 +36,19 @@ export function encodeEnvelope(envelope: Envelope): string {
   return Buffer.from(JSON.stringify(envelope), "utf8").toString("base64url");
 }
 
+/** Why an envelope header was refused, by field name only (never a value): for the API log. */
+export function envelopeProblem(header: string): string {
+  if (header.length > 4096) return "too long";
+  if (!/^[A-Za-z0-9_-]+$/.test(header)) return "not base64url";
+  try {
+    const parsed = envelopeSchema.safeParse(JSON.parse(Buffer.from(header, "base64url").toString("utf8")));
+    if (parsed.success) return "none";
+    return [...new Set(parsed.error.issues.map((issue) => issue.path.join(".") || issue.code))].join(",");
+  } catch {
+    return "not JSON";
+  }
+}
+
 export function decodeEnvelope(header: string): Envelope | null {
   if (header.length > 4096 || !/^[A-Za-z0-9_-]+$/.test(header)) return null;
   try {

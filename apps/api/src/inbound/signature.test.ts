@@ -168,3 +168,25 @@ describe("the relay Postfix runs (deploy/inbound/closyria-inbound-relay.mjs)", (
     }
   });
 });
+
+describe("envelopeProblem", () => {
+  it("names the refused fields, never their values", async () => {
+    const { envelopeProblem, encodeEnvelope } = await import("./signature");
+    const bad = Buffer.from(
+      JSON.stringify({ v: 1, queueId: "x", mailFrom: "", rcptTo: "a@b.c", clientIp: "not-an-ip", helo: "h" }),
+    ).toString("base64url");
+    const problem = envelopeProblem(bad);
+    expect(problem).toBe("queueId,clientIp");
+    expect(problem).not.toContain("not-an-ip");
+    expect(envelopeProblem("%%")).toBe("not base64url");
+    const ok = encodeEnvelope({
+      v: 1,
+      queueId: "4jSJlz49g0z3yWyJ",
+      mailFrom: "",
+      rcptTo: "a@b.c",
+      clientIp: "2607:f8b0:4864:20::334",
+      helo: "mail-ot1-x334.google.com",
+    });
+    expect(envelopeProblem(ok)).toBe("none");
+  });
+});
