@@ -143,6 +143,32 @@ function signedForUs(
   });
 }
 
+/**
+ * Why rule 1 refused, for the API log: never an address, only provider domains of the DKIM signatures (whose
+ * selectors and results say why her provider's signature did not count).
+ */
+export function ignoredReason(
+  result: AuthenticateResult,
+  fields: { name: string; value: string }[],
+  hersFrom: string | undefined,
+  rcpt: string,
+): string {
+  if (!hersFrom) return "From is not one of her verified addresses";
+  const signatures = result.dkim.results.map((r) => {
+    const covered = signedHeaders(r);
+    return `d=${r.signingDomain ?? "?"} ${r.status.result}${covered.includes("to") ? " to" : ""}${covered.includes("cc") ? " cc" : ""}`;
+  });
+  const tos = fields.filter((f) => f.name === "to");
+  const ccs = fields.filter((f) => f.name === "cc");
+  const where = [
+    tos.some((f) => addressesOf(f.value).includes(rcpt)) ? "order address in To" : "",
+    ccs.some((f) => addressesOf(f.value).includes(rcpt)) ? "in Cc" : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return `From is hers (domain ${domainOf(hersFrom)}); ${where || "order address not in To/Cc"}; DKIM: ${signatures.join("; ") || "none"}`;
+}
+
 /** Rule 2's second proof: Google relayed it (verified ARC set from Google, or a Google DKIM signature). */
 function relayedByGoogle(result: AuthenticateResult, google: GooglePolicy): boolean {
   const proof = new Set(google.proofDomains);
@@ -247,6 +273,7 @@ export async function decideSender(
     result.spf !== false &&
     result.spf.status.result === "temperror";
   if (rule1Undecided || rule2Undecided) return { kind: "retry" };
+  console.info(`inbound e-mail: ignored (${ignoredReason(result, fields, hersFrom, rcpt)})`);
   const claimed = from ?? lower(result.dkim.headerFrom[0] ?? "");
   return { kind: "ignored", fromAddress: (claimed || mailFrom || UNKNOWN).slice(0, MAX_STORED_ADDRESS) };
 }
