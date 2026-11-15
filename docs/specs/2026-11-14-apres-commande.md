@@ -523,12 +523,17 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   n'a pas été essayé sur la dev ; les formes réelles des réponses de La Poste et de 17TRACK sont à confirmer au premier
   vrai colis (§10.4).
 - **Points en attente des relectures, réglés** :
-  - **Rédaction avant l'IA** : adresses belges, suisses, luxembourgeoises (rue avant le numéro, « Rue de la Loi 16 » ;
-    rues allemandes et néerlandaises collées, « Bahnhofstrasse 5 » ; code postal à 4 chiffres avant la ville, ou ville
-    seule sur sa ligne avant le code, jamais une année 19xx/20xx ni après un mois), adresses anglaises « 4 Ashdown
-    Close » (nom en capitales, puis le genre de rue), e-mails écrits « &#64; », « &#x40; », « &commat; », « (at) »,
-    « [at] », « [dot] », et `%40` encodé plusieurs fois (« %2540 »). Montants, années, numéros de commande et dates
-    restent.
+  - **Rédaction avant l'IA** : adresses belges, suisses, luxembourgeoises — rue avant le numéro (« Rue de la Loi 16 »,
+    « Grand-Rue 12 »), rues allemandes et néerlandaises collées (« Bahnhofstrasse 5 »), code postal à 4 chiffres avec
+    son pays (« CH-8001 Zürich », « B-1000 Bruxelles »), ou nu (« 8001 Zürich », « Genève 1201 ») **seulement sur la
+    ligne qui suit une adresse retirée** —, adresses anglaises (« 4 Ashdown Close », « Flat 4, 12 Baker St »), e-mails
+    écrits « &#64; », « &#x40; », « &commat; », « (at) », « [at] », « [dot] », et `%40` encodé plusieurs fois
+    (« %2540 »). **Relecture n°1** : ces formes se trouvent aussi dans des noms d'articles (« 1 Petite Square Bag 45,00 € »,
+    « 2 Robe Close », « Robe Rue de Paris 38 », « 1234 Noir », « 1500 Robes vendues ») ; elles ne prennent donc qu'une
+    ligne qui n'est qu'une adresse — la rue en tête de ligne, son numéro (ou le genre de rue) la finissant ou suivi
+    d'une virgule —, jamais une ligne qui porte un prix, ni un nom anglais dont un mot est un vêtement (« Robe »,
+    « Bag », « Shoes »…). Dans le doute, le texte reste : une adresse qui passe ne donne à l'IA qu'une ville, une ligne
+    d'article perdue fausse la commande. Montants, années, numéros de commande et dates restent.
   - **Liaison par le nom** (« C'est bon », saisie) : seulement dans le **profil de la commande** ; la liaison par le
     produit reste sur tous ses profils (un article actif par produit), voir §10.3.
   - **Admin « Utilisatrices »** : les sous-requêtes de comptage nomment toujours la personne `"user"."id"` (Drizzle

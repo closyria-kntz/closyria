@@ -95,22 +95,36 @@ const STREET_LINE = new RegExp(
   "gimu",
 );
 /**
- * Street first, number after (Belgium, Switzerland, Luxembourg: « Rue de la Loi 16 », « Chaussée de Wavre 12 »):
- * a street word, its name, then the number.
+ * The street-first, English and 4-digit postcode shapes below are written by shops in product names too (« Robe Rue
+ * de Paris 38 », « 1 Petite Square Bag », « 1234 Noir »). So they only take a line that is nothing but an address
+ * line: the street at the start, its number (or kind of street) ending it or followed by a comma; and never a line
+ * with a price on it.
+ */
+const PRICE = /\d[\d .,]*[ \t]*(?:€|EUR|£|GBP|\$|USD|CHF)(?![\p{L}])|(?:€|£|\$)[ \t]*\d/iu;
+/** What may follow an address part on its line: nothing, or a comma and the rest of the address. */
+const ADDRESS_END = "[ \\t]*(?:,.*)?$";
+/**
+ * Street first, number after (Belgium, Switzerland, Luxembourg: « Rue de la Loi 16, 1000 Bruxelles », « Chaussée de
+ * Wavre 12 », « Grand-Rue 12 »): a street word starting the line, its name, the number ending it (or a comma).
  */
 const STREET_FIRST_WORDS =
   "rue|avenue|boulevard|chemin|place|route|quai|all[ée]e|impasse|square|passage|chauss[ée]e|dr[èe]ve|rempart|ruelle|sentier";
 const STREET_FIRST_LINE = new RegExp(
-  `^.*(?<![\\p{L}\\p{N}])(?:${STREET_FIRST_WORDS})[ \\t]+\\p{L}[\\p{L}' .-]*?[ \\t]+\\d{1,4}[ \\t]*(?:bis|ter|[a-z])?(?![\\p{L}\\p{N}]).*$`,
+  `^[ \\t]*(?:grande?-rue|(?:${STREET_FIRST_WORDS})[ \\t]+\\p{L}[\\p{L}' .-]*?)[ \\t]+\\d{1,4}[ \\t]*(?:bis|ter|[a-z])?${ADDRESS_END}`,
   "gimu",
 );
 /** German and Dutch street names, the kind of street glued to the name (« Bahnhofstrasse 5 », « Kerkstraat 12 »). */
-const COMPOUND_STREET_LINE =
-  /^.*\p{L}(?:strasse|straße|str\.|gasse|weg|platz|allee|ring|straat|laan|steenweg|dreef|plein|gracht|kade)[ \t]+\d{1,4}[ \t]*[a-z]?(?![\p{L}\p{N}]).*$/gimu;
-/** English addresses, the kind of street last (« 4 Ashdown Close », « 10 Downing Street »), capitalised names. */
-const ENGLISH_STREET_TYPES = [
+const COMPOUND_STREET_LINE = new RegExp(
+  `^[ \\t]*\\p{L}[\\p{L}-]*(?:strasse|straße|str\\.|gasse|weg|platz|allee|ring|straat|laan|steenweg|dreef|plein|gracht|kade)[ \\t]+\\d{1,4}[ \\t]*[a-z]?${ADDRESS_END}`,
+  "gimu",
+);
+const capitalised = (words: string[]) => words.flatMap((word) => [word, word.toLowerCase()]).join("|");
+/** English addresses, the kind of street last (« 4 Ashdown Close », « 12 Baker St, London »). */
+const ENGLISH_STREET_TYPES = capitalised([
   "Street",
+  "St",
   "Road",
+  "Rd",
   "Avenue",
   "Ave",
   "Lane",
@@ -127,11 +141,50 @@ const ENGLISH_STREET_TYPES = [
   "Row",
   "Square",
   "Boulevard",
-]
-  .flatMap((word) => [word, word.toLowerCase()])
-  .join("|");
+]);
+/** Words of an article's name, never of a street (« 2 Robe Close », « 1 Robe Place »). */
+const GARMENT_WORDS = capitalised([
+  "Robe",
+  "Dress",
+  "Top",
+  "Bag",
+  "Shoes",
+  "Jacket",
+  "Coat",
+  "Tee",
+  "Shirt",
+  "Skirt",
+  "Jeans",
+  "Jean",
+  "Trousers",
+  "Pants",
+  "Boots",
+  "Scarf",
+  "Hat",
+  "Sweater",
+  "Jumper",
+  "Cardigan",
+  "Blouse",
+  "Jupe",
+  "Pull",
+  "Sac",
+  "Veste",
+  "Manteau",
+  "Chemise",
+  "Pantalon",
+  "Short",
+  "Shorts",
+  "Sandales",
+  "Sneakers",
+  "Belt",
+  "Ceinture",
+  "Collier",
+  "Necklace",
+  "Bague",
+]);
+/** An address line: « Flat 4, » perhaps, the house number, one to three capitalised words, the kind of street. */
 const ENGLISH_STREET_LINE = new RegExp(
-  `^.*(?<![\\p{L}\\p{N}])\\d{1,4}[A-Za-z]?,?[ \\t]+(?:\\p{Lu}[\\p{L}'-]*[ \\t]+){1,3}(?:${ENGLISH_STREET_TYPES})(?![\\p{L}\\p{N}]).*$`,
+  `^[ \\t]*(?:(?:Flat|Apt\\.?|Apartment|Unit|Suite)[ \\t]*\\d+[A-Za-z]?,?[ \\t]*)?\\d{1,4}[A-Za-z]?,?[ \\t]+(?:(?!(?:${GARMENT_WORDS})(?![\\p{L}]))\\p{Lu}[\\p{L}'-]*[ \\t]+){1,3}(?:${ENGLISH_STREET_TYPES})\\.?${ADDRESS_END}`,
   "gmu",
 );
 /** Words a 5-digit number follows when it is no postcode (« Commande 10421 », « Total 10000 »). */
@@ -145,21 +198,33 @@ const POSTCODE_CITY_LINE = new RegExp(
   ].join("|"),
   "gimu",
 );
-/** Months: a year after one (« 9 novembre 2026 à 14 h ») is no postcode. */
-const MONTHS =
-  "janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre|janv|f[ée]vr|avr|juil|sept|oct|nov|d[ée]c|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|dec";
+/** A town's name: one to four capitalised words (« Bruxelles », « La Chaux-de-Fonds »), nothing after it. */
+const TOWN = "\\p{Lu}[\\p{L}'.-]*(?:[ \\t]+[\\p{L}'.-]+){0,3}";
 /**
- * A line with a Belgian, Swiss, Luxembourgish or Austrian postcode (4 digits) before its city (« 1000 Bruxelles »,
- * « 8001 Zürich »), not after a month, an order word or a currency; or a city alone on its line before such a
- * postcode (« Genève 1201 »), never a year (19xx, 20xx: « Collection Été 2026 »).
+ * A Belgian, Swiss, Luxembourgish or Austrian postcode written with its country (« CH-8001 Zürich », « B-1000
+ * Bruxelles », « L-1234 Luxembourg »), then the town ending the line (or a comma and the country).
  */
-const POSTCODE4_CITY_LINE = new RegExp(
-  [
-    `^.*(?<!(?:${NOT_A_CITY}|${MONTHS})\\.?[ \\t]*:?[ \\t]*)(?<![#/_.,\\p{L}\\p{N}-])\\d{4}[ \\t]+(?!(?:EUR|USD|GBP|CHF|à|a|at|h|x)(?![\\p{L}]))\\p{L}[\\p{L}' -]+.*$`,
-    `^[ \\t]*(?!(?:${NOT_A_CITY})(?![\\p{L}]))\\p{L}[\\p{L}'-]*(?:[ \\t-]\\p{L}[\\p{L}'-]*){0,2}[ \\t]+(?!19\\d\\d|20\\d\\d)\\d{4}[ \\t]*$`,
-  ].join("|"),
-  "gimu",
-);
+const PREFIXED_POSTCODE4_LINE = new RegExp(`^[ \\t]*(?:CH|B|L|A)-\\d{4}[ \\t]+${TOWN}${ADDRESS_END}`, "gmu");
+/**
+ * A bare 4-digit postcode and its town (« 8001 Zürich », « Genève 1201 »): only on the line right after an address
+ * line already taken out — alone, « 1234 Noir » or « 1500 Robes vendues » look just the same.
+ */
+const POSTCODE4_TOWN = new RegExp(`^[ \\t]*(?:\\d{4}[ \\t]+${TOWN}|${TOWN}[ \\t]+\\d{4})${ADDRESS_END}`, "u");
+
+/** Address lines with no price on them become `[adresse]`. */
+const dropAddressLines = (text: string, pattern: RegExp) =>
+  text.replace(pattern, (line) => (PRICE.test(line) ? line : "[adresse]"));
+
+/** The postcode-and-town line that follows an address line taken out. */
+function dropTownAfterAddress(text: string): string {
+  const lines = text.split("\n");
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (lines[i - 1] === "[adresse]" && POSTCODE4_TOWN.test(line) && !PRICE.test(line)) lines[i] = "[adresse]";
+  }
+  return lines.join("\n");
+}
+
 /** A line with a British (« SW1A 1AA ») or American (« NY 10001 ») postcode, CEDEX or a post-office box. */
 const POSTCODE_LINE =
   /^.*(?:\b[A-Z]{1,2}\d[A-Z\d]?[ \t]*\d[A-Z]{2}\b|\b[A-Z]{2}[ \t]+\d{5}(?:-\d{4})?\b|\bCEDEX\b|\bBP[ \t]*\d+).*$/gmu;
@@ -235,11 +300,12 @@ export function redactPersonalData(text: string): string {
   out = out.replace(SEPARATED_DIGITS, (m) => (phoneShaped(m) ? "[téléphone]" : m));
   out = dropAddressBlocks(out);
   out = out.replace(STREET_LINE, "[adresse]");
-  out = out.replace(STREET_FIRST_LINE, "[adresse]");
-  out = out.replace(COMPOUND_STREET_LINE, "[adresse]");
-  out = out.replace(ENGLISH_STREET_LINE, "[adresse]");
+  out = dropAddressLines(out, STREET_FIRST_LINE);
+  out = dropAddressLines(out, COMPOUND_STREET_LINE);
+  out = dropAddressLines(out, ENGLISH_STREET_LINE);
   out = out.replace(POSTCODE_CITY_LINE, "[adresse]");
-  out = out.replace(POSTCODE4_CITY_LINE, "[adresse]");
+  out = dropAddressLines(out, PREFIXED_POSTCODE4_LINE);
   out = out.replace(POSTCODE_LINE, "[adresse]");
+  out = dropTownAfterAddress(out);
   return out;
 }

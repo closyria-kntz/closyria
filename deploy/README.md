@@ -587,10 +587,14 @@ for NAME in ANTHROPIC_API_KEY LAPOSTE_OKAPI_KEY TRACKING_AGGREGATOR_KEY; do
 done
 unset V
 [ -n "$LINES" ] || stop "Aucune clé à ajouter : rien n'est changé."
-printf '\n%s' "$LINES" | sudo tee -a "$E" >/dev/null || { unset LINES; stop "Écriture dans $E impossible."; }
+# Un saut de ligne seulement si le fichier n'en a pas à la fin (relancée, la commande n'ajoute pas de lignes vides).
+{ sudo tail -c1 "$E" | grep -q . && printf '\n'; printf '%s' "$LINES"; } | sudo tee -a "$E" >/dev/null || { unset LINES; stop "Écriture dans $E impossible."; }
 unset LINES
 SINCE="$(date '+%Y-%m-%d %H:%M:%S')"
-if ! sudo systemctl restart "$W" || ! sleep 5 || ! systemctl is-active --quiet "$W"; then
+# Le worker doit redémarrer, puis rester actif 15 secondes de suite.
+UP=yes; sudo systemctl restart "$W" || UP=no
+for _ in $(seq 15); do [ "$UP" = yes ] || break; sleep 1; systemctl is-active --quiet "$W" || UP=no; done
+if [ "$UP" = no ]; then
   for NAME in $ADDED; do sudo sed -i "/^$NAME=/d" "$E"; done
   sudo systemctl restart "$W"
   stop "Le worker ne repart pas avec ces clés : elles sont retirées, worker redémarré comme avant (sudo journalctl -u $W -n 50)."
@@ -622,10 +626,14 @@ for NAME in ANTHROPIC_API_KEY LAPOSTE_OKAPI_KEY TRACKING_AGGREGATOR_KEY; do
 done
 unset V
 [ -n "$LINES" ] || stop "Aucune clé à ajouter : rien n'est changé."
-printf '\n%s' "$LINES" | sudo tee -a "$E" >/dev/null || { unset LINES; stop "Écriture dans $E impossible."; }
+# Un saut de ligne seulement si le fichier n'en a pas à la fin (relancée, la commande n'ajoute pas de lignes vides).
+{ sudo tail -c1 "$E" | grep -q . && printf '\n'; printf '%s' "$LINES"; } | sudo tee -a "$E" >/dev/null || { unset LINES; stop "Écriture dans $E impossible."; }
 unset LINES
 SINCE="$(date '+%Y-%m-%d %H:%M:%S')"
-if ! sudo systemctl restart "$W" || ! sleep 5 || ! systemctl is-active --quiet "$W"; then
+# Le worker doit redémarrer, puis rester actif 15 secondes de suite.
+UP=yes; sudo systemctl restart "$W" || UP=no
+for _ in $(seq 15); do [ "$UP" = yes ] || break; sleep 1; systemctl is-active --quiet "$W" || UP=no; done
+if [ "$UP" = no ]; then
   for NAME in $ADDED; do sudo sed -i "/^$NAME=/d" "$E"; done
   sudo systemctl restart "$W"
   stop "Le worker ne repart pas avec ces clés : elles sont retirées, worker redémarré comme avant (sudo journalctl -u $W -n 50)."
