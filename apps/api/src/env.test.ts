@@ -230,4 +230,10 @@ describe("envSchema dev access", () => {
       expect(envSchema.safeParse({ ...base, INBOUND_EMAIL_SECRET: bad }).success, bad).toBe(false);
     }
   });
+
+  it("keeps Gmail's automatic forwarding off unless INBOUND_AUTOFORWARD=on", () => {
+    expect(envSchema.parse(base).INBOUND_AUTOFORWARD).toBe("off");
+    expect(envSchema.parse({ ...base, INBOUND_AUTOFORWARD: "on" }).INBOUND_AUTOFORWARD).toBe("on");
+    expect(envSchema.safeParse({ ...base, INBOUND_AUTOFORWARD: "yes" }).success).toBe(false);
+  });
 });

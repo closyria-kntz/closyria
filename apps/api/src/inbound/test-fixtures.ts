@@ -1,5 +1,6 @@
 import { generateKeyPairSync, type KeyObject } from "node:crypto";
-import { type DNSResolver, dkimSign } from "mailauth";
+import { type DNSResolver, dkimSign, sealMessage } from "mailauth";
+import type { GooglePolicy } from "./sender";
 import type { Envelope } from "./signature";
 
 /**
@@ -20,6 +21,13 @@ export const PROVIDERS = {
     network: "198.51.100.0/24",
     ip: "198.51.100.17",
     helo: "mail-wr1-f41.gmail.example",
+  },
+  google: {
+    domain: "google.example",
+    selector: "arc-20160816",
+    network: "198.51.103.0/24",
+    ip: "198.51.103.5",
+    helo: "mail-sor-f69.google.example",
   },
   outlook: {
     domain: "outlook.example",
@@ -77,17 +85,22 @@ export function fixtureResolver(options: { fail?: boolean } = {}): DNSResolver {
 
 const crlf = (text: string) => text.replace(/\r?\n/g, "\r\n");
 
-/** Signs `message` as `signer`'s domain (`bodyLength`: an `l=` tag, only part of the body signed). */
-export async function signed(message: string, signer: ProviderName, bodyLength?: number): Promise<Buffer> {
+/** Signs `message` as `signer`'s domain (`bodyLength`: an `l=` tag; `headerList`: the `h=` fields). */
+export async function signed(
+  message: string,
+  signer: ProviderName,
+  options: { bodyLength?: number; headerList?: string } = {},
+): Promise<Buffer> {
   const p = PROVIDERS[signer];
   const raw = crlf(message);
   const result = await dkimSign(raw, {
+    ...(options.headerList ? { headerList: options.headerList } : {}),
     signatureData: [
       {
         signingDomain: p.domain,
         selector: p.selector,
         privateKey: pem(signer),
-        ...(bodyLength === undefined ? {} : { maxBodyLength: bodyLength }),
+        ...(options.bodyLength === undefined ? {} : { maxBodyLength: options.bodyLength }),
       },
     ],
   });
@@ -97,9 +110,39 @@ export async function signed(message: string, signer: ProviderName, bodyLength?:
 
 export const unsigned = (message: string) => Buffer.from(crlf(message));
 
-export function envelopeFrom(provider: ProviderName, mailFrom: string, rcptTo: string): Envelope {
+/** Google's names in the fake DNS (sender.ts's `GOOGLE` holds the real ones). */
+export const FIXTURE_GOOGLE: GooglePolicy = {
+  mailboxDomains: ["gmail.example"],
+  proofDomains: ["google.example", "gmail.example"],
+  confirmationFrom: "forwarding-noreply@google.example",
+  confirmationDomain: "google.example",
+};
+
+let queueCounter = 0;
+/** A Postfix-like queue id, a new one each time unless given. */
+export const nextQueueId = () => `4Qx${(++queueCounter).toString(36).toUpperCase().padStart(8, "0")}`;
+
+export function envelopeFrom(
+  provider: ProviderName,
+  mailFrom: string,
+  rcptTo: string,
+  queueId = nextQueueId(),
+): Envelope {
   const p = PROVIDERS[provider];
-  return { v: 1, mailFrom, rcptTo, clientIp: p.ip, helo: p.helo };
+  return { v: 1, queueId, mailFrom, rcptTo, clientIp: p.ip, helo: p.helo };
+}
+
+/** Adds an ARC set (i=1, cv=none) by `sealer`, as Gmail does on what it forwards. */
+export async function sealed(raw: Buffer, sealer: ProviderName): Promise<Buffer> {
+  const p = PROVIDERS[sealer];
+  const seal = await sealMessage(raw, {
+    signingDomain: p.domain,
+    selector: p.selector,
+    privateKey: pem(sealer),
+    authResults: `mx.${p.domain}; dkim=pass header.d=boutique.example; spf=pass smtp.mailfrom=boutique.example`,
+    cv: "none",
+  });
+  return Buffer.concat([seal, raw]);
 }
 
 const SHOP_ORDER_TEXT = `Bonjour Marie,
@@ -210,8 +253,26 @@ Votre commande #1042 est en route avec Colissimo : 6A18537412398.
 `;
 }
 
-/** Gmail's envelope sender for an automatic forward: a `+caf_=` subaddress of her mailbox. */
-export function gmailForwardingSender(to: string, mailbox = HER): string {
-  const [local, domain] = mailbox.split("@");
-  return `${local}+caf_=${to.replace("@", "=")}@${domain}`;
+/** Gmail's « Confirmation de transfert » for `requester`, sent to the order address `to`. */
+export function gmailConfirmation(to: string, requester: string, code = "185412963"): string {
+  return `From: Gmail Team <forwarding-noreply@google.example>
+To: ${to}
+Subject: =?UTF-8?Q?=28#${code}=29_Confirmation_de_transfert_Gmail_=E2=80=93_Recevoir_les?=
+ =?UTF-8?Q?_e-mails_de_${requester.replace("@", "=40")}?=
+Date: Sat, 14 Nov 2026 11:02:10 -0800
+Message-ID: <0000000000004a2b3c05f1example@google.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+${requester} a demand=C3=A9 le transfert automatique de ses e-mails vers votre adre=
+sse ${to}.
+Code de confirmation : ${code}
+
+Pour autoriser ${requester} =C3=A0 transf=C3=A9rer automatiquement des e-mails vers v=
+otre adresse, cliquez sur le lien ci-dessous :
+https://mail-settings.google.example/mail/vf-%5BEXAMPLE%5D-0000
+
+L'=C3=A9quipe Gmail
+`;
 }

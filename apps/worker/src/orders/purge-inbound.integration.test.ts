@@ -1,5 +1,5 @@
 import { createDb, eq, inArray, schema } from "@closyria/db";
-import { INBOUND_EMAIL_RETENTION_DAYS } from "@closyria/shared";
+import { INBOUND_EMAIL_RETENTION_DAYS, rawEmailKey } from "@closyria/shared";
 import { memoryStore, type ObjectStore } from "@closyria/storage";
 import { createTestDatabase } from "@closyria/testing/vitest";
 import type { PgBoss } from "pg-boss";
@@ -65,6 +65,7 @@ describe("purgeInboundEmails", () => {
         .values({
           inboxId: ctx.inboxId,
           userId: status === "ignored" ? null : ctx.userId,
+          queueId: `Q${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`,
           fromAddress: "marie@example.test",
           authOk: status !== "ignored",
           status,
@@ -95,7 +96,7 @@ describe("purgeInboundEmails", () => {
       inboundEmailId: failedWithOrder.id,
     });
 
-    expect(await purgeInboundEmails(db, now, store)).toEqual({ deleted: 2, cleared: 3 });
+    expect(await purgeInboundEmails(db, now, store)).toEqual({ deleted: 2, cleared: 3, failed: 0 });
 
     const all = [ignored, failedAlone, failedWithOrder, parsed, queued, fresh];
     const rows = await db
@@ -119,10 +120,10 @@ describe("purgeInboundEmails", () => {
     expect(await stored(store, fresh.key)).toBe(true);
 
     // Nothing left to do: a second run changes nothing.
-    expect(await purgeInboundEmails(db, now, store)).toEqual({ deleted: 0, cleared: 0 });
+    expect(await purgeInboundEmails(db, now, store)).toEqual({ deleted: 0, cleared: 0, failed: 0 });
   });
 
-  it("goes on when the store fails (logged), the rows are purged anyway", async () => {
+  it("keeps the key while the object is not deleted (logged), for the next run", async () => {
     const { db } = handle;
     const ctx = await setup();
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -134,20 +135,73 @@ describe("purgeInboundEmails", () => {
       },
     };
     const r = new Date(now.getTime() - 40 * DAY_MS);
-    await db.insert(schema.inboundEmails).values({
-      inboxId: ctx.inboxId,
-      userId: ctx.userId,
-      fromAddress: "marie@example.test",
-      authOk: true,
-      status: "parsed",
-      rawObjectKey: `users/${ctx.userId}/inbound/x.eml`,
-      receivedAt: r,
-      purgeAfter: new Date(r.getTime() + 30 * DAY_MS),
-    });
-    expect(await purgeInboundEmails(db, now, failing)).toEqual({ deleted: 0, cleared: 1 });
+    const [row] = await db
+      .insert(schema.inboundEmails)
+      .values({
+        inboxId: ctx.inboxId,
+        userId: ctx.userId,
+        queueId: `Q${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`,
+        fromAddress: "marie@example.test",
+        authOk: true,
+        status: "parsed",
+        rawObjectKey: `users/${ctx.userId}/inbound/x.eml`,
+        receivedAt: r,
+        purgeAfter: new Date(r.getTime() + 30 * DAY_MS),
+      })
+      .returning();
+    expect(await purgeInboundEmails(db, now, failing)).toEqual({ deleted: 0, cleared: 0, failed: 0 });
     expect(error).toHaveBeenCalledTimes(1);
+    const [kept] = await db
+      .select()
+      .from(schema.inboundEmails)
+      .where(eq(schema.inboundEmails.id, row?.id as string));
+    expect(kept?.rawObjectKey).toBe(`users/${ctx.userId}/inbound/x.eml`);
+    // The store is back: the next run finishes it.
+    expect(await purgeInboundEmails(db, now, memoryStore())).toEqual({ deleted: 0, cleared: 1, failed: 0 });
     expect(String(error.mock.calls[0])).not.toContain(ctx.userId);
     error.mockRestore();
+  });
+});
+
+describe("purgeInboundEmails: what the reception left half done", () => {
+  it("fails an accepted e-mail still queued without its message after an hour, its object deleted first", async () => {
+    const { db } = handle;
+    const store = memoryStore();
+    const ctx = await setup();
+    const row = async (minutesAgo: number, status = "queued") => {
+      const r = new Date(now.getTime() - minutesAgo * 60_000);
+      const [inserted] = await db
+        .insert(schema.inboundEmails)
+        .values({
+          inboxId: ctx.inboxId,
+          userId: ctx.userId,
+          queueId: `Q${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`,
+          fromAddress: "marie@example.test",
+          authOk: true,
+          status,
+          receivedAt: r,
+          purgeAfter: new Date(r.getTime() + 30 * DAY_MS),
+        })
+        .returning();
+      return inserted?.id as string;
+    };
+    const stuck = await row(61);
+    const recent = await row(59);
+    // Its object landed but the key was never saved: deleted with it.
+    const orphan = rawEmailKey(ctx.userId, stuck);
+    await store.put(orphan, Buffer.from("raw"), "message/rfc822");
+    expect(await purgeInboundEmails(db, now, store)).toEqual({ deleted: 0, cleared: 0, failed: 1 });
+    const statuses = await db
+      .select({ id: schema.inboundEmails.id, status: schema.inboundEmails.status })
+      .from(schema.inboundEmails)
+      .where(inArray(schema.inboundEmails.id, [stuck, recent]));
+    expect(new Map(statuses.map((s) => [s.id, s.status]))).toEqual(
+      new Map([
+        [stuck, "failed"],
+        [recent, "queued"],
+      ]),
+    );
+    expect(await stored(store, orphan)).toBe(false);
   });
 });
 
@@ -168,7 +222,7 @@ describe("order-email-purge queue", () => {
   });
 
   it("fails a job that carries data", async () => {
-    const run = vi.fn(async () => ({ deleted: 0, cleared: 0 }));
+    const run = vi.fn(async () => ({ deleted: 0, cleared: 0, failed: 0 }));
     const handler = orderEmailPurgeHandler(run);
     await handler([{ data: undefined }, { data: {} }]);
     expect(run).toHaveBeenCalledTimes(2);

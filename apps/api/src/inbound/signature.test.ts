@@ -22,6 +22,7 @@ const OTHER = "fedcba9876543210".repeat(4);
 const NOW = 1_794_000_000;
 const envelope: Envelope = {
   v: 1,
+  queueId: "4QxR2T0b9zK",
   mailFrom: "marie.test@gmail.example",
   rcptTo: "marie-k7f2@commandes.dev.closyria.com",
   clientIp: "198.51.100.17",
@@ -74,6 +75,9 @@ describe("request signature", () => {
     const bad = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
     expect(decodeEnvelope(bad({ ...envelope, clientIp: "unknown" }))).toBeNull();
     expect(decodeEnvelope(bad({ ...envelope, v: 2 }))).toBeNull();
+    expect(decodeEnvelope(bad({ ...envelope, queueId: "../x" }))).toBeNull();
+    const { queueId: _q, ...withoutQueueId } = envelope;
+    expect(decodeEnvelope(bad(withoutQueueId))).toBeNull();
     expect(decodeEnvelope(bad({ ...envelope, extra: 1 }))).toBeNull();
     expect(decodeEnvelope("not base64url!")).toBeNull();
     expect(decodeEnvelope(Buffer.from("{").toString("base64url"))).toBeNull();
@@ -83,7 +87,7 @@ describe("request signature", () => {
 describe("the relay Postfix runs (deploy/inbound/closyria-inbound-relay.mjs)", () => {
   const relay = resolve(import.meta.dirname, "../../../../deploy/inbound/closyria-inbound-relay.mjs");
   const dir = mkdtempSync(join(tmpdir(), "closyria-relay-"));
-  const secretFile = join(dir, "inbound-dev.secret");
+  const secretFile = join(dir, "dev.secret");
   writeFileSync(secretFile, `${SECRET}\n`);
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -95,7 +99,7 @@ describe("the relay Postfix runs (deploy/inbound/closyria-inbound-relay.mjs)", (
       req.on("data", (c: Buffer) => chunks.push(c));
       req.on("end", () => {
         got = { headers: req.headers, body: Buffer.concat(chunks) };
-        res.writeHead(status, { "content-type": "application/json" }).end("{}");
+        res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify({ result: "dropped" }));
       });
     });
     await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok));
@@ -105,24 +109,29 @@ describe("the relay Postfix runs (deploy/inbound/closyria-inbound-relay.mjs)", (
         CLOSYRIA_INBOUND_URL: `http://127.0.0.1:${port}/api/inbound-email`,
         CLOSYRIA_INBOUND_SECRET_FILE: secretPath,
       },
-      stdio: ["pipe", "ignore", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
     });
     let stderr = "";
+    let stdout = "";
+    child.stdout.on("data", (c: Buffer) => {
+      stdout += c.toString();
+    });
     child.stderr.on("data", (c: Buffer) => {
       stderr += c.toString();
     });
     child.stdin.end(input);
     const code = await new Promise<number | null>((ok) => child.on("close", ok));
     server.close();
-    return { code, got, stderr };
+    return { code, got, stderr, stdout };
   }
 
-  const args = ["dev", envelope.mailFrom, envelope.clientIp, envelope.helo, envelope.rcptTo];
+  const args = ["dev", envelope.queueId, envelope.mailFrom, envelope.clientIp, envelope.helo, envelope.rcptTo];
 
   it("signs exactly as the API verifies, with the envelope Postfix gave", async () => {
-    const { code, got, stderr } = await run(202, args, body);
+    const { code, got, stderr, stdout } = await run(202, args, body);
     expect(code).toBe(0);
     expect(stderr).toBe("");
+    expect(stdout).toBe("result=dropped\n");
     if (!got) throw new Error("nothing received");
     expect(got.headers["content-type"]).toBe("message/rfc822");
     expect(got.body.equals(body)).toBe(true);
@@ -135,8 +144,9 @@ describe("the relay Postfix runs (deploy/inbound/closyria-inbound-relay.mjs)", (
     expect(verifySignature(SECRET, h, got.body, Math.floor(Date.now() / 1000))).toBe(true);
   });
 
-  it("asks Postfix to try again when the API refuses or is away, never to bounce", async () => {
+  it("asks Postfix to try again when the API refuses, is away or the DNS failed (503), never to bounce", async () => {
     expect((await run(401, args, body)).code).toBe(75);
+    expect((await run(503, args, body)).code).toBe(75);
     expect((await run(500, args, body)).code).toBe(75);
     expect((await run(404, args, body)).code).toBe(75);
     expect((await run(202, args, body, join(dir, "missing.secret"))).code).toBe(75);

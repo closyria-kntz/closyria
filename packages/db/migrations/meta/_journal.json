@@ -267,6 +267,13 @@
       "when": 1794699884562,
       "tag": "0037_apres_commande",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1794736191806,
+      "tag": "0038_reception_emails",
+      "breakpoints": true
     }
   ]
 }

@@ -591,6 +591,7 @@ describe("anonymous -> account merge on sign-in", () => {
     await handle.db.insert(schema.inboundEmails).values({
       userId: anonymous.userId,
       inboxId: inbox?.id ?? "",
+      queueId: `Q${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`,
       fromAddress: "her@example.test",
       authOk: true,
       status: "parsed",

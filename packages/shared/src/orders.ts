@@ -204,8 +204,19 @@ export function parcelCheckUntil(start: Date): Date {
 
 /** Largest e-mail received (the raw message, headers included); a larger one is refused, nothing stored. */
 export const INBOUND_EMAIL_MAX_BYTES = 2 * 1024 * 1024;
-/** E-mails stored per address and per 24 hours at most (a flood of forged ones fills nothing). */
+/** Accepted e-mails stored per address and per 24 hours at most. */
 export const MAX_INBOUND_EMAILS_PER_DAY = 100;
+/** Ignored ones (not from her) kept per address and per 24 hours at most; beyond, nothing (a flood fills nothing). */
+export const MAX_IGNORED_INBOUND_EMAILS_PER_DAY = 20;
+/** An accepted e-mail still `queued` without its raw message after this long was never finished: the purge fails it. */
+export const STUCK_INBOUND_EMAIL_MINUTES = 60;
+/** How long Gmail's forwarding confirmation code is shown. */
+export const GMAIL_CODE_HOURS = 24;
+
+/** Storage key of a raw e-mail, under her own prefix like her photos. */
+export function rawEmailKey(userId: string, inboundEmailId: string): string {
+  return `users/${userId}/inbound/${inboundEmailId}.eml`;
+}
 /** The queue that reads an accepted e-mail (`{ inboundEmailId }`), filled by the API, worked by the worker. */
 export const ORDER_EMAIL_PARSE_QUEUE = "order-email-parse";
 export const orderEmailParseJobSchema = z.object({ inboundEmailId: uuidSchema }).strict();
@@ -387,5 +398,15 @@ export const orderListSchema = z.object({ orders: z.array(orderViewSchema) });
 export type OrderList = z.infer<typeof orderListSchema>;
 
 /** « Mes commandes par e-mail »: her active address, null before she asked for one. */
-export const orderInboxViewSchema = z.object({ address: z.email().nullable() });
+export const orderInboxViewSchema = z.object({
+  address: z.email().nullable(),
+  /**
+   * Gmail's forwarding confirmation code, received on her address in the last 24 hours, when the Gmail address that
+   * asked is hers (she types it in Gmail's settings); null otherwise.
+   */
+  pendingGmailCode: z
+    .string()
+    .regex(/^\d{6,12}$/)
+    .nullable(),
+});
 export type OrderInboxView = z.infer<typeof orderInboxViewSchema>;

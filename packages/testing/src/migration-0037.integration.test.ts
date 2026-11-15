@@ -76,13 +76,13 @@ describe("migration 0037 (après la commande)", () => {
           client.query(`insert into order_inboxes (user_id, local_part) values ('v', 'Marie@x')`),
         ).rejects.toThrow(/order_inboxes_local_part_check/);
         const email = await client.query<{ id: string }>(
-          `insert into inbound_emails (user_id, inbox_id, from_address, auth_ok, status, purge_after)
-           values ('u', $1, 'u@t.local', true, 'parsed', now() + interval '30 days') returning id`,
+          `insert into inbound_emails (user_id, inbox_id, queue_id, from_address, auth_ok, status, purge_after)
+           values ('u', $1, 'Q00001', 'u@t.local', true, 'parsed', now() + interval '30 days') returning id`,
           [inboxId],
         );
         await client.query(
-          `insert into inbound_emails (inbox_id, from_address, auth_ok, status, purge_after)
-           values ($1, 'x@t.local', false, 'ignored', now() + interval '30 days')`,
+          `insert into inbound_emails (inbox_id, queue_id, from_address, auth_ok, status, purge_after)
+           values ($1, 'Q00002', 'x@t.local', false, 'ignored', now() + interval '30 days')`,
           [inboxId],
         );
         const order = await client.query<{ id: string; status: string }>(

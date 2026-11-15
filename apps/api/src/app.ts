@@ -156,7 +156,14 @@ export function createApp(deps: AppDeps) {
     .route("/", bulkRoutes(deps.wardrobe))
     .route("/", giftsRoutes(deps.wardrobe))
     .route("/", orderDraftRoutes(deps.wardrobe))
-    .route("/", orderInboxRoutes({ db: deps.wardrobe.db, domain: orderInboxDomain(appEnvSchema.parse(deps.env)) }))
+    .route(
+      "/",
+      orderInboxRoutes({
+        db: deps.wardrobe.db,
+        domain: orderInboxDomain(appEnvSchema.parse(deps.env)),
+        ...(deps.wardrobe.now ? { nowMs: () => (deps.wardrobe.now as () => Date)().getTime() } : {}),
+      }),
+    )
     .route("/", itemsRoutes(deps.wardrobe, importAttacher))
     .route(
       "/",

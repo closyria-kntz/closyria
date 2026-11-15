@@ -65,7 +65,10 @@ export function bootstrap(env: Env): Api {
             store,
             secret: env.INBOUND_EMAIL_SECRET,
             domain: orderInboxDomain(env.APP_ENV),
-            checkSender: mailauthSenderCheck({ mta: "mx.closyria.com" }),
+            checkSender: mailauthSenderCheck({
+              mta: "mx.closyria.com",
+              autoForward: env.INBOUND_AUTOFORWARD === "on",
+            }),
             queue: pgBossOrderEmailQueue(boss),
           },
         }

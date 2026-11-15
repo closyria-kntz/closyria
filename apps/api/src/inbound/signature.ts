@@ -16,10 +16,14 @@ export const SIGNATURE_TOLERANCE_S = 300;
 
 const MAX_ADDRESS = 320;
 
-/** The SMTP envelope Postfix saw: MAIL FROM (empty for a bounce), the one recipient, the client's address and HELO. */
+/**
+ * The SMTP envelope Postfix saw: its queue id (with the recipient, what makes a retry idempotent), MAIL FROM (empty for
+ * a bounce), the one recipient, the client's address and HELO.
+ */
 export const envelopeSchema = z
   .object({
     v: z.literal(1),
+    queueId: z.string().regex(/^[0-9A-Za-z]{5,32}$/),
     mailFrom: z.string().max(MAX_ADDRESS),
     rcptTo: z.string().min(3).max(MAX_ADDRESS),
     clientIp: z.union([z.ipv4(), z.ipv6()]),

@@ -19,7 +19,9 @@ export type InboundEmailDeps = InboundDeps & {
   nowS?: () => number;
 };
 
-const resultSchema = z.object({ result: z.enum(["queued", "ignored", "dropped", "failed"]) });
+const resultSchema = z.object({
+  result: z.enum(["queued", "ignored", "confirmation", "duplicate", "dropped", "failed"]),
+});
 const errorSchema = z.object({ error: z.string() });
 const errorContent = (description: string) => ({
   description,
@@ -49,6 +51,7 @@ const route = defineAccess(
       401: errorContent("Missing, stale or wrong signature (invalid_signature)"),
       404: errorContent("Reception is off, or the request came through a proxy (not_found)"),
       413: errorContent("Larger than 2 MB (too_large): nothing is stored"),
+      503: errorContent("The DNS did not answer the checks (temporary): nothing stored, the relay tries again"),
     },
   }),
   "public",
@@ -75,6 +78,7 @@ export function inboundEmailRoutes(deps: InboundEmailDeps) {
     const type = c.req.header("content-type")?.split(";")[0]?.trim().toLowerCase();
     if (!envelope || type !== "message/rfc822" || body.length === 0) return c.json({ error: "invalid_request" }, 400);
     const result = await receiveInboundEmail(deps, { raw: Buffer.from(body), envelope });
+    if (result === "retry") return c.json({ error: "temporary" }, 503);
     return c.json({ result }, 202);
   });
 }

@@ -218,6 +218,7 @@ async function seedEverything(userId: string, email: string): Promise<string[]> 
     .values({
       userId,
       inboxId: inbox.id,
+      queueId: `Q${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`,
       fromAddress: email,
       authOk: true,
       status: "parsed",
@@ -231,6 +232,7 @@ async function seedEverything(userId: string, email: string): Promise<string[]> 
   await store.put(ignoredKey, Buffer.from("From: y"), "message/rfc822");
   await handle.db.insert(schema.inboundEmails).values({
     inboxId: inbox.id,
+    queueId: `Q${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`,
     fromAddress: "someone@example.test",
     authOk: false,
     status: "ignored",

@@ -59,10 +59,17 @@ export const orderInboxes = pgTable(
     userId: owner(),
     localPart: text("local_part").notNull().unique(),
     active: boolean("active").notNull().default(true),
+    /**
+     * Gmail's forwarding confirmation code, from its « Confirmation de transfert » e-mail when the address that asked
+     * is hers; shown for 24 hours after `gmail_code_at` (« Mes commandes par e-mail »).
+     */
+    gmailCode: text("gmail_code"),
+    gmailCodeAt: at("gmail_code_at"),
     createdAt: createdAt(),
   },
   (t) => [
     index("order_inboxes_user_id_idx").on(t.userId),
+    check("order_inboxes_gmail_code_check", sql`${t.gmailCode} IS NULL OR ${t.gmailCode} ~ '^[0-9]{6,12}$'`),
     uniqueIndex("order_inboxes_user_id_active_idx").on(t.userId).where(sql`${t.active}`),
     check("order_inboxes_local_part_check", sql`${t.localPart} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
   ],
@@ -83,6 +90,8 @@ export const inboundEmails = pgTable(
       .notNull()
       .references(() => orderInboxes.id, { onDelete: "cascade" }),
     receivedAt: at("received_at").defaultNow().notNull(),
+    /** Postfix's queue id: with the address (one recipient per delivery), a retry or a replay files nothing twice. */
+    queueId: text("queue_id").notNull(),
     fromAddress: text("from_address").notNull(),
     /** SPF or aligned DKIM passed for the effective sender. */
     authOk: boolean("auth_ok").notNull(),
@@ -92,6 +101,7 @@ export const inboundEmails = pgTable(
   },
   (t) => [
     index("inbound_emails_inbox_id_idx").on(t.inboxId),
+    uniqueIndex("inbound_emails_inbox_id_queue_id_idx").on(t.inboxId, t.queueId),
     index("inbound_emails_user_id_idx").on(t.userId),
     index("inbound_emails_purge_after_idx").on(t.purgeAfter),
     check("inbound_emails_status_check", oneOf(t.status, inboundEmailStatusSchema.options)),

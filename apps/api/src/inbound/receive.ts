@@ -1,7 +1,13 @@
-import { and, count, type Database, eq, gt, schema } from "@closyria/db";
-import { INBOUND_EMAIL_RETENTION_DAYS, MAX_INBOUND_EMAILS_PER_DAY } from "@closyria/shared";
+import { and, count, type Database, eq, gt, ne, schema } from "@closyria/db";
+import {
+  INBOUND_EMAIL_RETENTION_DAYS,
+  MAX_IGNORED_INBOUND_EMAILS_PER_DAY,
+  MAX_INBOUND_EMAILS_PER_DAY,
+  rawEmailKey,
+} from "@closyria/shared";
 import type { ObjectStore } from "@closyria/storage";
-import type { SenderCheck } from "./sender";
+import { pgCode } from "../pg-code";
+import type { SenderCheck, SenderVerdict } from "./sender";
 import type { Envelope } from "./signature";
 
 /** Hands an accepted e-mail to the worker (`order-email-parse`, `{ inboundEmailId }`). */
@@ -20,17 +26,15 @@ export type InboundDeps = {
 /**
  * - `queued`: accepted, raw message stored, reading queued;
  * - `ignored`: on one of her active addresses but not from her (or not authenticated): a row without the message;
- * - `dropped`: nothing stored (unknown or former address, another domain, too many today, account gone meanwhile);
- * - `failed`: accepted but the message could not be stored or queued (the row says `failed`, no object left behind).
+ * - `confirmation`: Gmail's forwarding confirmation for her own Gmail address, its code kept on the address;
+ * - `duplicate`: this delivery (Postfix queue id, recipient) was already filed: a retry or a replay, nothing more;
+ * - `dropped`: nothing stored (unknown or former address, another domain, today's quota, account gone meanwhile);
+ * - `failed`: accepted but not stored or not queued (the row says `failed`, no object left behind);
+ * - `retry`: the DNS did not answer (temperror): nothing stored, Postfix tries again later.
  */
-export type ReceiveOutcome = "queued" | "ignored" | "dropped" | "failed";
+export type ReceiveOutcome = "queued" | "ignored" | "confirmation" | "duplicate" | "dropped" | "failed" | "retry";
 
 const DAY_MS = 86_400_000;
-
-/** Storage key of a raw e-mail, under her own prefix like her photos. */
-export function rawEmailKey(userId: string, inboundEmailId: string): string {
-  return `users/${userId}/inbound/${inboundEmailId}.eml`;
-}
 
 /** Only the error's name and Postgres code: a query's parameters (an address) never reach the journal. */
 function errorLabel(error: unknown): string {
@@ -42,7 +46,8 @@ function errorLabel(error: unknown): string {
  * Files one e-mail received for `envelope.rcptTo` (Postfix delivers one recipient at a time). Order of the writes
  * (no object without its row, no object left behind): the row first, then the object, then its key on the row; a
  * failed write marks the row `failed` and removes what may have been written; a row deleted meanwhile (account
- * deletion locks her addresses, then reads the keys) has its object removed here.
+ * deletion locks her addresses, then reads the keys) has its object removed here. Should marking it failed fail
+ * too, the purge fails rows left `queued` without a message after an hour.
  */
 export async function receiveInboundEmail(
   deps: InboundDeps,
@@ -69,6 +74,29 @@ export async function receiveInboundEmail(
   // A former address (« Changer d'adresse ») stops working: nothing is kept, as for an address that never existed.
   if (!inbox) return "dropped";
 
+  const [seen] = await db
+    .select({ id: schema.inboundEmails.id })
+    .from(schema.inboundEmails)
+    .where(and(eq(schema.inboundEmails.inboxId, inbox.id), eq(schema.inboundEmails.queueId, input.envelope.queueId)));
+  if (seen) return "duplicate";
+
+  // Her verified address only: a guest has none (and cannot have an address), an unverified one proves nothing.
+  const verdict: SenderVerdict =
+    inbox.emailVerified && inbox.isAnonymous !== true
+      ? await deps.checkSender({ raw: input.raw, envelope: input.envelope, accountEmail: inbox.email })
+      : { kind: "ignored", fromAddress: input.envelope.mailFrom.toLowerCase().slice(0, 320) || "(inconnu)" };
+  if (verdict.kind === "retry") return "retry";
+  if (verdict.kind === "gmail_confirmation") {
+    const updated = await db
+      .update(schema.orderInboxes)
+      .set({ gmailCode: verdict.code, gmailCodeAt: now })
+      .where(and(eq(schema.orderInboxes.id, inbox.id), eq(schema.orderInboxes.active, true)))
+      .returning({ id: schema.orderInboxes.id });
+    return updated.length > 0 ? "confirmation" : "dropped";
+  }
+  const accepted = verdict.kind === "accepted";
+
+  // Today's quota, counted apart: her own e-mails (100), the ignored ones (20, so a flood fills nothing).
   const [today] = await db
     .select({ n: count() })
     .from(schema.inboundEmails)
@@ -76,42 +104,46 @@ export async function receiveInboundEmail(
       and(
         eq(schema.inboundEmails.inboxId, inbox.id),
         gt(schema.inboundEmails.receivedAt, new Date(now.getTime() - DAY_MS)),
+        accepted ? ne(schema.inboundEmails.status, "ignored") : eq(schema.inboundEmails.status, "ignored"),
       ),
     );
-  if ((today?.n ?? 0) >= MAX_INBOUND_EMAILS_PER_DAY) return "dropped";
-
-  // Her verified address only: a guest has none (and cannot have an address), an unverified one proves nothing.
-  const verdict =
-    inbox.emailVerified && inbox.isAnonymous !== true
-      ? await deps.checkSender({ raw: input.raw, envelope: input.envelope, accountEmail: inbox.email })
-      : { accepted: false, fromAddress: input.envelope.mailFrom.toLowerCase() || "(inconnu)" };
+  const quota = accepted ? MAX_INBOUND_EMAILS_PER_DAY : MAX_IGNORED_INBOUND_EMAILS_PER_DAY;
+  if ((today?.n ?? 0) >= quota) return "dropped";
 
   const purgeAfter = new Date(now.getTime() + INBOUND_EMAIL_RETENTION_DAYS * DAY_MS);
   // The address is locked (shared) while the row goes in: a rotation or an account deletion waits, and a row is
   // never filed on an address that just stopped working.
-  const id = await db.transaction(async (tx) => {
-    const [still] = await tx
-      .select({ id: schema.orderInboxes.id })
-      .from(schema.orderInboxes)
-      .where(and(eq(schema.orderInboxes.id, inbox.id), eq(schema.orderInboxes.active, true)))
-      .for("share");
-    if (!still) return null;
-    const [row] = await tx
-      .insert(schema.inboundEmails)
-      .values({
-        inboxId: inbox.id,
-        userId: verdict.accepted ? inbox.userId : null,
-        receivedAt: now,
-        fromAddress: verdict.fromAddress,
-        authOk: verdict.accepted,
-        status: verdict.accepted ? "queued" : "ignored",
-        purgeAfter,
-      })
-      .returning({ id: schema.inboundEmails.id });
-    return row?.id ?? null;
-  });
+  let id: string | null;
+  try {
+    id = await db.transaction(async (tx) => {
+      const [still] = await tx
+        .select({ id: schema.orderInboxes.id })
+        .from(schema.orderInboxes)
+        .where(and(eq(schema.orderInboxes.id, inbox.id), eq(schema.orderInboxes.active, true)))
+        .for("share");
+      if (!still) return null;
+      const [row] = await tx
+        .insert(schema.inboundEmails)
+        .values({
+          inboxId: inbox.id,
+          userId: accepted ? inbox.userId : null,
+          receivedAt: now,
+          queueId: input.envelope.queueId,
+          fromAddress: verdict.fromAddress,
+          authOk: accepted,
+          status: accepted ? "queued" : "ignored",
+          purgeAfter,
+        })
+        .returning({ id: schema.inboundEmails.id });
+      return row?.id ?? null;
+    });
+  } catch (error) {
+    // The same delivery filed at the same moment (a retry racing the first try).
+    if (pgCode(error) === "23505") return "duplicate";
+    throw error;
+  }
   if (!id) return "dropped";
-  if (!verdict.accepted) return "ignored";
+  if (!accepted) return "ignored";
 
   const markFailed = () =>
     db

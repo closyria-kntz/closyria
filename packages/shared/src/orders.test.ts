@@ -311,8 +311,10 @@ describe("order schemas", () => {
   });
 
   it("describes her order address", () => {
-    expect(orderInboxViewSchema.parse({ address: "marie-k7f2@commandes.closyria.com" }).address).toContain("@");
-    expect(orderInboxViewSchema.parse({ address: null }).address).toBeNull();
+    const view = { address: "marie-k7f2@commandes.closyria.com", pendingGmailCode: "185412963" };
+    expect(orderInboxViewSchema.parse(view)).toEqual(view);
+    expect(orderInboxViewSchema.parse({ address: null, pendingGmailCode: null }).address).toBeNull();
+    expect(orderInboxViewSchema.safeParse({ ...view, pendingGmailCode: "12ab" }).success).toBe(false);
   });
 });
 

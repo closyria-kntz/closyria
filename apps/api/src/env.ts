@@ -60,6 +60,8 @@ export const envSchema = appEnvObject({
     .string()
     .regex(/^[0-9a-f]{64}$/, "expected 64 lowercase hexadecimal characters (openssl rand -hex 32)")
     .optional(),
+  // Gmail's automatic forwarding (rule 2 of inbound/sender.ts): off until checked against real forwards on dev.
+  INBOUND_AUTOFORWARD: z.enum(["on", "off"]).default("off"),
   // dev.closyria.com only: the password the access page asks, and the cookie value Caddy lets in (the same token
   // as in /etc/caddy/Caddyfile). Hexadecimal, so it sits in a cookie and in the Caddyfile as is.
   DEV_ACCESS_PASSWORD: z.string().min(8, "at least 8 characters").max(200).optional(),

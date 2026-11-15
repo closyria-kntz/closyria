@@ -1,14 +1,14 @@
 import type { Database } from "@closyria/db";
 import type { ObjectStore } from "@closyria/storage";
 import type { PgBoss } from "pg-boss";
-import { purgeInboundEmails } from "./purge-inbound";
+import { type InboundPurgeResult, purgeInboundEmails } from "./purge-inbound";
 
 export const ORDER_EMAIL_PURGE_QUEUE = "order-email-purge";
 
 type JobLike = { id?: string; data: unknown };
 
 /** order-email-purge: the schedule sends no data; anything else fails the job. */
-export function orderEmailPurgeHandler(run: () => Promise<{ deleted: number; cleared: number }>) {
+export function orderEmailPurgeHandler(run: () => Promise<InboundPurgeResult>) {
   return async (jobs: JobLike[]): Promise<void> => {
     for (const job of jobs) {
       const data = job.data;
@@ -20,9 +20,11 @@ export function orderEmailPurgeHandler(run: () => Promise<{ deleted: number; cle
         console.error(`${ORDER_EMAIL_PURGE_QUEUE}: invalid job data (job ${job.id ?? "?"}), failing it`);
         throw new Error(`invalid job data on ${ORDER_EMAIL_PURGE_QUEUE}`);
       }
-      const { deleted, cleared } = await run();
-      if (deleted + cleared > 0) {
-        console.log(`inbound e-mail purge: ${deleted} e-mail(s) deleted, ${cleared} raw message(s) erased`);
+      const { deleted, cleared, failed } = await run();
+      if (deleted + cleared + failed > 0) {
+        console.log(
+          `inbound e-mail purge: ${deleted} e-mail(s) deleted, ${cleared} raw message(s) erased, ${failed} left unfinished marked failed`,
+        );
       }
     }
   };

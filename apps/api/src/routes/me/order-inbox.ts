@@ -1,6 +1,7 @@
 import { randomInt } from "node:crypto";
 import { and, type Database, eq, schema } from "@closyria/db";
 import {
+  GMAIL_CODE_HOURS,
   ORDER_INBOX_CODE_ALPHABET,
   ORDER_INBOX_CODE_LENGTH,
   orderInboxLocalPart,
@@ -18,7 +19,7 @@ export type OrderInboxDeps = {
   db: Database;
   /** The order addresses' domain (`orderInboxDomain`). */
   domain: string;
-  /** Clock of the rate limit, injectable for tests. */
+  /** Clock (the rate limit, the Gmail code's 24 hours), injectable for tests. */
   nowMs?: () => number;
 };
 
@@ -43,7 +44,9 @@ const getRoute = defineAccess(
     method: "get",
     path: "/me/order-inbox",
     summary: "« Mes commandes par e-mail »: her order address",
-    description: "Her active address, or null before she asked for one. Accounts only.",
+    description:
+      "Her active address, or null before she asked for one, and Gmail's forwarding confirmation code when one " +
+      "arrived on it in the last 24 hours, asked by her own Gmail address (`pendingGmailCode`). Accounts only.",
     responses: { 200: json("Her address"), 403: accountRequiredContent },
   }),
   "user",
@@ -105,10 +108,17 @@ export function orderInboxRoutes(deps: OrderInboxDeps) {
       const userId = userIdOf(c);
       if (!(await accountOf(db, userId))) return c.json(accountRequired, 403);
       const [row] = await db
-        .select({ localPart: schema.orderInboxes.localPart })
+        .select({
+          localPart: schema.orderInboxes.localPart,
+          gmailCode: schema.orderInboxes.gmailCode,
+          gmailCodeAt: schema.orderInboxes.gmailCodeAt,
+        })
         .from(schema.orderInboxes)
         .where(and(eq(schema.orderInboxes.userId, userId), eq(schema.orderInboxes.active, true)));
-      return c.json({ address: row ? address(row.localPart) : null }, 200);
+      const since = (deps.nowMs?.() ?? Date.now()) - GMAIL_CODE_HOURS * 3_600_000;
+      const pendingGmailCode =
+        row?.gmailCode && row.gmailCodeAt && row.gmailCodeAt.getTime() > since ? row.gmailCode : null;
+      return c.json({ address: row ? address(row.localPart) : null, pendingGmailCode }, 200);
     })
     .openapi(postRoute(deps.nowMs), async (c) => {
       const userId = userIdOf(c);
@@ -127,7 +137,7 @@ export function orderInboxRoutes(deps: OrderInboxDeps) {
               .where(and(eq(schema.orderInboxes.userId, userId), eq(schema.orderInboxes.active, true)));
             await tx.insert(schema.orderInboxes).values({ userId, localPart });
           });
-          return c.json({ address: address(localPart) }, 200);
+          return c.json({ address: address(localPart), pendingGmailCode: null }, 200);
         } catch (error) {
           // Taken (by anyone, former addresses included: never given twice), or a change at the same time: again.
           if (pgCode(error) !== "23505") throw error;

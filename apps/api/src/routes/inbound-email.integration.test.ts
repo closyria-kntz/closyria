@@ -1,20 +1,27 @@
 import { eq, schema } from "@closyria/db";
-import { INBOUND_EMAIL_MAX_BYTES, MAX_INBOUND_EMAILS_PER_DAY, type OrderInboxView } from "@closyria/shared";
+import {
+  INBOUND_EMAIL_MAX_BYTES,
+  MAX_IGNORED_INBOUND_EMAILS_PER_DAY,
+  MAX_INBOUND_EMAILS_PER_DAY,
+  type OrderInboxView,
+  rawEmailKey,
+} from "@closyria/shared";
 import { memoryStore, type ObjectStore } from "@closyria/storage";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { BASE_URL, createCatalogHarness } from "../catalog/test-app";
-import { rawEmailKey } from "../inbound/receive";
-import { mailauthSenderCheck } from "../inbound/sender";
+import { gmailForwardingSender, mailauthSenderCheck, type SenderCheck } from "../inbound/sender";
 import { type Envelope, signRequest } from "../inbound/signature";
 import {
   envelopeFrom,
+  FIXTURE_GOOGLE,
   fixtureResolver,
   gmailAutoForward,
+  gmailConfirmation,
   gmailForward,
-  gmailForwardingSender,
   INBOX_DOMAIN,
   icloudForward,
   outlookForward,
+  sealed,
   signed,
   unsigned,
 } from "../inbound/test-fixtures";
@@ -22,7 +29,9 @@ import {
 type Harness = Awaited<ReturnType<typeof createCatalogHarness>>;
 const SECRET = "0123456789abcdef".repeat(4);
 const NOW = new Date("2026-11-14T10:15:00Z");
-const NOW_S = Math.floor(NOW.getTime() / 1000);
+/** The clock of the reception, the signature and the inbox route; a test may move it, beforeEach puts it back. */
+const clock = { now: NOW };
+const nowS = () => Math.floor(clock.now.getTime() / 1000);
 const DAY_MS = 86_400_000;
 
 /** The store of the reception route: memory, with a switch to make writes fail or to run code before one lands. */
@@ -44,6 +53,25 @@ const inboundStore: ObjectStore = {
 const parsed: string[] = [];
 const queueControl = { fail: false };
 
+/** The sender check: the fixtures' DNS, Gmail's automatic forwarding on or off, the DNS failing or not. */
+const senderControl = { autoForward: false, dnsFail: false };
+const checks = {
+  off: mailauthSenderCheck({ mta: "mx.closyria.com", resolver: fixtureResolver(), google: FIXTURE_GOOGLE }),
+  on: mailauthSenderCheck({
+    mta: "mx.closyria.com",
+    resolver: fixtureResolver(),
+    google: FIXTURE_GOOGLE,
+    autoForward: true,
+  }),
+  down: mailauthSenderCheck({
+    mta: "mx.closyria.com",
+    resolver: fixtureResolver({ fail: true }),
+    google: FIXTURE_GOOGLE,
+  }),
+};
+const checkSender: SenderCheck = (input) =>
+  (senderControl.dnsFail ? checks.down : senderControl.autoForward ? checks.on : checks.off)(input);
+
 let t: Harness;
 let off: Harness;
 let counter = 0;
@@ -52,21 +80,21 @@ beforeAll(async () => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   [t, off] = await Promise.all([
     createCatalogHarness(
-      {},
+      { now: () => clock.now },
       {
         inbound: {
           secret: SECRET,
           domain: INBOX_DOMAIN,
           store: inboundStore,
-          checkSender: mailauthSenderCheck({ mta: "mx.closyria.com", resolver: fixtureResolver() }),
+          checkSender,
           queue: {
             async parse(id) {
               if (queueControl.fail) throw new Error("queue down");
               parsed.push(id);
             },
           },
-          now: () => NOW,
-          nowS: () => NOW_S,
+          now: () => clock.now,
+          nowS,
         },
       },
     ),
@@ -83,6 +111,9 @@ beforeEach(() => {
   storeControl.failPut = false;
   storeControl.beforePut = undefined;
   queueControl.fail = false;
+  senderControl.autoForward = false;
+  senderControl.dnsFail = false;
+  clock.now = NOW;
   parsed.length = 0;
   deleted.length = 0;
 });
@@ -114,7 +145,7 @@ function deliver(raw: Buffer, envelope: Envelope, options: { secret?: string; he
     body: raw,
     headers: {
       "content-type": "message/rfc822",
-      ...signRequest(options.secret ?? SECRET, envelope, raw, NOW_S),
+      ...signRequest(options.secret ?? SECRET, envelope, raw, nowS()),
       ...options.headers,
     },
   });
@@ -146,7 +177,7 @@ describe("POST /api/inbound-email: who may call it", () => {
       body: raw,
       headers: {
         "content-type": "message/rfc822",
-        ...signRequest(SECRET, envelopeFrom("gmail", "a@b.example", `x@${INBOX_DOMAIN}`), raw, NOW_S),
+        ...signRequest(SECRET, envelopeFrom("gmail", "a@b.example", `x@${INBOX_DOMAIN}`), raw, nowS()),
       },
     });
     expect(res.status).toBe(404);
@@ -210,7 +241,7 @@ describe("POST /api/inbound-email: who may call it", () => {
       body: raw,
       headers: {
         "content-type": "application/json",
-        ...signRequest(SECRET, envelopeFrom("gmail", her, address), raw, NOW_S),
+        ...signRequest(SECRET, envelopeFrom("gmail", her, address), raw, nowS()),
       },
     });
     expect(res.status).toBe(400);
@@ -240,12 +271,35 @@ describe("POST /api/inbound-email: her forwards are filed", () => {
     });
   }
 
-  it("Gmail's automatic forwarding (her +caf_ mailbox as sender)", async () => {
+  it("Gmail's automatic forwarding: ignored while INBOUND_AUTOFORWARD is off, filed when on", async () => {
     const her = mailbox("gmail");
     const { address } = await account(her);
-    const raw = await signed(gmailAutoForward(address), "shop");
-    const res = await deliver(raw, envelopeFrom("gmail", gmailForwardingSender(address, her), address));
-    expect(await res.json()).toEqual({ result: "queued" });
+    const raw = await sealed(await signed(gmailAutoForward(address), "shop"), "google");
+    const envelope = () => envelopeFrom("gmail", gmailForwardingSender(her, address), address);
+    expect(await (await deliver(raw, envelope())).json()).toEqual({ result: "ignored" });
+    senderControl.autoForward = true;
+    expect(await (await deliver(raw, envelope())).json()).toEqual({ result: "queued" });
+  });
+
+  it("files a delivery once: Postfix's retry (same queue id) is a duplicate, nothing more stored", async () => {
+    const her = mailbox("gmail");
+    const { address } = await account(her);
+    const raw = await signed(gmailForward(address, `Marie <${her}>`), "gmail");
+    const envelope = envelopeFrom("gmail", her, address);
+    expect(await (await deliver(raw, envelope)).json()).toEqual({ result: "queued" });
+    expect(await (await deliver(raw, envelope)).json()).toEqual({ result: "duplicate" });
+    expect(await rowsOf(address)).toHaveLength(1);
+    expect(parsed).toHaveLength(1);
+  });
+
+  it("answers 503 when the DNS does not answer, nothing stored (Postfix tries again)", async () => {
+    const her = mailbox("gmail");
+    const { address } = await account(her);
+    senderControl.dnsFail = true;
+    const raw = await signed(gmailForward(address, `Marie <${her}>`), "gmail");
+    const res = await deliver(raw, envelopeFrom("gmail", her, address));
+    expect(res.status).toBe(503);
+    expect(await rowsOf(address)).toEqual([]);
   });
 
   it("finds her address whatever its case", async () => {
@@ -320,26 +374,76 @@ describe("POST /api/inbound-email: anything else is ignored, without the message
     expect((await t.db.select().from(schema.inboundEmails)).length).toBe(before.length);
   });
 
-  it("stores nothing more once an address got its quota of the day", async () => {
-    const her = mailbox("gmail");
-    const sophie = mailbox("gmail");
-    const { address } = await account(her);
+  /** Fills today's quota of an address with `n` rows of `status`. */
+  async function fill(address: string, n: number, status: "ignored" | "parsed") {
     const local = address.split("@")[0] as string;
     const [inbox] = await t.db.select().from(schema.orderInboxes).where(eq(schema.orderInboxes.localPart, local));
     await t.db.insert(schema.inboundEmails).values(
-      Array.from({ length: MAX_INBOUND_EMAILS_PER_DAY }, () => ({
+      Array.from({ length: n }, () => ({
         inboxId: inbox?.id as string,
-        fromAddress: sophie,
-        authOk: false,
-        status: "ignored",
+        userId: status === "ignored" ? null : inbox?.userId,
+        queueId: `Q${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`,
+        fromAddress: "x@example.test",
+        authOk: status !== "ignored",
+        status,
         receivedAt: new Date(NOW.getTime() - 60_000),
         purgeAfter: new Date(NOW.getTime() + 30 * DAY_MS),
       })),
     );
-    const raw = await signed(gmailForward(address, `Marie <${her}>`), "gmail");
-    const res = await deliver(raw, envelopeFrom("gmail", her, address));
-    expect(await res.json()).toEqual({ result: "dropped" });
-    expect((await rowsOf(address)).length).toBe(MAX_INBOUND_EMAILS_PER_DAY);
+  }
+
+  it("keeps 20 ignored e-mails a day per address, then nothing; hers still go through", async () => {
+    const her = mailbox("gmail");
+    const sophie = mailbox("gmail");
+    const { address } = await account(her);
+    await fill(address, MAX_IGNORED_INBOUND_EMAILS_PER_DAY, "ignored");
+    const other = await signed(gmailForward(address, `Sophie <${sophie}>`), "gmail");
+    expect(await (await deliver(other, envelopeFrom("gmail", sophie, address))).json()).toEqual({ result: "dropped" });
+    const mine = await signed(gmailForward(address, `Marie <${her}>`), "gmail");
+    expect(await (await deliver(mine, envelopeFrom("gmail", her, address))).json()).toEqual({ result: "queued" });
+  });
+
+  it("keeps 100 of her e-mails a day per address, counting hers only", async () => {
+    const her = mailbox("gmail");
+    const { address } = await account(her);
+    await fill(address, MAX_IGNORED_INBOUND_EMAILS_PER_DAY, "ignored");
+    await fill(address, MAX_INBOUND_EMAILS_PER_DAY - 1, "parsed");
+    const mine = await signed(gmailForward(address, `Marie <${her}>`), "gmail");
+    expect(await (await deliver(mine, envelopeFrom("gmail", her, address))).json()).toEqual({ result: "queued" });
+    expect(await (await deliver(mine, envelopeFrom("gmail", her, address))).json()).toEqual({ result: "dropped" });
+  });
+});
+
+describe("Gmail's forwarding confirmation", () => {
+  it("keeps its code for 24 hours when the Gmail address that asked is hers, nothing else stored", async () => {
+    const her = `marie.test${++counter}@gmail.example`;
+    const { address, cookie } = await account(her);
+    const raw = await signed(gmailConfirmation(address, her, "185412963"), "google");
+    const res = await deliver(raw, envelopeFrom("google", "forwarding-noreply@google.example", address));
+    expect(await res.json()).toEqual({ result: "confirmation" });
+    expect(await rowsOf(address)).toEqual([]);
+    expect(parsed).toEqual([]);
+    expect(await (await call("GET", "/api/me/order-inbox", cookie)).json()).toEqual({
+      address,
+      pendingGmailCode: "185412963",
+    });
+    clock.now = new Date(NOW.getTime() + 24 * 3_600_000 + 1);
+    expect(await (await call("GET", "/api/me/order-inbox", cookie)).json()).toEqual({
+      address,
+      pendingGmailCode: null,
+    });
+  });
+
+  it("asked by another address: ignored, no code", async () => {
+    const her = mailbox("gmail");
+    const { address, cookie } = await account(her);
+    const raw = await signed(gmailConfirmation(address, "sophie.autre@gmail.example"), "google");
+    const res = await deliver(raw, envelopeFrom("google", "forwarding-noreply@google.example", address));
+    expect(await res.json()).toEqual({ result: "ignored" });
+    expect(await (await call("GET", "/api/me/order-inbox", cookie)).json()).toEqual({
+      address,
+      pendingGmailCode: null,
+    });
   });
 });
 
@@ -423,7 +527,10 @@ describe("/api/me/order-inbox", () => {
       .update(schema.user)
       .set({ isAnonymous: false, name: "Hélène Martin", email: mailbox("gmail"), emailVerified: true })
       .where(eq(schema.user.id, session.userId));
-    expect(await (await call("GET", "/api/me/order-inbox", session.cookie)).json()).toEqual({ address: null });
+    expect(await (await call("GET", "/api/me/order-inbox", session.cookie)).json()).toEqual({
+      address: null,
+      pendingGmailCode: null,
+    });
     const created = (await (await call("POST", "/api/me/order-inbox", session.cookie)).json()) as OrderInboxView;
     expect(created.address).toMatch(/^helene-[abcdefghjkmnpqrstuvwxyz23456789]{4}@commandes\.dev\.closyria\.com$/);
     expect(await (await call("GET", "/api/me/order-inbox", session.cookie)).json()).toEqual(created);
@@ -446,7 +553,10 @@ describe("/api/me/order-inbox", () => {
     const res = await call("POST", "/api/me/order-inbox", cookie);
     const { address: current } = (await res.json()) as OrderInboxView;
     expect(current).not.toBe(former);
-    expect(await (await call("GET", "/api/me/order-inbox", cookie)).json()).toEqual({ address: current });
+    expect(await (await call("GET", "/api/me/order-inbox", cookie)).json()).toEqual({
+      address: current,
+      pendingGmailCode: null,
+    });
 
     const toFormer = await signed(gmailForward(former, `Marie <${her}>`), "gmail");
     expect(await (await deliver(toFormer, envelopeFrom("gmail", her, former))).json()).toEqual({ result: "dropped" });
