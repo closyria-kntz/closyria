@@ -54,6 +54,12 @@ export const envSchema = appEnvObject({
   TEST_STORAGE_DIR: z.string().min(1).optional(),
   // Web Push (alerts): all three or none; without them, push is off (`/push/key` answers 404).
   ...vapidEnvShape,
+  // E-mail reception (« Mes commandes par e-mail »): the key the server's reception relay signs each e-mail with
+  // (deploy/inbound/). Without it, reception is off: `POST /api/inbound-email` answers 404.
+  INBOUND_EMAIL_SECRET: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/, "expected 64 lowercase hexadecimal characters (openssl rand -hex 32)")
+    .optional(),
   // dev.closyria.com only: the password the access page asks, and the cookie value Caddy lets in (the same token
   // as in /etc/caddy/Caddyfile). Hexadecimal, so it sits in a cookie and in the Caddyfile as is.
   DEV_ACCESS_PASSWORD: z.string().min(8, "at least 8 characters").max(200).optional(),

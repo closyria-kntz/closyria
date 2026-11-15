@@ -1,11 +1,13 @@
 import { brevoMailer, createAuth, memoryMailer } from "@closyria/auth";
 import { createDb, type Database, pingDb } from "@closyria/db";
-import { vapidConfig } from "@closyria/shared";
+import { orderInboxDomain, vapidConfig } from "@closyria/shared";
 import { fsStore, memoryStore, type ObjectStore, s3Store } from "@closyria/storage";
 import { PgBoss } from "pg-boss";
 import { createApp } from "./app";
 import { pgBossQueue } from "./catalog/capture-queue";
 import type { Env } from "./env";
+import { pgBossOrderEmailQueue } from "./inbound/queue";
+import { mailauthSenderCheck } from "./inbound/sender";
 import { registerOwnedTables } from "./owned-tables";
 import { parseShareLinkKey } from "./wardrobe/share-link";
 
@@ -55,6 +57,19 @@ export function bootstrap(env: Env): Api {
     admin: { db },
     wardrobe: { db, shareLinkKey: parseShareLinkKey(env.SHARE_LINK_KEY) },
     push: { publicKey: vapidConfig(env)?.publicKey ?? null },
+    // E-mail reception, only with its secret (deploy/README.md, « Réception des e-mails de commande »).
+    ...(env.INBOUND_EMAIL_SECRET
+      ? {
+          inbound: {
+            db,
+            store,
+            secret: env.INBOUND_EMAIL_SECRET,
+            domain: orderInboxDomain(env.APP_ENV),
+            checkSender: mailauthSenderCheck({ mta: "mx.closyria.com" }),
+            queue: pgBossOrderEmailQueue(boss),
+          },
+        }
+      : {}),
     // dev.closyria.com only: env.ts requires both variables together and refuses them in prod.
     ...(env.DEV_ACCESS_PASSWORD && env.DEV_ACCESS_TOKEN
       ? { devAccess: { password: env.DEV_ACCESS_PASSWORD, token: env.DEV_ACCESS_TOKEN } }

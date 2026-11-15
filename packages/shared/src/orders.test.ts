@@ -3,10 +3,16 @@ import {
   carrierSchema,
   detectCarrier,
   inboundEmailPurge,
+  isOrderInboxCode,
   manualOrderInputSchema,
   nextParcelCheck,
   nextParcelCheckClamped,
   normalizeTrackingNumber,
+  ORDER_INBOX_CODE_ALPHABET,
+  orderEmailParseJobSchema,
+  orderInboxDomain,
+  orderInboxLocalPart,
+  orderInboxSlug,
   orderInboxViewSchema,
   orderLineInputSchema,
   orderPatchSchema,
@@ -307,5 +313,52 @@ describe("order schemas", () => {
   it("describes her order address", () => {
     expect(orderInboxViewSchema.parse({ address: "marie-k7f2@commandes.closyria.com" }).address).toContain("@");
     expect(orderInboxViewSchema.parse({ address: null }).address).toBeNull();
+  });
+});
+
+describe("order addresses", () => {
+  it("uses an alphabet without look-alike characters", () => {
+    for (const c of "ilo01") expect(ORDER_INBOX_CODE_ALPHABET).not.toContain(c);
+    expect(new Set(ORDER_INBOX_CODE_ALPHABET).size).toBe(ORDER_INBOX_CODE_ALPHABET.length);
+    expect(isOrderInboxCode("k7f2")).toBe(true);
+    for (const bad of ["k7f", "k7f22", "K7F2", "l0o1", "k7-2"]) expect(isOrderInboxCode(bad), bad).toBe(false);
+  });
+
+  it("slugs her first name, « commande » when there is none", () => {
+    expect(orderInboxSlug("Marie Dupont")).toBe("marie");
+    expect(orderInboxSlug("Hélène")).toBe("helene");
+    expect(orderInboxSlug("Marie-Claire")).toBe("marie-claire");
+    expect(orderInboxSlug("Chloé ")).toBe("chloe");
+    expect(orderInboxSlug("Œnone")).toBe("oenone");
+    expect(orderInboxSlug("Zoë_2")).toBe("zoe-2");
+    expect(orderInboxSlug("--Ana--")).toBe("ana");
+    expect(orderInboxSlug("Maximilienne-Alexandrine")).toBe("maximilienne-alexand");
+    expect(orderInboxSlug("Abcdefghijklmnopqrs-tu")).toBe("abcdefghijklmnopqrs");
+    for (const none of [null, "", "  ", "李", "🙂"]) expect(orderInboxSlug(none)).toBe("commande");
+  });
+
+  it("builds `{slug}-{code}`, matching the table's check", () => {
+    const check = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+    for (const name of ["Marie", "Hélène Martin", null, "Marie-Claire", "Abcdefghijklmnopqrs-tu"]) {
+      const local = orderInboxLocalPart(name, "k7f2");
+      expect(local, String(name)).toMatch(check);
+      expect(local.endsWith("-k7f2")).toBe(true);
+    }
+    expect(orderInboxLocalPart("Marie", "k7f2")).toBe("marie-k7f2");
+    expect(orderInboxLocalPart(null, "x9ab")).toBe("commande-x9ab");
+    expect(() => orderInboxLocalPart("Marie", "l0o1")).toThrow();
+  });
+
+  it("has a domain per environment", () => {
+    expect(orderInboxDomain("prod")).toBe("commandes.closyria.com");
+    expect(orderInboxDomain("dev")).toBe("commandes.dev.closyria.com");
+    expect(orderInboxDomain("test")).toBe("commandes.dev.closyria.com");
+  });
+
+  it("reads the parse job, nothing more", () => {
+    const id = "6f1c1f0e-3c1a-4a35-9b0e-2b8f6f1d7a10";
+    expect(orderEmailParseJobSchema.parse({ inboundEmailId: id })).toEqual({ inboundEmailId: id });
+    expect(orderEmailParseJobSchema.safeParse({ inboundEmailId: "x" }).success).toBe(false);
+    expect(orderEmailParseJobSchema.safeParse({ inboundEmailId: id, raw: "…" }).success).toBe(false);
   });
 });

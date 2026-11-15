@@ -200,6 +200,59 @@ export function parcelCheckUntil(start: Date): Date {
   return new Date(start.getTime() + PARCEL_CHECK_DAYS * 24 * HOUR_MS);
 }
 
+// --- Order addresses and received e-mails ------------------------------------------------------------------------
+
+/** Largest e-mail received (the raw message, headers included); a larger one is refused, nothing stored. */
+export const INBOUND_EMAIL_MAX_BYTES = 2 * 1024 * 1024;
+/** E-mails stored per address and per 24 hours at most (a flood of forged ones fills nothing). */
+export const MAX_INBOUND_EMAILS_PER_DAY = 100;
+/** The queue that reads an accepted e-mail (`{ inboundEmailId }`), filled by the API, worked by the worker. */
+export const ORDER_EMAIL_PARSE_QUEUE = "order-email-parse";
+export const orderEmailParseJobSchema = z.object({ inboundEmailId: uuidSchema }).strict();
+export type OrderEmailParseJob = z.infer<typeof orderEmailParseJobSchema>;
+
+/** The 4 random characters of an address: no i, l, o, 0 or 1, which read alike. */
+export const ORDER_INBOX_CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
+export const ORDER_INBOX_CODE_LENGTH = 4;
+/** Longest first-name part of an address (« marie-claire » fits). */
+export const MAX_ORDER_INBOX_SLUG = 20;
+const ORDER_INBOX_FALLBACK = "commande";
+
+/** The domain of the order addresses: its own for prod, `commandes.dev.closyria.com` everywhere else. */
+export function orderInboxDomain(appEnv: "development" | "test" | "dev" | "prod"): string {
+  return appEnv === "prod" ? "commandes.closyria.com" : "commandes.dev.closyria.com";
+}
+
+export function isOrderInboxCode(code: string): boolean {
+  return code.length === ORDER_INBOX_CODE_LENGTH && [...code].every((c) => ORDER_INBOX_CODE_ALPHABET.includes(c));
+}
+
+/**
+ * The first-name part of an address: her first name without accents, in lowercase letters, digits and dashes
+ * (« Hélène » → « helene », « Marie-Claire » → « marie-claire »), « commande » when nothing is left.
+ */
+export function orderInboxSlug(firstName: string | null): string {
+  const first = (firstName ?? "").trim().split(/\s+/)[0] ?? "";
+  const slug = first
+    .replace(/[œŒ]/g, "oe")
+    .replace(/[æÆ]/g, "ae")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, MAX_ORDER_INBOX_SLUG)
+    .replace(/-+$/, "");
+  return slug || ORDER_INBOX_FALLBACK;
+}
+
+/** `{slug}-{code}`, e.g. « marie-k7f2 ». */
+export function orderInboxLocalPart(firstName: string | null, code: string): string {
+  if (!isOrderInboxCode(code)) throw new Error("invalid order address code");
+  return `${orderInboxSlug(firstName)}-${code}`;
+}
+
 // --- Inputs ------------------------------------------------------------------------------------------------------
 
 /** A text field she may empty: blank reads as null. */

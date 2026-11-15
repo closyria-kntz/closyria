@@ -48,9 +48,9 @@
 
 **Produces:** `POST /api/inbound-email` (webhook du fournisseur de réception, signature HMAC `INBOUND_EMAIL_SECRET` vérifiée en temps constant, sinon 401 ; sans secret configuré : 404) → retrouve l'adresse destinataire, l'expéditeur effectif (en-têtes du transfert inclus), applique la règle des Global Constraints, stocke le brut (stockage privé existant) et met en file `order-email-parse`. `GET/POST /api/me/order-inbox` (voir / créer / changer d'adresse ; invitée → 403 `account_required`).
 
-- [ ] Tests d'abord : signature, expéditeur autorisé / non autorisé / signature invalide (RF 1), taille, invitée, rotation (l'ancienne adresse ignorée), purge planifiée à 30 jours.
-- [ ] Choisir le fournisseur de réception (réception entrante de Brevo, déjà utilisé, si elle fournit le message brut et les résultats d'authentification ; sinon documenter l'alternative) et le documenter dans `deploy/README.md` avec la commande DNS (un seul message).
-- [ ] Commit « feat(commandes): réception des e-mails ».
+- [x] Tests d'abord : signature, expéditeur autorisé / non autorisé / signature invalide (RF 1), taille, invitée, rotation (l'ancienne adresse ignorée), purge planifiée à 30 jours.
+- [x] Choisir le fournisseur de réception (réception entrante de Brevo, déjà utilisé, si elle fournit le message brut et les résultats d'authentification ; sinon documenter l'alternative) et le documenter dans `deploy/README.md` avec la commande DNS (un seul message). Fait : Brevo écarté (ni message brut ni résultats d'authentification), Postfix sur la machine + relais signé, spec §10.1.
+- [x] Commit « feat(commandes): réception des e-mails ».
 
 ### Task 3: Lecture des e-mails
 

@@ -10,6 +10,7 @@ import { registerCaptureQueues } from "./capture/queues";
 import { seedReference } from "./capture/seed-reference";
 import { seedStartingShops } from "./capture/seed-shops";
 import { env } from "./env";
+import { registerOrderQueues } from "./orders/queues";
 import { stopWorker } from "./shutdown";
 import { registerWardrobeQueues } from "./wardrobe/queues";
 
@@ -61,6 +62,7 @@ await registerCaptureQueues(boss, { db, store });
 await registerWardrobeQueues(boss, { db, store });
 await registerSalePeriodQueue(boss, db);
 await registerAlertSendQueues(boss, { db, push });
+await registerOrderQueues(boss, { db, store });
 
 console.log(`worker ${env.APP_VERSION} (${env.APP_ENV}) started`);
 

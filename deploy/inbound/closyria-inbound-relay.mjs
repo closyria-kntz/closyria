@@ -1,0 +1,98 @@
+#!/usr/bin/env node
+// Reception relay for « Mes commandes par e-mail » (deploy/README.md, « Réception des e-mails de commande »).
+//
+// Postfix runs it (pipe transport, user closyria-mx) once per recipient of commandes.closyria.com (prod) or
+// commandes.dev.closyria.com (dev):
+//   closyria-inbound-relay.mjs <prod|dev> <sender> <client_address> <client_helo> <recipient>
+// with the raw message on standard input. It posts the message to the API of that environment, on 127.0.0.1
+// (never through Caddy), signed with the environment's INBOUND_EMAIL_SECRET, read from
+// /etc/closyria/inbound-<env>.secret (root:closyria-mx 640). The API checks the signature, the sender (SPF, DKIM,
+// alignment, computed by itself from the message and this envelope) and stores what it keeps.
+//
+// The signature is the same as apps/api/src/inbound/signature.ts (signature.test.ts runs this file against it):
+// HMAC-SHA256 of `<timestamp>.<envelope header>.` followed by the body bytes.
+//
+// Exit codes (sysexits): 0 when the API answered 202 (whatever it decided: ignored e-mails get no reply), 413
+// (too large) or 400 (malformed): dropped, no bounce; 75 (EX_TEMPFAIL) otherwise, so Postfix keeps the message and tries again later
+// (API restarting, wrong secret). Never 5x: a bounce would answer the sender. Nothing of the message, the envelope
+// or the secret is ever printed; Postfix logs only the short reason below.
+//
+// No dependency: Node's standard library only (it runs outside the application bundle).
+import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
+
+const EX_OK = 0;
+const EX_TEMPFAIL = 75;
+/** The API refuses more (INBOUND_EMAIL_MAX_BYTES); Postfix's message_size_limit is a little lower. */
+const MAX_BYTES = 2 * 1024 * 1024;
+const TIMEOUT_MS = 60_000;
+const PORTS = { prod: 3001, dev: 3101 };
+
+function done(code, reason) {
+  if (reason) process.stderr.write(`closyria-inbound-relay: ${reason}\n`);
+  process.exit(code);
+}
+
+async function readStdin(limit) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of process.stdin) {
+    size += chunk.length;
+    if (size > limit) return null;
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+async function main() {
+  const [env, sender = "", clientIp = "", helo = "", recipient = ""] = process.argv.slice(2);
+  if (!Object.hasOwn(PORTS, env)) return done(EX_TEMPFAIL, "unknown environment");
+  // Tests only: Postfix's pipe gives a clean environment, so these cannot come from a sender.
+  // biome-ignore lint/suspicious/noUndeclaredEnvVars: test override, never set by turbo nor by Postfix.
+  const url = process.env.CLOSYRIA_INBOUND_URL ?? `http://127.0.0.1:${PORTS[env]}/api/inbound-email`;
+  // biome-ignore lint/suspicious/noUndeclaredEnvVars: test override, never set by turbo nor by Postfix.
+  const secretFile = process.env.CLOSYRIA_INBOUND_SECRET_FILE ?? `/etc/closyria/inbound-${env}.secret`;
+  let secret;
+  try {
+    secret = readFileSync(secretFile, "utf8").trim();
+  } catch {
+    return done(EX_TEMPFAIL, "secret file unreadable");
+  }
+  if (!/^[0-9a-f]{64}$/.test(secret)) return done(EX_TEMPFAIL, "secret file malformed");
+
+  const body = await readStdin(MAX_BYTES);
+  if (body === null) return done(EX_OK, "message too large, dropped");
+
+  const envelope = Buffer.from(
+    JSON.stringify({ v: 1, mailFrom: sender, rcptTo: recipient, clientIp, helo }),
+    "utf8",
+  ).toString("base64url");
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signature = createHmac("sha256", secret).update(`${timestamp}.${envelope}.`, "utf8").update(body).digest("hex");
+
+  let status;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "message/rfc822",
+        "x-closyria-envelope": envelope,
+        "x-closyria-timestamp": timestamp,
+        "x-closyria-signature": `v1=${signature}`,
+      },
+      body,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    status = response.status;
+    await response.body?.cancel();
+  } catch {
+    return done(EX_TEMPFAIL, "API unreachable");
+  }
+  if (status === 202) return done(EX_OK);
+  if (status === 413) return done(EX_OK, "message too large for the API, dropped");
+  // Malformed (an envelope the API refuses): trying again would not change it.
+  if (status === 400) return done(EX_OK, "refused as malformed, dropped");
+  return done(EX_TEMPFAIL, `API answered ${status}`);
+}
+
+main().catch(() => done(EX_TEMPFAIL, "unexpected error"));

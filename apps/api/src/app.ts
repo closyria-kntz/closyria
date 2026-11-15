@@ -1,4 +1,4 @@
-import { healthSchema } from "@closyria/shared";
+import { appEnvSchema, healthSchema, orderInboxDomain } from "@closyria/shared";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { csrf } from "hono/csrf";
 import { type AccessEnv, appWide, defineAccess, provideSession, type SessionSource } from "./access";
@@ -20,6 +20,7 @@ import { capturesRoutes } from "./routes/captures";
 import { catalogueRoutes } from "./routes/catalogue";
 import { type DevAccessDeps, devAccessRoutes } from "./routes/dev-access";
 import { type EventsDeps, eventsRoutes } from "./routes/events";
+import { type InboundEmailDeps, inboundEmailRoutes } from "./routes/inbound-email";
 import { listingRoutes } from "./routes/listing";
 import { alertsRoutes, type PushDeps } from "./routes/me/alerts";
 import { budgetsRoutes } from "./routes/me/budgets";
@@ -33,6 +34,7 @@ import { itemMediaRoutes } from "./routes/me/item-media";
 import { itemsRoutes } from "./routes/me/items";
 import { loveLevelsRoutes } from "./routes/me/love-levels";
 import { orderDraftRoutes } from "./routes/me/order-draft";
+import { orderInboxRoutes } from "./routes/me/order-inbox";
 import { preferencesRoutes } from "./routes/me/preferences";
 import { profilesRoutes } from "./routes/me/profiles";
 import { recentsRoutes } from "./routes/me/recents";
@@ -67,6 +69,8 @@ export type AppDeps = {
   wardrobe: WardrobeDeps;
   /** Web Push (alerts); without it, push is off. */
   push?: PushDeps;
+  /** E-mail reception (`POST /api/inbound-email`); without it (no INBOUND_EMAIL_SECRET), reception is off (404). */
+  inbound?: InboundEmailDeps;
   /** dev.closyria.com's access page (`POST /api/dev-access`). Never given in prod. */
   devAccess?: DevAccessDeps;
   /** The memory mailer, exposed to the browser tests. Only ever given with APP_ENV=test (R18). */
@@ -152,6 +156,7 @@ export function createApp(deps: AppDeps) {
     .route("/", bulkRoutes(deps.wardrobe))
     .route("/", giftsRoutes(deps.wardrobe))
     .route("/", orderDraftRoutes(deps.wardrobe))
+    .route("/", orderInboxRoutes({ db: deps.wardrobe.db, domain: orderInboxDomain(appEnvSchema.parse(deps.env)) }))
     .route("/", itemsRoutes(deps.wardrobe, importAttacher))
     .route(
       "/",
@@ -187,6 +192,8 @@ export function createApp(deps: AppDeps) {
   if (deps.testMail) app.route("/", testMailRoutes(deps.testMail));
   // Not part of AppType either: only dev.closyria.com has it (DEV_ACCESS_*), and the page calls it with fetch.
   if (deps.devAccess) app.route("/", devAccessRoutes(deps.devAccess));
+  // Not part of AppType either: only the server's reception relay calls it, and only with INBOUND_EMAIL_SECRET.
+  if (deps.inbound) app.route("/", inboundEmailRoutes(deps.inbound));
 
   app.doc31("/openapi.json", {
     openapi: "3.1.0",

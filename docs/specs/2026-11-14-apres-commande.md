@@ -100,3 +100,77 @@ et n'a plus rien à faire jusqu'à la réception, puis est prévenue avant la fi
 
 Remboursements et avoirs, budget, annuaire des boutiques (fiche et réseaux sociaux), affichage officiel des posts
 Instagram, connexion directe à une boîte mail.
+
+## 10. Décisions de construction
+
+### 10.1 Réception des e-mails (Task 2, 2026-11-15)
+
+**Décision : pas la réception entrante de Brevo. Un serveur de réception sur notre machine (Postfix) remet chaque
+e-mail, brut, à l'API de l'environnement, signé ; l'API calcule elle-même SPF, DKIM et l'alignement.** C'est le
+« serveur de réception dédié » prévu au §6 à défaut du fournisseur.
+
+Ce que dit la documentation de Brevo (lue le 2026-11-15 : `developers.brevo.com/docs/inbound-parse-webhooks`,
+`/docs/secured-webhooks`, `/reference/get-inbound-email-events-by-uuid`) :
+
+- le webhook envoie du JSON (`items[]`) : `From`, `To`, `Recipients` (RCPT TO), `Subject`, `RawHtmlBody`,
+  `RawTextBody`, le texte extrait, les pièces jointes (métadonnées et jeton de téléchargement), `Headers` (tous les
+  en-têtes), une note de spam (rspamd) ;
+- **pas de message brut** (MIME) : on ne peut pas vérifier une signature DKIM nous-mêmes, elle porte sur les octets
+  exacts du message ;
+- **pas de résultat SPF, DKIM ou DMARC calculé par Brevo à la réception**, ni l'adresse du serveur d'envoi, ni le
+  MAIL FROM (seulement l'en-tête `Return-Path`). Les `Received-SPF` et `ARC-Authentication-Results` de l'exemple
+  viennent des serveurs d'avant ; n'importe quel en-tête peut être écrit par l'expéditeur ;
+- le webhook n'est **pas signé** : identifiant et mot de passe dans l'URL, jeton « bearer » ou en-têtes choisis, et
+  des plages d'adresses IP publiées dans le centre d'aide (page non lisible sans navigateur ; `1.179.112.0/20` selon
+  des sources tierces).
+
+Avec Brevo, la règle du §5 (expéditeur effectif = son adresse vérifiée **et** SPF ou DKIM aligné, Review Focus 1) ne
+peut donc pas être tenue : un faux e-mail avec son adresse en `From:` et un faux `Authentication-Results` passerait.
+Les autres fournisseurs de réception (Amazon SES, SendGrid, Mailgun, Postmark) n'ont pas été étudiés en détail :
+chacun demande un nouveau compte et ajoute un sous-traitant pour des données personnelles, ce qui se décide avec la
+fondatrice.
+
+Ce qui est construit :
+
+- `commandes.closyria.com` (prod) et `commandes.dev.closyria.com` (dev) ont pour MX `mx.closyria.com` (la machine).
+  Postfix y reçoit seulement (aucun envoi, aucune réponse, aucun avis de non-remise), refuse dès la réception plus de
+  2 048 000 octets et toute adresse d'un autre domaine, chiffre quand l'expéditeur le propose (certificat par défaut
+  de Debian : Gmail et Outlook ne vérifient pas celui d'un MX sans MTA-STS ni DANE) ;
+- pour chaque destinataire, Postfix lance `deploy/inbound/closyria-inbound-relay.mjs`, qui poste le message et
+  l'enveloppe SMTP (adresse du client, HELO, MAIL FROM, RCPT TO) à `POST /api/inbound-email` sur `127.0.0.1`, signés
+  HMAC-SHA256 avec `INBOUND_EMAIL_SECRET` (horodatage à 5 minutes près, comparaison en temps constant). Sans secret :
+  404. Une requête passée par Caddy (`X-Forwarded-For`) : 404, même bien signée ;
+- l'API vérifie avec `mailauth` : SPF à partir de l'adresse du client et du MAIL FROM, DKIM sur les octets reçus
+  (rsa-sha1 refusé, une signature `l=` qui ne couvre qu'une partie du corps ne compte pas), alignement relâché par la
+  liste des suffixes publics (partie privée comprise). Un en-tête du message n'est jamais cru. Une panne DNS vaut refus.
+
+**Expéditeur effectif** (celui du message de transfert, sa boîte à elle, jamais la boutique citée dedans) :
+
+1. un transfert fait par elle (« Transférer » de Gmail, Outlook, iCloud) : son adresse en `From:` (un seul champ, une
+   seule adresse), avec une signature DKIM valide alignée sur ce domaine, ou SPF réussi pour un MAIL FROM aligné ;
+2. un transfert automatique (adresse de transfert Gmail) : le `From:` de la boutique est gardé, mais le MAIL FROM est
+   sa boîte (Gmail écrit `marie+caf_=…@gmail.com` : un `+tag` de sa boîte compte comme elle), avec SPF réussi pour ce
+   domaine exactement.
+
+La comparaison avec l'adresse du compte se fait sans tenir compte des majuscules ; le compte doit avoir son adresse
+vérifiée. Sinon : ligne `ignored` (adresse prétendue, `auth_ok = false`), **rien d'autre** : ni message brut, ni file.
+
+Limites acceptées (à dire dans l'aide de la Task 7) : un alias (« Envoyer en tant que » de Gmail, « Masquer mon
+adresse » d'iCloud, alias Outlook) n'est pas son adresse ; une redirection qui réécrit l'expéditeur (« Rediriger »
+d'Outlook, certaines règles iCloud) est ignorée : l'aide doit indiquer « Transférer ». Les chaînes ARC ne sont pas
+utilisées (il faudrait faire confiance au serveur qui transfère).
+
+**Autres décisions** :
+
+- adresse : prénom sans accents en minuscules (20 caractères au plus) ou « commande », un tiret, 4 caractères de
+  `abcdefghjkmnpqrstuvwxyz23456789` (sans i, l, o, 0, 1). Jamais redonnée. « Changer d'adresse » : l'ancienne cesse
+  aussitôt, ses e-mails ne laissent aucune trace (comme une adresse inconnue) ;
+- ordre d'écriture : la ligne (`queued`), puis l'objet `users/<user>/inbound/<id>.eml` dans le stockage privé, puis sa
+  clé sur la ligne. Écriture ratée : ligne `failed`, l'objet éventuellement écrit est effacé. Ligne supprimée entre-temps
+  (suppression du compte, qui verrouille ses adresses) : l'objet est effacé. File d'attente en panne : `failed`, le
+  brut reste ses 30 jours (saisie à la main) ;
+- au plus 100 e-mails gardés par adresse et par 24 heures (au-delà : rien) ;
+- purge : tâche `order-email-purge` chaque nuit à 03:45 (UTC), qui applique `inboundEmailPurge` aux lignes passées
+  leur `purge_after` (réception + 30 jours) et efface les objets après la validation ;
+- le relais ne fait jamais renvoyer d'avis : API d'accord (202), message trop gros (413) ou mal formé (400) → remis
+  (code 0) ; sinon → réessai par Postfix (code 75), 5 jours au plus, puis abandon sans réponse.

@@ -221,4 +221,13 @@ describe("envSchema dev access", () => {
     expect(issues).not.toContain("secret-password-x");
     expect(issues).not.toContain('"zz"');
   });
+
+  it("takes INBOUND_EMAIL_SECRET as 64 hexadecimal characters, or nothing (reception off)", () => {
+    expect(envSchema.parse(base).INBOUND_EMAIL_SECRET).toBeUndefined();
+    const secret = "0123456789abcdef".repeat(4);
+    expect(envSchema.parse({ ...base, INBOUND_EMAIL_SECRET: secret }).INBOUND_EMAIL_SECRET).toBe(secret);
+    for (const bad of ["", "short", secret.toUpperCase(), `${secret}0`, `${secret.slice(0, 63)}g`]) {
+      expect(envSchema.safeParse({ ...base, INBOUND_EMAIL_SECRET: bad }).success, bad).toBe(false);
+    }
+  });
 });

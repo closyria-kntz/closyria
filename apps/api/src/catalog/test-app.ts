@@ -5,6 +5,7 @@ import { memoryStore, type ObjectStore } from "@closyria/storage";
 import { createTestDatabase } from "@closyria/testing/vitest";
 import { expect } from "vitest";
 import { createApp } from "../app";
+import type { InboundEmailDeps } from "../routes/inbound-email";
 import type { CaptureQueue } from "./capture-queue";
 import type { CatalogDeps } from "./deps";
 
@@ -32,7 +33,11 @@ export function recordingQueue() {
 /** A migrated database, the app wired with a recording queue and an in-memory store. */
 export async function createCatalogHarness(
   overrides: Partial<Omit<CatalogDeps, "db" | "store">> = {},
-  options: { pushPublicKey?: string } = {},
+  options: {
+    pushPublicKey?: string;
+    /** E-mail reception on (its database and store are the harness's own; `store` replaces it for this route). */
+    inbound?: Omit<InboundEmailDeps, "db" | "store"> & { store?: ObjectStore };
+  } = {},
 ) {
   const database = await createTestDatabase();
   const handle = createDb(database.url, { max: 8 });
@@ -57,6 +62,7 @@ export async function createCatalogHarness(
     wardrobe: { db: handle.db, shareLinkKey: Buffer.alloc(32, 7), ...(overrides.now ? { now: overrides.now } : {}) },
     catalog: { db: handle.db, store, queue: recorder.queue, ...overrides },
     push: { publicKey: options.pushPublicKey ?? null },
+    ...(options.inbound ? { inbound: { db: handle.db, store, ...options.inbound } } : {}),
   });
   let ipCounter = 0;
   async function signIn() {
