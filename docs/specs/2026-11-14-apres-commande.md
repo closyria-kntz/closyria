@@ -681,3 +681,13 @@ depuis l'adresse du compte sont gardés.
   demandés. Réessaie dans {n} h. » (jusqu'à 24 h : la limite par adresse) ; sans attente connue : « Trop de codes
   demandés. Réessaie un peu plus tard. »
 - E-mail pas parti (rien n'est ajouté) : « L'e-mail n'est pas parti. Réessaie dans un instant. »
+
+### 11.2 Transferts Hotmail / Outlook (décision de la fondatrice, 2026-11-15)
+
+Constat sur dev : Microsoft (Hotmail, Outlook) signe ses e-mails (DKIM `d=hotmail.com`, valide) mais ne signe
+jamais `To`/`Cc` ; la règle 1 (adresse de commande dans un `To`/`Cc` signé) les écartait tous. Règle ajoutée : la
+signature alignée de son adresse vérifiée compte aussi quand elle couvre **un seul** `Subject` qui dit « transféré »
+(`TR:`, `Fwd:`, `Fw:`, `FW:`, mots encodés compris) et **un seul** `Date` des 7 derniers jours (24 h d'avance tolérées),
+l'adresse de commande étant dans `To` ou `Cc` (un seul champ chacun). Rejouer un de ses e-mails signés demande alors un
+e-mail qu'elle a elle-même transféré à cette personne dans la semaine ; au pire, une commande « à valider » qu'elle
+peut refuser. L'API note la raison d'un e-mail écarté (domaine et résultat des signatures, jamais d'adresse).

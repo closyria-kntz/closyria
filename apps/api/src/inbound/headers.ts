@@ -44,3 +44,27 @@ export function addressesOf(value: string): string[] {
 export function isAsciiAddress(address: string): boolean {
   return /^[\x21-\x3f\x41-\x7e]+@[\x21-\x3f\x41-\x7e]+$/.test(address);
 }
+
+/** Decodes RFC 2047 encoded words (`=?utf-8?Q?TR=A0:_…?=`) well enough to read a subject's prefix. */
+export function decodeEncodedWords(value: string): string {
+  const joined = value.replace(/\?=\s+=\?/g, "?==?");
+  return joined.replace(
+    /=\?([^?]+)\?([bBqQ])\?([^?]*)\?=/g,
+    (whole, charset: string, encoding: string, text: string) => {
+      try {
+        const bytes =
+          encoding.toLowerCase() === "b"
+            ? Buffer.from(text, "base64")
+            : Buffer.from(
+                text
+                  .replace(/_/g, " ")
+                  .replace(/=([0-9A-Fa-f]{2})/g, (_m, hex: string) => String.fromCharCode(Number.parseInt(hex, 16))),
+                "latin1",
+              );
+        return new TextDecoder(charset.toLowerCase()).decode(bytes);
+      } catch {
+        return whole;
+      }
+    },
+  );
+}

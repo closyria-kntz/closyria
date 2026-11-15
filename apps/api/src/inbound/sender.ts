@@ -2,7 +2,7 @@ import { promises as dns } from "node:dns";
 import { type AuthenticateResult, authenticate, type DKIMResult, type DNSResolver } from "mailauth";
 import PostalMime from "postal-mime";
 import { getDomain } from "tldts";
-import { addressesOf, headerFields, isAsciiAddress, isGroup } from "./headers";
+import { addressesOf, decodeEncodedWords, headerFields, isAsciiAddress, isGroup } from "./headers";
 import type { Envelope } from "./signature";
 
 /**
@@ -72,6 +72,8 @@ export type SenderPolicy = {
   /** Rule 2 (INBOUND_AUTOFORWARD). Off until checked against real Gmail forwards on dev. */
   autoForward: boolean;
   google: GooglePolicy;
+  /** Tests only: the clock for the « recent forward » check. */
+  nowMs?: number;
 };
 
 const MAX_STORED_ADDRESS = 320;
@@ -124,11 +126,18 @@ function singleFrom(result: AuthenticateResult, fields: { name: string; value: s
 }
 
 /** Rule 1: an aligned signature that also signs the one To (or Cc) field naming this order address. */
+/** « TR: », « Fwd: », « Fw: », « FW: » (any case, a non-breaking space allowed before the colon). */
+const FORWARD_SUBJECT = /^\s*(?:tr|fwd?)[\s\u00a0]*:/i;
+/** A forward older than this does not count as « just forwarded » (Microsoft rule, §10.1). */
+const FORWARD_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+const FORWARD_MAX_SKEW_MS = 24 * 3600 * 1000;
+
 function signedForUs(
   result: AuthenticateResult,
   fields: { name: string; value: string }[],
   from: string,
   rcpt: string,
+  nowMs: number,
 ) {
   const tos = fields.filter((f) => f.name === "to");
   const ccs = fields.filter((f) => f.name === "cc");
@@ -136,10 +145,24 @@ function signedForUs(
   if (tos.length > 1 || ccs.length > 1) return false;
   const inTo = tos.some((f) => addressesOf(f.value).includes(rcpt));
   const inCc = ccs.some((f) => addressesOf(f.value).includes(rcpt));
+  // Microsoft (Hotmail, Outlook) never signs To/Cc. Its signature still counts when it covers a single Subject that
+  // says « forwarded » and a single Date of the last 7 days: replaying one of her signed e-mails then needs one she
+  // forwarded to that person this week (founder's ruling, 2026-11-15, spec §10.1).
+  const subjects = fields.filter((f) => f.name === "subject");
+  const dates = fields.filter((f) => f.name === "date");
+  const sentAt = dates.length === 1 ? Date.parse((dates[0] as { value: string }).value) : Number.NaN;
+  const recentForward =
+    (inTo || inCc) &&
+    subjects.length === 1 &&
+    FORWARD_SUBJECT.test(decodeEncodedWords((subjects[0] as { value: string }).value)) &&
+    Number.isFinite(sentAt) &&
+    sentAt <= nowMs + FORWARD_MAX_SKEW_MS &&
+    nowMs - sentAt <= FORWARD_MAX_AGE_MS;
   return passing(result).some((r) => {
     if (!aligned(r.signingDomain as string, domainOf(from))) return false;
     const covered = signedHeaders(r);
-    return (inTo && covered.includes("to")) || (inCc && covered.includes("cc"));
+    if ((inTo && covered.includes("to")) || (inCc && covered.includes("cc"))) return true;
+    return recentForward && covered.includes("subject") && covered.includes("date");
   });
 }
 
@@ -246,7 +269,7 @@ export async function decideSender(
     const code = await gmailConfirmationCode(raw, result, from, own, rcpt, policy.google);
     if (code) return { kind: "gmail_confirmation", code };
   }
-  if (hersFrom && signedForUs(result, fields, hersFrom, rcpt)) {
+  if (hersFrom && signedForUs(result, fields, hersFrom, rcpt, policy.nowMs ?? Date.now())) {
     return { kind: "accepted", fromAddress: hersFrom };
   }
   if (
@@ -290,6 +313,8 @@ export function mailauthSenderCheck(options: {
   resolver?: DNSResolver;
   autoForward?: boolean;
   google?: GooglePolicy;
+  /** Tests only: the clock for the « recent forward » check. */
+  now?: () => number;
 }): SenderCheck {
   const resolver = options.resolver ?? systemResolver();
   const policy: SenderPolicy = { autoForward: options.autoForward ?? false, google: options.google ?? GOOGLE };
@@ -304,7 +329,10 @@ export function mailauthSenderCheck(options: {
         disableBimi: true,
         rejectRsaSha1: true,
       });
-      return await decideSender(raw, result, envelope, [accountEmail, ...verifiedSenders], policy);
+      return await decideSender(raw, result, envelope, [accountEmail, ...verifiedSenders], {
+        ...policy,
+        nowMs: options.now?.() ?? Date.now(),
+      });
     } catch (error) {
       // A message that cannot be read is nobody's: ignored. Only the error's name, never the message.
       console.error(`inbound e-mail: authentication check failed (${error instanceof Error ? error.name : "error"})`);

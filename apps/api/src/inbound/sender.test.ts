@@ -107,8 +107,10 @@ describe("rule 1: ignored (Review Focus 1)", () => {
   });
 
   it("her signature does not cover the To field (it could have been changed)", async () => {
+    // Without the « recent forward » proof: a week and more after the forward.
+    const later = mailauthSenderCheck({ ...options, now: () => Date.parse("2026-11-22T12:00:00Z") });
     const raw = await signed(gmailForward(TO), "gmail", { headerList: "From:Subject:Date:Message-ID" });
-    expect((await check({ raw, envelope: envelopeFrom("gmail", HER, TO), accountEmail: HER })).kind).toBe("ignored");
+    expect((await later({ raw, envelope: envelopeFrom("gmail", HER, TO), accountEmail: HER })).kind).toBe("ignored");
   });
 
   it("her signed message with a second To field added above the signed one", async () => {
@@ -414,5 +416,73 @@ describe("her verified sender addresses (« Mes adresses d'envoi », spec §11)"
       code: "185412963",
     });
     expect((await checkAuto({ raw, envelope, accountEmail: OUTLOOK })).kind).toBe("ignored");
+  });
+});
+
+describe("Microsoft forwards (To never signed): signed « forwarded » Subject and a Date of the last 7 days", () => {
+  const her = "marie.test@outlook.example";
+  const microsoft = { headerList: "From:Date:Subject:Message-ID:Content-Type:MIME-Version" };
+  const at = (iso: string) => mailauthSenderCheck({ ...options, now: () => Date.parse(iso) });
+  const sent = "2026-11-14T09:20:04Z";
+
+  it("accepted the day after a « TR: » forward", async () => {
+    const raw = await signed(outlookForward(TO), "outlook", microsoft);
+    expect(
+      await at("2026-11-15T09:00:00Z")({ raw, envelope: envelopeFrom("outlook", her, TO), accountEmail: her }),
+    ).toEqual(accepted(her));
+  });
+
+  it("ignored more than 7 days after, or dated far in the future", async () => {
+    const raw = await signed(outlookForward(TO), "outlook", microsoft);
+    const env = { raw, envelope: envelopeFrom("outlook", her, TO), accountEmail: her };
+    expect((await at("2026-11-21T09:30:00Z")(env)).kind).toBe("ignored");
+    expect((await at("2026-11-12T09:00:00Z")(env)).kind).toBe("ignored");
+    expect((await at(sent)(env)).kind).toBe("accepted");
+  });
+
+  it("ignored when the Subject does not say « forwarded » (a plain message of hers, replayed)", async () => {
+    const plain = outlookForward(TO).replace("Subject: TR: ", "Subject: ");
+    const raw = await signed(plain, "outlook", microsoft);
+    expect(
+      (await at("2026-11-15T09:00:00Z")({ raw, envelope: envelopeFrom("outlook", her, TO), accountEmail: her })).kind,
+    ).toBe("ignored");
+  });
+
+  it("ignored when Subject or Date is not covered by her signature, or a second Subject is added", async () => {
+    const env = async (raw: Buffer) =>
+      (await at("2026-11-15T09:00:00Z")({ raw, envelope: envelopeFrom("outlook", her, TO), accountEmail: her })).kind;
+    expect(await env(await signed(outlookForward(TO), "outlook", { headerList: "From:Date:Message-ID" }))).toBe(
+      "ignored",
+    );
+    expect(await env(await signed(outlookForward(TO), "outlook", { headerList: "From:Subject:Message-ID" }))).toBe(
+      "ignored",
+    );
+    const raw = await signed(
+      outlookForward(TO).replace("Subject: TR: ", "Subject: Confirmation "),
+      "outlook",
+      microsoft,
+    );
+    expect(await env(Buffer.concat([Buffer.from("Subject: TR: ajouté\r\n"), raw]))).toBe("ignored");
+  });
+
+  it("an encoded « TR » subject counts, the order address must still be in To or Cc", async () => {
+    const encoded = outlookForward(TO).replace(
+      /Subject: TR: [^\r\n]*/,
+      "Subject: =?iso-8859-1?Q?TR=A0:_Confirmation_de_votre_commande?=",
+    );
+    const raw = await signed(encoded, "outlook", microsoft);
+    expect(
+      (await at("2026-11-15T09:00:00Z")({ raw, envelope: envelopeFrom("outlook", her, TO), accountEmail: her })).kind,
+    ).toBe("accepted");
+    const elsewhere = await signed(outlookForward("ami@outlook.example"), "outlook", microsoft);
+    expect(
+      (
+        await at("2026-11-15T09:00:00Z")({
+          raw: elsewhere,
+          envelope: envelopeFrom("attacker", her, TO),
+          accountEmail: her,
+        })
+      ).kind,
+    ).toBe("ignored");
   });
 });
