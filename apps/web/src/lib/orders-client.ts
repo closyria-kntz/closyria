@@ -13,6 +13,7 @@ import {
   type SenderAddressList,
   senderAddressListSchema,
   senderAddressViewSchema,
+  senderRateLimitedSchema,
   type TrackingInput,
 } from "@closyria/shared";
 import { z } from "zod";
@@ -59,16 +60,42 @@ export function fetchSenderAddresses(deps: ClientDeps = defaultDeps): Promise<Gu
 
 const SENDERS = "/api/me/order-inbox/senders";
 
+/**
+ * A request that sends a code: as `call`, and a refusal for too many codes says how long to wait
+ * (`retryAfterSeconds`, read from the 429's body).
+ */
+async function sendingCall(deps: ClientDeps, path: string, init: RequestInit) {
+  let retryAfterSeconds: number | null = null;
+  const watched: ClientDeps = {
+    ...deps,
+    fetch: async (input, options) => {
+      const response = await deps.fetch(input, options);
+      if (response.status === 429) {
+        const parsed = senderRateLimitedSchema.safeParse(
+          await response
+            .clone()
+            .json()
+            .catch(() => null),
+        );
+        if (parsed.success) retryAfterSeconds = parsed.data.retryAfterSeconds;
+      }
+      return response;
+    },
+  };
+  const result = await call(watched, path, init, senderAddressViewSchema);
+  return !result.ok && result.error === "rate_limited" ? { ...result, retryAfterSeconds } : result;
+}
+
 /** « Ajouter une adresse »: a code leaves for it. */
 export const addSenderAddress = (email: string, deps: ClientDeps = defaultDeps) =>
-  call(deps, SENDERS, jsonInit("POST", { email }), senderAddressViewSchema);
+  sendingCall(deps, SENDERS, jsonInit("POST", { email }));
 
 export const verifySenderAddress = (id: string, code: string, deps: ClientDeps = defaultDeps) =>
   call(deps, `${SENDERS}/${id}/verify`, jsonInit("POST", { code }), senderAddressViewSchema);
 
 /** « Renvoyer le code ». */
 export const resendSenderCode = (id: string, deps: ClientDeps = defaultDeps) =>
-  call(deps, `${SENDERS}/${id}/resend`, { method: "POST" }, senderAddressViewSchema);
+  sendingCall(deps, `${SENDERS}/${id}/resend`, { method: "POST" });
 
 /** « Retirer ». */
 export const removeSenderAddress = (id: string, deps: ClientDeps = defaultDeps) =>

@@ -1,4 +1,11 @@
-export type MailMessage = { to: string; subject: string; text: string; html: string };
+export type MailMessage = {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  /** Never written to a log, not even by the memory mailer of local development (« Mes adresses d'envoi » codes). */
+  unlogged?: boolean;
+};
 
 export type Mailer = { send(msg: MailMessage): Promise<void> };
 
@@ -51,7 +58,7 @@ export function memoryMailer(options: { logContent?: boolean } = {}): Mailer & {
       if (messages.length > MEMORY_MAILER_CAPACITY) messages.splice(0, messages.length - MEMORY_MAILER_CAPACITY);
       // A code may sit in the subject (« Mes adresses d'envoi »): its digits are masked.
       console.log(`[mail:memory] message kept in memory: "${msg.subject.replace(/\d{4,}/g, "••••")}"`);
-      if (options.logContent) console.log(msg.text);
+      if (options.logContent && !msg.unlogged) console.log(msg.text);
     },
   };
 }

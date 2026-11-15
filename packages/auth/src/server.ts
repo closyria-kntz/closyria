@@ -75,6 +75,7 @@ export function senderCodeEmail(to: string, code: string): MailMessage {
     subject: t.subject.replace("{code}", code),
     text: lines.join("\n\n"),
     html: lines.map((line) => `<p>${line === code ? `<strong>${code}</strong>` : escapeHtml(line)}</p>`).join("\n"),
+    unlogged: true,
   };
 }
 

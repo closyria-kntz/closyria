@@ -11,5 +11,6 @@ describe("senderCodeEmail (« Mes adresses d'envoi », spec §11)", () => {
     );
     expect(mail.html).toContain("<strong>048213</strong>");
     expect(mail.html).toContain("Recopie ce code dans Closyria");
+    expect(mail.unlogged).toBe(true);
   });
 });

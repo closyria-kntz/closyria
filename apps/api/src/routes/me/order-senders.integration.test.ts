@@ -119,6 +119,20 @@ describe("who may use « Mes adresses d'envoi »", () => {
     expect(off.mail.messages.length).toBe(before);
   });
 
+  it("an account whose own e-mail is not verified sends no code (403 email_unverified)", async () => {
+    const { cookie, userId } = await account();
+    await t.db.update(schema.user).set({ emailVerified: false }).where(eq(schema.user.id, userId));
+    const before = t.mail.messages.length;
+    for (const res of [
+      await call("GET", "/api/me/order-inbox/senders", cookie),
+      await call("POST", "/api/me/order-inbox/senders", cookie, { email: other() }),
+    ]) {
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: "email_unverified" });
+    }
+    expect(t.mail.messages.length).toBe(before);
+  });
+
   it("needs a session (401)", async () => {
     expect((await call("GET", "/api/me/order-inbox/senders", undefined)).status).toBe(401);
   });
@@ -227,51 +241,119 @@ describe("adding and verifying an address", () => {
     expect((await verify(cookie, body.id, fresh)).status).toBe(200);
   });
 
-  it("« Renvoyer le code »: once a minute, and 5 codes an hour per account (adding one counts)", async () => {
+  it("« Renvoyer le code »: once a minute per address, the wait said, the former code stops", async () => {
     const { cookie } = await account();
     const first = other();
     const { body } = await add(cookie, first);
     const old = codeSentTo(first);
-    expect(await (await resend(cookie, body.id)).json()).toEqual({ error: "rate_limited" });
-    later(MINUTE);
+    expect(await (await resend(cookie, body.id)).json()).toEqual({ error: "rate_limited", retryAfterSeconds: 60 });
+    later(20_000);
+    expect(await (await resend(cookie, body.id)).json()).toEqual({ error: "rate_limited", retryAfterSeconds: 40 });
+    later(40_000);
     expect((await resend(cookie, body.id)).status).toBe(200);
     expect(sentTo(first)).toBe(2);
-    // The former code no longer works.
     const fresh = codeSentTo(first);
     if (fresh !== old) expect(await (await verify(cookie, body.id, old)).json()).toEqual({ error: "code_wrong" });
-    const second = other();
-    expect((await add(cookie, second)).status).toBe(201); // 3
+  });
+
+  it("5 codes an hour per account (adding counts); a refused request counts nothing", async () => {
+    const { cookie, userId } = await account();
+    const [a, b, c] = [await add(cookie, other()), await add(cookie, other()), await add(cookie, other())];
     later(MINUTE);
-    expect((await resend(cookie, body.id)).status).toBe(200); // 4
-    later(MINUTE);
-    expect((await resend(cookie, body.id)).status).toBe(200); // 5
-    later(MINUTE);
-    expect(await (await resend(cookie, body.id)).json()).toEqual({ error: "rate_limited" });
-    const third = other();
-    expect(await add(cookie, third)).toEqual({ status: 429, body: { error: "rate_limited" } });
+    expect((await resend(cookie, a.body.id)).status).toBe(200); // 4
+    expect((await resend(cookie, b.body.id)).status).toBe(200); // 5
+    // The hour began at the first code, a minute ago: 59 minutes to wait.
+    expect(await (await resend(cookie, c.body.id)).json()).toEqual({
+      error: "rate_limited",
+      retryAfterSeconds: 59 * 60,
+    });
+    const fourth = other();
+    expect(await add(cookie, fourth)).toEqual({
+      status: 429,
+      body: { error: "rate_limited", retryAfterSeconds: 59 * 60 },
+    });
     const [none] = await t.db
       .select()
       .from(schema.orderSenderAddresses)
-      .where(eq(schema.orderSenderAddresses.email, third));
+      .where(eq(schema.orderSenderAddresses.email, fourth));
     expect(none).toBeUndefined();
-    later(60 * MINUTE);
-    expect((await resend(cookie, body.id)).status).toBe(200);
+    const [count] = await t.db
+      .select({ sends: schema.orderSenderSends.sends })
+      .from(schema.orderSenderSends)
+      .where(eq(schema.orderSenderSends.userId, userId));
+    expect(count?.sends).toBe(5);
+    later(59 * MINUTE);
+    expect((await resend(cookie, c.body.id)).status).toBe(200);
   });
 
-  it("an e-mail that does not leave: 502 mail_failed, the address kept waiting for « Renvoyer le code »", async () => {
+  it("3 codes a day to one same address, whatever the account; refused for a 4th, the wait said", async () => {
+    const target = other();
+    const sessions = [await account(), await account(), await account(), await account()];
+    for (const who of sessions.slice(0, 3)) expect((await add(who.cookie, target)).status).toBe(201);
+    later(MINUTE);
+    const fourth = sessions[3] as (typeof sessions)[number];
+    expect(await add(fourth.cookie, target)).toEqual({
+      status: 429,
+      body: { error: "rate_limited", retryAfterSeconds: 24 * 60 * 60 - 60 },
+    });
+    // Resending counts too, and the refusal changed nothing on her hour.
+    const [first] = sessions;
+    const [row] = await t.db
+      .select({ id: schema.orderSenderAddresses.id })
+      .from(schema.orderSenderAddresses)
+      .where(
+        and(eq(schema.orderSenderAddresses.userId, first?.userId ?? ""), eq(schema.orderSenderAddresses.email, target)),
+      );
+    expect((await resend(first?.cookie ?? "", row?.id ?? "")).status).toBe(429);
+    const [sends] = await t.db
+      .select({ sends: schema.orderSenderSends.sends })
+      .from(schema.orderSenderSends)
+      .where(eq(schema.orderSenderSends.userId, fourth.userId));
+    expect(sends).toBeUndefined();
+    // Another address still works for her, and the address itself is never kept in the counts.
+    expect((await add(fourth.cookie, other())).status).toBe(201);
+    const keys = await t.db.select({ key: schema.orderSenderCodeTargets.key }).from(schema.orderSenderCodeTargets);
+    expect(keys.every((k) => /^[0-9a-f]{64}$/.test(k.key))).toBe(true);
+    later(24 * 60 * MINUTE);
+    expect((await add(fourth.cookie, target)).status).toBe(201);
+  });
+
+  it("an e-mail that does not leave: 502 mail_failed, nothing added, nothing counted, the former code kept", async () => {
     const { cookie, userId } = await account();
     const address = other();
     mailControl.fail = true;
-    expect(await add(cookie, address)).toEqual({ status: 502, body: { error: "mail_failed" } });
-    const [row] = await t.db
+    for (let i = 0; i < 6; i++)
+      expect(await add(cookie, address)).toEqual({ status: 502, body: { error: "mail_failed" } });
+    expect(
+      await t.db.select().from(schema.orderSenderAddresses).where(eq(schema.orderSenderAddresses.userId, userId)),
+    ).toEqual([]);
+    expect(await t.db.select().from(schema.orderSenderSends).where(eq(schema.orderSenderSends.userId, userId))).toEqual(
+      [],
+    );
+    mailControl.fail = false;
+    const { body } = await add(cookie, address);
+    const code = codeSentTo(address);
+    const [before] = await t.db
       .select()
       .from(schema.orderSenderAddresses)
-      .where(and(eq(schema.orderSenderAddresses.userId, userId), eq(schema.orderSenderAddresses.email, address)));
-    expect(row?.verifiedAt).toBeNull();
-    mailControl.fail = false;
+      .where(eq(schema.orderSenderAddresses.id, body.id));
     later(MINUTE);
-    expect((await resend(cookie, row?.id as string)).status).toBe(200);
-    expect((await verify(cookie, row?.id as string, codeSentTo(address))).status).toBe(200);
+    mailControl.fail = true;
+    expect(await (await resend(cookie, body.id)).json()).toEqual({ error: "mail_failed" });
+    mailControl.fail = false;
+    const [after] = await t.db
+      .select()
+      .from(schema.orderSenderAddresses)
+      .where(eq(schema.orderSenderAddresses.id, body.id));
+    expect(after).toEqual(before);
+    // `last_sent_at` was not moved: « Renvoyer le code » works at once.
+    expect((await resend(cookie, body.id)).status).toBe(200);
+    const [sends] = await t.db
+      .select({ sends: schema.orderSenderSends.sends })
+      .from(schema.orderSenderSends)
+      .where(eq(schema.orderSenderSends.userId, userId));
+    expect(sends?.sends).toBe(2);
+    expect(code).toMatch(/^\d{6}$/);
   });
 });
 

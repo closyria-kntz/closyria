@@ -113,6 +113,17 @@ export const orderSenderAddresses = pgTable(
   ],
 );
 
+/**
+ * Codes sent to one address in the current 24 hours, whatever the account (3 at most: nobody floods someone else's
+ * mailbox from Closyria's sender). `key` is a SHA-256 of the lowercase address, never the address itself; rows whose
+ * window ended long ago are deleted as codes are sent. Not a user's row: it outlives an account deletion on purpose.
+ */
+export const orderSenderCodeTargets = pgTable("order_sender_code_targets", {
+  key: text("key").primaryKey(),
+  windowStart: at("window_start").notNull(),
+  sends: integer("sends").notNull(),
+});
+
 /** Codes sent to her added addresses in the current hour (one row per account): 5 an hour, whatever the address. */
 export const orderSenderSends = pgTable("order_sender_sends", {
   userId: text("user_id")

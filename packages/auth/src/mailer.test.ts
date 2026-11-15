@@ -92,6 +92,18 @@ describe("memoryMailer in local development", () => {
     expect(logged).not.toContain("alice");
   });
 
+  it("never logs a message marked unlogged (« Mes adresses d'envoi » codes), even in local development", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    await memoryMailer({ logContent: true }).send({
+      ...message,
+      subject: "Ton code Closyria : 048213",
+      unlogged: true,
+    });
+    const logged = log.mock.calls.flat().join(" ");
+    expect(logged).not.toContain("123456");
+    expect(logged).not.toContain("048213");
+  });
+
   it("keeps only the last 50 messages", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     const mailer = memoryMailer();

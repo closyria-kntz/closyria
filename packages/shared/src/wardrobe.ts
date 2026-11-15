@@ -751,6 +751,7 @@ export const wardrobeErrorCodes = [
   "code_expired",
   "code_locked",
   "mail_failed",
+  "email_unverified",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];

@@ -701,6 +701,38 @@ describe("anonymous -> account merge on sign-in", () => {
     expect(sends).toEqual([{ sends: 2 }]);
   });
 
+  it("keeps 10 sender addresses at most after a merge, the verified ones first", async () => {
+    const email = `envoi-plafond-${randomUUID()}@example.test`;
+    const accountId = await signInWithEmail(email);
+    const anonymous = await signInAnonymously();
+    const n = ++counter;
+    const at = (minute: number) => new Date(Date.UTC(2026, 10, 1, 10, minute));
+    // The account: 5 pending ones (older); the guest: 6 verified ones (newer). 11 in all, 9 places.
+    await handle.db.insert(schema.orderSenderAddresses).values([
+      ...Array.from({ length: 5 }, (_, i) => ({ userId: accountId, email: `p${i}-${n}@x.example`, createdAt: at(i) })),
+      ...Array.from({ length: 6 }, (_, i) => ({
+        userId: anonymous.userId,
+        email: `v${i}-${n}@x.example`,
+        verifiedAt: at(30),
+        createdAt: at(10 + i),
+      })),
+    ]);
+
+    expect(await signInWithEmail(email, anonymous.cookie)).toBe(accountId);
+
+    const rows = await handle.db
+      .select({ email: schema.orderSenderAddresses.email })
+      .from(schema.orderSenderAddresses)
+      .where(eq(schema.orderSenderAddresses.userId, accountId))
+      .orderBy(asc(schema.orderSenderAddresses.email));
+    expect(rows.map((r) => r.email)).toEqual([
+      `p0-${n}@x.example`,
+      `p1-${n}@x.example`,
+      `p2-${n}@x.example`,
+      ...Array.from({ length: 6 }, (_, i) => `v${i}-${n}@x.example`),
+    ]);
+  });
+
   it("folding the same product keeps her target price unless empty, « M'alerter » only if both, and its alerts", async () => {
     const email = `alertes-fusion-${randomUUID()}@example.test`;
     const accountId = await signInWithEmail(email);

@@ -7,7 +7,7 @@ import { startTestDatabase } from "./postgres";
 
 const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../db/migrations");
 
-describe("migration 0044 (adresses d'envoi)", () => {
+describe("migrations 0044 and 0045 (adresses d'envoi)", () => {
   it("keeps one row per address and account, lowercase, no code once verified, removed with the account", async () => {
     const database = await startTestDatabase();
     try {
@@ -39,6 +39,12 @@ describe("migration 0044 (adresses d'envoi)", () => {
           client.query(`insert into order_sender_addresses (user_id, email, attempts) values ('u', 'c@x.example', -1)`),
         ).rejects.toThrow(/order_sender_addresses_attempts_check/);
         await client.query(`insert into order_sender_sends (user_id, window_start, sends) values ('u', now(), 1)`);
+
+        // 0045: one count per target address (its hash), none of an account's.
+        await client.query(`insert into order_sender_code_targets (key, window_start, sends) values ('k', now(), 1)`);
+        await expect(
+          client.query(`insert into order_sender_code_targets (key, window_start, sends) values ('k', now(), 1)`),
+        ).rejects.toThrow(/order_sender_code_targets_pkey/);
 
         await client.query(`delete from "user" where id = 'u'`);
         const left = await client.query<{ user_id: string }>(

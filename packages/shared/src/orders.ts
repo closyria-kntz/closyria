@@ -508,6 +508,19 @@ export const SENDER_CODE_MAX_ATTEMPTS = 5;
 export const SENDER_RESEND_SECONDS = 60;
 /** Codes sent per account and per hour at most (adding an address sends one too). */
 export const SENDER_SENDS_PER_HOUR = 5;
+/** Codes sent to one same address per 24 hours at most, whatever the account (no flood towards someone else). */
+export const SENDER_TARGET_SENDS_PER_DAY = 3;
+/** 429 of « Mes adresses d'envoi »: how long until a code may leave again. */
+export const senderRateLimitedSchema = z.object({
+  error: z.literal("rate_limited"),
+  retryAfterSeconds: z.number().int().positive(),
+});
+export type SenderRateLimited = z.infer<typeof senderRateLimitedSchema>;
+
+/** A code typed or pasted (« 123 456 », « 123-456 »): its digits only, 6 at most. */
+export function cleanSenderCode(value: string): string {
+  return value.replace(/\D/g, "").slice(0, SENDER_CODE_LENGTH);
+}
 const MAX_EMAIL = 254;
 
 /**

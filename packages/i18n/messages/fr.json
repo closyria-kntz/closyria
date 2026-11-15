@@ -2900,12 +2900,18 @@
           "invalidCode": "Le code a 6 chiffres.",
           "sender_exists": "Cette adresse est déjà dans ta liste.",
           "sender_limit": "Tu as déjà {max} adresses. Retires-en une pour en ajouter une autre.",
-          "rate_limited": "Trop de codes demandés. Réessaie dans quelques minutes.",
-          "mail_failed": "L'e-mail n'est pas parti. Réessaie avec « Renvoyer le code ».",
+          "rate_limited": "Trop de codes demandés. Réessaie un peu plus tard.",
+          "mail_failed": "L'e-mail n'est pas parti. Réessaie dans un instant.",
           "code_wrong": "Ce code n'est pas le bon.",
           "code_expired": "Ce code a expiré : demande-en un nouveau.",
           "code_locked": "Trop d'essais : demande un nouveau code.",
           "failed": "Ça n'a pas marché. Réessaie dans un instant."
+        },
+        "wait": {
+          "minute": "Trop de codes demandés. Réessaie dans une minute.",
+          "minutes": "Trop de codes demandés. Réessaie dans {n} min.",
+          "hour": "Trop de codes demandés. Réessaie dans une heure.",
+          "hours": "Trop de codes demandés. Réessaie dans {n} h."
         }
       }
     },

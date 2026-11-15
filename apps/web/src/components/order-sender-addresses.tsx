@@ -1,6 +1,6 @@
 "use client";
 
-import { type SenderAddressList, type SenderAddressView, senderEmailSchema } from "@closyria/shared";
+import { cleanSenderCode, type SenderAddressList, type SenderAddressView, senderEmailSchema } from "@closyria/shared";
 import { useTranslations } from "next-intl";
 import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import {
@@ -10,6 +10,7 @@ import {
   resendSenderCode,
   verifySenderAddress,
 } from "@/lib/orders-client";
+import { type SenderWait, senderWait } from "@/lib/sender-wait";
 import type { ClientError } from "@/lib/wardrobe-client";
 import { Dialog } from "./dialog";
 import { buttonClass, inputClass, primaryButtonClass } from "./ui";
@@ -31,6 +32,22 @@ const SAID = new Set<string>([
 type Said = "invalidEmail" | "invalidCode" | "failed" | ClientError;
 const said = (error: ClientError): Said => (SAID.has(error) ? error : "failed");
 
+/** An error as shown: its words, and for too many codes the real wait (« Réessaie dans 59 min. »). */
+type Shown = { said: Said; wait: SenderWait | null };
+const shown = (error: Said | ClientError, retryAfterSeconds?: number | null): Shown => ({
+  said: error === "invalidEmail" || error === "invalidCode" ? error : said(error),
+  wait: error === "rate_limited" && retryAfterSeconds ? senderWait(retryAfterSeconds) : null,
+});
+
+/** The words of an error (`Orders.inbox.senders`). */
+function useErrorText() {
+  const t = useTranslations("Orders.inbox.senders");
+  return (error: Shown, max: number) =>
+    error.wait
+      ? t(`wait.${error.wait.key}` as "wait.minutes", { n: "n" in error.wait ? error.wait.n : 0 })
+      : t(`errors.${error.said}` as "errors.failed", { max });
+}
+
 type State = { kind: "loading" } | { kind: "failed" } | { kind: "ready"; list: SenderAddressList };
 
 /** One added address waiting for its code: the code field, « Valider », « Renvoyer le code ». */
@@ -48,7 +65,8 @@ function CodeForm({
   const t = useTranslations("Orders.inbox.senders");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<Said | null>(null);
+  const [error, setError] = useState<Shown | null>(null);
+  const errorText = useErrorText();
   const input = useRef<HTMLInputElement>(null);
   const ids = { code: useId(), hint: useId(), error: useId() };
 
@@ -58,12 +76,12 @@ function CodeForm({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!/^\d{6}$/.test(code)) return setError("invalidCode");
+    if (!/^\d{6}$/.test(code)) return setError(shown("invalidCode"));
     setBusy(true);
     setError(null);
     const result = await verifySenderAddress(address.id, code);
     setBusy(false);
-    if (!result.ok) return setError(result.error === "invalid_request" ? "invalidCode" : said(result.error));
+    if (!result.ok) return setError(shown(result.error === "invalid_request" ? "invalidCode" : result.error));
     onVerified({ id: result.id, email: result.email, verified: result.verified, createdAt: result.createdAt });
   };
 
@@ -72,7 +90,8 @@ function CodeForm({
     setError(null);
     const result = await resendSenderCode(address.id);
     setBusy(false);
-    if (!result.ok) return setError(said(result.error));
+    if (!result.ok)
+      return setError(shown(result.error, "retryAfterSeconds" in result ? result.retryAfterSeconds : null));
     setCode("");
     onStatus(t("resent", { email: address.email }));
     input.current?.focus();
@@ -91,11 +110,11 @@ function CodeForm({
         autoComplete="one-time-code"
         inputMode="numeric"
         pattern="[0-9]{6}"
-        maxLength={6}
         required
         value={code}
-        onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-        aria-invalid={error === "invalidCode" || error === "code_wrong" || undefined}
+        // No maxLength: a pasted « 123 456 » is cleaned first, then cut to 6 digits.
+        onChange={(e) => setCode(cleanSenderCode(e.target.value))}
+        aria-invalid={error?.said === "invalidCode" || error?.said === "code_wrong" || undefined}
         aria-describedby={[ids.hint, error ? ids.error : ""].filter(Boolean).join(" ")}
         className={`${inputClass} min-h-touch-target max-w-search tabular-nums`}
       />
@@ -104,7 +123,7 @@ function CodeForm({
       </p>
       {error && (
         <p id={ids.error} role="alert" className="text-sm text-danger">
-          {t(`errors.${error}` as "errors.failed")}
+          {errorText(error, 0)}
         </p>
       )}
       <div className="flex flex-wrap gap-space-2">
@@ -136,7 +155,8 @@ export function OrderSenderAddresses() {
   const [status, setStatus] = useState("");
   const [adding, setAdding] = useState(false);
   const [email, setEmail] = useState("");
-  const [addError, setAddError] = useState<Said | null>(null);
+  const [addError, setAddError] = useState<Shown | null>(null);
+  const errorText = useErrorText();
   const [busy, setBusy] = useState(false);
   /** The pending address whose code field is open (the one just added, or « Saisir le code »). */
   const [open, setOpen] = useState<string | null>(null);
@@ -197,35 +217,22 @@ export function OrderSenderAddresses() {
   const full = list.addresses.length + 1 >= list.max;
   const replace = (addresses: SenderAddressView[]) => setState({ kind: "ready", list: { ...list, addresses } });
 
-  const reload = async () => {
-    const fresh = await fetchSenderAddresses().catch(() => null);
-    if (fresh && fresh !== "guest") setState({ kind: "ready", list: fresh });
-    return fresh && fresh !== "guest" ? fresh : null;
-  };
-
   const submitAdd = async (event: FormEvent) => {
     event.preventDefault();
     const parsed = senderEmailSchema.safeParse(email);
-    if (!parsed.success) return setAddError("invalidEmail");
+    if (!parsed.success) return setAddError(shown("invalidEmail"));
     setBusy(true);
     setAddError(null);
     const result = await addSenderAddress(parsed.data);
     setBusy(false);
+    // Nothing was added when the e-mail did not leave (`mail_failed`): the form stays, to try again.
     if (!result.ok) {
-      if (result.error === "invalid_request") return setAddError("invalidEmail");
-      setAddError(said(result.error));
-      // The address was kept although its e-mail did not leave: shown, its code field open for « Renvoyer le code ».
-      if (result.error === "mail_failed") {
-        const fresh = await reload();
-        const kept = fresh?.addresses.find((a) => a.email === parsed.data);
-        if (kept) {
-          setAdding(false);
-          setEmail("");
-          setOpen(kept.id);
-          setStatus(t("errors.mail_failed"));
-        }
-      }
-      return;
+      return setAddError(
+        shown(
+          result.error === "invalid_request" ? "invalidEmail" : result.error,
+          "retryAfterSeconds" in result ? result.retryAfterSeconds : null,
+        ),
+      );
     }
     const view = { id: result.id, email: result.email, verified: result.verified, createdAt: result.createdAt };
     replace([...list.addresses, view]);
@@ -322,7 +329,7 @@ export function OrderSenderAddresses() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            aria-invalid={addError === "invalidEmail" || addError === "sender_exists" || undefined}
+            aria-invalid={addError?.said === "invalidEmail" || addError?.said === "sender_exists" || undefined}
             aria-describedby={[ids.hint, addError ? ids.error : ""].filter(Boolean).join(" ")}
             className={`${inputClass} min-h-touch-target`}
           />
@@ -331,7 +338,7 @@ export function OrderSenderAddresses() {
           </p>
           {addError && (
             <p id={ids.error} role="alert" className="text-sm text-danger">
-              {t(`errors.${addError}` as "errors.failed", { max: list.max })}
+              {errorText(addError, list.max)}
             </p>
           )}
           <div className="flex flex-wrap gap-space-2">

@@ -70,9 +70,15 @@ describe("« Mes adresses d'envoi »", () => {
       ok: false,
       error: "code_wrong",
     });
-    expect(await resendSenderCode(id, deps(json({ error: "rate_limited" }, 429)))).toEqual({
+    expect(await resendSenderCode(id, deps(json({ error: "rate_limited", retryAfterSeconds: 3540 }, 429)))).toEqual({
       ok: false,
       error: "rate_limited",
+      retryAfterSeconds: 3540,
+    });
+    expect(await addSenderAddress("x@y.example", deps(json({ error: "rate_limited" }, 429)))).toEqual({
+      ok: false,
+      error: "rate_limited",
+      retryAfterSeconds: null,
     });
     const removed = deps(new Response(null, { status: 204 }));
     expect(await removeSenderAddress(id, removed)).toEqual({ ok: true });

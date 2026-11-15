@@ -1,5 +1,6 @@
 import type { DbTransaction } from "@closyria/auth";
 import { schema, sql } from "@closyria/db";
+import { MAX_SENDER_ADDRESSES } from "@closyria/shared";
 
 /**
  * Anonymous -> account merge of her order addresses (« Après la commande »). Addresses are for accounts only, so a
@@ -18,7 +19,7 @@ export async function mergeOrderInboxes(fromUserId: string, toUserId: string, tx
 /**
  * Anonymous -> account merge of « Mes adresses d'envoi » (spec §11). A guest cannot add any (accounts only); should she
  * hold some, they move, one address once per account (`order_sender_addresses_user_id_email_idx`): an address both
- * have is kept on the account's row, verified if either was.
+ * have is kept on the account's row, verified if either was. The cap of 10 holds afterwards (verified ones kept first).
  */
 export async function mergeOrderSenders(fromUserId: string, toUserId: string, tx: DbTransaction): Promise<void> {
   const t = schema.orderSenderAddresses;
@@ -33,6 +34,14 @@ export async function mergeOrderSenders(fromUserId: string, toUserId: string, tx
     where theirs.user_id = ${fromUserId}
       and exists (select 1 from ${t} as mine where mine.user_id = ${toUserId} and mine.email = theirs.email)`);
   await tx.execute(sql`update ${t} set user_id = ${toUserId} where user_id = ${fromUserId}`);
+  // Still 10 addresses at most, the account's included: the verified ones first, then the oldest; the rest dropped.
+  await tx.execute(sql`
+    delete from ${t} where id in (
+      select id from (
+        select id, row_number() over (order by verified_at is null, created_at, id) as rank
+        from ${t} where user_id = ${toUserId}
+      ) ranked
+      where rank > ${MAX_SENDER_ADDRESSES - 1})`);
 }
 
 /** The guest's count of codes sent this hour is dropped: the account keeps its own (one row per account). */

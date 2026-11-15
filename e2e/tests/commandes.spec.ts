@@ -302,12 +302,18 @@ test("ses adresses d'envoi : ajouter une autre boîte, recopier le code reçu, l
   await axeLightAndDark(page);
   await shots(page, testInfo, "adresses-envoi-code");
 
+  // « Renvoyer le code » at once: the real wait is said (once a minute per address).
+  await row.getByRole("button", { name: "Renvoyer le code" }).click();
+  await expect(row.getByRole("alert")).toHaveText("Trop de codes demandés. Réessaie dans une minute.");
+
   const code = await readCode(request, other);
   const wrong = code === "000000" ? "111111" : "000000";
   await codeField.fill(wrong);
   await row.getByRole("button", { name: "Valider" }).click();
   await expect(row.getByRole("alert")).toHaveText("Ce code n'est pas le bon.");
-  await codeField.fill(code);
+  // Pasted with a space (« 123 456 »): cleaned before the 6-digit limit.
+  await codeField.fill(`${code.slice(0, 3)} ${code.slice(3)}`);
+  await expect(codeField).toHaveValue(code);
   const valider = row.getByRole("button", { name: "Valider" });
   expect((await valider.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   await valider.click();

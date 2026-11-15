@@ -568,7 +568,7 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   commandes encore loin de leur seconde question ne prennent plus la place des commandes dues (plafond de 2 000 par jour).
 - **Requêtes d'une transaction** : les lectures d'un article (`loadItemViews`, `loadBareItemFacts`, `loadProductViews`)
   passent une à une dans une transaction (`readAll`), toutes ensemble hors transaction.
-- **Mise en prod** : migrations 0037 à 0044 à essayer sur une copie de la prod (`deploy/dry-run-prod-migrations.sh`),
+- **Mise en prod** : migrations 0037 à 0045 à essayer sur une copie de la prod (`deploy/dry-run-prod-migrations.sh`),
   rappelé dans `deploy/README.md`.
 
 #### Textes à valider (relecture finale)
@@ -607,34 +607,44 @@ depuis l'adresse du compte sont gardés.
 - **API** (`routes/me/order-senders.ts`, schémas dans `packages/shared/src/orders.ts`) :
   `GET /api/me/order-inbox/senders` (adresse du compte à part, `max` 10, adresses ajoutées les plus anciennes
   d'abord), `POST …/senders` `{ email }` (201, code envoyé), `POST …/senders/{id}/verify` `{ code }`,
-  `POST …/senders/{id}/resend`, `DELETE …/senders/{id}` (204). Invitée : 403 `account_required` ; réception pas en
+  `POST …/senders/{id}/resend`, `DELETE …/senders/{id}` (204). Invitée : 403 `account_required` ; compte dont
+  l'adresse n'est pas vérifiée (`user.email_verified`, relecture n°1) : 403 `email_unverified` ; réception pas en
   service : 409 `inbound_off` partout ; adresse d'un autre compte ou inconnue : 404.
   Erreurs : 409 `sender_exists` (l'adresse du compte, ou déjà ajoutée), 409 `sender_limit` (10 avec celle du compte,
   rien envoyé), 409 `sender_verified`, 422 `code_wrong` / `code_locked` (5 essais par code) / `code_expired`
-  (15 minutes), 429 `rate_limited`, 502 `mail_failed` (l'adresse reste « En attente du code », « Renvoyer le code »
-  repart).
+  (15 minutes), 429 `rate_limited` avec `retryAfterSeconds` (l'attente réelle), 502 `mail_failed`.
 - **Adresse** : coupée des espaces, en minuscules, e-mail valide de 254 caractères au plus, **ASCII seulement** (une
   adresse internationalisée n'est jamais acceptée comme expéditrice, §10.1, elle n'est donc pas proposée).
 - **Code** : 6 chiffres (`randomInt`), gardé seulement en HMAC-SHA256 sous un sel aléatoire de 16 octets propre à la
-  ligne, comparé en temps constant ; jamais renvoyé par l'API ni écrit dans un journal (le faux mailer des tests et du
-  développement masque les chiffres de l'objet). Un nouveau code (« Renvoyer le code ») remplace l'ancien et remet les
+  ligne, comparé en temps constant ; jamais renvoyé par l'API ni écrit dans un journal, même sur un poste de
+  développement (le faux mailer masque les chiffres de l'objet et n'écrit jamais le texte de cet e-mail, marqué
+  `unlogged`). Un nouveau code (« Renvoyer le code ») remplace l'ancien et remet les
   essais à zéro ; une adresse vérifiée ne garde aucun code (contrainte en base).
 - **Limites d'envoi** : « Renvoyer le code » une fois par minute et par adresse ; **5 codes par heure et par compte,
-  ajout compris** (table `order_sender_sends`, une ligne par compte, fenêtre d'une heure, mise à jour atomique). Un
-  ajout refusé par la limite ne crée rien. Conséquence : ajouter plus de 5 adresses prend plus d'une heure (accepté :
-  le cas courant est une ou deux boîtes de plus).
+  ajout compris** (table `order_sender_sends`, une ligne par compte) ; **3 codes par 24 heures vers une même adresse,
+  tous comptes confondus** (relecture n°1, contre l'envoi en masse vers la boîte de quelqu'un d'autre : table
+  `order_sender_code_targets`, migration 0045, clé = SHA-256 de l'adresse, jamais l'adresse ; lignes de plus de deux
+  jours effacées au fil des envois ; elle survit à la suppression d'un compte, exprès). Fenêtres fixes depuis le
+  premier code, comptées par une seule mise à jour atomique qui **ne compte pas** une demande refusée. L'e-mail part
+  dans la transaction qui le compte : s'il ne part pas (502), rien n'est ajouté, rien n'est compté, `last_sent_at` et
+  l'ancien code restent. Un refus (429) dit l'attente réelle (`retryAfterSeconds`), affichée « Réessaie dans … ».
+  Conséquence : ajouter plus de 5 adresses prend plus d'une heure (accepté : le cas courant est une ou deux boîtes
+  de plus).
 - **Base** : migration 0044, tables `order_sender_addresses` (unique par compte et adresse, adresse en minuscules,
   essais ≥ 0) et `order_sender_sends`, toutes deux dans le registre des tables possédées (cascade : effacées avec le
   compte). Fusion invitée → compte (une invitée ne peut pas en ajouter ; si elle en avait) : ses adresses passent au
-  compte, une adresse que le compte a déjà n'y figure qu'une fois, vérifiée si l'une des deux l'était ; son compteur
-  d'envois est abandonné.
+  compte, une adresse que le compte a déjà n'y figure qu'une fois, vérifiée si l'une des deux l'était ; ensuite le
+  plafond de 10 est rétabli (relecture n°1) : les vérifiées d'abord, puis les plus anciennes, le reste est retiré ;
+  son compteur d'envois est abandonné.
 - **E-mail** : envoyé par le même mailer que les codes de connexion (Brevo ; le faux mailer en test, lu par
   `/api/test/emails`), texte dans `packages/i18n/messages/fr.json` (`Auth.senderEmail`).
 - **Écran** (`order-sender-addresses.tsx`, dans « Mes commandes par e-mail ») : section « Mes adresses d'envoi » après
   « Ton adresse » : l'adresse du compte d'abord (« Adresse du compte », sans bouton), puis chaque adresse ajoutée
   (« Vérifiée » / « En attente du code », « Saisir le code », « Retirer » demandé d'abord). « Ajouter une adresse »
   ouvre le champ, « Envoyer le code » ouvre aussitôt le champ du code (`autocomplete="one-time-code"`, clavier
-  numérique) avec « Valider » et « Renvoyer le code ». À 10 adresses, le bouton laisse place à une phrase.
+  numérique ; un code collé « 123 456 » est nettoyé avant la limite de 6 chiffres) avec « Valider » et « Renvoyer le
+  code ». À 10 adresses, le bouton laisse place à une phrase. Un e-mail qui n'est pas parti laisse le formulaire
+  ouvert pour réessayer.
 
 #### Textes à valider (adresses d'envoi)
 
@@ -657,6 +667,14 @@ depuis l'adresse du compte sont gardés.
   pour en ajouter une autre. »
 - Erreurs : « Vérifie l'adresse e-mail. » ; « Le code a 6 chiffres. » ; « Cette adresse est déjà dans ta liste. » ;
   « Tu as déjà 10 adresses. Retires-en une pour en ajouter une autre. » ; « Trop de codes demandés. Réessaie dans
-  quelques minutes. » ; « L'e-mail n'est pas parti. Réessaie avec « Renvoyer le code ». » ; « Ce code n'est pas le
-  bon. » ; « Ce code a expiré : demande-en un nouveau. » ; « Trop d'essais : demande un nouveau code. » ; « Ça n'a pas
+  quelques minutes. » (remplacé, relecture n°1, voir plus bas) ; « L'e-mail n'est pas parti. Réessaie avec « Renvoyer
+  le code ». » (remplacé, voir plus bas) ; « Ce code n'est pas le bon. » ; « Ce code a expiré : demande-en un nouveau. » ; « Trop d'essais : demande un nouveau code. » ; « Ça n'a pas
   marché. Réessaie dans un instant. »
+
+#### Textes à valider (adresses d'envoi, relecture n°1)
+
+- Trop de codes, avec l'attente réelle : « Trop de codes demandés. Réessaie dans une minute. » ; « Trop de codes
+  demandés. Réessaie dans {n} min. » ; « Trop de codes demandés. Réessaie dans une heure. » ; « Trop de codes
+  demandés. Réessaie dans {n} h. » (jusqu'à 24 h : la limite par adresse) ; sans attente connue : « Trop de codes
+  demandés. Réessaie un peu plus tard. »
+- E-mail pas parti (rien n'est ajouté) : « L'e-mail n'est pas parti. Réessaie dans un instant. »
