@@ -814,3 +814,41 @@ l'inscription) à comparer avec TrackingMore avant la prod, selon le volume atte
   commande ne peut pas être dans le futur. », « Une autre de tes commandes de cette boutique a déjà ce numéro. »,
   « Ça n'a pas marché. Réessaie dans un instant. » (repris).
 - « Choisir le transporteur » ; « Annuler » (repris).
+
+### 11.6 Frise et historique du suivi (choix de la fondatrice, 2026-11-16)
+
+- **Frise des grandes étapes**, sur chaque colis (« Mes commandes », cartes de l'Accueil, bloc « Commande / colis »),
+  quatre étapes « Expédié » → « En route » → « En livraison » → « Livré », remplies jusqu'à l'étape en cours. L'étape
+  vient de celle du colis (`parcelProgress`, `packages/shared`) : `pending` avec au moins un événement → « Expédié » ;
+  `in_transit` → « En route » ; `out_for_delivery` et `pickup_ready` → la troisième, nommée « En point relais » pour un
+  colis en point relais ; `delivered` → « Livré », tout rempli. Pas de frise (le texte d'avant reste : étape en
+  étiquette, dernière étape du transporteur, date prévue) pour un colis `pending` sans événement, `unknown`, ou en
+  incident sans aucun événement. **Incident** (`exception`) : la frise s'arrête à l'étape la plus avancée qu'ont
+  atteinte ses événements (« Expédié » s'il n'a que des incidents : le transporteur l'a en main), le point de l'étape
+  en ocre (celui des étiquettes, jamais le rouge d'erreur), et dessous, calme, « Un souci signalé par le
+  transporteur » (fond `tip`). Dessous encore : « Arrivée prévue le {date} » quand le transporteur la donne, « Livré le
+  {date} » une fois livré.
+- **Ce que la frise remplace** : avec la frise, l'étiquette de l'étape (« En route »…) et la dernière étape du
+  transporteur ne sont plus répétées à côté (comme sur l'aperçu validé) ; la dernière étape est la première de « Voir
+  tout le suivi ».
+- **Accessibilité** : une liste numérotée « Étapes du colis » ; l'étape en cours porte `aria-current="step"`, les
+  autres disent, en texte masqué, « étape franchie » ou « étape à venir » (jamais la couleur seule : points pleins,
+  point cerclé de rose pour l'étape en cours, points creux et fil en pointillés pour ce qui vient). Rien ne bouge ;
+  seule la flèche de « Voir tout le suivi » pivote, et plus du tout quand le mouvement est réduit. Clair et sombre par
+  les jetons Boudoir ; sur 360 px, les mots passent à la ligne dans leur colonne sans déborder.
+- **« Voir tout le suivi »** (bouton de 44 px, `aria-expanded`, fermé au départ, « Masquer le suivi » une fois
+  ouvert) : la liste « Suivi du colis » de **tous** ses événements, le plus récent d'abord, chacun daté à l'heure de
+  Paris (« 15 nov. 14:02 ») avec les mots du transporteur tels qu'enregistrés. Sans événement, pas de bouton.
+- **API** : chaque colis de la vue d'une commande (`ParcelView`, `GET /api/me/orders` et les réponses qui rendent une
+  commande) a `events: { at, status, label }[]`, le plus récent d'abord (à date égale, par identifiant), **50 au
+  plus** par colis (`MAX_PARCEL_EVENTS_SHOWN`). Une seule lecture pour tous les colis des commandes listées
+  (`row_number()` par colis), après les autres, l'une après l'autre (la vue peut tourner dans une transaction).
+  Seules ses commandes à elle ont des colis dans leur vue ; la vue de ses amies et les commandes groupées n'en donnent
+  aucun.
+
+#### Textes à valider (frise et historique)
+
+- Repris de la décision : « Expédié », « En route », « En livraison », « En point relais », « Livré », « Un souci
+  signalé par le transporteur », « Voir tout le suivi », « Masquer le suivi », « étape franchie », « étape à venir ».
+- Nouveaux, lus par les lecteurs d'écran seulement : « Étapes du colis » (nom de la frise), « Suivi du colis » (nom de
+  la liste des événements).

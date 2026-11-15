@@ -14,6 +14,7 @@ import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { addItemTracking, changeParcelCarrier, deleteParcel, patchParcel } from "@/lib/orders-client";
 import { type ClientError, isTrackingInput } from "@/lib/orders-form";
+import { friseOf } from "@/lib/parcel-frise";
 import { formatPrice } from "@/lib/price";
 import { Dialog } from "./dialog";
 import { buttonClass, focusRing, inputClass, moreButtonClass, primaryButtonClass } from "./ui";
@@ -109,17 +110,63 @@ export function OrderLines({
   );
 }
 
-/** The parcel's step in words, its dates in a second line. */
+/**
+ * Where the parcel stands. Once the carrier has told something: the frise of its four steps (« Expédié », « En route »,
+ * « En livraison » or « En point relais », « Livré »), an incident said calmly under it, then the expected or delivery
+ * day (§11.6). Before that, or without news: its step in words, the carrier's last step and the expected day.
+ */
 function ParcelState({ parcel }: { parcel: ParcelView }) {
   const t = useTranslations("Orders.parcel");
   const day = useDay();
   const delivered = parcel.status === "delivered";
-  const line =
-    delivered && parcel.deliveredAt
-      ? t("deliveredOn", { date: day(parcel.deliveredAt) })
-      : t(`status.${parcel.status}`);
-  const step = parcel.lastEventLabel && !delivered ? parcel.lastEventLabel : null;
+  const frise = friseOf(parcel);
+  const deliveredOn = delivered && parcel.deliveredAt ? t("deliveredOn", { date: day(parcel.deliveredAt) }) : null;
   const estimated = !delivered && parcel.estimatedAt ? t("estimated", { date: day(parcel.estimatedAt) }) : null;
+  if (frise) {
+    const dates = deliveredOn ?? estimated;
+    return (
+      <div className="flex flex-col gap-space-2">
+        <ol
+          aria-label={t("frise.label")}
+          data-exception={frise.exception ? "" : undefined}
+          className="parcel-frise grid grid-cols-4 pt-space-1"
+        >
+          {frise.steps.map((step, i) => (
+            <li
+              key={step.key}
+              data-state={step.state}
+              aria-current={step.state === "current" ? "step" : undefined}
+              className="flex min-w-space-0 flex-col items-center gap-space-1-5 text-center"
+            >
+              <span aria-hidden="true" className="flex items-center self-stretch">
+                <span className="frise-thread" data-todo={step.state === "upcoming" ? "" : undefined} />
+                <span className="frise-dot" />
+                <span className="frise-thread" data-todo={frise.steps[i + 1]?.state === "upcoming" ? "" : undefined} />
+              </span>
+              <span
+                className={`px-space-0-5 text-chip leading-tight text-balance break-words ${
+                  step.state === "current"
+                    ? "font-bold text-ink"
+                    : step.state === "passed"
+                      ? "text-ink"
+                      : "text-ink-muted"
+                }`}
+              >
+                {t(`frise.${step.key}`)}
+                {step.state !== "current" && <span className="sr-only"> {t(`frise.${step.state}`)}</span>}
+              </span>
+            </li>
+          ))}
+        </ol>
+        {frise.exception && (
+          <p className="self-start rounded-md bg-tip px-space-3 py-space-1-5 text-sm text-tip-ink">{t("exception")}</p>
+        )}
+        {dates && <span className="text-sm text-ink-muted">{dates}</span>}
+      </div>
+    );
+  }
+  const line = deliveredOn ?? t(`status.${parcel.status}`);
+  const step = parcel.lastEventLabel && !delivered ? parcel.lastEventLabel : null;
   return (
     <div className="flex flex-col gap-space-0-5">
       <span className="flex flex-wrap items-center gap-space-2">
@@ -127,6 +174,65 @@ function ParcelState({ parcel }: { parcel: ParcelView }) {
         {step && <span className="text-sm">{step}</span>}
       </span>
       {estimated && <span className="text-sm text-ink-muted">{estimated}</span>}
+    </div>
+  );
+}
+
+/** « 15 nov. » and « 14:02 »: an instant in Paris, as a step of the carrier is dated. */
+function useStepDate() {
+  const format = useFormatter();
+  return (at: string) => {
+    const date = new Date(at);
+    const day = format.dateTime(date, { day: "numeric", month: "short", timeZone: "Europe/Paris" });
+    const time = format.dateTime(date, { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
+    return `${day} ${time}`;
+  };
+}
+
+/**
+ * « Voir tout le suivi »: every step the carrier gave, the most recent first, each dated in Paris with the carrier's
+ * own words. Closed at first; none when the carrier has told nothing.
+ */
+function ParcelHistory({ parcel }: { parcel: ParcelView }) {
+  const t = useTranslations("Orders.parcel");
+  const stepDate = useStepDate();
+  const listId = useId();
+  const [open, setOpen] = useState(false);
+  if (parcel.events.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-space-1">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        onClick={() => setOpen((o) => !o)}
+        className={`group inline-flex min-h-touch-target items-center gap-space-1-5 self-start rounded-button text-sm font-bold ${focusRing}`}
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 12 12"
+          className="size-space-3 transition-transform duration-base ease-standard group-aria-expanded:rotate-180 motion-reduce:transition-none"
+        >
+          <path d="M2 4.5 6 8.5 10 4.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+        </svg>
+        {open ? t("history.hide") : t("history.show")}
+      </button>
+      {open && (
+        <ol
+          id={listId}
+          aria-label={t("history.label")}
+          className="ml-space-1-5 flex flex-col gap-space-2 border-l-2 border-line pl-space-3"
+        >
+          {parcel.events.map((event) => (
+            <li key={`${event.at}-${event.label}`} className="flex flex-wrap items-baseline gap-x-space-3">
+              <time dateTime={event.at} className="shrink-0 text-chip text-ink-muted tabular-nums">
+                {stepDate(event.at)}
+              </time>{" "}
+              <span className="min-w-space-0 text-sm break-words">{event.label}</span>
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }
@@ -256,6 +362,7 @@ export function ParcelRow({
         <span className="text-meta text-ink-muted tabular-nums">{parcel.trackingNumber}</span>
       </span>
       <ParcelState parcel={parcel} />
+      <ParcelHistory parcel={parcel} />
       <a
         href={carrierTrackingUrl(parcel.carrier, parcel.trackingNumber)}
         target="_blank"

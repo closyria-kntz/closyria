@@ -304,6 +304,7 @@ describe("order schemas", () => {
           lastEventLabel: "Pris en charge",
           estimatedAt: null,
           deliveredAt: null,
+          events: [{ at: "2026-11-03T08:00:00.000Z", status: "in_transit", label: "Pris en charge" }],
         },
       ],
       receivedQuestion: false,

@@ -538,3 +538,48 @@ html:has([data-admin-shell]) {
     background-size: 100% 100%;
   }
 }
+
+/* « Après la commande » (§11.6): the frise of a parcel, four steps on a thread. Each step's dot sits between two
+   half threads (the outer ones of the first and last step stay bare): a sewn seam up to the current step, basting
+   stitches after. The step's state is in its words too (`data-state` only draws it); nothing moves. */
+.parcel-frise {
+  --frise-dot: var(--spacing-space-3-5);
+  --frise-thread: var(--spacing-space-0-5);
+}
+.parcel-frise .frise-dot {
+  flex: none;
+  inline-size: var(--frise-dot);
+  block-size: var(--frise-dot);
+  margin-inline: var(--spacing-space-1);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}
+/* Square ends: the two halves meeting between two steps read as one thread. */
+.parcel-frise .frise-thread {
+  flex: 1;
+  block-size: var(--frise-thread);
+  background: var(--color-accent);
+}
+.parcel-frise .frise-thread[data-todo] {
+  background: repeating-linear-gradient(
+    to right,
+    var(--color-ink-muted) 0 var(--spacing-space-1),
+    transparent var(--spacing-space-1) var(--spacing-space-2)
+  );
+}
+.parcel-frise > li:first-child .frise-thread:first-child,
+.parcel-frise > li:last-child .frise-thread:last-child {
+  visibility: hidden;
+}
+.parcel-frise [data-state="current"] .frise-dot {
+  box-shadow: 0 0 0 var(--spacing-space-0-75) var(--color-hint);
+}
+.parcel-frise [data-state="upcoming"] .frise-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 var(--frise-thread) var(--color-ink-muted);
+}
+/* An incident: the step reached in the clothing tag's ochre, calm (never the danger red). */
+.parcel-frise[data-exception] [data-state="current"] .frise-dot {
+  background: var(--color-label);
+  box-shadow: 0 0 0 var(--spacing-space-0-75) var(--color-tip);
+}

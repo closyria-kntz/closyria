@@ -3023,6 +3023,22 @@
       },
       "deliveredOn": "Livré le {date}",
       "estimated": "Arrivée prévue le {date}",
+      "frise": {
+        "label": "Étapes du colis",
+        "shipped": "Expédié",
+        "on_the_way": "En route",
+        "out_for_delivery": "En livraison",
+        "pickup": "En point relais",
+        "delivered": "Livré",
+        "passed": "étape franchie",
+        "upcoming": "étape à venir"
+      },
+      "exception": "Un souci signalé par le transporteur",
+      "history": {
+        "show": "Voir tout le suivi",
+        "hide": "Masquer le suivi",
+        "label": "Suivi du colis"
+      },
       "follow": "Suivre chez le transporteur",
       "newTab": "(s'ouvre dans un nouvel onglet)",
       "pickCarrier": "Transporteur",

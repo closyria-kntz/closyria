@@ -452,6 +452,13 @@ export const orderLineViewSchema = z.object({
 });
 export type OrderLineView = z.infer<typeof orderLineViewSchema>;
 
+/** A parcel's events shown at most (« Voir tout le suivi »), the most recent first. */
+export const MAX_PARCEL_EVENTS_SHOWN = 50;
+
+/** One dated step of the carrier, its label as the carrier wrote it. */
+export const parcelEventViewSchema = z.object({ at: dateTimeSchema, status: parcelStatusSchema, label: z.string() });
+export type ParcelEventView = z.infer<typeof parcelEventViewSchema>;
+
 export const parcelViewSchema = z.object({
   id: uuidSchema,
   carrier: carrierSchema.nullable(),
@@ -462,8 +469,60 @@ export const parcelViewSchema = z.object({
   lastEventLabel: z.string().nullable(),
   estimatedAt: dateTimeSchema.nullable(),
   deliveredAt: dateTimeSchema.nullable(),
+  /** All its events, the most recent first, `MAX_PARCEL_EVENTS_SHOWN` at most. */
+  events: z.array(parcelEventViewSchema),
 });
 export type ParcelView = z.infer<typeof parcelViewSchema>;
+
+/** The frise of a parcel: « Expédié », « En route », « En livraison », « Livré » (2026-11-16, §11.6). */
+export const PARCEL_STEPS = ["shipped", "on_the_way", "out_for_delivery", "delivered"] as const;
+export type ParcelStep = (typeof PARCEL_STEPS)[number];
+
+/** The frise's step of a carrier's status; none for an incident or an unknown parcel. */
+const STEP_OF: Partial<Record<ParcelStatus, number>> = {
+  pending: 0,
+  in_transit: 1,
+  out_for_delivery: 2,
+  pickup_ready: 2,
+  delivered: 3,
+};
+
+export type ParcelProgress = {
+  /** The index in `PARCEL_STEPS` of the step reached; the ones before it are passed. */
+  current: number;
+  /** The third step is « En point relais » rather than « En livraison ». */
+  pickup: boolean;
+  /** The carrier reported a problem (« Un souci signalé par le transporteur »). */
+  exception: boolean;
+};
+
+/**
+ * Where a parcel stands on the frise, or null when there is nothing to draw: still waiting for the carrier with no
+ * event, or no news (`unknown`). An incident stays on the furthest step its events reached (shipped when it has only
+ * incidents: the carrier has it); with no event at all, no frise either. `events` may come in any order.
+ */
+export function parcelProgress(parcel: {
+  status: ParcelStatus;
+  events: readonly { status: ParcelStatus }[];
+}): ParcelProgress | null {
+  const { status, events } = parcel;
+  if (status === "unknown") return null;
+  if (status === "exception") {
+    if (events.length === 0) return null;
+    let current = 0;
+    let pickup = false;
+    for (const event of events) {
+      const step = STEP_OF[event.status];
+      if (step === undefined || step < current) continue;
+      if (step > current) pickup = false;
+      current = step;
+      pickup ||= event.status === "pickup_ready";
+    }
+    return { current, pickup, exception: true };
+  }
+  if (status === "pending" && events.length === 0) return null;
+  return { current: STEP_OF[status] ?? 0, pickup: status === "pickup_ready", exception: false };
+}
 
 export const orderViewSchema = z.object({
   id: uuidSchema,

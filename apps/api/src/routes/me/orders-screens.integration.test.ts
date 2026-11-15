@@ -110,6 +110,53 @@ describe("GET /api/me/orders", () => {
     const parcel = list.orders.flatMap((o) => o.parcels).find((p) => p.id === parcelId);
     expect(parcel?.lastEventLabel).toBe("En cours d'acheminement");
   });
+
+  it("gives each parcel all its events, the most recent first, 50 at most (« Voir tout le suivi »)", async () => {
+    const a = await account();
+    const first = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" });
+    const second = await orderWithParcel(a, { carrier: "colissimo", status: "pending" });
+    const quiet = await orderWithParcel(a, { carrier: "colissimo", status: "pending" });
+    await t.db.insert(schema.parcelEvents).values([
+      {
+        parcelId: first.parcelId,
+        at: new Date(NOW.getTime() - 50 * HOUR),
+        status: "pending",
+        label: "Étiquette créée",
+      },
+      { parcelId: first.parcelId, at: new Date(NOW.getTime() - HOUR), status: "in_transit", label: "En cours" },
+      {
+        parcelId: first.parcelId,
+        at: new Date(NOW.getTime() - 26 * HOUR),
+        status: "in_transit",
+        label: "Pris en charge",
+      },
+      // 60 steps on the second parcel: the 50 most recent are shown.
+      ...Array.from({ length: 60 }, (_, i) => ({
+        parcelId: second.parcelId,
+        at: new Date(NOW.getTime() - (i + 1) * HOUR),
+        status: "pending",
+        label: `Étape ${i + 1}`,
+      })),
+    ]);
+    const list = await json<OrderList>(await call("GET", "/api/me/orders", a.cookie), 200);
+    const parcelOf = (id: string) => list.orders.flatMap((o) => o.parcels).find((p) => p.id === id);
+    expect(parcelOf(first.parcelId)?.events).toEqual([
+      { at: new Date(NOW.getTime() - HOUR).toISOString(), status: "in_transit", label: "En cours" },
+      { at: new Date(NOW.getTime() - 26 * HOUR).toISOString(), status: "in_transit", label: "Pris en charge" },
+      { at: new Date(NOW.getTime() - 50 * HOUR).toISOString(), status: "pending", label: "Étiquette créée" },
+    ]);
+    const many = parcelOf(second.parcelId)?.events ?? [];
+    expect(many).toHaveLength(50);
+    expect(many[0]?.label).toBe("Étape 1");
+    expect(many[49]?.label).toBe("Étape 50");
+    expect(parcelOf(quiet.parcelId)?.events).toEqual([]);
+    // The same steps on one order's own view (after a change).
+    const one = await json<OrderView>(
+      await call("PATCH", `/api/me/orders/${first.orderId}/parcels/${first.parcelId}`, a.cookie, { carrier: "gls" }),
+      200,
+    );
+    expect(one.parcels[0]?.events).toHaveLength(3);
+  });
 });
 
 describe("the shop's name read in the e-mail (2026-11-15)", () => {

@@ -7,6 +7,7 @@ import {
   getTableColumns,
   inArray,
   isNull,
+  lte,
   receivedQuestionOpen,
   schema,
   sql,
@@ -14,8 +15,10 @@ import {
 import {
   type Carrier,
   type ItemStage,
+  MAX_PARCEL_EVENTS_SHOWN,
   type OrderView,
   orderShopDisplayName,
+  type ParcelEventView,
   type ParcelStatus,
   type UnreadEmailView,
 } from "@closyria/shared";
@@ -28,7 +31,7 @@ export const MAX_LISTED_ORDERS = 100;
 
 const iso = (d: Date | null) => d?.toISOString() ?? null;
 
-/** Her orders as the API shows them, in the order of `rows`, with their lines, parcels and last steps. */
+/** Her orders as the API shows them, in the order of `rows`, with their lines, parcels and their steps. */
 async function viewsOf(db: Database | Tx, rows: OrderRow[]): Promise<OrderView[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
@@ -69,6 +72,37 @@ async function viewsOf(db: Database | Tx, rows: OrderRow[]): Promise<OrderView[]
     .from(schema.parcels)
     .where(inArray(schema.parcels.orderId, ids))
     .orderBy(asc(schema.parcels.createdAt), asc(schema.parcels.id));
+  // « Voir tout le suivi »: every parcel's events in one read, the most recent first, the 50 latest of each.
+  const pe = schema.parcelEvents;
+  const ranked = db
+    .select({
+      id: pe.id,
+      parcelId: pe.parcelId,
+      at: pe.at,
+      status: pe.status,
+      label: pe.label,
+      rank: sql<number>`row_number() over (partition by ${pe.parcelId} order by ${pe.at} desc, ${pe.id} desc)`.as(
+        "rank",
+      ),
+    })
+    .from(pe)
+    .innerJoin(schema.parcels, eq(schema.parcels.id, pe.parcelId))
+    .where(inArray(schema.parcels.orderId, ids))
+    .as("ranked");
+  const events =
+    parcels.length === 0
+      ? []
+      : await db
+          .select({ parcelId: ranked.parcelId, at: ranked.at, status: ranked.status, label: ranked.label })
+          .from(ranked)
+          .where(lte(ranked.rank, MAX_PARCEL_EVENTS_SHOWN))
+          .orderBy(desc(ranked.at), desc(ranked.id));
+  const eventsOf = new Map<string, ParcelEventView[]>();
+  for (const e of events) {
+    const list = eventsOf.get(e.parcelId) ?? [];
+    list.push({ at: e.at.toISOString(), status: e.status as ParcelStatus, label: e.label });
+    eventsOf.set(e.parcelId, list);
+  }
   const shopOf = new Map(shops.map((s) => [s.id, s]));
   return rows.map((order): OrderView => {
     const shop = order.shopId ? shopOf.get(order.shopId) : undefined;
@@ -108,6 +142,7 @@ async function viewsOf(db: Database | Tx, rows: OrderRow[]): Promise<OrderView[]
           lastEventLabel,
           estimatedAt: iso(parcel.estimatedAt),
           deliveredAt: iso(parcel.deliveredAt),
+          events: eventsOf.get(parcel.id) ?? [],
         })),
       receivedQuestion: order.receivedQuestion,
       createdAt: order.createdAt.toISOString(),

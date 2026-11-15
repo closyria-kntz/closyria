@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { readCode, sessionsOf } from "../fixtures/auth";
 import { AUTO_SHOP, autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
@@ -38,9 +38,9 @@ async function axeLightAndDark(page: Page) {
 
 /**
  * Screenshots for the founder (iPhone and computer, light and dark), only when `E2E_SHOTS_DIR` names a folder:
- * the suite itself never writes them.
+ * the suite itself never writes them. With `target`, only that part of the page.
  */
-async function shots(page: Page, testInfo: TestInfo, name: string) {
+async function shots(page: Page, testInfo: TestInfo, name: string, target?: Locator) {
   const dir = process.env.E2E_SHOTS_DIR;
   if (!dir || testInfo.project.name === "iPad (gen 7)") return;
   await mkdir(dir, { recursive: true });
@@ -50,7 +50,8 @@ async function shots(page: Page, testInfo: TestInfo, name: string) {
   if (size) await page.setViewportSize({ width: size.width, height: Math.max(size.height, 2200) });
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
-    await page.screenshot({ path: `${dir}/${name}-${device}-${scheme === "light" ? "clair" : "sombre"}.png` });
+    const path = `${dir}/${name}-${device}-${scheme === "light" ? "clair" : "sombre"}.png`;
+    await (target ? target.screenshot({ path }) : page.screenshot({ path }));
   }
   await page.emulateMedia({ colorScheme: "light" });
   if (size) await page.setViewportSize(size);
@@ -476,22 +477,48 @@ test("un numéro collé, le colis en route puis reçu avec sa date limite, et un
   const parcel = parcels[0];
   if (!parcel) throw new Error("no parcel");
 
-  // The carrier said « Pris en charge »: « En route » with the step and the estimated day.
+  // The carrier said « Étiquette créée », « Pris en charge à Lyon », « En cours d'acheminement »: the frise stands on
+  // « En route », with the estimated day; « Voir tout le suivi » lists the three, the most recent first (§11.6).
   const estimated = await parisDayPlus(db, 2);
   await db.query(
     `update parcels set status = 'in_transit', last_event_at = now(), estimated_at = $2::date + time '12:00' where id = $1`,
     [parcel.id, estimated],
   );
   await db.query(
-    `insert into parcel_events (parcel_id, at, status, label) values ($1, now(), 'in_transit', 'Pris en charge')`,
+    `insert into parcel_events (parcel_id, at, status, label) values
+       ($1, timestamptz '2026-11-13 06:55 Europe/Paris', 'pending', 'Étiquette créée'),
+       ($1, timestamptz '2026-11-14 09:10 Europe/Paris', 'in_transit', 'Pris en charge à Lyon'),
+       ($1, timestamptz '2026-11-15 14:02 Europe/Paris', 'in_transit', 'En cours d''acheminement')`,
     [parcel.id],
   );
   await page.reload();
-  await expect(block).toContainText("En route");
-  await expect(block).toContainText("Pris en charge");
+  const frise = block.getByRole("list", { name: "Étapes du colis" });
+  await expect(frise.getByRole("listitem")).toHaveText([
+    "Expédié étape franchie",
+    "En route",
+    "En livraison étape à venir",
+    "Livré étape à venir",
+  ]);
+  await expect(frise.locator('[aria-current="step"]')).toHaveText("En route");
   await expect(block).toContainText(`Arrivée prévue le ${frenchDay(estimated)}`);
+  const more = block.getByRole("button", { name: "Voir tout le suivi" });
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await expect(block.getByRole("list", { name: "Suivi du colis" })).toHaveCount(0);
   await axeLightAndDark(page);
   await shots(page, testInfo, "fiche-commande-colis");
+  await more.click();
+  const less = block.getByRole("button", { name: "Masquer le suivi" });
+  await expect(less).toHaveAttribute("aria-expanded", "true");
+  await expect(block.getByRole("list", { name: "Suivi du colis" }).getByRole("listitem")).toHaveText([
+    "15 nov. 14:02 En cours d'acheminement",
+    "14 nov. 09:10 Pris en charge à Lyon",
+    "13 nov. 06:55 Étiquette créée",
+  ]);
+  await axeLightAndDark(page);
+  await shots(page, testInfo, "frise", block);
+  await less.click();
+  await expect(block.getByRole("button", { name: "Voir tout le suivi" })).toBeFocused();
+  await expect(block.getByRole("list", { name: "Suivi du colis" })).toHaveCount(0);
 
   // « Tu as reçu ta commande … ? » → « Oui »: « Reçu » with its return deadline (14 days, the shop's default).
   await db.query("update orders set received_asked_at = now() where id = $1", [parcel.order_id]);
