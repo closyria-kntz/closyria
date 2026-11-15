@@ -4,8 +4,9 @@ import type { ItemCounts, ItemView } from "@closyria/shared";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { articlesHref } from "@/lib/articles-address";
+import { itemHref } from "@/lib/item-display";
 import { fetchItemsPage } from "@/lib/wardrobe-client";
 import { type Step, toItemQuery, type ViewFilters, type ViewKey } from "@/lib/wardrobe-view";
 import { countOf } from "./step-chips";
@@ -91,10 +92,7 @@ export function StageBoard({
               <ul className="flex flex-col gap-space-2-5">
                 {column.items.map((item) => (
                   <li key={item.id}>
-                    <Link
-                      href={`/produits/${item.product.id}`}
-                      className={`flex items-center gap-space-2-5 rounded-board-row bg-surface-raised p-space-1-5 ${focusRing}`}
-                    >
+                    <BoardRow href={itemHref(item)}>
                       <span className="block aspect-3/4 w-board-thumb shrink-0 overflow-hidden rounded-board-thumb bg-media-backdrop">
                         {item.coverUrl && (
                           // biome-ignore lint/performance/noImgElement: photos come from our own API, already resized.
@@ -110,7 +108,7 @@ export function StageBoard({
                       <span className="min-w-space-0 font-title text-sm leading-tight break-words text-ink">
                         {item.name?.trim() || t("card.noName")}
                       </span>
-                    </Link>
+                    </BoardRow>
                   </li>
                 ))}
               </ul>
@@ -124,5 +122,17 @@ export function StageBoard({
         );
       })}
     </section>
+  );
+}
+
+const boardRowClass = "flex items-center gap-space-2-5 rounded-board-row bg-surface-raised p-space-1-5";
+
+/** A row of the board: a link to its sheet, or plain for an article without a product (born from an order). */
+function BoardRow({ href, children }: { href: string | null; children: ReactNode }) {
+  if (!href) return <div className={boardRowClass}>{children}</div>;
+  return (
+    <Link href={href} className={`${boardRowClass} ${focusRing}`}>
+      {children}
+    </Link>
   );
 }

@@ -380,9 +380,12 @@ export type ParcelView = z.infer<typeof parcelViewSchema>;
 export const orderViewSchema = z.object({
   id: uuidSchema,
   profileId: uuidSchema,
+  /** The shop known to Closyria; null when unknown (no site read, or a typed name that matches no shop). */
   shop: z
     .object({ id: uuidSchema, name: z.string(), returnsUrl: z.url({ protocol: /^https?$/ }).nullable() })
     .nullable(),
+  /** The name to show: the shop's, else the one she typed (`orders.shop_name`), else null. */
+  shopName: z.string().nullable(),
   externalRef: z.string().nullable(),
   orderedAt: dateTimeSchema.nullable(),
   status: orderStatusSchema,

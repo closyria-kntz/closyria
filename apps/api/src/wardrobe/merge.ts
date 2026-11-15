@@ -55,8 +55,8 @@ export async function mergeProfiles(fromUserId: string, toUserId: string, tx: Db
     await tx.execute(
       sql`update ${schema.alertEvents} set profile_id = ${accountMoi.id} where profile_id = ${anonymousMoi.id}`,
     );
-    // Her orders too (« Après la commande »): the profile's deletion below would take them (cascade). Their user_id
-    // follows with the orders table, registered after.
+    // Her orders too (« Après la commande »): `orders.profile_id` has no cascade, the profile's deletion below would
+    // fail while they point to it. Their user_id follows with the orders table, registered after.
     await tx.execute(
       sql`update ${schema.orders} set profile_id = ${accountMoi.id} where profile_id = ${anonymousMoi.id}`,
     );

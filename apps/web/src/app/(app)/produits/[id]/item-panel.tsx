@@ -78,7 +78,7 @@ export function ItemPanel({ item, onChange, onGone, reload, top, shop }: Props) 
   const levels = useLoveLevels();
   const locale = useLocale();
   const profiles = useProfiles();
-  const currency = item.product.currency ?? "EUR";
+  const currency = item.product?.currency ?? "EUR";
   const money = (cents: number) => formatPrice(locale, cents, currency);
   const [error, setError] = useState<{ text: string; inWish: boolean } | null>(null);
   const [stage, setStage] = useState<ItemStage | null>(null);

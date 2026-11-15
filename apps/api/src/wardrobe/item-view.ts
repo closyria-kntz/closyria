@@ -13,6 +13,7 @@ import {
   trackingImpossibleSql,
 } from "@closyria/db";
 import {
+  type CatalogIllustration,
   DEFAULT_ALERT_SETTINGS,
   ITEMS_PAGE_SIZE,
   type ItemAlertState,
@@ -21,6 +22,7 @@ import {
   type ItemPhotoView,
   type ItemSort,
   type ItemView,
+  illustrationKindsByCategory,
   itemSortSchema,
   type SizeKind,
   sizeKindsByCategory,
@@ -98,6 +100,58 @@ async function loadAlertFacts(db: Database | Tx, userId: string, itemIds: string
   return facts;
 }
 
+type BareItemFacts = { shopName: string | null; illustration: CatalogIllustration };
+
+/**
+ * What her articles without a product show instead of their product's: the shop of their latest order (or the name
+ * she typed for it), and a silhouette of her category in her colour.
+ */
+async function loadBareItemFacts(
+  db: Database | Tx,
+  items: { id: string; categoryId: string | null; colorId: string | null }[],
+): Promise<Map<string, BareItemFacts>> {
+  const facts = new Map<string, BareItemFacts>();
+  if (items.length === 0) return facts;
+  const ids = items.map((i) => i.id);
+  const colorIds = [...new Set(items.flatMap((i) => (i.colorId ? [i.colorId] : [])))];
+  const [shops, colors, categories] = await Promise.all([
+    db
+      .selectDistinctOn([schema.orderLines.itemId], {
+        itemId: schema.orderLines.itemId,
+        name: sql<string | null>`coalesce(${schema.shops.name}, ${schema.orders.shopName})`,
+      })
+      .from(schema.orderLines)
+      .innerJoin(schema.orders, eq(schema.orders.id, schema.orderLines.orderId))
+      .leftJoin(schema.shops, eq(schema.shops.id, schema.orders.shopId))
+      .where(inArray(schema.orderLines.itemId, ids))
+      .orderBy(schema.orderLines.itemId, sql`${schema.orders.createdAt} desc`),
+    colorIds.length === 0
+      ? []
+      : db
+          .select({ id: schema.colors.id, hex: schema.colors.hex })
+          .from(schema.colors)
+          .where(inArray(schema.colors.id, colorIds)),
+    items.some((i) => i.categoryId)
+      ? db
+          .select({ id: schema.categories.id, parentId: schema.categories.parentId, slug: schema.categories.slug })
+          .from(schema.categories)
+      : [],
+  ]);
+  const kinds = illustrationKindsByCategory(categories);
+  const hex = new Map(colors.map((c) => [c.id, c.hex]));
+  const shopOf = new Map(shops.map((s) => [s.itemId, s.name]));
+  for (const item of items) {
+    facts.set(item.id, {
+      shopName: shopOf.get(item.id) ?? null,
+      illustration: {
+        kind: (item.categoryId ? kinds.get(item.categoryId) : undefined) ?? "other",
+        color: (item.colorId ? hex.get(item.colorId) : undefined) ?? null,
+      },
+    });
+  }
+  return facts;
+}
+
 /**
  * Her items, in the order of `itemIds`, with their products, photos, tags and lists in a fixed number of queries.
  * `now` decides « Reçu » (see `received.ts`).
@@ -115,7 +169,7 @@ export async function loadItemViews(
     .where(and(inArray(schema.items.id, itemIds), eq(schema.items.userId, userId)));
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const [products, photos, tags, lists, ownedMoves, alerts] = await Promise.all([
+  const [products, photos, tags, lists, ownedMoves, alerts, bare] = await Promise.all([
     loadProductViews(
       db as Database,
       rows.flatMap((r) => (r.productId ? [r.productId] : [])),
@@ -157,28 +211,37 @@ export async function loadItemViews(
       )
       .groupBy(schema.itemEvents.itemId),
     loadAlertFacts(db, userId, ids),
+    loadBareItemFacts(
+      db,
+      rows.filter((r) => !r.productId),
+    ),
   ]);
   const since = receivedSince(now).getTime();
   const lastOwned = new Map(ownedMoves.map((m) => [m.itemId, m.at]));
   const byId = new Map<string, ItemView>();
   for (const item of rows) {
-    const product = item.productId ? products.get(item.productId) : undefined;
-    if (!product) continue; // 2a: every item has a product (items born from a photo come with 2b)
+    // An article without a product is born from an order line (« Après la commande »); one whose product is gone
+    // meanwhile is not shown.
+    const product = item.productId ? products.get(item.productId) : null;
+    if (product === undefined) continue;
+    const facts = product ? null : bare.get(item.id);
     const own: ItemPhotoView[] = photos
       .filter((p) => p.itemId === item.id)
       .map((p) => ({ id: p.id, url: privateMediaUrl(p.id), width: p.width, height: p.height, source: "private" }));
-    const shop: ItemPhotoView[] = product.images.map((i) => ({ ...i, source: "shop" }));
+    const shop: ItemPhotoView[] = (product?.images ?? []).map((i) => ({ ...i, source: "shop" }));
     byId.set(item.id, {
       id: item.id,
       profileId: item.profileId,
       product,
+      shopName: product ? product.shop.name : (facts?.shopName ?? null),
+      illustration: product ? null : (facts?.illustration ?? { kind: "other", color: null }),
       stage: item.stage as ItemView["stage"],
       loveLevel: item.loveLevel as ItemView["loveLevel"],
       priority: item.priority,
       why: item.why,
       inOrderDraft: item.inOrderDraft,
-      name: item.nameOverride ?? product.name,
-      brand: item.brandOverride ?? product.brand,
+      name: item.nameOverride ?? product?.name ?? null,
+      brand: item.brandOverride ?? product?.brand ?? null,
       sizeLabel: item.sizeLabel,
       sizeNote: item.sizeNote,
       notes: item.notes,
@@ -197,12 +260,12 @@ export async function loadItemViews(
       // Null cover = the shop's first photo, else her first private photo (spec §3).
       coverUrl: item.coverMediaId
         ? privateMediaUrl(item.coverMediaId)
-        : (product.images[0]?.url ?? own[0]?.url ?? null),
+        : (product?.images[0]?.url ?? own[0]?.url ?? null),
       alertsEnabled: item.alertsEnabled,
       targetPriceCents: item.targetPriceCents,
       alertState: alerts.get(item.id)?.state ?? null,
       watchedSizes: alerts.get(item.id)?.watched ?? "any",
-      checkedAt: product.lastCapturedAt,
+      checkedAt: product?.lastCapturedAt ?? null,
       photos: [...own, ...shop],
       tags: tags
         .filter((t) => t.itemId === item.id)
@@ -351,6 +414,14 @@ function decodeCursor(sort: ListSort, cursor: string): string[] {
   return values;
 }
 
+/** An article without a product whose order's shop (or the name she typed for it) matches `pattern`. */
+const orderShopMatches = (pattern: string) => sql`exists (
+  select 1 from ${schema.orderLines}
+  join ${schema.orders} on ${schema.orders.id} = ${schema.orderLines.orderId}
+  left join ${schema.shops} as order_shop on order_shop.id = ${schema.orders.shopId}
+  where ${schema.orderLines.itemId} = ${schema.items.id}
+    and coalesce(order_shop.name, ${schema.orders.shopName}) ilike ${pattern})`;
+
 /**
  * One page (48) of her items, filtered and sorted, with a cursor on the sort keys: `(created_at, id)` descending by
  * default, `(deleted_at, id)` descending in the trash (`deleted=true`). Price sorts use the product's price.
@@ -400,7 +471,7 @@ export async function listItems(
     // `%`, `_` and `\` she types are looked for as they are.
     const pattern = `%${query.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     conditions.push(
-      sql`(coalesce(${effectiveName}, '') ilike ${pattern} or coalesce(${schema.items.brandOverride}, ${schema.products.brand}, '') ilike ${pattern} or ${schema.shops.name} ilike ${pattern})`,
+      sql`(coalesce(${effectiveName}, '') ilike ${pattern} or coalesce(${schema.items.brandOverride}, ${schema.products.brand}, '') ilike ${pattern} or ${schema.shops.name} ilike ${pattern} or (${isNull(schema.items.productId)} and ${orderShopMatches(pattern)}))`,
     );
   }
   if (query.cursor) {
@@ -422,8 +493,9 @@ export async function listItems(
   const rows = (await db
     .select(selection)
     .from(schema.items)
-    .innerJoin(schema.products, eq(schema.products.id, schema.items.productId))
-    .innerJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
+    // Left joins: an article without a product (born from an order line) is listed too.
+    .leftJoin(schema.products, eq(schema.products.id, schema.items.productId))
+    .leftJoin(schema.shops, eq(schema.shops.id, schema.products.shopId))
     .leftJoin(
       schema.wishlistItems,
       and(

@@ -5,6 +5,12 @@ import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { BASE_URL, createCatalogHarness } from "../../catalog/test-app";
 
+/** Her item's product (these items are all kept from a product). */
+function productOf(item: { product: ItemView["product"] }) {
+  if (!item.product) throw new Error("no product");
+  return item.product;
+}
+
 type Harness = Awaited<ReturnType<typeof createCatalogHarness>>;
 let t: Harness;
 let counter = 0;
@@ -467,7 +473,7 @@ describe("/api/me/items/:id/media/imports", () => {
     const importId = await startImport(item.id, cookie);
     await simulateReady(importId, userId);
 
-    const res = await call("GET", `/api/me/items?product=${item.product.id}`, cookie);
+    const res = await call("GET", `/api/me/items?product=${productOf(item).id}`, cookie);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { items: ItemView[] };
     expect(body.items[0]?.photos).toHaveLength(1);
@@ -483,7 +489,7 @@ describe("/api/me/items/:id/media/imports", () => {
     const answers = await Promise.all([
       call("GET", `/api/me/items/${item.id}`, cookie),
       call("GET", importPath(item.id, importId), cookie),
-      call("GET", `/api/me/items?product=${item.product.id}`, cookie),
+      call("GET", `/api/me/items?product=${productOf(item).id}`, cookie),
     ]);
     for (const res of answers) expect(res.status).toBe(200);
     const photos = await t.db.select().from(schema.itemMedia).where(eq(schema.itemMedia.itemId, item.id));
@@ -539,7 +545,7 @@ describe("/api/me/items/:id/media/imports", () => {
     const key = await simulateReady(importId, userId);
     // Into the trash, kept again (a new active item), then restored: merged into the active one.
     expect((await call("DELETE", `/api/me/items/${trashed.id}`, cookie)).status).toBe(200);
-    const again = await call("POST", "/api/me/items", cookie, { productId: trashed.product.id, action: "wish" });
+    const again = await call("POST", "/api/me/items", cookie, { productId: productOf(trashed).id, action: "wish" });
     const active = ((await again.json()) as ItemResult).item;
     expect(active.id).not.toBe(trashed.id);
     const restored = await call("POST", `/api/me/items/${trashed.id}/restore`, cookie);

@@ -64,6 +64,8 @@ const item = {
   id,
   profileId: id,
   product,
+  shopName: product.shop.name,
+  illustration: null,
   stage: "spotted",
   loveLevel: 2,
   priority: false,

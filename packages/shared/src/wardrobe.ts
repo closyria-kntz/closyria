@@ -2,6 +2,7 @@ import { z } from "zod";
 import { audienceSchema, childDetailSchema, currencySchema, productViewSchema, seasonSchema } from "./catalog";
 import { sharedGiftStateSchema, sharedGiftsSchema } from "./gifts";
 import { groupOrderStatusSchema, sharedGroupOrderSchema } from "./group-orders";
+import { catalogIllustrationSchema } from "./illustration";
 import { type LoveLevel, loveLevelSchema } from "./love-level";
 import { opinionViewSchema, wishlistSettingsSchema } from "./opinions";
 
@@ -409,7 +410,15 @@ export type ItemPhotoView = z.infer<typeof itemPhotoViewSchema>;
 export const itemViewSchema = z.object({
   id: z.uuid(),
   profileId: z.uuid(),
-  product: productViewSchema,
+  /**
+   * Null for an article born from an order line that matched none of her items (« Après la commande »): no shop page,
+   * no stock nor price follow-up; its name and brand are her own (`nameOverride`, `brandOverride`).
+   */
+  product: productViewSchema.nullable(),
+  /** The product's shop; for an article without a product, its order's shop (or the name she typed), else null. */
+  shopName: z.string().nullable(),
+  /** What an article without a product shows instead of a photo (her category and colour); null with a product. */
+  illustration: catalogIllustrationSchema.nullable(),
   stage: itemStageSchema,
   loveLevel: loveLevelSchema.nullable(),
   priority: z.boolean(),
@@ -720,6 +729,10 @@ export const wardrobeErrorCodes = [
   "not_in_shop",
   "not_eligible",
   "account_required",
+  "order_not_draft",
+  "order_dismissed",
+  "item_not_ordered",
+  "tracking_exists",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];

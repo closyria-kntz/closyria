@@ -4,6 +4,12 @@ import type { ItemView, MutationResult } from "@closyria/shared";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { BASE_URL, createCatalogHarness } from "../../catalog/test-app";
 
+/** Her item's product (these items are all kept from a product). */
+function productOf(item: { product: ItemView["product"] }) {
+  if (!item.product) throw new Error("no product");
+  return item.product;
+}
+
 type Harness = Awaited<ReturnType<typeof createCatalogHarness>>;
 let t: Harness;
 let counter = 0;
@@ -631,13 +637,13 @@ describe("GET /api/me/items", () => {
       );
     expect(await ids("stage=ordered")).toEqual([dear.item.id]);
     expect(await ids(`profile=${lea.id}`)).toEqual([dear.item.id]);
-    expect(await ids(`product=${dear.item.product.id}`)).toEqual([dear.item.id]);
+    expect(await ids(`product=${productOf(dear.item).id}`)).toEqual([dear.item.id]);
     expect(await ids(`product=${UNKNOWN_ID}`)).toEqual([]);
     expect((await call("GET", "/api/me/items?product=not-a-uuid", cookie)).status).toBe(400);
     // Another account's item for the same product is never returned.
     const stranger = await t.signIn();
-    await keep(stranger.cookie, { productId: dear.item.product.id, action: "wish" });
-    expect(await ids(`product=${dear.item.product.id}`)).toEqual([dear.item.id]);
+    await keep(stranger.cookie, { productId: productOf(dear.item).id, action: "wish" });
+    expect(await ids(`product=${productOf(dear.item).id}`)).toEqual([dear.item.id]);
     expect(await ids("sort=price_asc")).toEqual([cheap.item.id, dear.item.id, noPriceId]);
     expect(await ids("sort=price_desc")).toEqual([dear.item.id, cheap.item.id, noPriceId]);
     expect(await ids("sort=oldest")).toEqual([cheap.item.id, dear.item.id, noPriceId]);
@@ -668,7 +674,7 @@ describe("GET /api/me/items", () => {
     expect(await ids("sézane")).toEqual([dress.item.id]);
     expect(await ids("levi")).toEqual([jeans.item.id]);
     // The shop's name: every product of this test has its own « Boutique I… ».
-    const shopName = dress.item.product.shop.name;
+    const shopName = productOf(dress.item).shop.name;
     expect(await ids(shopName)).toEqual([dress.item.id]);
     expect(await ids("%")).toEqual([odd.item.id]);
     expect(await ids("0%_")).toEqual([odd.item.id]);

@@ -217,6 +217,8 @@ export function wishSummary(items: readonly ItemView[]): { count: number; totalC
   let totalCents = 0;
   let drops = 0;
   for (const { product } of items) {
+    // An article without a product (born from an order) is never a wish: nothing to add.
+    if (!product) continue;
     if (product.priceCents !== null) totalCents += product.priceCents;
     if (priceDropCents(product.priceCents, product.compareAtCents) !== null) drops += 1;
   }

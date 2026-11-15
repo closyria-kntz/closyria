@@ -67,7 +67,7 @@
 
 **Produces:** `GET /api/me/orders` (brouillons et commandes), `PATCH /api/me/orders/{id}` (corriger), `POST /api/me/orders/{id}/confirm` → articles : reliés à l'envie du même produit (URL canonique / produit capturé ; sinon même boutique + nom proche) et passés « Commandé » avec la taille de la commande (RF 3), sinon créés « Commandé » ; `POST /api/me/orders/{id}/dismiss` ; `POST /api/me/orders` (saisie manuelle) ; `POST /api/me/items/{id}/tracking` (numéro collé → commande `tracking` + colis).
 
-- [ ] Tests d'abord, commit « feat(commandes): valider et relier ».
+- [x] Tests d'abord, commit « feat(commandes): valider et relier ». Décisions et arbitrages (article sans produit, boutique tapée) : spec §10.3.
 
 ### Task 5: Suivi des colis
 

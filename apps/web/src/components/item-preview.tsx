@@ -42,8 +42,9 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
         ? [item.coverUrl]
         : []
     : [];
-  const price = item?.product.priceCents ?? null;
-  const drop = item ? priceDropCents(price, item.product.compareAtCents) : null;
+  const price = item?.product?.priceCents ?? null;
+  const compareAt = item?.product?.compareAtCents ?? null;
+  const drop = item ? priceDropCents(price, compareAt) : null;
   const size = item ? [item.sizeLabel, item.sizeNote && `« ${item.sizeNote} »`].filter(Boolean).join(" · ") : "";
 
   return (
@@ -68,7 +69,7 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
               {t("take")}
               <span className="ml-auto text-sm text-ink-muted">{t("takeHint")}</span>
             </label>
-            {isHttpUrl(item.product.canonicalUrl) && (
+            {item.product && isHttpUrl(item.product.canonicalUrl) && (
               <a
                 href={item.product.canonicalUrl}
                 target="_blank"
@@ -122,9 +123,9 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
               </h2>
               <p className="flex flex-wrap items-baseline gap-space-2 font-strong tabular-nums">
                 {price === null ? tRow("unknownPrice") : money(price)}
-                {drop !== null && item?.product.compareAtCents != null && (
+                {drop !== null && compareAt !== null && (
                   <>
-                    <s className="font-normal text-ink-muted">{money(item.product.compareAtCents)}</s>
+                    <s className="font-normal text-ink-muted">{money(compareAt)}</s>
                     <span className="rounded-full bg-success-soft px-space-2 text-sm text-success">−{money(drop)}</span>
                   </>
                 )}
@@ -159,12 +160,14 @@ export function ItemPreview({ item, levels, money, onClose, onToggle }: Props) {
               </dl>
             )}
             <ItemOpinionsSection itemId={item.id} />
-            <Link
-              href={`/produits/${item.product.id}`}
-              className={`self-start rounded-sm text-sm text-ink-muted underline underline-offset-2 hover:text-ink ${focusRing}`}
-            >
-              {t("full")}
-            </Link>
+            {item.product && (
+              <Link
+                href={`/produits/${item.product.id}`}
+                className={`self-start rounded-sm text-sm text-ink-muted underline underline-offset-2 hover:text-ink ${focusRing}`}
+              >
+                {t("full")}
+              </Link>
+            )}
           </div>
         </>
       )}

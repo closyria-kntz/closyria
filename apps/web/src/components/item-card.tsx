@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { formatAmount } from "@/lib/budget";
+import { itemHref, itemPrice, itemShopName } from "@/lib/item-display";
 import { formatOptionalPrice, priceDropCents } from "@/lib/price";
 import { itemStep } from "@/lib/wardrobe-view";
 import { ItemMenu } from "./item-menu";
 import { PHOTO_CLICK_DELAY_MS, photoClickPlan } from "./level-picker-logic";
 import { LoveLevelBadge, LoveLevelPill } from "./love-level-pill";
+import { ProductIllustration } from "./product-illustration";
 import { Tick } from "./tick";
 import { focusRing } from "./ui";
 
@@ -51,7 +53,7 @@ type Props = {
  * mockup's heart); then the name (Gloock), « type · boutique », « Prioritaire », her opinion, and the price in a
  * powder-pink price tag (crossed price and « −20 € » inside it) with « … » beside it, bottom right.
  */
-export function ItemCard({ item, actions, selection, typeName, linked = true, children }: Props) {
+export function ItemCard({ item, actions, selection, typeName, linked: linkedProp = true, children }: Props) {
   const t = useTranslations("Views.card");
   const tStep = useTranslations("Views.step");
   const tStage = useTranslations("Item.stage");
@@ -65,7 +67,9 @@ export function ItemCard({ item, actions, selection, typeName, linked = true, ch
     if (open) clearTimeout(openTimer.current);
     setPickerOpen(open);
   };
-  const href = `/produits/${item.product.id}`;
+  // An article without a product (born from an order) has no sheet yet: its card is not a link.
+  const href = itemHref(item) ?? "";
+  const linked = linkedProp && href !== "";
   // A click on the photo waits a beat: a second click (double tap) opens the 4 levels instead of the sheet.
   // The keyboard, a middle click and cmd / ctrl / shift clicks keep the link's own behaviour.
   const onPhotoClick =
@@ -82,14 +86,15 @@ export function ItemCard({ item, actions, selection, typeName, linked = true, ch
       : undefined;
   const name = item.name?.trim() || t("noName");
   const asked = item.stage === "for_sale" || item.stage === "sold" ? item.salePriceCents : null;
-  const currency = item.product.currency ?? "EUR";
-  const price = formatOptionalPrice(locale, asked ?? item.product.priceCents, currency, t("noPrice"));
+  const shown = itemPrice(item);
+  const { currency } = shown;
+  const price = formatOptionalPrice(locale, asked ?? shown.priceCents, currency, t("noPrice"));
   // The shop's crossed price, only while the card shows the shop's price (not the price she asks).
-  const drop = asked === null ? priceDropCents(item.product.priceCents, item.product.compareAtCents) : null;
+  const drop = asked === null ? priceDropCents(shown.priceCents, shown.compareAtCents) : null;
   const quick = actions && !selection && actions.onTake && actions.onPreview ? actions : null;
   const step = itemStep(item);
   const stepLabel = step ? tStep(step) : tStage(item.stage);
-  const shop = item.product.shop.name;
+  const shop = itemShopName(item);
   return (
     <li className="card card-rise group relative flex flex-col rounded-card bg-surface-raised" data-testid="item-card">
       <Wrapper
@@ -109,6 +114,8 @@ export function ItemCard({ item, actions, selection, typeName, linked = true, ch
               decoding="async"
               className="card-photo size-full object-cover"
             />
+          ) : item.illustration ? (
+            <ProductIllustration illustration={item.illustration} className="size-full" />
           ) : (
             <span
               aria-hidden="true"
@@ -123,14 +130,14 @@ export function ItemCard({ item, actions, selection, typeName, linked = true, ch
             {name}
           </span>
           <span className="truncate text-meta text-ink-muted">
-            {typeName ? t("meta", { type: typeName, shop }) : shop}
+            {typeName && shop ? t("meta", { type: typeName, shop }) : (typeName ?? shop)}
           </span>
           {item.priority && (
             <span className="self-start rounded-pill bg-accent px-space-2 py-space-0-5 text-tag font-bold text-accent-ink">
               {t("priority")}
             </span>
           )}
-          {asked === null && item.product.captureStatus === "manual" && item.product.priceCents !== null && (
+          {asked === null && item.product?.captureStatus === "manual" && item.product.priceCents !== null && (
             <span className="truncate text-meta text-ink-muted">{t("manualPrice")}</span>
           )}
           {item.why && <span className="truncate text-meta text-ink-muted italic">{t("why", { why: item.why })}</span>}
@@ -139,10 +146,8 @@ export function ItemCard({ item, actions, selection, typeName, linked = true, ch
           <span className="flex min-w-space-0 pt-space-1 pr-space-7">
             <span data-testid="price-tag" className="price-tag max-w-full tabular-nums">
               <span className="whitespace-nowrap">{price}</span>
-              {drop !== null && item.product.compareAtCents !== null && (
-                <s className="font-regular whitespace-nowrap">
-                  {formatAmount(locale, item.product.compareAtCents, currency)}
-                </s>
+              {drop !== null && shown.compareAtCents !== null && (
+                <s className="font-regular whitespace-nowrap">{formatAmount(locale, shown.compareAtCents, currency)}</s>
               )}
               {drop !== null && (
                 <span data-testid="card-drop" className="whitespace-nowrap">

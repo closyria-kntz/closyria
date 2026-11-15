@@ -85,7 +85,7 @@ function userIdOf(c: Context<AccessEnv>): string {
 }
 
 /** Read from the table, not the session: the session may be older than her account. */
-async function accountOf(db: Database, userId: string) {
+export async function accountOf(db: Database, userId: string) {
   const [row] = await db
     .select({ name: schema.user.name, isAnonymous: schema.user.isAnonymous })
     .from(schema.user)

@@ -54,7 +54,7 @@ export function PhotoManager({
   const [confirming, setConfirming] = useState<ItemPhotoView | null>(null);
   const [picker, setPicker] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
-  const name = item.name ?? item.product.shop.name;
+  const name = item.name ?? item.shopName ?? "";
   const mine = item.photos.filter((photo) => photo.source === "private");
   const shop = item.photos.filter((photo) => photo.source === "shop");
   const photos: GalleryPhoto[] = [

@@ -64,7 +64,7 @@ export function ItemMenu({ item, onChanged, onTrashed, reload }: Props) {
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDialogElement>(null);
   const panelId = useId();
-  const name = item.name?.trim() || item.product.name || "";
+  const name = item.name?.trim() || item.product?.name || "";
   const fail = (code: string) => pushUndo(tItem(`errors.${code}` as "errors.failed"), null);
 
   const close = useCallback((returnFocus: boolean) => {

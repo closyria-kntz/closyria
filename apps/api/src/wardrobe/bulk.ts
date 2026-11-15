@@ -345,17 +345,19 @@ async function applyOp(tx: Tx, userId: string, op: ItemBulk, options: OpOptions)
       const merged: string[] = [];
       for (const item of items) {
         if (!item.deletedAt) continue;
-        if (!item.productId) throw new Error("items without a product come with 2b");
-        const [active] = await tx
-          .select()
-          .from(schema.items)
-          .where(
-            and(
-              eq(schema.items.userId, userId),
-              eq(schema.items.productId, item.productId),
-              isNull(schema.items.deletedAt),
-            ),
-          );
+        // An article without a product (born from an order line) has nothing to merge with: it simply comes back.
+        const [active] = !item.productId
+          ? []
+          : await tx
+              .select()
+              .from(schema.items)
+              .where(
+                and(
+                  eq(schema.items.userId, userId),
+                  eq(schema.items.productId, item.productId),
+                  isNull(schema.items.deletedAt),
+                ),
+              );
         if (active) {
           await mergeItemInto(tx, item, active, now);
           changed.add(active.id);

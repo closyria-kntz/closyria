@@ -281,6 +281,13 @@
       "when": 1794738320303,
       "tag": "0039_ia_commandes",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1794740801939,
+      "tag": "0040_commandes_boutique_saisie",
+      "breakpoints": true
     }
   ]
 }

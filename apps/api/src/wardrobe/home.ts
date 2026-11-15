@@ -361,16 +361,16 @@ export async function homeView(db: Database, userId: string, now: Date): Promise
       if (!item) return [];
       const facts: Partial<HomeNews> =
         draft.kind === "price_drop"
-          ? { currency: item.product.currency }
+          ? { currency: item.product?.currency ?? null }
           : draft.kind === "target_price"
-            ? { currency: item.product.currency, targetPriceCents: item.targetPriceCents }
+            ? { currency: item.product?.currency ?? null, targetPriceCents: item.targetPriceCents }
             : {};
       return [
         {
           ...draft,
           ...facts,
-          title: item.name?.trim() || item.product.shop.name,
-          detail: draft.kind === "opinion" ? (draft.detail ?? null) : item.product.shop.name,
+          title: item.name?.trim() || item.shopName || "",
+          detail: draft.kind === "opinion" ? (draft.detail ?? null) : item.shopName,
           photoUrl: item.coverUrl,
         },
       ];

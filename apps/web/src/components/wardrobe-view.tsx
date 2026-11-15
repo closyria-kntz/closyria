@@ -507,7 +507,7 @@ export function WardrobeView({ view }: { view: ViewKey }) {
     const names = new Map(reference?.categories.map((category) => [category.id, category.name]) ?? []);
     // Her correction first, else the product's own type (the last of its path).
     return (item: ItemView) =>
-      (item.categoryId ? names.get(item.categoryId) : undefined) ?? item.product.traits.category.at(-1) ?? null;
+      (item.categoryId ? names.get(item.categoryId) : undefined) ?? item.product?.traits.category.at(-1) ?? null;
   }, [reference]);
   const boardHref = (() => {
     const params = new URLSearchParams(search.toString());

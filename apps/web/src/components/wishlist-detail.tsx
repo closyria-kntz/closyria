@@ -42,8 +42,8 @@ const touch = "min-h-touch-target";
 /** The shops of the list's items, once each, in the list's order. */
 function shopsOf(items: readonly ItemView[]) {
   const shops = new Map<string, string>();
-  for (const item of items)
-    if (!shops.has(item.product.shop.id)) shops.set(item.product.shop.id, item.product.shop.name);
+  for (const { product } of items)
+    if (product && !shops.has(product.shop.id)) shops.set(product.shop.id, product.shop.name);
   return [...shops].map(([id, name]) => ({ id, name }));
 }
 
@@ -222,7 +222,7 @@ export function WishlistDetail({ id }: { id: string }) {
   }
 
   const { list, items, partial } = state;
-  const nameOf = (item: ItemView) => item.name?.trim() || item.product.name || "";
+  const nameOf = (item: ItemView) => item.name?.trim() || item.product?.name || "";
 
   async function rename(event: FormEvent) {
     event.preventDefault();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ILLUSTRATION_KINDS, illustrationKindOf, illustrationKindsByCategory } from "./catalogue";
 import { type CatalogueFacts, factualDescription } from "./catalogue-facts";
+import { ILLUSTRATION_KINDS, illustrationKindOf, illustrationKindsByCategory } from "./illustration";
 
 const facts = (partial: Partial<CatalogueFacts>): CatalogueFacts => ({
   category: null,

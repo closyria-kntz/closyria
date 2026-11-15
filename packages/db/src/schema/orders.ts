@@ -6,6 +6,7 @@ import {
   MAX_ORDER_LINE_NAME,
   MAX_ORDER_LINE_QUANTITY,
   MAX_PARCEL_EVENT_LABEL,
+  MAX_SHOP_NAME,
   MAX_SIZE_LABEL,
   MAX_TRACKING_NUMBER,
   orderParseMethodSchema,
@@ -120,6 +121,11 @@ export const orders = pgTable(
       .notNull()
       .references(() => profiles.id),
     shopId: uuid("shop_id").references(() => shops.id, { onDelete: "set null" }),
+    /**
+     * The shop name she typed (« Corriger », manual entry) when it matches no shop: never a shop created from a typed
+     * name. Null when the shop is known or unnamed.
+     */
+    shopName: text("shop_name"),
     /** The shop's order number (« #1042 »): with the shop, finds the order a second e-mail completes. */
     externalRef: text("external_ref"),
     orderedAt: at("ordered_at"),
@@ -139,6 +145,10 @@ export const orders = pgTable(
     check("orders_source_check", oneOf(t.source, orderSourceSchema.options)),
     check("orders_parse_method_check", oneOf(t.parseMethod, orderParseMethodSchema.options)),
     check("orders_external_ref_check", atMost(t.externalRef, MAX_EXTERNAL_REF)),
+    check(
+      "orders_shop_name_check",
+      sql`${t.shopName} IS NULL OR char_length(${t.shopName}) BETWEEN 1 AND ${sql.raw(String(MAX_SHOP_NAME))}`,
+    ),
   ],
 );
 

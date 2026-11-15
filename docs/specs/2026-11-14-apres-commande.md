@@ -249,3 +249,41 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   figure pas (la carte reste dans « Nouvelles »).
 - **File** `order-email-parse` : 3 nouvelles tentatives (IA indisponible, stockage ou base en panne) ; à la dernière,
   l'e-mail passe `failed` plutôt que de rester `queued`. Une seconde exécution du même travail ne fait rien.
+
+### 10.3 Valider et relier (Task 4, 2026-11-15)
+
+- **Arbitrages de la fondatrice (2026-11-15)** :
+  - **Article sans produit** : une ligne de commande qui ne correspond à aucun de ses articles devient un article
+    « Commandé » **sans produit** (pas de produit inventé dans le catalogue partagé). Son nom est le sien
+    (`name_override`), sa boutique celle de la commande (ou le nom qu'elle a tapé), son image la silhouette de sa
+    catégorie dans sa couleur (silhouette neutre sans catégorie). Il n'a ni fiche produit, ni lien « Voir chez … »,
+    ni suivi du stock et du prix, ni alerte ; il se met à la corbeille, revient, change d'étape comme les autres.
+    La fiche de ces articles et leur bloc « Commande / colis » viennent avec les écrans (Task 7).
+  - **Boutique tapée** (« Corriger », saisie manuelle) : la boutique au nom exactement identique, casse et accents
+    mis à part (jamais une boutique fusionnée ; une boutique publiée d'abord) ; sinon la commande reste sans boutique
+    et garde le nom tapé (`orders.shop_name`, migration 0040). Un nom tapé ne crée jamais de boutique.
+- **« C'est bon »** : chaque ligne reçoit son article. D'abord son article du produit de la ligne (un seul article
+  actif par produit, quel que soit son stade) ; sinon son unique envie ou article « Commandé » de la même boutique et
+  du même nom (casse, accents, ponctuation et espaces mis à part), pas déjà relié à une autre commande validée — deux
+  articles du même nom, ou une commande sans boutique : pas de liaison par le nom, un nouvel article (mieux vaut un
+  article de trop qu'une envie passée « Commandé » à tort). Une envie passe « Commandé » à la date de la commande
+  (sinon le jour même), avec sa ligne d'historique, la taille de la commande et ce qu'elle a payé (prix unitaire ×
+  quantité, compté seulement en euros) ; un article déjà « Commandé » reçoit la taille et le prix qui lui manquaient.
+  La commande est verrouillée (`for update`, comme la lecture des e-mails) : une seconde validation attend la
+  première et répond la commande telle quelle, sans rien recréer. Une commande écartée : 409 `order_dismissed`.
+- **Corriger / écarter** : seulement un brouillon (409 `order_not_draft`) ; « Ce n'est pas une commande » deux fois ne
+  fait rien de plus ; une commande écartée n'est plus listée.
+- **Saisie manuelle** : tapée par elle, elle est validée aussitôt (ses lignes reliées comme avec « C'est bon »), avec
+  son colis quand elle donne un numéro ; l'e-mail illisible qu'elle remplace doit être à elle (sinon 404).
+- **Numéro collé sur un article « Commandé »** : le colis rejoint la commande validée de l'article, sinon une commande
+  `tracking` (validée, une ligne) est créée. Transporteur : celui que dit le format du numéro, sinon celui qu'elle a
+  choisi, sinon inconnu (colis `unknown`, gardé quand même : « Suivre chez le transporteur » et la question J+10 des
+  Tasks 5–6). Premier contrôle (`next_check_at`) au rythme de `nextParcelCheck`, jamais après la fin du suivi. Même
+  numéro deux fois : sans effet ; numéro d'une autre de ses commandes : 409 `tracking_exists`. Même verrou par numéro
+  que la lecture des e-mails.
+- **Comptes seulement** : invitée → 403 `account_required` sur toutes ces routes ; commande ou article d'un autre
+  compte → 404.
+- **Limite** : saisie manuelle et numéros collés comptent comme les créations d'articles, 300 par heure et par compte
+  (429 `rate_limited`).
+- **Profils** : déplacer un article vers un autre profil laisse ses commandes dans le profil où elles ont été passées
+  (leurs lignes pointent toujours vers l'article).

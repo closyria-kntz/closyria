@@ -284,7 +284,7 @@ export function OrderDraft() {
           <ul aria-label={t("listLabel")} className="flex flex-col gap-space-2">
             {items.items.map((item) => {
               const level = item.loveLevel === null ? null : levelOf(levels, item.loveLevel);
-              const price = item.product.priceCents;
+              const price = item.product?.priceCents ?? null;
               return (
                 <li key={item.id}>
                   <div className="flex items-center gap-space-2 rounded-card border-2 border-line bg-surface-raised py-space-2 pr-space-3 has-checked:border-selected-line has-checked:bg-selected-surface">
@@ -336,7 +336,7 @@ export function OrderDraft() {
                             .join(" · ")}
                         </span>
                       )}
-                      {isHttpUrl(item.product.canonicalUrl) && (
+                      {item.product && isHttpUrl(item.product.canonicalUrl) && (
                         <a
                           href={item.product.canonicalUrl}
                           target="_blank"

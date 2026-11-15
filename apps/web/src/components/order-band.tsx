@@ -180,7 +180,7 @@ export function OrderBand({
       {open && (
         <ul id={listId} aria-label={t("band.items")} className="flex max-h-72 flex-col overflow-y-auto">
           {rows.map((item) => {
-            const price = item.product.priceCents;
+            const price = item.product?.priceCents ?? null;
             return (
               <li key={item.id} className="flex items-center gap-space-2">
                 <label

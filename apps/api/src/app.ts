@@ -35,6 +35,7 @@ import { itemsRoutes } from "./routes/me/items";
 import { loveLevelsRoutes } from "./routes/me/love-levels";
 import { orderDraftRoutes } from "./routes/me/order-draft";
 import { orderInboxRoutes } from "./routes/me/order-inbox";
+import { ordersRoutes } from "./routes/me/orders";
 import { preferencesRoutes } from "./routes/me/preferences";
 import { profilesRoutes } from "./routes/me/profiles";
 import { recentsRoutes } from "./routes/me/recents";
@@ -164,6 +165,7 @@ export function createApp(deps: AppDeps) {
         ...(deps.wardrobe.now ? { nowMs: () => (deps.wardrobe.now as () => Date)().getTime() } : {}),
       }),
     )
+    .route("/", ordersRoutes(deps.wardrobe))
     .route("/", itemsRoutes(deps.wardrobe, importAttacher))
     .route(
       "/",

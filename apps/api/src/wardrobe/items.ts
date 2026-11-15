@@ -47,7 +47,7 @@ export async function lockOwnItem(tx: Tx, userId: string, itemId: string): Promi
 }
 
 /** Her active item for the product, row-locked (read fresh, after any change in flight on it has committed). */
-async function lockActiveItemFor(tx: Tx, userId: string, productId: string): Promise<Item | null> {
+export async function lockActiveItemFor(tx: Tx, userId: string, productId: string): Promise<Item | null> {
   const [row] = await tx
     .select()
     .from(schema.items)
@@ -284,7 +284,8 @@ async function moveItemIn(tx: Tx, userId: string, itemId: string, input: ItemMov
   if (!target) return { error: "not_found" };
   if (item.deletedAt) return { error: "item_deleted" };
   if (item.profileId === target.id) return { error: "same_profile" };
-  // Another profile, out of this profile's order selection (spec §3.6); the undo selects it again.
+  // Another profile, out of this profile's order selection (spec §3.6); the undo selects it again. Its orders stay in
+  // the profile they were placed in (« Après la commande », ruling of Task 4): their lines still point to the item.
   await tx
     .update(schema.items)
     .set({ profileId: target.id, inOrderDraft: false, updatedAt: now })
@@ -337,7 +338,18 @@ export async function restoreItem(db: Database, userId: string, itemId: string, 
       .from(schema.items)
       .where(and(eq(schema.items.id, itemId), eq(schema.items.userId, userId)));
     if (!peek) return { error: "not_found" };
-    if (!peek.productId) throw new Error("items without a product come with 2b");
+    if (!peek.productId) {
+      // An article without a product (born from an order line): nothing to merge with, it simply comes back.
+      const item = await lockOwnItem(tx, userId, itemId);
+      if (!item) return { error: "not_found" };
+      if (!item.deletedAt) return { error: "item_not_deleted" };
+      await tx.update(schema.items).set({ deletedAt: null, updatedAt: now }).where(eq(schema.items.id, item.id));
+      return {
+        itemId: item.id,
+        itemIds: [item.id],
+        undo: { ops: [{ ids: [item.id], op: "delete" }], removeEventIds: [] },
+      };
+    }
     // Lock order, as the batches: the product lock (no new active item meanwhile), then the source and target rows
     // together by id, read fresh under their locks so that a change committed on the target meanwhile is merged,
     // never overwritten.
@@ -368,4 +380,43 @@ export async function restoreItem(db: Database, userId: string, itemId: string, 
       undo: { ops: [{ ids: [item.id], op: "delete" }], removeEventIds: [] },
     };
   });
+}
+
+/** What an order line makes of an article when « C'est bon » finds none of hers (« Après la commande », Task 4). */
+export type OrderedItemInput = {
+  userId: string;
+  profileId: string;
+  /** The captured product of the line; null for an article without a product (its name is then `name`). */
+  productId: string | null;
+  name: string;
+  sizeLabel: string | null;
+  pricePaidCents: number | null;
+  /** When she ordered (the history row's date). */
+  at: Date;
+};
+
+/**
+ * Creates an article « Commandé » inside the caller's transaction, with its history row (the amount counted in the
+ * budgets), as `createItem` does for `ordered`. With a product, the caller holds `lockProductOfUser` and found no
+ * active item for it (G2). Without one, the article carries its own name (`name_override`): no shop page, no stock or
+ * price follow-up.
+ */
+export async function insertOrderedItem(tx: Tx, input: OrderedItemInput, now: Date): Promise<string> {
+  const [item] = await tx
+    .insert(schema.items)
+    .values({
+      userId: input.userId,
+      profileId: input.profileId,
+      productId: input.productId,
+      stage: "ordered",
+      nameOverride: input.productId ? null : input.name,
+      sizeLabel: input.sizeLabel,
+      pricePaidCents: input.pricePaidCents,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+  if (!item) throw new Error("item not inserted");
+  await recordEvent(tx, item, { type: "stage", stage: "ordered", at: input.at, amountCents: input.pricePaidCents });
+  return item.id;
 }

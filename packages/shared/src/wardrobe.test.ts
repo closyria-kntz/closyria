@@ -219,6 +219,8 @@ const itemView = {
   id,
   profileId: id2,
   product,
+  shopName: "Shop",
+  illustration: null,
   stage: "owned",
   loveLevel: null,
   priority: false,
@@ -258,6 +260,11 @@ describe("views", () => {
   it("item view reuses the product view", () => {
     expect(itemViewSchema.safeParse(itemView).success).toBe(true);
     expect(itemViewSchema.safeParse({ ...itemView, product: { ...product, id: "x" } }).success).toBe(false);
+  });
+  it("item view without a product (born from an order line) shows its silhouette", () => {
+    const bare = { ...itemView, product: null, shopName: null, illustration: { kind: "dress", color: "#AA3355" } };
+    expect(itemViewSchema.safeParse(bare).success).toBe(true);
+    expect(itemViewSchema.safeParse({ ...bare, illustration: { kind: "cape", color: null } }).success).toBe(false);
   });
   it("page has items and nextCursor", () => {
     expect(itemPageSchema.safeParse({ items: [itemView], nextCursor: null }).success).toBe(true);

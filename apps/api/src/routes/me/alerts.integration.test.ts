@@ -11,6 +11,12 @@ import type {
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { BASE_URL, createCatalogHarness } from "../../catalog/test-app";
 
+/** Her item's product (these items are all kept from a product). */
+function productOf(item: { product: ItemView["product"] }) {
+  if (!item.product) throw new Error("no product");
+  return item.product;
+}
+
 type Harness = Awaited<ReturnType<typeof createCatalogHarness>>;
 let t: Harness;
 let off: Harness;
@@ -87,7 +93,7 @@ const itemEvent = (item: ItemView, userId: string, extra: Partial<typeof schema.
     userId,
     itemId: item.id,
     profileId: item.profileId,
-    productId: item.product.id,
+    productId: productOf(item).id,
     kind: "size_back",
     sizeLabel: "M",
     ...extra,
@@ -287,8 +293,8 @@ describe("/api/me/alerts", () => {
       priceCents: 7000,
       previousCents: 8000,
       currency: "EUR",
-      shopName: item.product.shop.name,
-      href: `/produits/${item.product.id}?profil=${item.profileId}`,
+      shopName: productOf(item).shop.name,
+      href: `/produits/${productOf(item).id}?profil=${item.profileId}`,
       readAt: null,
     });
   });
@@ -316,7 +322,7 @@ describe("/api/me/alerts", () => {
     const profile = (await res.json()) as { id: string };
     expect((await call("POST", `/api/me/items/${item.id}/move`, a.cookie, { profileId: profile.id })).status).toBe(200);
     const [alert] = (await page(a.cookie)).alerts;
-    expect(alert?.href).toBe(`/produits/${item.product.id}?profil=${profile.id}`);
+    expect(alert?.href).toBe(`/produits/${productOf(item).id}?profil=${profile.id}`);
   });
 
   it("names the shop of a promo and the sales of a sales alert", async () => {
@@ -424,8 +430,8 @@ describe("item alert fields", () => {
     const blocked = await wish(a.cookie, refused.id);
     await t.db.insert(schema.captures).values({
       shopId: refused.id,
-      productId: blocked.product.id,
-      url: blocked.product.canonicalUrl,
+      productId: productOf(blocked).id,
+      url: productOf(blocked).canonicalUrl,
       status: "failed",
       errorCode: "robots_disallowed",
       trigger: "refresh",
@@ -445,7 +451,10 @@ describe("item alert fields", () => {
     expect(item.watchedSizes).toBe("any");
     expect(item.checkedAt).toBeNull();
     const at = new Date("2026-11-14T10:00:00.000Z");
-    await t.db.update(schema.products).set({ lastCapturedAt: at }).where(eq(schema.products.id, item.product.id));
+    await t.db
+      .update(schema.products)
+      .set({ lastCapturedAt: at })
+      .where(eq(schema.products.id, productOf(item).id));
     const sized = (await (await patch(a.cookie, item.id, { sizeLabel: "M" })).json()) as ItemMutationResult;
     expect(sized.item.watchedSizes).toEqual(["M"]);
     expect(sized.item.checkedAt).toBe(at.toISOString());
@@ -505,9 +514,9 @@ describe("« Accueil »: target price reached", () => {
     const a = await account();
     const item = await wish(a.cookie);
     await t.db.insert(schema.productImages).values({
-      productId: item.product.id,
+      productId: productOf(item).id,
       position: 0,
-      key: `products/${item.product.id}/0.webp`,
+      key: `products/${productOf(item).id}/0.webp`,
       width: 600,
       height: 800,
       sourceHash: `hash-${item.id}`,
@@ -528,7 +537,7 @@ describe("« Accueil »: target price reached", () => {
       kind: "target_price",
       itemId: item.id,
       title: item.name,
-      href: `/produits/${item.product.id}?profil=${item.profileId}`,
+      href: `/produits/${productOf(item).id}?profil=${item.profileId}`,
       priceCents: 5900,
       targetPriceCents: 6000,
       currency: "EUR",

@@ -15,6 +15,7 @@ export * from "./gifts";
 export * from "./group-orders";
 export * from "./health";
 export * from "./home";
+export * from "./illustration";
 export * from "./listing";
 export * from "./love-level";
 export * from "./media";

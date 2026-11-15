@@ -63,7 +63,7 @@ export function ItemAlerts({
 }) {
   const t = useTranslations("Item.alerts");
   const locale = useLocale();
-  const currency = item.product.currency ?? "EUR";
+  const currency = item.product?.currency ?? "EUR";
   const money = (cents: number) => formatAmount(locale, cents, currency);
   const [target, setTarget] = useState(toEuros(item.targetPriceCents));
   const [error, setError] = useState<string | null>(null);

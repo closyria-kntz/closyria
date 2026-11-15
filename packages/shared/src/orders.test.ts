@@ -271,6 +271,7 @@ describe("order schemas", () => {
       id,
       profileId: id,
       shop: { id, name: "Maison Lumière", returnsUrl: null },
+      shopName: "Maison Lumière",
       externalRef: "#1042",
       orderedAt: "2026-11-02T10:00:00.000Z",
       status: "draft",

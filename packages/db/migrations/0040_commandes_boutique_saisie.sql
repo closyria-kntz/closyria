@@ -1,0 +1,2 @@
+ALTER TABLE "orders" ADD COLUMN "shop_name" text;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_shop_name_check" CHECK ("orders"."shop_name" IS NULL OR char_length("orders"."shop_name") BETWEEN 1 AND 120);

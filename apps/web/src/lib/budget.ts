@@ -27,7 +27,7 @@ export function draftTotals(items: readonly ItemView[], budget: BudgetView | nul
   for (const item of items) {
     if (!item.inOrderDraft) continue;
     count += 1;
-    const price = item.product.priceCents;
+    const price = item.product?.priceCents ?? null;
     if (typeof price === "number") totalCents += price;
     else unknownPrices += 1;
   }
