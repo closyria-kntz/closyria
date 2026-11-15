@@ -1,0 +1,115 @@
+{
+  "code": 0,
+  "data": {
+    "accepted": [
+      {
+        "number": "12345678",
+        "carrier": 100304,
+        "param": null,
+        "tag": null,
+        "track_info": {
+          "shipping_info": { "shipper_address": { "country": "FR" }, "recipient_address": { "country": "FR" } },
+          "latest_status": { "status": "Delivered", "sub_status": "Delivered_Other", "sub_status_descr": null },
+          "latest_event": {
+            "time_iso": "2026-11-13T15:20:00+01:00",
+            "time_utc": "2026-11-13T14:20:00Z",
+            "time_raw": { "date": "2026-11-13", "time": "15:20:00", "timezone": null },
+            "description": "Colis livré au destinataire",
+            "description_translation": null,
+            "location": "PARIS",
+            "stage": "Delivered",
+            "sub_status": "Delivered_Other",
+            "address": { "country": "FR", "city": "PARIS" }
+          },
+          "time_metrics": {
+            "days_after_order": 4,
+            "days_of_transit": 3,
+            "days_of_transit_done": 3,
+            "days_after_last_update": 0,
+            "estimated_delivery_date": { "source": null, "from": null, "to": null }
+          },
+          "milestone": [
+            {
+              "key_stage": "InfoReceived",
+              "time_iso": "2026-11-10T08:00:00+01:00",
+              "time_utc": "2026-11-10T07:00:00Z",
+              "time_raw": { "date": null, "time": null, "timezone": null }
+            },
+            {
+              "key_stage": "Delivered",
+              "time_iso": "2026-11-13T15:20:00+01:00",
+              "time_utc": "2026-11-13T14:20:00Z",
+              "time_raw": { "date": null, "time": null, "timezone": null }
+            }
+          ],
+          "misc_info": { "risk_factor": 0, "service_type": null },
+          "tracking": {
+            "providers_hash": 123456,
+            "providers": [
+              {
+                "provider": {
+                  "key": 100304,
+                  "name": "Mondial Relay",
+                  "alias": "Mondial Relay",
+                  "tel": null,
+                  "homepage": "https://www.mondialrelay.fr",
+                  "country": "FR"
+                },
+                "latest_sync_status": "Success",
+                "latest_sync_time": "2026-11-13T14:30:00Z",
+                "events_hash": 654321,
+                "events": [
+                  {
+                    "time_iso": "2026-11-13T15:20:00+01:00",
+                    "time_utc": "2026-11-13T14:20:00Z",
+                    "time_raw": { "date": "2026-11-13", "time": "15:20:00", "timezone": null },
+                    "description": "Colis livré au destinataire",
+                    "description_translation": null,
+                    "location": "PARIS",
+                    "stage": "Delivered",
+                    "sub_status": "Delivered_Other",
+                    "address": { "country": "FR" }
+                  },
+                  {
+                    "time_iso": "2026-11-12T09:00:00+01:00",
+                    "time_utc": "2026-11-12T08:00:00Z",
+                    "time_raw": { "date": "2026-11-12", "time": "09:00:00", "timezone": null },
+                    "description": "Colis disponible en Point Relais",
+                    "description_translation": null,
+                    "location": "PARIS",
+                    "stage": "AvailableForPickup",
+                    "sub_status": "AvailableForPickup_Other",
+                    "address": { "country": "FR" }
+                  },
+                  {
+                    "time_iso": "2026-11-11T02:00:00+01:00",
+                    "time_utc": "2026-11-11T01:00:00Z",
+                    "time_raw": { "date": null, "time": null, "timezone": null },
+                    "description": "Colis en cours d'acheminement",
+                    "description_translation": null,
+                    "location": null,
+                    "stage": null,
+                    "sub_status": "InTransit_Other",
+                    "address": null
+                  },
+                  {
+                    "time_iso": null,
+                    "time_utc": null,
+                    "time_raw": { "date": null, "time": null, "timezone": null },
+                    "description": "Événement sans date",
+                    "description_translation": null,
+                    "location": null,
+                    "stage": "InTransit",
+                    "sub_status": "InTransit_Other",
+                    "address": null
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "rejected": []
+  }
+}

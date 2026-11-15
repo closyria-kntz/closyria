@@ -240,10 +240,20 @@ describe("order-email-purge queue", () => {
         calls.push(args);
       }),
     } as unknown as PgBoss;
-    await registerOrderQueues(boss, { db: handle.db, store: memoryStore() });
+    await registerOrderQueues(boss, {
+      db: handle.db,
+      store: memoryStore(),
+      connectors: { laPoste: null, aggregator: null },
+    });
     expect(boss.createQueue).toHaveBeenCalledWith(ORDER_EMAIL_PURGE_QUEUE);
     expect(boss.work).toHaveBeenCalledWith(ORDER_EMAIL_PURGE_QUEUE, expect.any(Function));
-    expect(calls).toEqual([["order-email-purge", "45 3 * * *"]]);
+    // The parcels are swept every 15 minutes, one sweep at a time.
+    expect(calls).toEqual([
+      ["order-email-purge", "45 3 * * *"],
+      ["parcel-check", "*/15 * * * *"],
+    ]);
+    expect(boss.createQueue).toHaveBeenCalledWith("parcel-check", { policy: "singleton" });
+    expect(boss.work).toHaveBeenCalledWith("parcel-check", expect.any(Function));
     const retries = { retryLimit: 3, retryDelay: 60, retryBackoff: true };
     expect(boss.createQueue).toHaveBeenCalledWith(ORDER_EMAIL_PARSE_QUEUE, retries);
     expect(boss.updateQueue).toHaveBeenCalledWith(ORDER_EMAIL_PARSE_QUEUE, retries);

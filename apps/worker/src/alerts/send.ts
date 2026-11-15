@@ -77,6 +77,31 @@ export function orderReceivedTitle(shop: string | null): string {
   return name ? `Commande reçue de ${cut(name)}` : "Commande reçue";
 }
 
+/** The parcel notifications' kinds (« Après la commande », Task 5). */
+export type ParcelAlertKind = "parcel_out_for_delivery" | "parcel_pickup_ready" | "parcel_delivered";
+
+const PARCEL_WORDS: Record<ParcelAlertKind, { step: string; body: string; status: string }> = {
+  parcel_out_for_delivery: {
+    step: "est en cours de livraison",
+    body: "Il arrive aujourd'hui.",
+    status: "out_for_delivery",
+  },
+  parcel_pickup_ready: {
+    step: "est disponible en point relais",
+    body: "Tu peux aller le chercher.",
+    status: "pickup_ready",
+  },
+  parcel_delivered: { step: "est arrivé", body: "Ses articles sont dans « Reçu ».", status: "delivered" },
+};
+
+/** « Ton colis {boutique} est arrivé » (« … est disponible en point relais », « … est en cours de livraison »), « Ton colis est arrivé » without a shop. */
+export function parcelTitle(kind: ParcelAlertKind, shop: string | null): string {
+  const name = shop?.trim();
+  return `Ton colis ${name ? `${cut(name)} ` : ""}${PARCEL_WORDS[kind].step}`;
+}
+
+const isParcelKind = (kind: string): kind is ParcelAlertKind => kind in PARCEL_WORDS;
+
 /** The item's sheet, in the item's profile. */
 export const itemUrl = alertItemHref;
 
@@ -163,6 +188,7 @@ export async function sendAlert(
       profileId: schema.items.profileId,
       productId: schema.alertEvents.productId,
       orderId: schema.alertEvents.orderId,
+      parcelId: schema.alertEvents.parcelId,
       sizeLabel: schema.alertEvents.sizeLabel,
       priceCents: schema.alertEvents.priceCents,
       sendAfter: schema.alertEvents.sendAfter,
@@ -175,6 +201,7 @@ export async function sendAlert(
       isAnonymous: schema.user.isAnonymous,
       sizeBackOn: schema.alertSettings.sizeBack,
       targetPriceOn: schema.alertSettings.targetPrice,
+      parcelOutForDeliveryOn: schema.alertSettings.parcelOutForDelivery,
     })
     .from(schema.alertEvents)
     .innerJoin(schema.user, eq(schema.user.id, schema.alertEvents.userId))
@@ -245,6 +272,33 @@ export async function sendAlert(
         body: "Vérifie les articles, puis « C'est bon ».",
         url: ALERTS_PAGE_HREF,
       };
+    }
+  }
+  if (isParcelKind(event.kind) && event.parcelId && event.orderId) {
+    // Only while the step still holds (held overnight, a parcel « en cours de livraison » may be delivered since), and
+    // « en cours de livraison » only while her setting is on.
+    const words = PARCEL_WORDS[event.kind];
+    const [parcel] = await db
+      .select({
+        status: schema.parcels.status,
+        shopName: sql<string | null>`coalesce(${schema.shops.name}, ${schema.orders.shopName})`,
+      })
+      .from(schema.parcels)
+      .innerJoin(schema.orders, eq(schema.orders.id, schema.parcels.orderId))
+      .leftJoin(schema.shops, eq(schema.shops.id, schema.orders.shopId))
+      .where(
+        and(
+          eq(schema.parcels.id, event.parcelId),
+          eq(schema.orders.id, event.orderId),
+          eq(schema.orders.userId, event.userId),
+        ),
+      );
+    const wanted =
+      event.kind !== "parcel_out_for_delivery" ||
+      (event.parcelOutForDeliveryOn ?? DEFAULT_ALERT_SETTINGS.parcelOutForDelivery);
+    if (parcel?.status === words.status && wanted) {
+      // TODO(Task 7): lead to the order (« Mes commandes ») once the page exists.
+      message = { title: parcelTitle(event.kind, parcel.shopName), body: words.body, url: ALERTS_PAGE_HREF };
     }
   }
   if (!message || !push || event.isAnonymous === true) return skip();

@@ -442,6 +442,7 @@ describe("the API", () => {
       targetPrice: true,
       digest: true,
       digestHour: 18,
+      parcelOutForDelivery: false,
     });
     expect(await fetchAlerts(null, deps(json({}, 401)))).toEqual({ alerts: [], nextCursor: null });
     const d = deps(json({ alerts: [], nextCursor: null }));
@@ -451,7 +452,7 @@ describe("the API", () => {
   });
 
   it("changes her settings, refused for a guest", async () => {
-    const settings = { sizeBack: false, targetPrice: true, digest: true, digestHour: 20 };
+    const settings = { sizeBack: false, targetPrice: true, digest: true, digestHour: 20, parcelOutForDelivery: true };
     const d = deps(json(settings));
     expect(await patchAlertSettings({ sizeBack: false }, d)).toEqual({ ok: true, settings });
     expect(d.fetch).toHaveBeenCalledWith(

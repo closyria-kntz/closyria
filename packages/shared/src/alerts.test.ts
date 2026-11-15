@@ -150,10 +150,13 @@ describe("schemas", () => {
       "sale_period",
       "shop_promo",
       "order_received",
+      "parcel_out_for_delivery",
+      "parcel_pickup_ready",
+      "parcel_delivered",
     ]);
   });
   it("settings: digest hour between 8 and 21, out of the quiet hours", () => {
-    const base = { sizeBack: true, targetPrice: true, digest: true };
+    const base = { sizeBack: true, targetPrice: true, digest: true, parcelOutForDelivery: false };
     expect(alertSettingsSchema.safeParse({ ...base, digestHour: 18 }).success).toBe(true);
     expect(alertSettingsSchema.safeParse({ ...base, digestHour: 8 }).success).toBe(true);
     expect(alertSettingsSchema.safeParse({ ...base, digestHour: 21 }).success).toBe(true);

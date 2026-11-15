@@ -28,7 +28,7 @@ import { buttonClass, focusRing, inputClass, primaryButtonClass } from "./ui";
 
 const HERE = "/reglages/notifications";
 const HOURS = Array.from({ length: DIGEST_HOUR_MAX - DIGEST_HOUR_MIN + 1 }, (_, i) => DIGEST_HOUR_MIN + i);
-const SWITCHES = ["sizeBack", "targetPrice", "digest"] as const;
+const SWITCHES = ["sizeBack", "targetPrice", "digest", "parcelOutForDelivery"] as const;
 
 const cardClass = "flex flex-col gap-space-3 rounded-card border border-line bg-surface-raised p-space-4";
 const subTitleClass = "font-display text-lead font-strong";

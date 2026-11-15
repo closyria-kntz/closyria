@@ -8,6 +8,7 @@ import {
   ALERT_SEND_QUEUE,
   ALERT_SEND_QUEUE_OPTIONS,
   alertSendHandler,
+  parcelTitle,
   planAlertSends,
   sendAlert,
   sizeBackSentence,
@@ -446,6 +447,113 @@ describe("sendAlert", () => {
     const noShop = await event(who, null, { kind: "order_received", orderId: bare?.id, sendAfter: afternoon });
     expect(await sendAlert({ db, push }, noShop, afternoon, once)).toBe("sent");
     expect(calls[1]?.message.title).toBe("Commande reçue");
+  });
+
+  it("tells her about her parcel: arrived, at a pickup point, out for delivery (setting on) — while still true", async () => {
+    const { db } = handle;
+    const her = await person({ settings: { parcelOutForDelivery: true } });
+    const { shopId } = await wish(her, { shopName: "Maison Lune" });
+    const parcel = async (status: string, orderValues: { shopId?: string | null; shopName?: string | null } = {}) => {
+      const [order] = await db
+        .insert(schema.orders)
+        .values({
+          userId: her.userId,
+          profileId: her.profileId,
+          shopId: orderValues.shopId === undefined ? shopId : orderValues.shopId,
+          shopName: orderValues.shopName ?? null,
+          status: "confirmed",
+          source: "manual",
+          parseMethod: "manual",
+        })
+        .returning();
+      const [row] = await db
+        .insert(schema.parcels)
+        .values({
+          orderId: order?.id as string,
+          carrier: "gls",
+          trackingNumber: `P${++counter}`,
+          status,
+          checkUntil: afternoon,
+        })
+        .returning();
+      return { orderId: order?.id as string, parcelId: row?.id as string };
+    };
+    const parcelEvent = async (kind: string, ids: { orderId: string; parcelId: string }) =>
+      event(her, null, { kind, ...ids, shopId, sendAfter: afternoon });
+    const { push, calls } = fakePush();
+
+    expect(
+      await sendAlert({ db, push }, await parcelEvent("parcel_delivered", await parcel("delivered")), afternoon, once),
+    ).toBe("sent");
+    expect(calls.at(-1)?.message).toEqual({
+      title: "Ton colis Maison Lune est arrivé",
+      body: "Ses articles sont dans « Reçu ».",
+      url: "/nouvelles",
+    });
+    expect(
+      await sendAlert(
+        { db, push },
+        await parcelEvent("parcel_pickup_ready", await parcel("pickup_ready")),
+        afternoon,
+        once,
+      ),
+    ).toBe("sent");
+    expect(calls.at(-1)?.message.title).toBe("Ton colis Maison Lune est disponible en point relais");
+    expect(
+      await sendAlert(
+        { db, push },
+        await parcelEvent("parcel_out_for_delivery", await parcel("out_for_delivery")),
+        afternoon,
+        once,
+      ),
+    ).toBe("sent");
+    expect(calls.at(-1)?.message.title).toBe("Ton colis Maison Lune est en cours de livraison");
+
+    // Held overnight and delivered since: « en cours de livraison » or « point relais » no longer holds.
+    expect(
+      await sendAlert(
+        { db, push },
+        await parcelEvent("parcel_out_for_delivery", await parcel("delivered")),
+        afternoon,
+        once,
+      ),
+    ).toBe("skipped");
+    expect(
+      await sendAlert(
+        { db, push },
+        await parcelEvent("parcel_pickup_ready", await parcel("delivered")),
+        afternoon,
+        once,
+      ),
+    ).toBe("skipped");
+
+    // The shop she typed, or none: « Ton colis est arrivé ».
+    const typed = await parcel("delivered", { shopId: null, shopName: "Atelier Rose" });
+    await sendAlert({ db, push }, await parcelEvent("parcel_delivered", typed), afternoon, once);
+    expect(calls.at(-1)?.message.title).toBe("Ton colis Atelier Rose est arrivé");
+    const bare = await parcel("delivered", { shopId: null });
+    await sendAlert({ db, push }, await parcelEvent("parcel_delivered", bare), afternoon, once);
+    expect(calls.at(-1)?.message.title).toBe("Ton colis est arrivé");
+
+    // Her setting turned off since the event was born: not sent.
+    await db
+      .update(schema.alertSettings)
+      .set({ parcelOutForDelivery: false })
+      .where(eq(schema.alertSettings.userId, her.userId));
+    expect(
+      await sendAlert(
+        { db, push },
+        await parcelEvent("parcel_out_for_delivery", await parcel("out_for_delivery")),
+        afternoon,
+        once,
+      ),
+    ).toBe("skipped");
+  });
+
+  it("words a parcel's notification", () => {
+    expect(parcelTitle("parcel_delivered", "Maison Lune")).toBe("Ton colis Maison Lune est arrivé");
+    expect(parcelTitle("parcel_pickup_ready", null)).toBe("Ton colis est disponible en point relais");
+    expect(parcelTitle("parcel_out_for_delivery", "  ")).toBe("Ton colis est en cours de livraison");
   });
 
   it("an event already handled is left alone", async () => {

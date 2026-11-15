@@ -8,13 +8,14 @@ import {
   IMMEDIATE_ALERT_KINDS,
   ITEM_ALERT_KINDS,
   MAX_SALE_PERIOD_NAME,
+  PARCEL_ALERT_KINDS,
 } from "@closyria/shared";
 import { sql } from "drizzle-orm";
-import { boolean, check, date, index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, date, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { products, shops } from "./catalog";
 import { oneOf } from "./helpers";
-import { orders } from "./orders";
+import { orders, parcels } from "./orders";
 import { items, profiles } from "./wardrobe";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
@@ -53,6 +54,8 @@ export const alertSettings = pgTable(
     digest: boolean("digest").notNull().default(true),
     /** Hour of the daily digest, Europe/Paris. */
     digestHour: integer("digest_hour").notNull().default(DEFAULT_DIGEST_HOUR),
+    /** « Ton colis {boutique} est en cours de livraison »: off by default (spec « Après la commande » §3.4). */
+    parcelOutForDelivery: boolean("parcel_out_for_delivery").notNull().default(false),
   },
   (t) => [
     check(
@@ -102,6 +105,8 @@ export const alertEvents = pgTable(
     salePeriodId: uuid("sale_period_id").references(() => salePeriods.id, { onDelete: "cascade" }),
     /** order_received: the order to validate (gone with it). */
     orderId: uuid("order_id").references(() => orders.id, { onDelete: "cascade" }),
+    /** Parcel kinds: the parcel (gone with it); with `order_id` its order. */
+    parcelId: uuid("parcel_id").references(() => parcels.id, { onDelete: "cascade" }),
     createdAt: createdAt(),
     /** Immediate kinds: not before this (quiet hours). */
     sendAfter: timestamp("send_after", { withTimezone: true }),
@@ -118,6 +123,8 @@ export const alertEvents = pgTable(
     index("alert_events_shop_id_idx").on(t.shopId),
     index("alert_events_sale_period_id_idx").on(t.salePeriodId),
     index("alert_events_order_id_idx").on(t.orderId),
+    // One notification of each kind per parcel, however often the carrier repeats the step.
+    uniqueIndex("alert_events_parcel_kind_idx").on(t.parcelId, t.kind).where(sql`${t.parcelId} IS NOT NULL`),
     index("alert_events_digest_idx").on(t.userId, t.digestOn).where(sql`${t.digestOn} IS NOT NULL`),
     // The minute sweep of the immediate alerts due, and the digest planner (Task 4).
     index("alert_events_pending_send_idx")
@@ -131,6 +138,10 @@ export const alertEvents = pgTable(
       sql`NOT (${oneOf(t.kind, ITEM_ALERT_KINDS)}) OR (${t.itemId} IS NOT NULL AND ${t.profileId} IS NOT NULL AND ${t.productId} IS NOT NULL)`,
     ),
     check("alert_events_order_check", sql`${t.kind} <> 'order_received' OR ${t.orderId} IS NOT NULL`),
+    check(
+      "alert_events_parcel_check",
+      sql`NOT (${oneOf(t.kind, PARCEL_ALERT_KINDS)}) OR (${t.parcelId} IS NOT NULL AND ${t.orderId} IS NOT NULL)`,
+    ),
     check(
       "alert_events_cents_check",
       sql`(${t.priceCents} IS NULL OR ${t.priceCents} >= 0) AND (${t.previousCents} IS NULL OR ${t.previousCents} >= 0)`,

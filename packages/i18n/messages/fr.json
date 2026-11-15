@@ -27,7 +27,10 @@
       "gift_reminder": "Rappel des cadeaux",
       "sale_period": "Soldes",
       "shop_promo": "Promo",
-      "order_received": "Commande"
+      "order_received": "Commande",
+      "parcel_out_for_delivery": "Colis",
+      "parcel_pickup_ready": "Colis",
+      "parcel_delivered": "Colis"
     },
     "une": {
       "price_drop": "{name} passe à {price}",
@@ -2634,6 +2637,8 @@
       "targetPriceHint": "Tout de suite quand un article passe sous le prix que tu as choisi sur sa fiche.",
       "digest": "Résumé du jour",
       "digestHint": "Une seule notification par jour pour les baisses de prix de tes envies, les soldes et les promos.",
+      "parcelOutForDelivery": "Colis en cours de livraison",
+      "parcelOutForDeliveryHint": "Le jour où ton colis part en livraison.",
       "digestHour": "Heure du résumé",
       "hour": "{hour} h",
       "saved": "Réglage enregistré",
@@ -2695,6 +2700,12 @@
     "priceDropNoShop": "−{drop}",
     "order_received": "Commande reçue de {shop}",
     "order_receivedNoShop": "Commande reçue",
+    "parcel_out_for_delivery": "Ton colis {shop} est en cours de livraison",
+    "parcel_out_for_deliveryNoShop": "Ton colis est en cours de livraison",
+    "parcel_pickup_ready": "Ton colis {shop} est disponible en point relais",
+    "parcel_pickup_readyNoShop": "Ton colis est disponible en point relais",
+    "parcel_delivered": "Ton colis {shop} est arrivé",
+    "parcel_deliveredNoShop": "Ton colis est arrivé",
     "action": "Voir"
   },
   "Listing": {

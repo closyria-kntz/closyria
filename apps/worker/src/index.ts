@@ -12,6 +12,7 @@ import { seedReference } from "./capture/seed-reference";
 import { seedStartingShops } from "./capture/seed-shops";
 import { env } from "./env";
 import { registerOrderQueues } from "./orders/queues";
+import { trackingConnectors } from "./orders/tracking";
 import { stopWorker } from "./shutdown";
 import { registerWardrobeQueues } from "./wardrobe/queues";
 
@@ -44,6 +45,14 @@ if (!model) console.warn("order e-mails: AI off (no ANTHROPIC_API_KEY), unknown 
 const budget = databaseBudget(db);
 const ai = model ? (text: string) => aiParseOrderEmail(text, { model, budget }) : null;
 
+// env.ts allows either key to be missing: that connector is off, its parcels wait.
+const connectors = trackingConnectors({
+  laPosteKey: env.LAPOSTE_OKAPI_KEY,
+  aggregatorKey: env.TRACKING_AGGREGATOR_KEY,
+});
+if (!connectors.laPoste) console.warn("parcels: La Poste tracking off (no LAPOSTE_OKAPI_KEY)");
+if (!connectors.aggregator) console.warn("parcels: aggregator tracking off (no TRACKING_AGGREGATOR_KEY)");
+
 const barrier = await checkNetworkBarrier();
 if (barrier.state === "active") {
   console.log(`network barrier: active (${barrier.reason})`);
@@ -69,7 +78,7 @@ await registerCaptureQueues(boss, { db, store });
 await registerWardrobeQueues(boss, { db, store });
 await registerSalePeriodQueue(boss, db);
 await registerAlertSendQueues(boss, { db, push });
-await registerOrderQueues(boss, { db, store, ai });
+await registerOrderQueues(boss, { db, store, ai, connectors });
 
 console.log(`worker ${env.APP_VERSION} (${env.APP_ENV}) started`);
 

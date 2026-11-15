@@ -18,6 +18,11 @@ export const envSchema = appEnvObject({
   // The AI that reads order e-mails no known format could (« Après la commande »). Without it, such an e-mail is
   // marked unread (« On n'a pas su lire cet e-mail ») and she types the order in.
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  // Parcel tracking (« Après la commande »): La Poste's « Suivi » key (« Okapi », Colissimo, Lettre suivie,
+  // Chronopost) and the aggregator's (17TRACK, the other carriers). Without one, that connector is off: its parcels
+  // wait (checked again later), « Suivre chez le transporteur » stays.
+  LAPOSTE_OKAPI_KEY: z.string().min(1).optional(),
+  TRACKING_AGGREGATOR_KEY: z.string().min(1).optional(),
 }).superRefine((env, ctx) => {
   for (const issue of vapidEnvIssues(env)) ctx.addIssue({ code: "custom", path: [issue.path], message: issue.message });
   // The memory store is for development only; a partial S3 configuration is always a mistake.

@@ -230,7 +230,13 @@ describe("/api/me/alert-settings", () => {
     const guest = await t.signIn();
     const res = await call("GET", "/api/me/alert-settings", guest.cookie);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ sizeBack: true, targetPrice: true, digest: true, digestHour: 18 });
+    expect(await res.json()).toEqual({
+      sizeBack: true,
+      targetPrice: true,
+      digest: true,
+      digestHour: 18,
+      parcelOutForDelivery: false,
+    });
   });
 
   it("refuses a guest's change", async () => {
@@ -244,12 +250,19 @@ describe("/api/me/alert-settings", () => {
     const a = await account();
     const res = await call("PATCH", "/api/me/alert-settings", a.cookie, { sizeBack: false, digestHour: 9 });
     expect(res.status).toBe(200);
-    const expected: AlertSettings = { sizeBack: false, targetPrice: true, digest: true, digestHour: 9 };
+    const expected: AlertSettings = {
+      sizeBack: false,
+      targetPrice: true,
+      digest: true,
+      digestHour: 9,
+      parcelOutForDelivery: false,
+    };
     expect(await res.json()).toEqual(expected);
-    await call("PATCH", "/api/me/alert-settings", a.cookie, { digest: false });
+    await call("PATCH", "/api/me/alert-settings", a.cookie, { digest: false, parcelOutForDelivery: true });
     expect(await (await call("GET", "/api/me/alert-settings", a.cookie)).json()).toEqual({
       ...expected,
       digest: false,
+      parcelOutForDelivery: true,
     });
   });
 

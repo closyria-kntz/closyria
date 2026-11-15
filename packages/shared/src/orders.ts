@@ -158,6 +158,11 @@ export const PARCEL_CHECK_FAST_HOURS = 2;
 export const PARCEL_CHECK_SLOW_HOURS = 6;
 /** A parcel is followed this long at most after its tracking started. */
 export const PARCEL_CHECK_DAYS = 30;
+/**
+ * Checks in a row that got no answer (carrier down, timeout, unreadable answer, number unknown to the carrier) before
+ * the parcel turns `unknown`, silently (RF 4); it is still checked until `check_until`.
+ */
+export const PARCEL_MAX_CHECK_FAILURES = 3;
 
 /** When to ask the carrier again about a parcel in `status`; null once delivered (the tracking stops). */
 export function nextParcelCheck(status: ParcelStatus, now: Date): Date | null {

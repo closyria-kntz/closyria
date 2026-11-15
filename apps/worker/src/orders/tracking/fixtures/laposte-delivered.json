@@ -1,0 +1,54 @@
+{
+  "lang": "fr_FR",
+  "scope": "open",
+  "returnCode": 200,
+  "shipment": {
+    "idShip": "6A12345678901",
+    "holder": 4,
+    "product": "Colissimo",
+    "isFinal": true,
+    "entryDate": "2026-11-10T09:12:00+01:00",
+    "deliveryDate": "2026-11-13T11:42:00+01:00",
+    "timeline": [
+      {
+        "shortLabel": "Votre colis est pris en charge",
+        "longLabel": "",
+        "id": 1,
+        "country": "",
+        "status": true,
+        "type": 1,
+        "date": "2026-11-10T09:12:00+01:00"
+      },
+      {
+        "shortLabel": "Votre colis est livré",
+        "longLabel": "Votre colis a été livré dans votre boîte aux lettres.",
+        "id": 5,
+        "country": "",
+        "status": true,
+        "type": 1,
+        "date": "2026-11-13T11:42:00+01:00"
+      }
+    ],
+    "event": [
+      {
+        "code": "DI1",
+        "label": "Votre colis est livré dans votre boîte aux lettres.",
+        "date": "2026-11-13T11:42:00+01:00"
+      },
+      { "code": "MD2", "label": "Votre colis est en cours de livraison.", "date": "2026-11-13T07:05:00+01:00" },
+      { "code": "ET1", "label": "Votre colis est en cours d'acheminement.", "date": "2026-11-11T22:30:00+01:00" },
+      {
+        "code": "PC1",
+        "label": "Votre colis a été déposé après l'heure limite de dépôt. Il sera expédié dès le prochain jour ouvré.",
+        "date": "2026-11-10T09:12:00+01:00"
+      },
+      {
+        "code": "DR1",
+        "label": "Votre Colissimo va bientôt nous être confié ! Il est en cours de préparation chez votre expéditeur.",
+        "date": "2026-11-09T18:20:00+01:00"
+      }
+    ],
+    "contextData": { "deliveryChoice": { "deliveryChoice": 0 }, "originCountry": "FR", "arrivalCountry": "FR" },
+    "url": "https://www.laposte.fr/outils/suivre-vos-envois?code=6A12345678901"
+  }
+}

@@ -288,6 +288,13 @@
       "when": 1794740801939,
       "tag": "0040_commandes_boutique_saisie",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1794742569079,
+      "tag": "0041_suivi_colis",
+      "breakpoints": true
     }
   ]
 }

@@ -75,7 +75,7 @@
 
 **Produces:** planificateur (toutes les 15 min, colis dont `next_check_at` est passé), connecteurs (La Poste pour ses transporteurs, agrégateur pour les autres, `unknown` sinon), événements, statuts ; livraison → articles « Reçu » (étape existante) + `return_deadline` + notification « Ton colis {boutique} est arrivé » ; point relais → notification ; « en cours de livraison » seulement si le réglage est activé (coupé d'office) ; échec répété → `unknown` sans erreur visible (RF 4). Notifications via l'envoi du chantier 4 (nouveaux types d'alerte, mêmes règles de calme et de plafond).
 
-- [ ] Tests d'abord, commit « feat(commandes): suivi des colis ».
+- [x] Tests d'abord, commit « feat(commandes): suivi des colis ».
 
 ### Task 6: Retours, question J+10, liens Instagram
 

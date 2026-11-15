@@ -30,6 +30,11 @@ export const alertKindSchema = z.enum([
   "shop_promo",
   // « Commande reçue de {boutique} » (« Après la commande »): an order read from a forwarded e-mail, to validate.
   "order_received",
+  // « Ton colis {boutique} est en cours de livraison / disponible en point relais / arrivé »: a parcel's step, once
+  // per parcel (the first only when her setting is on, off by default).
+  "parcel_out_for_delivery",
+  "parcel_pickup_ready",
+  "parcel_delivered",
 ]);
 export type AlertKind = z.infer<typeof alertKindSchema>;
 /** The kinds about one item (the others are about a shop or the sales calendar). */
@@ -39,6 +44,15 @@ export const IMMEDIATE_ALERT_KINDS = [
   "size_back",
   "target_price",
   "order_received",
+  "parcel_out_for_delivery",
+  "parcel_pickup_ready",
+  "parcel_delivered",
+] as const satisfies readonly AlertKind[];
+/** The kinds about a parcel (they name it, and its order). */
+export const PARCEL_ALERT_KINDS = [
+  "parcel_out_for_delivery",
+  "parcel_pickup_ready",
+  "parcel_delivered",
 ] as const satisfies readonly AlertKind[];
 /** An alert waiting for its digest: a digest kind (`pending`) or an immediate one the daily cap sent there. */
 export const DIGEST_WAITING_STATUSES = ["pending", "digest"] as const satisfies readonly AlertStatus[];
@@ -150,6 +164,8 @@ export const alertSettingsSchema = z.object({
   targetPrice: z.boolean(),
   digest: z.boolean(),
   digestHour: digestHourSchema,
+  /** « Ton colis {boutique} est en cours de livraison » (« Après la commande »): off unless she turns it on. */
+  parcelOutForDelivery: z.boolean(),
 });
 export type AlertSettings = z.infer<typeof alertSettingsSchema>;
 export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
@@ -157,6 +173,7 @@ export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
   targetPrice: true,
   digest: true,
   digestHour: DEFAULT_DIGEST_HOUR,
+  parcelOutForDelivery: false,
 };
 
 /** `PATCH /api/me/alert-settings`: at least one field. */

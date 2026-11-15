@@ -295,3 +295,61 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   (429 `rate_limited`).
 - **Profils** : déplacer un article vers un autre profil laisse ses commandes dans le profil où elles ont été passées
   (leurs lignes pointent toujours vers l'article).
+
+### 10.4 Suivi des colis (Task 5, 2026-11-15)
+
+- **Connecteurs** (`apps/worker/src/orders/tracking`), derrière une interface `TrackingConnector` (« trouvé » avec
+  l'étape, les étapes datées, la date estimée et celle de la livraison ; « numéro inconnu » ; « en attente » ; un échec
+  est une exception) :
+  - **La Poste**, API « Suivi » v2 (`GET https://api.laposte.fr/suivi/v2/idships/{numéro}?lang=fr_FR`, clé dans
+    `X-Okapi-Key`) pour Colissimo, Lettre suivie et Chronopost. Étape lue sur le code du dernier événement : DR1
+    annoncé ; PC, ET, EP1, DO et tout code inconnu en route ; MD2 en cours de livraison ; AG1 point relais ou guichet ;
+    DI1 (ou `isFinal`) livré ; DI2, RE1, ND1, PB incident. 404 et 400 : numéro inconnu.
+  - **Agrégateur 17TRACK**, API v2.2 (`POST https://api.17track.net/track/v2.2/gettrackinfo`, clé dans `17token`) pour
+    les autres transporteurs, avec le code transporteur de 17TRACK (Mondial Relay 100304, GLS 100005, DPD France
+    100072, Colis Privé 100027, UPS 100002 ; DHL sans code, 17TRACK distingue ses services). Un numéro pas encore
+    enregistré (erreur -18019902) est enregistré (`/register`) et lu au contrôle suivant ; « NotFound » ou un numéro
+    refusé à l'enregistrement : numéro inconnu. Deux requêtes à 400 ms au moins l'une de l'autre (3 par seconde au
+    plus chez 17TRACK). Expired → `unknown`, DeliveryFailure et Exception → incident.
+  - Les formes des réponses viennent des documentations publiques (lues le 2026-11-15 ; celle de La Poste n'est pas
+    lisible sans navigateur, ses noms de champs ont été recoupés avec une bibliothèque publique) ; les tests utilisent
+    des réponses enregistrées écrites d'après elles, jamais le réseau. **À vérifier sur un vrai colis en dev dès que
+    les clés sont posées** : une réponse qui ne passe pas la validation Zod compte comme un échec (donc `unknown` au
+    bout de trois, sans erreur visible), pas comme une étape fausse.
+  - Chaque requête est abandonnée après 10 s ; toute réponse est validée par Zod ; ni la clé ni le numéro ne sont
+    écrits dans un journal (seulement le connecteur et la nature de l'échec).
+- **Clés facultatives** `LAPOSTE_OKAPI_KEY`, `TRACKING_AGGREGATOR_KEY` (worker, `deploy/README.md`) : sans clé, le
+  connecteur est coupé ; ses colis ne sont pas interrogés, ne comptent aucun échec et sont reprogrammés au rythme
+  normal (ils seront suivis dès la clé posée). Un colis sans transporteur connu est traité de même.
+- **File `parcel-check`** toutes les 15 minutes (une passe à la fois) : colis dus (`next_check_at` passé) des
+  commandes **validées** seulement (le suivi démarre à « C'est bon », §3.2 ; un brouillon attend), par lots de 50 pris
+  `for update skip locked`, 500 au plus par passe. Un colis pris est réservé 30 minutes (une passe qui meurt le rend
+  ensuite). Le transporteur est interrogé hors transaction, puis la réponse appliquée dans une transaction : verrou de
+  ses profils, commande, colis, puis articles (même ordre que « C'est bon » et la lecture des e-mails). Prochain
+  contrôle au rythme de `nextParcelCheckClamped` (2 h en cours de livraison / point relais, 6 h sinon), le dernier à
+  `check_until` ; plus aucun une fois livré. Un colis corrigé pendant le contrôle (transporteur ou numéro changé) garde
+  sa correction et repasse une minute plus tard.
+- **Étapes** gardées une fois (`parcel_events`, unique sur colis + date + libellé, l'index de la Task 1 ; le libellé
+  plutôt que l'étape, deux événements différents pouvant tomber sur la même étape à la même minute), `last_event_at`
+  la plus récente, `estimated_at` celle du transporteur.
+- **Échecs (RF 4)** : nouvelle colonne `parcels.check_failures` (migration 0041). Un échec (réseau, délai, HTTP,
+  réponse illisible) **ou un numéro inconnu du transporteur** compte un raté ; une réponse (ou « en attente » chez
+  l'agrégateur) remet le compte à zéro ; au troisième raté d'affilée (`PARCEL_MAX_CHECK_FAILURES`), le colis passe
+  `unknown`, sans erreur visible, et reste interrogé jusqu'à `check_until`. Un numéro inconnu ne passe donc pas
+  `unknown` dès la première fois : une étiquette fraîchement créée est souvent inconnue quelques heures.
+- **Livraison** : date du transporteur (jamais après maintenant). Ses articles des lignes de la commande encore
+  « Commandé » (hors corbeille, avec ou sans produit) passent à « Reçu » (`owned`, l'étape de « Je l'ai reçu », avec sa
+  ligne d'historique à la date de livraison, sans montant) et reçoivent `return_deadline = returnDeadline(livraison,
+  shops.return_days ?? 14)` ; un article déjà « Reçu » sans date limite la reçoit ; les autres étapes ne bougent pas.
+  Une commande à plusieurs colis : le premier livré fait passer tous ses articles (on ne sait pas quel article est dans
+  quel colis). Rejouée, la livraison ne refait rien (articles déjà reçus, notification unique).
+- **Notifications** : trois nouvelles sortes d'alerte immédiates (même envoi que le chantier 4 : calme de 22 h à 8 h,
+  5 par jour, le reste au résumé où elles ne figurent pas, comme `order_received`), une fois par colis et par sorte
+  (`alert_events.parcel_id`, index unique colis + sorte) : `parcel_delivered` « Ton colis {boutique} est arrivé »
+  (« Ses articles sont dans « Reçu ». »), `parcel_pickup_ready` « … est disponible en point relais » (« Tu peux aller le
+  chercher. »), `parcel_out_for_delivery` « … est en cours de livraison » (« Il arrive aujourd'hui. ») seulement si
+  son réglage est activé (`alert_settings.parcel_out_for_delivery`, coupé d'office, interrupteur « Colis en cours de
+  livraison » dans « Notifications »). Boutique : celle de la commande, sinon le nom tapé, sinon « Ton colis est
+  arrivé ». À l'envoi, l'étape doit toujours tenir (retenue la nuit puis livrée, « en cours de livraison » ou « point
+  relais » n'est plus envoyée) et le réglage être encore activé. Lien vers « Nouvelles » en attendant « Mes commandes »
+  (Task 7).

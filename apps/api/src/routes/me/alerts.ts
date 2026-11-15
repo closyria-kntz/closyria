@@ -184,6 +184,7 @@ const settingsColumns = {
   targetPrice: schema.alertSettings.targetPrice,
   digest: schema.alertSettings.digest,
   digestHour: schema.alertSettings.digestHour,
+  parcelOutForDelivery: schema.alertSettings.parcelOutForDelivery,
 };
 
 const subscriptionColumns = {

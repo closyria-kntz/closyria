@@ -1,0 +1,33 @@
+{
+  "lang": "fr_FR",
+  "scope": "open",
+  "returnCode": 200,
+  "shipment": {
+    "idShip": "6A12345678901",
+    "holder": 4,
+    "product": "Colissimo",
+    "isFinal": false,
+    "entryDate": "2026-11-10T09:12:00+01:00",
+    "estimDate": "2026-11-13T00:00:00+01:00",
+    "timeline": [
+      {
+        "shortLabel": "Votre colis est pris en charge",
+        "longLabel": "",
+        "id": 1,
+        "country": "",
+        "status": true,
+        "type": 1,
+        "date": "2026-11-10T09:12:00+01:00"
+      }
+    ],
+    "event": [
+      {
+        "code": "AG1",
+        "label": "Votre colis est disponible dans votre point de retrait.",
+        "date": "2026-11-13T10:00:00+01:00"
+      },
+      { "code": "ET1", "label": "Votre colis est en cours d'acheminement.", "date": "2026-11-11T22:30:00+01:00" }
+    ],
+    "url": "https://www.laposte.fr/outils/suivre-vos-envois?code=6A12345678901"
+  }
+}

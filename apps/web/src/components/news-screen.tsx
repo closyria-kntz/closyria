@@ -58,12 +58,22 @@ function useAlertWords() {
         return { line: tHome.rich("shop_promo", { shop: name, b: (chunks) => chunks }), detail: "" };
       case "order_received":
         return { line: shop ? t("order_received", { shop }) : t("order_receivedNoShop"), detail: "" };
+      case "parcel_out_for_delivery":
+      case "parcel_pickup_ready":
+      case "parcel_delivered":
+        return { line: shop ? t(alert.kind, { shop }) : t(`${alert.kind}NoShop`), detail: "" };
     }
   };
 }
 
-/** The icon of each kind of alert: the news ones, and a parcel for an order read from an e-mail. */
-const ALERT_ICONS: Record<AlertEventView["kind"], string> = { ...NEWS_ICONS, order_received: "📦" };
+/** The icon of each kind of alert: the news ones, and a parcel for an order read from an e-mail or a parcel's step. */
+const ALERT_ICONS: Record<AlertEventView["kind"], string> = {
+  ...NEWS_ICONS,
+  order_received: "📦",
+  parcel_out_for_delivery: "📦",
+  parcel_pickup_ready: "📦",
+  parcel_delivered: "📦",
+};
 
 function AlertRow({ alert, unread, now }: { alert: AlertEventView; unread: boolean; now: Date }) {
   const t = useTranslations("News");

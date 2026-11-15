@@ -202,6 +202,11 @@ export const parcels = pgTable(
     deliveredAt: at("delivered_at"),
     nextCheckAt: at("next_check_at"),
     checkUntil: at("check_until").notNull(),
+    /**
+     * Checks in a row that failed (carrier down, timeout, unreadable answer); reset by an answer. At
+     * `PARCEL_MAX_CHECK_FAILURES` the parcel turns `unknown`, never a visible error (RF 4).
+     */
+    checkFailures: integer("check_failures").notNull().default(0),
     createdAt: createdAt(),
   },
   (t) => [
@@ -209,6 +214,7 @@ export const parcels = pgTable(
     index("parcels_next_check_at_idx").on(t.nextCheckAt).where(sql`${t.nextCheckAt} IS NOT NULL`),
     check("parcels_carrier_check", sql`${t.carrier} IS NULL OR ${oneOf(t.carrier, carrierSchema.options)}`),
     check("parcels_status_check", oneOf(t.status, parcelStatusSchema.options)),
+    check("parcels_check_failures_check", sql`${t.checkFailures} >= 0`),
     check(
       "parcels_tracking_number_check",
       sql`${t.trackingNumber} ~ ${sql.raw(`'^[0-9A-Z]{1,${MAX_TRACKING_NUMBER}}$'`)}`,

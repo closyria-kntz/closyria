@@ -1,0 +1,39 @@
+{
+  "code": 0,
+  "data": {
+    "accepted": [
+      {
+        "number": "12345678",
+        "carrier": 100304,
+        "param": null,
+        "tag": null,
+        "track_info": {
+          "shipping_info": { "shipper_address": {}, "recipient_address": {} },
+          "latest_status": { "status": "NotFound", "sub_status": "NotFound_Other", "sub_status_descr": null },
+          "latest_event": null,
+          "time_metrics": {
+            "days_after_order": 0,
+            "days_of_transit": 0,
+            "days_of_transit_done": 0,
+            "days_after_last_update": 0,
+            "estimated_delivery_date": { "source": null, "from": null, "to": null }
+          },
+          "milestone": [],
+          "misc_info": {},
+          "tracking": {
+            "providers_hash": 0,
+            "providers": [
+              {
+                "provider": { "key": 100304, "name": "Mondial Relay" },
+                "latest_sync_status": "Success",
+                "events_hash": 0,
+                "events": []
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "rejected": []
+  }
+}
