@@ -2967,6 +2967,7 @@
       "saved": "Commande modifiée.",
       "errors": {
         "shop": "Écris le nom de la boutique.",
+        "shopLong": "Ce nom de boutique est trop long : 80 caractères au plus.",
         "ref": "Ce numéro de commande est trop long.",
         "date": "La date de commande ne peut pas être dans le futur.",
         "order_exists": "Une autre de tes commandes de cette boutique a déjà ce numéro."

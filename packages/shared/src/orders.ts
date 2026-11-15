@@ -400,16 +400,16 @@ export const orderLineInputSchema = z
   });
 export type OrderLineInput = z.infer<typeof orderLineInputSchema>;
 
-/** Longest shop name she types with « Modifier » on a validated order (kept on her order, `orders.shop_name`). */
+/** Longest shop name she types with « Corriger » or « Modifier » (kept on her order, `orders.shop_name`). */
 export const MAX_ORDER_SHOP_NAME = 80;
 
 /**
- * « Corriger » on an order to validate, « Modifier » on a validated one (shop name of 80 characters at most, number and
- * date only): only the fields given change; `lines` replaces them all.
+ * « Corriger » on an order to validate, « Modifier » on a validated one (shop name, number and date only): only the
+ * fields given change; `lines` replaces them all. The shop name is 80 characters at most (400 beyond).
  */
 export const orderPatchSchema = z.object({
   profileId: uuidSchema.optional(),
-  shopName: z.string().trim().min(1).max(MAX_SHOP_NAME).optional(),
+  shopName: z.string().trim().min(1).max(MAX_ORDER_SHOP_NAME).optional(),
   externalRef: optionalText(MAX_EXTERNAL_REF),
   orderedAt: orderedAtSchema.nullable().optional(),
   lines: z.array(orderLineInputSchema).min(1).max(MAX_ORDER_LINES).optional(),

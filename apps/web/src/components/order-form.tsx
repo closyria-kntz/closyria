@@ -1,6 +1,12 @@
 "use client";
 
-import { type Carrier, MAX_ORDER_LINES, MAX_SHOP_NAME, type OrderLineInput } from "@closyria/shared";
+import {
+  type Carrier,
+  MAX_ORDER_LINES,
+  MAX_ORDER_SHOP_NAME,
+  MAX_SHOP_NAME,
+  type OrderLineInput,
+} from "@closyria/shared";
 import { useTranslations } from "next-intl";
 import { type FormEvent, useId, useState } from "react";
 import { checkLines, emptyLine, isTrackingInput, type LineDraft } from "@/lib/orders-form";
@@ -139,7 +145,7 @@ export function OrderForm({
         <input
           id={ids.shop}
           value={shop}
-          maxLength={MAX_SHOP_NAME}
+          maxLength={manual ? MAX_SHOP_NAME : MAX_ORDER_SHOP_NAME}
           autoComplete="off"
           onChange={(e) => setShop(e.target.value)}
           {...describe("shop")}

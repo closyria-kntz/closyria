@@ -17,7 +17,6 @@ import {
   type Carrier,
   detectCarrier,
   MAX_ORDER_LINE_NAME,
-  MAX_ORDER_SHOP_NAME,
   type ManualOrderInput,
   nameFromUrl,
   nextParcelCheckClamped,
@@ -305,17 +304,14 @@ export async function confirmOrder(db: Database, userId: string, orderId: string
 
 // --- « Corriger » and « Ce n'est pas une commande » ---------------------------------------------------------------
 
-/** Same lock key as the e-mail reading (Task 3): an order number of a shop is filed, or changed, one at a time. */
-async function lockOrderRef(tx: Tx, userId: string, shopId: string, externalRef: string) {
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtextextended(${`order:${userId}:${shopId}:${externalRef}`}, 0))`,
-  );
-}
+/** The e-mail reading's lock key of an order number of a shop (Task 3): one filed, or changed, at a time. */
+const orderRefKey = (userId: string, shopId: string, externalRef: string) => `order:${userId}:${shopId}:${externalRef}`;
 
 /**
  * The shop of an order she names: on a validated order already tied to a shop (« Modifier »), the shop stays (its
- * returns, the next e-mails of the order) and her name is kept for her order only — none when it is the catalogue's
- * own, case and accents aside; the catalogue is never renamed. Otherwise as `resolveShopName`.
+ * returns, the next e-mails of the order) and her name is kept for her order only (`shopNameTyped`: never shown to
+ * her friends) — none when it is the catalogue's own, case and accents aside; the catalogue is never renamed.
+ * Otherwise as `resolveShopName` (a name of an order without a shop is the order's only name, as before).
  */
 async function shopFor(
   tx: Tx,
@@ -331,16 +327,22 @@ async function shopFor(
     const own = shop && foldShopName(shop.name) === foldShopName(typed);
     return { shopId: order.shopId, shopName: own ? null : typed, shopNameTyped: !own };
   }
-  const resolved = await resolveShopName(tx, name);
-  return { ...resolved, shopNameTyped: resolved.shopName !== null };
+  return { ...(await resolveShopName(tx, name)), shopNameTyped: false };
 }
+
+/** The order changed between its plain read and its lock: its lock keys may be others; the transaction starts again. */
+class OrderMoved extends Error {}
 
 /**
  * « Corriger » a draft, or « Modifier » a validated order (2026-11-15): only the fields given change. A draft takes
- * its shop, number, date, profile and lines (`lines` replaces them all); a validated order only its shop's name (80
- * characters at most, `shopFor`), its number and its date — its articles are changed on their own sheets (409
- * `order_not_draft` with `lines` or `profileId`, and for a dismissed order). The number of another of her open orders
- * of the same shop — the one the e-mail reading would complete — is refused (409 `order_exists`).
+ * its shop, number, date, profile and lines (`lines` replaces them all); a validated order only its shop's name
+ * (`shopFor`), its number and its date — its articles are changed on their own sheets (409 `order_not_draft` with
+ * `lines` or `profileId`, and for a dismissed order). The number of another of her open orders of the same shop — the
+ * one the e-mail reading would complete — is refused (409 `order_exists`).
+ *
+ * Lock order, as the e-mail reading (apps/worker/src/orders/parse.ts): her profiles, then the order-number locks of
+ * its current and its new shop and number (sorted, as the reading sorts its keys), then the order row. The keys come
+ * from a plain read of the order; when the locked row turns out to differ, the transaction is tried again.
  */
 export async function patchOrder(
   db: Database,
@@ -349,31 +351,61 @@ export async function patchOrder(
   patch: OrderPatch,
   now: Date,
 ): Promise<OrderOutcome> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await patchOrderOnce(db, userId, orderId, patch, now);
+    } catch (error) {
+      if (!(error instanceof OrderMoved) || attempt >= 3) throw error;
+    }
+  }
+}
+
+async function patchOrderOnce(
+  db: Database,
+  userId: string,
+  orderId: string,
+  patch: OrderPatch,
+  now: Date,
+): Promise<OrderOutcome> {
   return inTransaction(db, async (tx) => {
     await lockProfilesOf(tx, userId);
+    const [seen] = await tx
+      .select()
+      .from(schema.orders)
+      .where(and(eq(schema.orders.id, orderId), eq(schema.orders.userId, userId)));
+    if (!seen) return { error: "not_found" };
+    const shop = patch.shopName === undefined ? undefined : await shopFor(tx, seen, patch.shopName);
+    const shopId = shop ? shop.shopId : seen.shopId;
+    const externalRef = patch.externalRef !== undefined ? patch.externalRef : seen.externalRef;
+    const renumbered = Boolean(shopId && externalRef && (shopId !== seen.shopId || externalRef !== seen.externalRef));
+    const keys = new Set<string>();
+    if (renumbered && shopId && externalRef) {
+      keys.add(orderRefKey(userId, shopId, externalRef));
+      if (seen.shopId && seen.externalRef) keys.add(orderRefKey(userId, seen.shopId, seen.externalRef));
+    }
+    for (const key of [...keys].sort()) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+    }
+
     const order = await lockOwnOrder(tx, userId, orderId);
     if (!order) return { error: "not_found" };
+    if (order.status !== seen.status || order.shopId !== seen.shopId || order.externalRef !== seen.externalRef) {
+      throw new OrderMoved();
+    }
     const confirmed = order.status === "confirmed";
     if (order.status !== "draft" && !confirmed) return { error: "order_not_draft" };
     if (confirmed && (patch.lines || patch.profileId)) return { error: "order_not_draft" };
-    if (confirmed && patch.shopName !== undefined && patch.shopName.length > MAX_ORDER_SHOP_NAME) {
-      return { error: "invalid_request" };
-    }
     if (patch.profileId && !(await findOwnProfile(tx, userId, patch.profileId))) return { error: "not_found" };
-    const shop = patch.shopName === undefined ? undefined : await shopFor(tx, order, patch.shopName);
 
-    const shopId = shop ? shop.shopId : order.shopId;
-    const externalRef = patch.externalRef !== undefined ? patch.externalRef : order.externalRef;
-    if (shopId && externalRef && (shopId !== order.shopId || externalRef !== order.externalRef)) {
-      await lockOrderRef(tx, userId, shopId, externalRef);
+    if (renumbered) {
       const [twin] = await tx
         .select({ id: schema.orders.id })
         .from(schema.orders)
         .where(
           and(
             eq(schema.orders.userId, userId),
-            eq(schema.orders.shopId, shopId),
-            eq(schema.orders.externalRef, externalRef),
+            eq(schema.orders.shopId, shopId as string),
+            eq(schema.orders.externalRef, externalRef as string),
             inArray(schema.orders.status, ["draft", "confirmed"]),
             ne(schema.orders.id, order.id),
           ),
@@ -515,7 +547,6 @@ export async function createManualOrder(
         userId,
         profileId: input.profileId,
         ...shop,
-        shopNameTyped: shop.shopName !== null,
         externalRef: input.externalRef ?? null,
         orderedAt: input.orderedAt ? new Date(input.orderedAt) : null,
         status: "draft",
@@ -794,12 +825,24 @@ export async function deleteParcel(
  * notifications (`order_received`, `parcel_*`, `order_received_check`: `on delete cascade`). Her articles stay as they
  * are (same stage, only no longer tied to it: the « Commande / colis » block of their sheet goes). The e-mail it was
  * read from stays, unlinked, until its purge; one nothing could read, which she typed this order from, is set aside
- * so that « On n'a pas su lire cet e-mail » does not come back. Lock order: her profiles, the order, its parcels, then
- * the items. False when unknown or another account's.
+ * so that « On n'a pas su lire cet e-mail » does not come back. Lock order: her profiles, its e-mail (before the
+ * order, as the e-mail reading), the order, its parcels, then the items. False when unknown or another account's.
  */
 export async function deleteOrder(db: Database, userId: string, orderId: string, now: Date): Promise<boolean> {
   return db.transaction(async (tx) => {
     await lockProfilesOf(tx, userId);
+    const [seen] = await tx
+      .select({ inboundEmailId: schema.orders.inboundEmailId })
+      .from(schema.orders)
+      .where(and(eq(schema.orders.id, orderId), eq(schema.orders.userId, userId)));
+    if (!seen) return false;
+    if (seen.inboundEmailId) {
+      await tx
+        .select({ id: schema.inboundEmails.id })
+        .from(schema.inboundEmails)
+        .where(eq(schema.inboundEmails.id, seen.inboundEmailId))
+        .for("update");
+    }
     const order = await lockOwnOrder(tx, userId, orderId);
     if (!order) return false;
     await tx

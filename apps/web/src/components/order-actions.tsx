@@ -86,7 +86,10 @@ function EditOrderForm({ order, onDone }: { order: OrderView; onDone: (order: Or
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const checked = checkOrderEdit(order, draft, new Date());
-    if (!checked.ok) return setError({ text: t(`errors.${checked.error}`), field: checked.error });
+    if (!checked.ok) {
+      const field = checked.error === "shopLong" ? "shop" : checked.error;
+      return setError({ text: t(`errors.${checked.error}`), field });
+    }
     if (Object.keys(checked.patch).length === 0) return onDone(null);
     setBusy(true);
     setError(null);

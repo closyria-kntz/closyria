@@ -1,4 +1,5 @@
-import { eq, inArray, schema } from "@closyria/db";
+import { setTimeout as delay } from "node:timers/promises";
+import { eq, inArray, schema, sql } from "@closyria/db";
 import type { HomeView, ItemView, OrderList, OrderView, OwnerGroupOrder, WishlistView } from "@closyria/shared";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { BASE_URL, createCatalogHarness } from "../../catalog/test-app";
@@ -753,6 +754,24 @@ describe("« Supprimer la commande » (2026-11-15)", () => {
     expect(await json(await call("DELETE", orderPath(o.orderId), a.cookie), 404)).toEqual({ error: "not_found" });
   });
 
+  it("leaves her other orders, their parcels and articles as they are", async () => {
+    const a = await account();
+    const gone = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" });
+    const kept = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" });
+    // An article on both orders (one bought twice) keeps the order left.
+    await t.db.insert(schema.orderLines).values({ orderId: gone.orderId, itemId: kept.itemId, name: "Robe Iris" });
+    expect((await call("DELETE", orderPath(gone.orderId), a.cookie)).status).toBe(204);
+    const list = await json<OrderList>(await call("GET", "/api/me/orders", a.cookie), 200);
+    const left = list.orders.find((o) => o.id === kept.orderId);
+    expect(left?.lines.map((l) => l.itemId)).toEqual([kept.itemId]);
+    expect(left?.parcels.map((p) => p.id)).toEqual([kept.parcelId]);
+    const items = await t.db
+      .select()
+      .from(schema.items)
+      .where(inArray(schema.items.id, [gone.itemId, kept.itemId]));
+    expect(items.map((i) => i.stage)).toEqual(["ordered", "ordered"]);
+  });
+
   it("deletes an order to validate and one set aside, whatever its status", async () => {
     const a = await account();
     for (const status of ["draft", "dismissed"]) {
@@ -904,6 +923,78 @@ describe("« Modifier » a validated order (2026-11-15)", () => {
     const b = await account();
     const theirs = await orderWithParcel(b, { carrier: "colissimo", status: "in_transit" }, shopId);
     await json(await call("PATCH", orderPath(theirs.orderId), b.cookie, { externalRef: "1042" }), 200);
+  });
+
+  it("takes the order number's lock before the order, as the e-mail reading does (no deadlock)", async () => {
+    const a = await account();
+    const shopId = await shop();
+    const o = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" }, shopId);
+    await t.db.update(schema.orders).set({ externalRef: "1042" }).where(eq(schema.orders.id, o.orderId));
+    // The e-mail reading of order 2002 (apps/worker/src/orders/parse.ts): its number's lock, then the order row.
+    let keyTaken!: () => void;
+    const taken = new Promise<void>((resolve) => {
+      keyTaken = resolve;
+    });
+    const reading = t.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`order:${a.userId}:${shopId}:2002`}, 0))`);
+      keyTaken();
+      // « Modifier » starts meanwhile.
+      await delay(300);
+      await tx.select().from(schema.orders).where(eq(schema.orders.id, o.orderId)).for("update");
+    });
+    await taken;
+    const patch = call("PATCH", orderPath(o.orderId), a.cookie, { externalRef: "2002" });
+    await reading;
+    expect((await json<OrderView>(await patch, 200)).externalRef).toBe("2002");
+  });
+
+  it("never shows the name she typed to her friends (shared list, group order) nor in the admin's views", async () => {
+    const a = await account();
+    const [pending] = await t.db
+      .insert(schema.shops)
+      .values({ name: "lunebis.example", slug: `screens-typed-${++counter}`, status: "pending" })
+      .returning();
+    const shopId = pending?.id as string;
+    const o = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" }, shopId);
+    const secret = "Le nom secret de Marie";
+    const view = await json<OrderView>(await call("PATCH", orderPath(o.orderId), a.cookie, { shopName: secret }), 200);
+    expect(view.shopName).toBe(secret);
+
+    const list = await json<WishlistView>(
+      await call("POST", "/api/me/wishlists", a.cookie, { name: "Pour les copines" }),
+      201,
+    );
+    await json(await call("POST", `/api/me/wishlists/${list.id}/items`, a.cookie, { itemId: o.itemId }), 200);
+    const share = await json<{ url: string }>(await call("POST", `/api/me/wishlists/${list.id}/share`, a.cookie), 200);
+    await json(
+      await call("POST", `/api/me/wishlists/${list.id}/group-order`, a.cookie, {
+        shopId,
+        shipping: { label: "Colissimo", shippingCents: 590, freeFromCents: null },
+        deadline: null,
+      }),
+      201,
+    );
+    const friendView = await call("GET", `/api/shared/${share.url.slice("/l/".length)}`, undefined);
+    const friendText = await friendView.text();
+    expect(friendView.status, friendText).toBe(200);
+    expect(friendText).not.toContain(secret);
+    const shared = JSON.parse(friendText) as { items: { itemId: string; shopName: string }[]; groupOrder: unknown };
+    expect(shared.groupOrder).not.toBeNull();
+    expect(shared.items.find((i) => i.itemId === o.itemId)?.shopName).toBe("lunebis.example");
+    const ownerGroup = await call("GET", `/api/me/wishlists/${list.id}/group-order`, a.cookie);
+    expect(await ownerGroup.text()).not.toContain(secret);
+
+    const admin = await t.signIn();
+    await t.db.update(schema.user).set({ role: "admin", isAnonymous: false }).where(eq(schema.user.id, admin.userId));
+    await t.db.update(schema.session).set({ authMethod: "passkey" }).where(eq(schema.session.userId, admin.userId));
+    for (const path of ["/order-emails", "/overview", `/shops/${shopId}`, `/users/${a.userId}`]) {
+      const res = await call("GET", `/api/admin${path}`, admin.cookie);
+      const text = await res.text();
+      expect(res.status, `${path}: ${text}`).toBe(200);
+      expect(text, path).not.toContain(secret);
+    }
+    // The catalogue keeps its own name.
+    expect((await shopRow(shopId))?.name).toBe("lunebis.example");
   });
 
   it("keeps the articles for their own sheets: lines and profile only on an order to validate", async () => {

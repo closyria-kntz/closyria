@@ -115,11 +115,13 @@ export const orderEditDraftOf = (order: EditedOrder): OrderEditDraft => ({
   orderedOn: order.orderedAt ? parisDay(order.orderedAt) : "",
 });
 
-export type OrderEditCheck = { ok: true; patch: OrderPatch } | { ok: false; error: "shop" | "date" | "ref" };
+export type OrderEditCheck =
+  | { ok: true; patch: OrderPatch }
+  | { ok: false; error: "shop" | "shopLong" | "date" | "ref" };
 
 /**
- * The fields of « Modifier » that changed, as the API takes them; an emptied shop name (the order had one), a day to
- * come (in Paris) or an over-long number is refused before sending.
+ * The fields of « Modifier » that changed, as the API takes them; an emptied shop name (the order had one), an
+ * over-long name or number, or a day to come (in Paris) is refused before sending (never cut).
  */
 export function checkOrderEdit(order: EditedOrder, draft: OrderEditDraft, now: Date): OrderEditCheck {
   const before = orderEditDraftOf(order);
@@ -127,7 +129,8 @@ export function checkOrderEdit(order: EditedOrder, draft: OrderEditDraft, now: D
   const shopName = draft.shopName.trim().replace(/\s+/g, " ");
   if (shopName !== before.shopName.trim()) {
     if (!shopName) return { ok: false, error: "shop" };
-    patch.shopName = shopName.slice(0, MAX_ORDER_SHOP_NAME);
+    if (shopName.length > MAX_ORDER_SHOP_NAME) return { ok: false, error: "shopLong" };
+    patch.shopName = shopName;
   }
   const externalRef = draft.externalRef.trim();
   if (externalRef.length > MAX_EXTERNAL_REF) return { ok: false, error: "ref" };

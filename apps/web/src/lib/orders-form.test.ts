@@ -143,6 +143,15 @@ describe("« Modifier » a validated order", () => {
     expect(checkOrderEdit(order, { ...orderEditDraftOf(order), orderedOn: "2026-11-15" }, NOW)).toMatchObject({
       ok: true,
     });
+    // Never cut: a name over 80 characters is refused, as the API would.
+    expect(checkOrderEdit(order, { ...orderEditDraftOf(order), shopName: "x".repeat(81) }, NOW)).toEqual({
+      ok: false,
+      error: "shopLong",
+    });
+    expect(checkOrderEdit(order, { ...orderEditDraftOf(order), shopName: "x".repeat(80) }, NOW)).toEqual({
+      ok: true,
+      patch: { shopName: "x".repeat(80) },
+    });
     expect(checkOrderEdit(order, { ...orderEditDraftOf(order), externalRef: "x".repeat(65) }, NOW)).toEqual({
       ok: false,
       error: "ref",

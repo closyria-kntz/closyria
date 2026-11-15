@@ -236,6 +236,9 @@ describe("order schemas", () => {
     expect(at(new Date(Date.now() + 2 * 86_400_000).toISOString()).success).toBe(false);
     expect(orderPatchSchema.safeParse({ orderedAt: "1990-01-01T00:00:00Z" }).success).toBe(false);
     expect(orderPatchSchema.parse({ orderedAt: null }).orderedAt).toBeNull();
+    // A shop name of 80 characters at most (never cut): 400 beyond.
+    expect(orderPatchSchema.safeParse({ shopName: "x".repeat(80) }).success).toBe(true);
+    expect(orderPatchSchema.safeParse({ shopName: "x".repeat(81) }).success).toBe(false);
   });
 
   it("reads an emptied text field as null", () => {
