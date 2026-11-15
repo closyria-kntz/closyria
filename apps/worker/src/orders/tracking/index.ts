@@ -107,8 +107,13 @@ export function trackingConnectors(
   };
 }
 
-/** La Poste for Colissimo, Lettre suivie and Chronopost; the aggregator for the others; null: no way to follow it. */
+/**
+ * La Poste for Colissimo, Lettre suivie and Chronopost when its key is set, else the aggregator (17TRACK follows them
+ * too, recognising the number itself); the aggregator for the others; null: no way to follow it.
+ */
 export function connectorFor(carrier: Carrier | null, connectors: TrackingConnectors): TrackingConnector | null {
   if (!carrier) return null;
-  return (LA_POSTE_CARRIERS as readonly Carrier[]).includes(carrier) ? connectors.laPoste : connectors.aggregator;
+  return (LA_POSTE_CARRIERS as readonly Carrier[]).includes(carrier)
+    ? (connectors.laPoste ?? connectors.aggregator)
+    : connectors.aggregator;
 }

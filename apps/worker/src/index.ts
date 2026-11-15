@@ -50,7 +50,7 @@ const connectors = trackingConnectors({
   laPosteKey: env.LAPOSTE_OKAPI_KEY,
   aggregatorKey: env.TRACKING_AGGREGATOR_KEY,
 });
-if (!connectors.laPoste) console.warn("parcels: La Poste tracking off (no LAPOSTE_OKAPI_KEY)");
+if (!connectors.laPoste) console.warn("parcels: La Poste direct off (no LAPOSTE_OKAPI_KEY): its carriers go to the aggregator");
 if (!connectors.aggregator) console.warn("parcels: aggregator tracking off (no TRACKING_AGGREGATOR_KEY)");
 
 const barrier = await checkNetworkBarrier();

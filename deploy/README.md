@@ -553,8 +553,8 @@ echo "Tout est retiré : plus de serveur d'e-mail ni de port 25, secrets, relais
 | Variable | D'où elle vient | Sans elle |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys (une clé par environnement, commence par `sk-ant-`). Mettre aussi une limite de dépense mensuelle dans la console : c'est une seconde barrière, derrière le plafond de l'admin. | Les e-mails que les formats connus ne lisent pas restent « On n'a pas su lire cet e-mail ». |
-| `LAPOSTE_OKAPI_KEY` | developer.laposte.fr → l'API « Suivi » (v2), sa clé « Okapi ». | Colissimo, Lettre suivie et Chronopost ne sont pas suivis (« Suivre chez le transporteur » reste). |
-| `TRACKING_AGGREGATOR_KEY` | 17TRACK → compte API → « Security Key » (en-tête `17token`). | Mondial Relay, GLS, DPD, Colis Privé, UPS et DHL ne sont pas suivis. |
+| `LAPOSTE_OKAPI_KEY` | developer.laposte.fr → l'API « Suivi » (v2), sa clé « Okapi ». | Colissimo, Lettre suivie et Chronopost passent par 17TRACK (clé suivante) : La Poste en direct n'est qu'un plus. |
+| `TRACKING_AGGREGATOR_KEY` | 17TRACK → compte API → « Security Key » (en-tête `17token`). | Aucun colis n'est suivi sans la clé La Poste ; avec elle, seuls Colissimo, Lettre suivie et Chronopost. |
 
 `INBOUND_EMAIL_SECRET` (la réception) **n'est pas** dans cette commande : il est tiré sur la machine et posé par la
 commande de « Réception des e-mails de commande » (étape 3), jamais à la main ni recopié.

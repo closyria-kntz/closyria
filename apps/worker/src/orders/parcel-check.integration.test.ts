@@ -471,10 +471,11 @@ describe("parcel-check: failures stay silent (RF 4)", () => {
 
   it("without the connector's key the parcel waits (checked later); without a carrier it is unknown, no longer checked", async () => {
     const who = await person();
-    const noKey = await order(who, { carrier: "colissimo" });
+    // GLS needs the aggregator; La Poste's carriers fall back to it, so only no aggregator leaves a parcel waiting.
+    const noKey = await order(who, { carrier: "gls" });
     const noCarrier = await order(who, { carrier: null });
     const { connector, asked } = scripted(() => found("delivered"));
-    await checkOnly(noKey.parcelId, connectorsFor(connector, null));
+    await checkOnly(noKey.parcelId, connectorsFor(null, connector));
     await checkOnly(noCarrier.parcelId, connectorsFor(connector, connector));
     expect(asked).toHaveLength(0);
     expect(await parcelRow(noKey.parcelId)).toMatchObject({ status: "pending", checkFailures: 0 });

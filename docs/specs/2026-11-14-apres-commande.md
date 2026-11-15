@@ -698,3 +698,10 @@ la notification « Commande reçue », ou un colis ajouté à une commande exist
 continuation en tête, ligne sans « nom: », nom replié avant ses deux-points, caractère de contrôle) est toujours
 écarté : sinon un champ signé replié sous une copie truquée était lu par DKIM et pas par nous (contournait aussi la
 règle `To` signé de Gmail). Le journal n'écrit le domaine que pour les grands fournisseurs (« custom domain » sinon). L'API note la raison d'un e-mail écarté (domaine et résultat des signatures, jamais d'adresse).
+
+### 11.3 Suivi sans clé La Poste (décision de la fondatrice, 2026-11-15)
+
+La clé La Poste (Okapi) est abandonnée pour l'instant. Sans elle, Colissimo, Lettre suivie et Chronopost sont suivis
+par 17TRACK (qui reconnaît le transporteur à partir du numéro) ; si la clé est ajoutée un jour, La Poste reprend ses
+colis. Une seule clé, `TRACKING_AGGREGATOR_KEY`, suffit donc. Coût 17TRACK (quota prépayé, essai offert à
+l'inscription) à comparer avec TrackingMore avant la prod, selon le volume attendu.
