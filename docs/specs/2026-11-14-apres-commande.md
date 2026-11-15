@@ -628,6 +628,9 @@ depuis l'adresse du compte sont gardés.
   premier code, comptées par une seule mise à jour atomique qui **ne compte pas** une demande refusée. L'e-mail part
   dans la transaction qui le compte : s'il ne part pas (502), rien n'est ajouté, rien n'est compté, `last_sent_at` et
   l'ancien code restent. Un refus (429) dit l'attente réelle (`retryAfterSeconds`), affichée « Réessaie dans … ».
+  Un seul code en cours d'envoi par compte et par processus (relecture n°2) : l'e-mail part dans sa transaction
+  (jusqu'à 10 s si Brevo est lent), une seconde demande du même compte pendant ce temps reçoit aussitôt 429
+  (`retryAfterSeconds` 10) sans ouvrir de transaction, pour ne pas vider le pool de connexions.
   Conséquence : ajouter plus de 5 adresses prend plus d'une heure (accepté : le cas courant est une ou deux boîtes
   de plus).
 - **Base** : migration 0044, tables `order_sender_addresses` (unique par compte et adresse, adresse en minuscules,

@@ -1,5 +1,5 @@
 import type { Mailer } from "@closyria/auth";
-import { and, eq, schema } from "@closyria/db";
+import { and, eq, schema, sql } from "@closyria/db";
 import type { SenderAddressList, SenderAddressView } from "@closyria/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { BASE_URL, createCatalogHarness } from "../../catalog/test-app";
@@ -16,7 +16,7 @@ const later = (ms: number) => {
   clock.now = new Date(clock.now.getTime() + ms);
 };
 const MINUTE = 60_000;
-const mailControl = { fail: false };
+const mailControl: { fail: boolean; hold?: Promise<void> | undefined } = { fail: false };
 
 let t: Harness;
 let off: Harness;
@@ -38,6 +38,7 @@ beforeAll(async () => {
   // The app sends through a mailer that can fail; what leaves lands in the harness's memory mailer (`t.mail`).
   const mailer: Mailer = {
     async send(msg) {
+      await mailControl.hold; // Brevo slow
       if (mailControl.fail) throw new Error("Brevo refused the e-mail (HTTP 500)");
       await t.mail.send(msg);
     },
@@ -56,6 +57,7 @@ afterAll(async () => {
 beforeEach(() => {
   clock.now = NOW;
   mailControl.fail = false;
+  mailControl.hold = undefined;
 });
 
 function call(method: string, path: string, cookie: string | undefined, body?: unknown, h: Harness = t) {
@@ -378,5 +380,46 @@ describe("removing, and another account's addresses", () => {
     const list = (await (await call("GET", "/api/me/order-inbox/senders", sophie.cookie)).json()) as SenderAddressList;
     expect(list.addresses).toEqual([]);
     expect((await call("DELETE", `/api/me/order-inbox/senders/${body.id}`, sophie.cookie)).status).toBe(404);
+  });
+});
+
+describe("one code sent at a time per account (Brevo slow)", () => {
+  /** Transactions left open on the test database (each holds one pool connection). */
+  async function openTransactions(): Promise<number> {
+    const result = await t.db.execute<{ n: number }>(
+      sql`select count(*)::int as n from pg_stat_activity
+          where datname = current_database() and state like 'idle in transaction%' and pid <> pg_backend_pid()`,
+    );
+    return result.rows[0]?.n ?? 0;
+  }
+
+  it("a second add or resend of the same account is refused at once (429, 10 s), without a transaction", async () => {
+    const { cookie } = await account();
+    let release = () => {};
+    mailControl.hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = add(cookie, other());
+    await vi.waitFor(async () => expect(await openTransactions()).toBe(1));
+    expect(await add(cookie, other())).toEqual({
+      status: 429,
+      body: { error: "rate_limited", retryAfterSeconds: 10 },
+    });
+    expect(await openTransactions()).toBe(1);
+    // Another account is not held up.
+    const sophie = await account();
+    const hers = add(sophie.cookie, other());
+    await vi.waitFor(async () => expect(await openTransactions()).toBe(2));
+    release();
+    expect((await first).status).toBe(201);
+    expect((await hers).status).toBe(201);
+    // The slot is free again, for a resend as for an add; a failed send frees it too.
+    mailControl.hold = undefined;
+    const { body } = await add(cookie, other());
+    later(MINUTE);
+    mailControl.fail = true;
+    expect((await resend(cookie, body.id)).status).toBe(502);
+    mailControl.fail = false;
+    expect((await resend(cookie, body.id)).status).toBe(200);
   });
 });

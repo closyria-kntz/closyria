@@ -284,6 +284,9 @@ async function consumeSend(tx: Tx, userId: string, email: string, now: Date): Pr
   });
 }
 
+/** `oneAtATime`'s answer when a code of the same account is already being sent. */
+const BUSY: unique symbol = Symbol("busy");
+
 /** Only the error's name: the address and the code never reach the journal. */
 const errorName = (error: unknown) => (error instanceof Error ? error.name : "error");
 
@@ -320,6 +323,25 @@ export function orderSenderRoutes(deps: OrderSenderDeps) {
     } catch (error) {
       console.error(`sender address: code e-mail not sent (${errorName(error)})`);
       throw new MailFailed();
+    }
+  }
+
+  /**
+   * One code being sent per account at a time, in this process: the e-mail leaves inside its transaction (up to the
+   * mailer's 10 s), so parallel requests of one account while Brevo is slow would each hold a pool connection and wait
+   * on her account row. A second one is refused at once (429, 10 s), before any transaction.
+   */
+  const sending = new Set<string>();
+  const IN_FLIGHT_RETRY_SECONDS = 10;
+  const busy = <C extends Context<AccessEnv>>(c: C) =>
+    c.json({ error: "rate_limited" as const, retryAfterSeconds: IN_FLIGHT_RETRY_SECONDS }, 429);
+  async function oneAtATime<T>(userId: string, work: () => Promise<T>): Promise<T | typeof BUSY> {
+    if (sending.has(userId)) return BUSY;
+    sending.add(userId);
+    try {
+      return await work();
+    } finally {
+      sending.delete(userId);
     }
   }
 
@@ -361,40 +383,43 @@ export function orderSenderRoutes(deps: OrderSenderDeps) {
       if (email === gated.accountEmail.trim().toLowerCase()) return c.json({ error: "sender_exists" } as const, 409);
       const at = now();
       const fresh = freshCode(at);
-      let outcome: { row: Row } | { error: "sender_exists" | "sender_limit" };
+      let outcome: { row: Row } | { error: "sender_exists" | "sender_limit" } | typeof BUSY;
       try {
-        outcome = await db.transaction(async (tx) => {
-          // Her account row, so that two additions at once count one after the other (the limit of 10).
-          await tx
-            .select({ id: schema.user.id })
-            .from(schema.user)
-            .where(eq(schema.user.id, userId))
-            .for("no key update");
-          const [taken] = await tx
-            .select({ id: schema.orderSenderAddresses.id })
-            .from(schema.orderSenderAddresses)
-            .where(and(eq(schema.orderSenderAddresses.userId, userId), eq(schema.orderSenderAddresses.email, email)));
-          if (taken) return { error: "sender_exists" } as const;
-          const [held] = await tx
-            .select({ n: count() })
-            .from(schema.orderSenderAddresses)
-            .where(eq(schema.orderSenderAddresses.userId, userId));
-          if ((held?.n ?? 0) >= MAX_EMAIL_ROWS) return { error: "sender_limit" } as const;
-          await consumeSend(tx, userId, email, at);
-          const [row] = await tx
-            .insert(schema.orderSenderAddresses)
-            .values({ userId, email, ...fresh.columns })
-            .returning();
-          if (!row) throw new Error("sender address not inserted");
-          await send(email, fresh.code);
-          return { row };
-        });
+        outcome = await oneAtATime(userId, () =>
+          db.transaction(async (tx) => {
+            // Her account row, so that two additions at once count one after the other (the limit of 10).
+            await tx
+              .select({ id: schema.user.id })
+              .from(schema.user)
+              .where(eq(schema.user.id, userId))
+              .for("no key update");
+            const [taken] = await tx
+              .select({ id: schema.orderSenderAddresses.id })
+              .from(schema.orderSenderAddresses)
+              .where(and(eq(schema.orderSenderAddresses.userId, userId), eq(schema.orderSenderAddresses.email, email)));
+            if (taken) return { error: "sender_exists" } as const;
+            const [held] = await tx
+              .select({ n: count() })
+              .from(schema.orderSenderAddresses)
+              .where(eq(schema.orderSenderAddresses.userId, userId));
+            if ((held?.n ?? 0) >= MAX_EMAIL_ROWS) return { error: "sender_limit" } as const;
+            await consumeSend(tx, userId, email, at);
+            const [row] = await tx
+              .insert(schema.orderSenderAddresses)
+              .values({ userId, email, ...fresh.columns })
+              .returning();
+            if (!row) throw new Error("sender address not inserted");
+            await send(email, fresh.code);
+            return { row };
+          }),
+        );
       } catch (error) {
         if (pgCode(error) === "23505") return c.json({ error: "sender_exists" } as const, 409);
         const failure = sendFailure(c, error);
         if (failure) return failure;
         throw error;
       }
+      if (outcome === BUSY) return busy(c);
       if ("error" in outcome) return c.json({ error: outcome.error }, 409);
       return c.json(viewOf(outcome.row), 201);
     })
@@ -438,28 +463,35 @@ export function orderSenderRoutes(deps: OrderSenderDeps) {
       const { id } = c.req.valid("param");
       const at = now();
       const fresh = freshCode(at);
-      let outcome: { row: Row } | { error: "not_found" | "sender_verified" };
+      let outcome: { row: Row } | { error: "not_found" | "sender_verified" } | typeof BUSY;
       try {
-        outcome = await db.transaction(async (tx) => {
-          const [row] = await tx.select().from(schema.orderSenderAddresses).where(own(gated.userId, id)).for("update");
-          if (!row) return { error: "not_found" } as const;
-          if (row.verifiedAt) return { error: "sender_verified" } as const;
-          const next = (row.lastSentAt?.getTime() ?? 0) + SENDER_RESEND_SECONDS * 1000;
-          if (next > at.getTime()) throw new Refused(secondsUntil(next, at));
-          await consumeSend(tx, gated.userId, row.email, at);
-          const [updated] = await tx
-            .update(schema.orderSenderAddresses)
-            .set(fresh.columns)
-            .where(eq(schema.orderSenderAddresses.id, row.id))
-            .returning();
-          await send(row.email, fresh.code);
-          return { row: updated ?? row };
-        });
+        outcome = await oneAtATime(gated.userId, () =>
+          db.transaction(async (tx) => {
+            const [row] = await tx
+              .select()
+              .from(schema.orderSenderAddresses)
+              .where(own(gated.userId, id))
+              .for("update");
+            if (!row) return { error: "not_found" } as const;
+            if (row.verifiedAt) return { error: "sender_verified" } as const;
+            const next = (row.lastSentAt?.getTime() ?? 0) + SENDER_RESEND_SECONDS * 1000;
+            if (next > at.getTime()) throw new Refused(secondsUntil(next, at));
+            await consumeSend(tx, gated.userId, row.email, at);
+            const [updated] = await tx
+              .update(schema.orderSenderAddresses)
+              .set(fresh.columns)
+              .where(eq(schema.orderSenderAddresses.id, row.id))
+              .returning();
+            await send(row.email, fresh.code);
+            return { row: updated ?? row };
+          }),
+        );
       } catch (error) {
         const failure = sendFailure(c, error);
         if (failure) return failure;
         throw error;
       }
+      if (outcome === BUSY) return busy(c);
       if ("error" in outcome) {
         return outcome.error === "not_found" ? c.json(notFound, 404) : c.json({ error: outcome.error }, 409);
       }
