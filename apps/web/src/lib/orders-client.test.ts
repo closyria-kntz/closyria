@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   addSenderAddress,
+  deleteParcel,
   fetchOrderInbox,
   fetchOrders,
   fetchSenderAddresses,
+  patchParcel,
   removeSenderAddress,
   resendSenderCode,
   verifySenderAddress,
@@ -83,5 +85,51 @@ describe("« Mes adresses d'envoi »", () => {
     const removed = deps(new Response(null, { status: 204 }));
     expect(await removeSenderAddress(id, removed)).toEqual({ ok: true });
     expect(removed.fetch).toHaveBeenCalledWith(`/api/me/order-inbox/senders/${id}`, { method: "DELETE" });
+  });
+});
+
+describe("« Modifier le numéro » and « Supprimer ce suivi »", () => {
+  const orderId = "7a0c3c58-7c3b-4d0e-9a5e-1f7d1b0f3c11";
+  const parcelId = "0b8f0f8e-3f41-4b9e-8a0e-5c1d2e3f4a5b";
+  const order = {
+    id: orderId,
+    profileId: "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+    shop: null,
+    shopName: "Lola & Co",
+    externalRef: null,
+    orderedAt: null,
+    status: "confirmed",
+    source: "email",
+    parseMethod: "ai",
+    lines: [],
+    parcels: [],
+    receivedQuestion: false,
+    createdAt: "2026-11-15T09:00:00.000Z",
+  };
+
+  it("sends the new number to the parcel and answers the order", async () => {
+    const d = deps(json(order));
+    const result = await patchParcel(orderId, parcelId, { trackingNumber: "6A18537412398" }, d);
+    expect(result).toMatchObject({ ok: true, order: { id: orderId, shopName: "Lola & Co" } });
+    const [path, init] = d.fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(path).toBe(`/api/me/orders/${orderId}/parcels/${parcelId}`);
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(String(init.body))).toEqual({ trackingNumber: "6A18537412398" });
+  });
+
+  it("keeps the API's reason for a refused number", async () => {
+    const d = deps(json({ error: "parcel_exists" }, 409));
+    expect(await patchParcel(orderId, parcelId, { trackingNumber: "6A18537412398" }, d)).toEqual({
+      ok: false,
+      error: "parcel_exists",
+    });
+  });
+
+  it("deletes the parcel and answers the order", async () => {
+    const d = deps(json(order));
+    expect(await deleteParcel(orderId, parcelId, d)).toMatchObject({ ok: true, order: { id: orderId } });
+    const [path, init] = d.fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(path).toBe(`/api/me/orders/${orderId}/parcels/${parcelId}`);
+    expect(init.method).toBe("DELETE");
   });
 });

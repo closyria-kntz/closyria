@@ -531,6 +531,74 @@ test("un numéro collé, le colis en route puis reçu avec sa date limite, et un
   expect(fixed).toEqual([{ carrier: "mondial_relay", status: "pending", check_failures: 0, due: true }]);
 });
 
+test("un numéro de suivi modifié puis un suivi supprimé, la commande et l'article restent", async ({
+  page,
+  db,
+  userAgentTag,
+}, testInfo) => {
+  const who = await account(page, db, userAgentTag);
+  const orderId = await draftOrder(db, who, [{ name: "Robe portefeuille" }], {
+    trackingNumber: "6A18537412398",
+    carrier: "colissimo",
+    ref: "4001",
+  });
+  await db.query("update orders set status = 'confirmed', confirmed_at = now() where id = $1", [orderId]);
+  await db.query(
+    `insert into parcels (order_id, carrier, tracking_number, status, next_check_at, check_until)
+     values ($1, 'colissimo', '8R04217735096', 'in_transit', now() + interval '6 hours', now() + interval '30 days')`,
+    [orderId],
+  );
+  await page.goto("/mes-commandes");
+  const card = main(page).getByRole("article", { name: AUTO_SHOP.name }).filter({ hasText: "Robe portefeuille" });
+  const first = card.getByRole("listitem").filter({ hasText: "6A18537412398" });
+
+  // « Modifier le numéro »: a number another parcel of the order has is refused, said in words.
+  await first.getByRole("button", { name: "Modifier le numéro" }).click();
+  const field = first.getByLabel("Numéro de suivi");
+  await expect(field).toHaveValue("6A18537412398");
+  await field.fill("8R0421 7735096");
+  await first.getByRole("button", { name: "Enregistrer le numéro" }).click();
+  await expect(first.getByRole("alert")).toHaveText("Ce numéro est déjà sur un autre colis de cette commande.");
+  await expect(field).toHaveAttribute("aria-invalid", "true");
+  await axeLightAndDark(page);
+
+  // A DHL number: its carrier is read from it, and the tracking starts again.
+  await field.fill("jjd 0001 2345 6789 012345");
+  await first.getByRole("button", { name: "Enregistrer le numéro" }).click();
+  const renamed = card.getByRole("listitem").filter({ hasText: "JJD000123456789012345" });
+  await expect(renamed).toContainText("DHL");
+  await expect(renamed).toContainText("En attente du transporteur");
+  await expect(renamed.getByRole("status")).toHaveText("Numéro enregistré : le suivi reprend.");
+  const { rows: edited } = await db.query<{ carrier: string; status: string; due: boolean }>(
+    `select carrier, status, next_check_at <= now() as due from parcels
+     where order_id = $1 and tracking_number = 'JJD000123456789012345'`,
+    [orderId],
+  );
+  expect(edited).toEqual([{ carrier: "dhl", status: "pending", due: true }]);
+
+  // « Supprimer ce suivi »: asked first; « Annuler » keeps it.
+  const second = card.getByRole("listitem").filter({ hasText: "8R04217735096" });
+  await second.getByRole("button", { name: "Supprimer ce suivi" }).click();
+  const dialog = page.getByRole("dialog", { name: "Supprimer ce suivi de colis ?" });
+  await expect(dialog).toContainText("L'article et la commande restent.");
+  await axeLightAndDark(page);
+  await shots(page, testInfo, "supprimer-suivi");
+  await dialog.getByRole("button", { name: "Annuler" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(second).toHaveCount(1);
+  await second.getByRole("button", { name: "Supprimer ce suivi" }).click();
+  await dialog.getByRole("button", { name: "Supprimer", exact: true }).click();
+  await expect(second).toHaveCount(0);
+  await expect(card).toContainText("Robe portefeuille");
+  await expect(card).toContainText("JJD000123456789012345");
+  const { rows: left } = await db.query<{ n: number }>("select count(*)::int as n from parcels where order_id = $1", [
+    orderId,
+  ]);
+  expect(left).toEqual([{ n: 1 }]);
+  await page.reload();
+  await expect(card.getByRole("listitem").filter({ hasText: "8R04217735096" })).toHaveCount(0);
+});
+
 test("le rappel de retour à 3 jours est la une de l'Accueil", async ({ page, db, userAgentTag }) => {
   const who = await account(page, db, userAgentTag);
   const wish = await pasteAndWish(page, db, who.userId);

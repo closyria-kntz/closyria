@@ -4,7 +4,7 @@ import {
   orderPatchSchema,
   orderReceivedAnswerSchema,
   orderViewSchema,
-  parcelCarrierInputSchema,
+  parcelPatchInputSchema,
   trackingInputSchema,
   wardrobeErrorSchema,
 } from "@closyria/shared";
@@ -15,13 +15,14 @@ import { listOrderViews, listUnreadEmails } from "../../orders/view";
 import {
   addItemTracking,
   answerReceived,
-  changeParcelCarrier,
   confirmOrder,
   createManualOrder,
+  deleteParcel,
   dismissOrder,
   dismissUnreadEmail,
   type OrderOutcome,
   patchOrder,
+  patchParcel,
 } from "../../orders/write";
 import { rateLimit } from "../../rate-limit";
 import { WARDROBE_LIMITS, type WardrobeDeps } from "../../wardrobe/deps";
@@ -138,19 +139,44 @@ const receivedRoute = defineAccess(
   "user",
 );
 
-const parcelCarrierRoute = defineAccess(
+const parcelParams = z.object({ id: z.uuid(), parcelId: z.uuid() });
+
+const parcelPatchRoute = defineAccess(
   createRoute({
     method: "patch",
     path: "/me/orders/{id}/parcels/{parcelId}",
-    summary: "« Changer de transporteur » on one of her parcels",
+    summary: "« Changer de transporteur » or « Modifier le numéro » on one of her parcels",
     description:
-      "The carrier she picked; the tracking starts again (step `pending`, failures reset, next check at the usual " +
-      "rhythm; a tracking already over gets 30 more days).",
-    request: { params: z.object({ id: z.uuid(), parcelId: z.uuid() }), ...body(parcelCarrierInputSchema) },
+      "The carrier she picked, a new number, or both; the tracking starts again (step `pending`, failures reset, " +
+      "asked at the next sweep; a tracking already over gets 30 more days). A new number drops the old one's steps " +
+      "and notifications, and its carrier is read from its format unless she picked one (none: `unknown`).",
+    request: { params: parcelParams, ...body(parcelPatchInputSchema) },
     responses: {
       200: orderContent("The order with the corrected parcel"),
       ...common,
-      409: errorContent("Delivered already (parcel_delivered), or the order is dismissed (order_dismissed)"),
+      409: errorContent(
+        "Delivered already (parcel_delivered), the order is dismissed (order_dismissed), the number is on another " +
+          "parcel of the order (parcel_exists) or on another of her orders (tracking_exists)",
+      ),
+    },
+  }),
+  "user",
+);
+
+const parcelDeleteRoute = defineAccess(
+  createRoute({
+    method: "delete",
+    path: "/me/orders/{id}/parcels/{parcelId}",
+    summary: "« Supprimer ce suivi » on one of her parcels",
+    description:
+      "The parcel goes with its steps and notifications; the order and its articles stay (what a delivery brought " +
+      "is kept). A validated order is settled again: its parcels left all settled with one delivered, its articles " +
+      "move to « Reçu ».",
+    request: { params: parcelParams },
+    responses: {
+      200: orderContent("The order without the parcel"),
+      ...common,
+      409: errorContent("The order is dismissed (order_dismissed)"),
     },
   }),
   "user",
@@ -286,11 +312,17 @@ export function ordersRoutes(deps: WardrobeDeps) {
       if (!userId) return c.json(accountRequired, 403);
       return answer(c, await answerReceived(db, userId, c.req.valid("param").id, c.req.valid("json"), now()));
     })
-    .openapi(parcelCarrierRoute, async (c) => {
+    .openapi(parcelPatchRoute, async (c) => {
       const userId = await accountIdOf(c);
       if (!userId) return c.json(accountRequired, 403);
       const { id, parcelId } = c.req.valid("param");
-      return answer(c, await changeParcelCarrier(db, userId, id, parcelId, c.req.valid("json"), now()));
+      return answer(c, await patchParcel(db, userId, id, parcelId, c.req.valid("json"), now()));
+    })
+    .openapi(parcelDeleteRoute, async (c) => {
+      const userId = await accountIdOf(c);
+      if (!userId) return c.json(accountRequired, 403);
+      const { id, parcelId } = c.req.valid("param");
+      return answer(c, await deleteParcel(db, userId, id, parcelId, now()));
     })
     .openapi(dismissEmailRoute, async (c) => {
       const userId = await accountIdOf(c);

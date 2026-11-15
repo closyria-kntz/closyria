@@ -10,6 +10,7 @@ import {
   orderInboxViewSchema,
   orderListSchema,
   orderViewSchema,
+  type ParcelPatchInput,
   type SenderAddressList,
   senderAddressListSchema,
   senderAddressViewSchema,
@@ -130,13 +131,25 @@ export const createManualOrder = (input: ManualOrderInput, deps: ClientDeps = de
 export const addItemTracking = (itemId: string, input: TrackingInput, deps: ClientDeps = defaultDeps) =>
   orderCall(deps, `/api/me/items/${itemId}/tracking`, jsonInit("POST", input));
 
+/** « Changer de transporteur » and « Modifier le numéro » on one of her parcels: the carrier, the number, or both. */
+export const patchParcel = (
+  orderId: string,
+  parcelId: string,
+  patch: ParcelPatchInput,
+  deps: ClientDeps = defaultDeps,
+) => orderCall(deps, `/api/me/orders/${orderId}/parcels/${parcelId}`, jsonInit("PATCH", patch));
+
 /** « Changer de transporteur » on one of her parcels. */
 export const changeParcelCarrier = (
   orderId: string,
   parcelId: string,
   carrier: Carrier,
   deps: ClientDeps = defaultDeps,
-) => orderCall(deps, `/api/me/orders/${orderId}/parcels/${parcelId}`, jsonInit("PATCH", { carrier }));
+) => patchParcel(orderId, parcelId, { carrier }, deps);
+
+/** « Supprimer ce suivi »: the order answered without the parcel. */
+export const deleteParcel = (orderId: string, parcelId: string, deps: ClientDeps = defaultDeps) =>
+  orderCall(deps, `/api/me/orders/${orderId}/parcels/${parcelId}`, { method: "DELETE" });
 
 /** « Ce n'est pas une commande » on an e-mail nothing could read. */
 export const dismissUnreadEmail = (id: string, deps: ClientDeps = defaultDeps) =>

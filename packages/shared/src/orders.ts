@@ -821,8 +821,12 @@ export function carrierTrackingUrl(carrier: Carrier | null, trackingNumber: stri
 }
 
 /**
- * « Changer de transporteur » on one of her parcels (`PATCH /api/me/orders/{id}/parcels/{parcelId}`): the tracking
- * starts again with that carrier (step `pending`, no failure counted, next check at the usual rhythm).
+ * « Changer de transporteur » and « Modifier le numéro » on one of her parcels
+ * (`PATCH /api/me/orders/{id}/parcels/{parcelId}`): the carrier she picked, a new number (spaces and dashes removed,
+ * 6 to 40 letters and digits), or both. The tracking starts again (step `pending`, no failure counted, checked at the
+ * next sweep); a new number drops the old one's steps. One field at least.
  */
-export const parcelCarrierInputSchema = z.object({ carrier: carrierSchema });
-export type ParcelCarrierInput = z.infer<typeof parcelCarrierInputSchema>;
+export const parcelPatchInputSchema = z
+  .object({ carrier: carrierSchema.optional(), trackingNumber: trackingNumberSchema.optional() })
+  .refine((p) => p.carrier !== undefined || p.trackingNumber !== undefined, { message: "nothing to change" });
+export type ParcelPatchInput = z.infer<typeof parcelPatchInputSchema>;

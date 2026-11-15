@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_PARSED_SHOP_NAME, orderShopDisplayName, parsedShopName } from "./orders";
+import { MAX_PARSED_SHOP_NAME, orderShopDisplayName, parcelPatchInputSchema, parsedShopName } from "./orders";
 
 describe("parsedShopName", () => {
   it("keeps the name the e-mail gives, trimmed and on one line", () => {
@@ -35,5 +35,28 @@ describe("orderShopDisplayName", () => {
     expect(orderShopDisplayName({ name: "lolaandco.com", status: "pending" }, null)).toBe("lolaandco.com");
     expect(orderShopDisplayName(null, "Ma boutique")).toBe("Ma boutique");
     expect(orderShopDisplayName(undefined, null)).toBeNull();
+  });
+});
+
+describe("parcelPatchInputSchema", () => {
+  it("accepts a new number, cleaned of spaces (and dashes), in capitals", () => {
+    expect(parcelPatchInputSchema.parse({ trackingNumber: " 6a 1853-7412398 " })).toEqual({
+      trackingNumber: "6A18537412398",
+    });
+  });
+
+  it("accepts a carrier alone, or both", () => {
+    expect(parcelPatchInputSchema.parse({ carrier: "gls" })).toEqual({ carrier: "gls" });
+    expect(parcelPatchInputSchema.parse({ trackingNumber: "12345678901", carrier: "gls" })).toEqual({
+      trackingNumber: "12345678901",
+      carrier: "gls",
+    });
+  });
+
+  it("refuses a number too short, too long or with other characters, and an empty change", () => {
+    expect(parcelPatchInputSchema.safeParse({ trackingNumber: "12345" }).success).toBe(false);
+    expect(parcelPatchInputSchema.safeParse({ trackingNumber: "1".repeat(41) }).success).toBe(false);
+    expect(parcelPatchInputSchema.safeParse({ trackingNumber: "ABC_123456" }).success).toBe(false);
+    expect(parcelPatchInputSchema.safeParse({}).success).toBe(false);
   });
 });

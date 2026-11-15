@@ -51,11 +51,13 @@ export {
 } from "drizzle-orm";
 export { importNotUnderWay } from "./import-state";
 export {
+  isParcelSettled,
   OUTER_ORDER_ID,
   orderAwaitingNews,
   orderShopNameSql,
   receivedQuestionOpen,
   receiveOrderItems,
+  settleOrder,
 } from "./orders";
 export type { AuditDetails } from "./schema/audit";
 export { readAiMonthlyCapCents } from "./settings";

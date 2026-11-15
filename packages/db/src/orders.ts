@@ -116,3 +116,39 @@ export function orderShopNameSql(
   return sql<string | null>`(case when ${shopStatus} = 'pending' and ${orderShopName} is not null then ${orderShopName}
     else coalesce(${shopName}, ${orderShopName}) end)`;
 }
+
+/** A parcel done with: delivered, `unknown` (the carrier gave up on it, or we did), or at the end of its tracking. */
+export const isParcelSettled = (parcel: { status: string; checkUntil: Date }, now: Date) =>
+  parcel.status === "delivered" || parcel.status === "unknown" || parcel.checkUntil.getTime() <= now.getTime();
+
+/**
+ * Receives the order once all its parcels are settled and one at least was delivered (none delivered: the J+10
+ * question takes over): her items move to « Reçu » on the latest delivery's date (`receiveOrderItems`), with their
+ * return deadline counted from it. Run after every check of one of its parcels by the worker, and after she deletes a
+ * parcel (the API), under the order's lock (her profiles, the order, then the items), so a late parcel turning
+ * `unknown`, reaching its end or deleted never blocks the others; idempotent.
+ *
+ * Returns how many items moved and how many of its parcels are still on their way.
+ */
+export async function settleOrder(
+  tx: Tx,
+  order: { id: string; userId: string; shopId: string | null },
+  now: Date,
+): Promise<{ moved: number; inTransit: number }> {
+  const parcels = await tx
+    .select({
+      status: schema.parcels.status,
+      checkUntil: schema.parcels.checkUntil,
+      deliveredAt: schema.parcels.deliveredAt,
+    })
+    .from(schema.parcels)
+    .where(eq(schema.parcels.orderId, order.id));
+  const inTransit = parcels.filter((p) => !isParcelSettled(p, now)).length;
+  const deliveries = parcels.flatMap((p) =>
+    p.status === "delivered" && p.deliveredAt ? [p.deliveredAt.getTime()] : [],
+  );
+  if (inTransit > 0 || deliveries.length === 0) return { moved: 0, inTransit };
+  const deliveredAt = new Date(Math.max(...deliveries));
+  const moved = await receiveOrderItems(tx, order, deliveredAt, now);
+  return { moved, inTransit };
+}

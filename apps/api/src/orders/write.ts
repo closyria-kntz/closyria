@@ -10,6 +10,7 @@ import {
   receivedQuestionOpen,
   receiveOrderItems,
   schema,
+  settleOrder,
   sql,
 } from "@closyria/db";
 import {
@@ -23,7 +24,7 @@ import {
   type OrderPatch,
   type OrderReceivedAnswer,
   type OrderView,
-  type ParcelCarrierInput,
+  type ParcelPatchInput,
   parcelCheckUntil,
   type TrackingInput,
   type WardrobeErrorCode,
@@ -604,24 +605,32 @@ export async function answerReceived(
   });
 }
 
-// --- Carrier correction (Task 7) ----------------------------------------------------------------------------------
+// --- Carrier correction (Task 7), number correction and deletion (2026-11-15) -------------------------------------
 
 /**
- * « Changer de transporteur » on one of her parcels: the carrier she picked, and the tracking starts again (step
- * `pending`, no failure counted, next check at the usual rhythm — §10.4: a parcel without a carrier stopped being
- * checked). A tracking already over (30 days passed) gets a new window from now. A delivered parcel stays as it is
- * (409 `parcel_delivered`); a parcel of a dismissed order, or of another account, is refused like its order.
+ * « Changer de transporteur » and « Modifier le numéro » on one of her parcels; the tracking starts again (step
+ * `pending`, no failure counted, asked at the next sweep — founder's ruling of 2026-11-15; §10.4: a parcel without a
+ * carrier stopped being checked).
+ * - A carrier alone: the one she picked. A tracking already over (30 days passed) gets a new window from now.
+ * - A new number (`trackingNumber`): its carrier read from its format (`detectCarrier`, her current carrier as the hint
+ *   a digits-only number needs), else the one she picked with it, else none (`unknown`, not checked: she picks it, as
+ *   for a pasted number). The old number's steps, last step, estimated date and notifications are dropped, and its
+ *   30 days start again. A number another parcel of the order holds: 409 `parcel_exists`; one of another of her open
+ *   orders: 409 `tracking_exists` (as a pasted number). The same number again changes nothing.
+ * A delivered parcel stays as it is (409 `parcel_delivered`); a parcel of a dismissed order, or of another account, is
+ * refused like its order. Lock order: her profiles, the new number's lock (as the e-mail reading), the order, the parcel.
  */
-export async function changeParcelCarrier(
+export async function patchParcel(
   db: Database,
   userId: string,
   orderId: string,
   parcelId: string,
-  input: ParcelCarrierInput,
+  input: ParcelPatchInput,
   now: Date,
 ): Promise<OrderOutcome> {
   return inTransaction(db, async (tx) => {
     await lockProfilesOf(tx, userId);
+    if (input.trackingNumber) await lockTrackingNumber(tx, userId, input.trackingNumber);
     const order = await lockOwnOrder(tx, userId, orderId);
     if (!order) return { error: "not_found" };
     if (order.status === "dismissed") return { error: "order_dismissed" };
@@ -632,17 +641,82 @@ export async function changeParcelCarrier(
       .for("update");
     if (!parcel) return { error: "not_found" };
     if (parcel.status === "delivered") return { error: "parcel_delivered" };
-    const checkUntil = parcel.checkUntil.getTime() > now.getTime() ? parcel.checkUntil : parcelCheckUntil(now);
-    await tx
-      .update(schema.parcels)
-      .set({
-        carrier: input.carrier,
-        status: "pending",
-        checkFailures: 0,
-        checkUntil,
-        nextCheckAt: nextParcelCheckClamped("pending", now, checkUntil),
-      })
-      .where(eq(schema.parcels.id, parcel.id));
+
+    const number =
+      input.trackingNumber && input.trackingNumber !== parcel.trackingNumber ? input.trackingNumber : undefined;
+    if (number) {
+      const [sibling] = await tx
+        .select({ id: schema.parcels.id })
+        .from(schema.parcels)
+        .where(and(eq(schema.parcels.orderId, order.id), eq(schema.parcels.trackingNumber, number)));
+      if (sibling) return { error: "parcel_exists" };
+      const holder = await orderWithParcel(tx, userId, number);
+      if (holder && holder.id !== order.id) return { error: "tracking_exists" };
+      const carrier = input.carrier
+        ? (detectCarrier(number, input.carrier) ?? input.carrier)
+        : detectCarrier(number, parcel.carrier as Carrier | null);
+      const checkUntil = parcelCheckUntil(now);
+      // Its steps and notifications were the old number's (a notification would also block the new one's: one per
+      // parcel and kind).
+      await tx.delete(schema.parcelEvents).where(eq(schema.parcelEvents.parcelId, parcel.id));
+      await tx.delete(schema.alertEvents).where(eq(schema.alertEvents.parcelId, parcel.id));
+      await tx
+        .update(schema.parcels)
+        .set({
+          trackingNumber: number,
+          carrier,
+          status: carrier ? "pending" : "unknown",
+          checkFailures: 0,
+          checkUntil,
+          nextCheckAt: carrier ? now : null,
+          lastEventAt: null,
+          estimatedAt: null,
+          deliveredAt: null,
+        })
+        .where(eq(schema.parcels.id, parcel.id));
+    } else if (input.carrier) {
+      const checkUntil = parcel.checkUntil.getTime() > now.getTime() ? parcel.checkUntil : parcelCheckUntil(now);
+      await tx
+        .update(schema.parcels)
+        .set({ carrier: input.carrier, status: "pending", checkFailures: 0, checkUntil, nextCheckAt: now })
+        .where(eq(schema.parcels.id, parcel.id));
+    } else {
+      return viewOf(tx, userId, order.id);
+    }
+    await tx.update(schema.orders).set({ updatedAt: now }).where(eq(schema.orders.id, order.id));
+    return viewOf(tx, userId, order.id);
+  });
+}
+
+/**
+ * « Supprimer ce suivi »: the parcel goes, with its steps and its notifications (sent ones too: they hang from it);
+ * the order and its articles stay. What a delivery already brought is never taken back (articles stay « Reçu »). A
+ * validated order is then settled again (`settleOrder`, shared with the tracking): the parcels left all settled with
+ * one delivered, her articles move to « Reçu ». A parcel of a dismissed order, or of another account, is refused like
+ * its order. Lock order: her profiles, the order, its parcels, then the items.
+ */
+export async function deleteParcel(
+  db: Database,
+  userId: string,
+  orderId: string,
+  parcelId: string,
+  now: Date,
+): Promise<OrderOutcome> {
+  return inTransaction(db, async (tx) => {
+    await lockProfilesOf(tx, userId);
+    const order = await lockOwnOrder(tx, userId, orderId);
+    if (!order) return { error: "not_found" };
+    if (order.status === "dismissed") return { error: "order_dismissed" };
+    const parcels = await tx
+      .select({ id: schema.parcels.id })
+      .from(schema.parcels)
+      .where(eq(schema.parcels.orderId, order.id))
+      .orderBy(asc(schema.parcels.id))
+      .for("update");
+    if (!parcels.some((p) => p.id === parcelId)) return { error: "not_found" };
+    // Its steps and notifications go with it (`on delete cascade`).
+    await tx.delete(schema.parcels).where(eq(schema.parcels.id, parcelId));
+    if (order.status === "confirmed") await settleOrder(tx, order, now);
     await tx.update(schema.orders).set({ updatedAt: now }).where(eq(schema.orders.id, order.id));
     return viewOf(tx, userId, order.id);
   });

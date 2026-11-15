@@ -12,9 +12,10 @@ import {
 import Link from "next/link";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { type FormEvent, useId, useState } from "react";
-import { addItemTracking, changeParcelCarrier } from "@/lib/orders-client";
+import { addItemTracking, changeParcelCarrier, deleteParcel, patchParcel } from "@/lib/orders-client";
 import { type ClientError, isTrackingInput } from "@/lib/orders-form";
 import { formatPrice } from "@/lib/price";
+import { Dialog } from "./dialog";
 import { buttonClass, focusRing, inputClass, moreButtonClass, primaryButtonClass } from "./ui";
 
 /**
@@ -130,9 +131,20 @@ function ParcelState({ parcel }: { parcel: ParcelView }) {
   );
 }
 
+/** The errors « Modifier le numéro » says in words; anything else is « Ça n'a pas marché ». */
+function numberErrorText(
+  t: ReturnType<typeof useTranslations<"Orders.parcel">>,
+  tForm: ReturnType<typeof useTranslations<"Orders.form">>,
+  error: ClientError | "tracking",
+): string {
+  if (error === "parcel_exists" || error === "parcel_delivered") return t(`errors.${error}`);
+  return errorText(tForm, error === "invalid_request" ? "tracking" : error);
+}
+
 /**
  * One parcel: its carrier and number, where it stands, « Suivre chez le transporteur » (every parcel, RF 4), and —
- * not delivered — « Changer de transporteur », which starts the tracking again.
+ * not delivered — « Changer de transporteur » and « Modifier le numéro », which start the tracking again; « Supprimer
+ * ce suivi » (after a confirmation) for any parcel of an order not set aside.
  */
 export function ParcelRow({
   order,
@@ -148,15 +160,21 @@ export function ParcelRow({
 }) {
   const t = useTranslations("Orders.parcel");
   const tForm = useTranslations("Orders.form");
-  const selectId = useId();
-  const hintId = useId();
+  const ids = { select: useId(), hint: useId(), number: useId(), numberCarrier: useId(), numberError: useId() };
   const [carrier, setCarrier] = useState<Carrier | "">(parcel.carrier ?? "");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   // Without a known carrier she picks it at once; otherwise « Changer de transporteur » opens the choice.
   const [fixing, setFixing] = useState(parcel.carrier === null);
+  const [editing, setEditing] = useState(false);
+  const [number, setNumber] = useState(parcel.trackingNumber);
+  const [numberCarrier, setNumberCarrier] = useState<Carrier | "">("");
+  const [numberError, setNumberError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
   const name = parcel.carrier ? t(`carrier.${parcel.carrier}`) : t("carrier.unknown");
-  const canFix = parcel.status !== "delivered" && order.status !== "dismissed";
+  const open = order.status !== "dismissed";
+  const canFix = parcel.status !== "delivered" && open;
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -169,6 +187,45 @@ export function ParcelRow({
     onChange(result.order);
     setFixing(false);
     setMessage({ ok: true, text: t("carrierSaved") });
+  };
+
+  const openEditing = () => {
+    setNumber(parcel.trackingNumber);
+    setNumberCarrier("");
+    setNumberError(null);
+    setMessage(null);
+    setFixing(false);
+    setEditing(true);
+  };
+
+  const saveNumber = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!isTrackingInput(number)) return setNumberError(tForm("errors.tracking"));
+    setBusy(true);
+    setNumberError(null);
+    const result = await patchParcel(order.id, parcel.id, {
+      trackingNumber: number,
+      ...(numberCarrier ? { carrier: numberCarrier } : {}),
+    });
+    setBusy(false);
+    if (!result.ok) return setNumberError(numberErrorText(t, tForm, result.error));
+    const next = result.order.parcels.find((p) => p.id === parcel.id);
+    setCarrier(next?.carrier ?? "");
+    // A number no carrier signs: she picks the carrier, as for a pasted one.
+    setFixing(next?.carrier === null);
+    setEditing(false);
+    onChange(result.order);
+    setMessage({ ok: true, text: t("numberSaved") });
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    setDeleteFailed(false);
+    const result = await deleteParcel(order.id, parcel.id);
+    setBusy(false);
+    if (!result.ok) return setDeleteFailed(true);
+    setDeleting(false);
+    onChange(result.order);
   };
 
   return (
@@ -189,21 +246,40 @@ export function ParcelRow({
         {t("follow")}
         <span className="sr-only"> {t("newTab")}</span>
       </a>
-      {canFix && !fixing && (
-        <button type="button" onClick={() => setFixing(true)} className={moreButtonClass}>
-          {t("changeCarrier")}
-        </button>
+      {open && !editing && (
+        <span className="flex flex-wrap gap-x-space-4 gap-y-space-2">
+          {canFix && !fixing && (
+            <button type="button" onClick={() => setFixing(true)} className={moreButtonClass}>
+              {t("changeCarrier")}
+            </button>
+          )}
+          {canFix && (
+            <button type="button" onClick={openEditing} className={moreButtonClass}>
+              {t("editNumber")}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setDeleteFailed(false);
+              setDeleting(true);
+            }}
+            className={moreButtonClass}
+          >
+            {t("deleteTracking")}
+          </button>
+        </span>
       )}
-      {canFix && fixing && (
+      {canFix && fixing && !editing && (
         <form onSubmit={save} className="flex flex-wrap items-end gap-space-2">
           <span className="flex flex-col gap-space-1">
-            <label htmlFor={selectId} className="text-sm font-strong">
+            <label htmlFor={ids.select} className="text-sm font-strong">
               {t("pickCarrier")}
             </label>
             <select
-              id={selectId}
+              id={ids.select}
               value={carrier}
-              aria-describedby={hintId}
+              aria-describedby={ids.hint}
               onChange={(e) => setCarrier(e.target.value as Carrier | "")}
               className={`${inputClass} min-h-touch-target w-auto`}
             >
@@ -222,9 +298,61 @@ export function ParcelRow({
           >
             {t("saveCarrier")}
           </button>
-          <p id={hintId} className="w-full text-meta text-ink-muted">
+          <p id={ids.hint} className="w-full text-meta text-ink-muted">
             {t("carrierHint")}
           </p>
+        </form>
+      )}
+      {canFix && editing && (
+        <form noValidate onSubmit={saveNumber} className="flex flex-col gap-space-3">
+          <span className="flex flex-col gap-space-1">
+            <label htmlFor={ids.number} className="text-sm font-strong">
+              {t("trackingField")}
+            </label>
+            <input
+              id={ids.number}
+              value={number}
+              onChange={(e) => setNumber(e.target.value)}
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              maxLength={MAX_TRACKING_NUMBER * 2}
+              aria-invalid={numberError ? true : undefined}
+              aria-describedby={numberError ? ids.numberError : undefined}
+              className={`${inputClass} min-h-touch-target`}
+            />
+          </span>
+          <span className="flex flex-col gap-space-1">
+            <label htmlFor={ids.numberCarrier} className="text-sm font-strong">
+              {t("carrierOptional")}
+            </label>
+            <select
+              id={ids.numberCarrier}
+              value={numberCarrier}
+              onChange={(e) => setNumberCarrier(e.target.value as Carrier | "")}
+              className={`${inputClass} min-h-touch-target w-auto self-start`}
+            >
+              <option value="">{t("carrierAuto")}</option>
+              {CARRIERS.map((c) => (
+                <option key={c} value={c}>
+                  {t(`carrier.${c}`)}
+                </option>
+              ))}
+            </select>
+          </span>
+          {numberError && (
+            <p id={ids.numberError} role="alert" className="text-sm text-danger">
+              {numberError}
+            </p>
+          )}
+          <span className="flex flex-wrap gap-space-2">
+            <button type="submit" disabled={busy} className={`${primaryButtonClass} min-h-touch-target`}>
+              {t("saveNumber")}
+            </button>
+            <button type="button" onClick={() => setEditing(false)} className={`${buttonClass} min-h-touch-target`}>
+              {t("cancel")}
+            </button>
+          </span>
         </form>
       )}
       {message && (
@@ -232,6 +360,22 @@ export function ParcelRow({
           {message.text}
         </p>
       )}
+      <Dialog open={deleting} onClose={() => setDeleting(false)} title={t("deleteTitle")} closeLabel={t("cancel")}>
+        <p>{t("deleteBody")}</p>
+        {deleteFailed && (
+          <p role="alert" className="text-sm text-danger">
+            {tForm("errors.failed")}
+          </p>
+        )}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void remove()}
+          className={`${primaryButtonClass} min-h-touch-target self-start`}
+        >
+          {t("deleteConfirm")}
+        </button>
+      </Dialog>
     </li>
   );
 }

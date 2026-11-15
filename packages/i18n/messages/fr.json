@@ -3014,7 +3014,18 @@
       "add": "Ajouter",
       "added": "Numéro ajouté : on suit ton colis.",
       "cancel": "Annuler",
-      "changeCarrier": "Changer de transporteur"
+      "changeCarrier": "Changer de transporteur",
+      "editNumber": "Modifier le numéro",
+      "saveNumber": "Enregistrer le numéro",
+      "numberSaved": "Numéro enregistré : le suivi reprend.",
+      "deleteTracking": "Supprimer ce suivi",
+      "deleteTitle": "Supprimer ce suivi de colis ?",
+      "deleteBody": "L'article et la commande restent.",
+      "deleteConfirm": "Supprimer",
+      "errors": {
+        "parcel_exists": "Ce numéro est déjà sur un autre colis de cette commande.",
+        "parcel_delivered": "Ce colis est déjà livré : son numéro ne change plus."
+      }
     },
     "item": {
       "title": "Commande / colis",

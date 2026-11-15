@@ -1,4 +1,4 @@
-import { and, asc, type Database, eq, inArray, isNotNull, lte, receiveOrderItems, schema, sql } from "@closyria/db";
+import { and, asc, type Database, eq, inArray, isNotNull, lte, schema, settleOrder, sql } from "@closyria/db";
 import {
   type Carrier,
   carrierSchema,
@@ -98,8 +98,6 @@ async function askCarrier(connectors: TrackingConnectors, parcel: ClaimedParcel)
     return { kind: "failed" };
   }
 }
-
-type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 const NOTIFIED: Partial<Record<ParcelStatus, "parcel_out_for_delivery" | "parcel_pickup_ready" | "parcel_delivered">> =
   {
@@ -224,41 +222,6 @@ async function applyOutcome(db: Database, claimed: ClaimedParcel, outcome: Outco
     }
     return status === "delivered";
   });
-}
-
-/** A parcel done with: delivered, `unknown` (the carrier gave up on it, or we did), or at the end of its tracking. */
-const isSettled = (parcel: { status: string; checkUntil: Date }, now: Date) =>
-  parcel.status === "delivered" || parcel.status === "unknown" || parcel.checkUntil.getTime() <= now.getTime();
-
-/**
- * Receives the order once all its parcels are settled and one at least was delivered (none delivered: the J+10
- * question of Task 6 takes over): her items move to « Reçu » on the latest delivery's date (`receiveOrderItems`, shared
- * with her « Oui » to that question), with their return deadline counted from it. Run after every check of one of its parcels (under the order's lock), so a late parcel
- * turning `unknown` or reaching its end never blocks the others; idempotent.
- *
- * Returns how many items moved and how many of its parcels are still on their way.
- */
-async function settleOrder(
-  tx: Tx,
-  order: { id: string; userId: string; shopId: string | null },
-  now: Date,
-): Promise<{ moved: number; inTransit: number }> {
-  const parcels = await tx
-    .select({
-      status: schema.parcels.status,
-      checkUntil: schema.parcels.checkUntil,
-      deliveredAt: schema.parcels.deliveredAt,
-    })
-    .from(schema.parcels)
-    .where(eq(schema.parcels.orderId, order.id));
-  const inTransit = parcels.filter((p) => !isSettled(p, now)).length;
-  const deliveries = parcels.flatMap((p) =>
-    p.status === "delivered" && p.deliveredAt ? [p.deliveredAt.getTime()] : [],
-  );
-  if (inTransit > 0 || deliveries.length === 0) return { moved: 0, inTransit };
-  const deliveredAt = new Date(Math.max(...deliveries));
-  const moved = await receiveOrderItems(tx, order, deliveredAt, now);
-  return { moved, inTransit };
 }
 
 /**

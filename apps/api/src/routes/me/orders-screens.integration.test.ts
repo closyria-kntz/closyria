@@ -187,8 +187,8 @@ describe("PATCH /api/me/orders/{id}/parcels/{parcelId}", () => {
     expect(view.parcels[0]).toMatchObject({ id: parcelId, carrier: "mondial_relay", status: "pending" });
     const row = await parcelRow(parcelId);
     expect(row).toMatchObject({ carrier: "mondial_relay", status: "pending", checkFailures: 0 });
-    // The usual rhythm (6 hours for a parcel not out for delivery), within its 30 days.
-    expect(row?.nextCheckAt?.toISOString()).toBe(new Date(NOW.getTime() + 6 * HOUR).toISOString());
+    // Asked at the next sweep (2026-11-15: a correction shows its first steps within minutes), within its 30 days.
+    expect(row?.nextCheckAt?.toISOString()).toBe(NOW.toISOString());
     expect(row?.checkUntil.toISOString()).toBe(new Date(NOW.getTime() + 20 * DAY).toISOString());
   });
 
@@ -205,7 +205,7 @@ describe("PATCH /api/me/orders/{id}/parcels/{parcelId}", () => {
     );
     const row = await parcelRow(parcelId);
     expect(row?.checkUntil.toISOString()).toBe(new Date(NOW.getTime() + 30 * DAY).toISOString());
-    expect(row?.nextCheckAt?.toISOString()).toBe(new Date(NOW.getTime() + 6 * HOUR).toISOString());
+    expect(row?.nextCheckAt?.toISOString()).toBe(NOW.toISOString());
   });
 
   it("refuses a delivered parcel, a dismissed order, another account's parcel, a guest and a bad carrier", async () => {
@@ -246,6 +246,201 @@ describe("PATCH /api/me/orders/{id}/parcels/{parcelId}", () => {
     expect(await json(await call("PATCH", path(mine), guest.cookie, { carrier: "gls" }), 403)).toEqual({
       error: "account_required",
     });
+  });
+});
+
+/** One more parcel on an order. */
+async function addParcelRow(orderId: string, values: Partial<typeof schema.parcels.$inferInsert> = {}) {
+  const [row] = await t.db
+    .insert(schema.parcels)
+    .values({
+      orderId,
+      carrier: "colissimo",
+      trackingNumber: `6B${String(++counter).padStart(11, "0")}`,
+      status: "in_transit",
+      checkUntil: new Date(NOW.getTime() + 20 * DAY),
+      ...values,
+    })
+    .returning();
+  return row?.id as string;
+}
+const parcelPath = (o: { orderId: string; parcelId: string }) => `/api/me/orders/${o.orderId}/parcels/${o.parcelId}`;
+const eventsOf = (parcelId: string) =>
+  t.db.select().from(schema.parcelEvents).where(eq(schema.parcelEvents.parcelId, parcelId));
+const parcelAlertsOf = (parcelId: string) =>
+  t.db.select().from(schema.alertEvents).where(eq(schema.alertEvents.parcelId, parcelId));
+
+describe("« Modifier le numéro »", () => {
+  it("takes the new number, reads its carrier, and starts its tracking from scratch", async () => {
+    const a = await account();
+    const o = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit", failures: 2 });
+    await t.db
+      .update(schema.parcels)
+      .set({ lastEventAt: new Date(NOW.getTime() - HOUR), estimatedAt: new Date(NOW.getTime() + DAY) })
+      .where(eq(schema.parcels.id, o.parcelId));
+    await t.db.insert(schema.parcelEvents).values({
+      parcelId: o.parcelId,
+      at: new Date(NOW.getTime() - HOUR),
+      status: "in_transit",
+      label: "Pris en charge",
+    });
+    await t.db.insert(schema.alertEvents).values({
+      userId: a.userId,
+      profileId: a.moi,
+      kind: "parcel_pickup_ready",
+      orderId: o.orderId,
+      parcelId: o.parcelId,
+    });
+
+    // Spaces, dashes and small letters are fine: « JJD » + 18 digits is DHL's own signature.
+    const view = await json<OrderView>(
+      await call("PATCH", parcelPath(o), a.cookie, { trackingNumber: " jjd 0001-23456789012345 " }),
+      200,
+    );
+    expect(view.parcels).toEqual([
+      expect.objectContaining({
+        id: o.parcelId,
+        trackingNumber: "JJD000123456789012345",
+        carrier: "dhl",
+        status: "pending",
+        lastEventAt: null,
+        lastEventLabel: null,
+        estimatedAt: null,
+      }),
+    ]);
+    const row = await parcelRow(o.parcelId);
+    expect(row).toMatchObject({ checkFailures: 0, deliveredAt: null });
+    // Asked at the next sweep, its 30 days counted again from now.
+    expect(row?.nextCheckAt?.toISOString()).toBe(NOW.toISOString());
+    expect(row?.checkUntil.toISOString()).toBe(new Date(NOW.getTime() + 30 * DAY).toISOString());
+    // The old number's steps and notifications are gone.
+    expect(await eventsOf(o.parcelId)).toHaveLength(0);
+    expect(await parcelAlertsOf(o.parcelId)).toHaveLength(0);
+    // Order and article stay.
+    expect(view.lines).toHaveLength(1);
+  });
+
+  it("keeps her carrier for a number only it can confirm, takes the one she picks, and asks when it can't tell", async () => {
+    const a = await account();
+    const relay = await orderWithParcel(a, { carrier: "colissimo", status: "pending" });
+    await t.db.update(schema.parcels).set({ carrier: "mondial_relay" }).where(eq(schema.parcels.id, relay.parcelId));
+    await json(await call("PATCH", parcelPath(relay), a.cookie, { trackingNumber: "12345678" }), 200);
+    expect(await parcelRow(relay.parcelId)).toMatchObject({ trackingNumber: "12345678", carrier: "mondial_relay" });
+
+    const picked = await orderWithParcel(a, { carrier: "colissimo", status: "pending" });
+    await json(
+      await call("PATCH", parcelPath(picked), a.cookie, { trackingNumber: "12345678901", carrier: "gls" }),
+      200,
+    );
+    expect(await parcelRow(picked.parcelId)).toMatchObject({ carrier: "gls", status: "pending" });
+
+    // A shape no carrier signs, none picked: no carrier, as when she pastes one (she picks it on the screen).
+    const unknown = await orderWithParcel(a, { carrier: "colissimo", status: "pending" });
+    const view = await json<OrderView>(
+      await call("PATCH", parcelPath(unknown), a.cookie, { trackingNumber: "ABC123456" }),
+      200,
+    );
+    expect(view.parcels[0]).toMatchObject({ carrier: null, status: "unknown" });
+    expect((await parcelRow(unknown.parcelId))?.nextCheckAt).toBeNull();
+  });
+
+  it("refuses a number another parcel of the order has, one of another order, and a malformed one", async () => {
+    const a = await account();
+    const o = await orderWithParcel(a, { carrier: "colissimo", status: "pending" });
+    await addParcelRow(o.orderId, { trackingNumber: "6A18537412398" });
+    expect(
+      await json(await call("PATCH", parcelPath(o), a.cookie, { trackingNumber: "6A 1853 7412 398" }), 409),
+    ).toEqual({ error: "parcel_exists" });
+    const other = await orderWithParcel(a, { carrier: "colissimo", status: "pending" });
+    await addParcelRow(other.orderId, { trackingNumber: "8R04217735096" });
+    expect(await json(await call("PATCH", parcelPath(o), a.cookie, { trackingNumber: "8R04217735096" }), 409)).toEqual({
+      error: "tracking_exists",
+    });
+    for (const trackingNumber of ["12345", "1".repeat(41), "ABC_123456"]) {
+      expect(await json(await call("PATCH", parcelPath(o), a.cookie, { trackingNumber }), 400)).toEqual({
+        error: "invalid_request",
+      });
+    }
+    expect(await json(await call("PATCH", parcelPath(o), a.cookie, {}), 400)).toEqual({ error: "invalid_request" });
+    const before = await parcelRow(o.parcelId);
+    // The same number again: nothing changes.
+    await json(await call("PATCH", parcelPath(o), a.cookie, { trackingNumber: before?.trackingNumber }), 200);
+    expect(await parcelRow(o.parcelId)).toEqual(before);
+  });
+});
+
+describe("« Supprimer ce suivi »", () => {
+  it("deletes the parcel, its steps and its notifications; the order and its article stay", async () => {
+    const a = await account();
+    const o = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" });
+    const kept = await addParcelRow(o.orderId);
+    await t.db.insert(schema.parcelEvents).values({
+      parcelId: o.parcelId,
+      at: new Date(NOW.getTime() - HOUR),
+      status: "in_transit",
+      label: "Pris en charge",
+    });
+    await t.db.insert(schema.alertEvents).values({
+      userId: a.userId,
+      profileId: a.moi,
+      kind: "parcel_out_for_delivery",
+      orderId: o.orderId,
+      parcelId: o.parcelId,
+    });
+    const view = await json<OrderView>(await call("DELETE", parcelPath(o), a.cookie), 200);
+    expect(view.parcels.map((p) => p.id)).toEqual([kept]);
+    expect(view.lines).toHaveLength(1);
+    expect(await parcelRow(o.parcelId)).toBeUndefined();
+    expect(await eventsOf(o.parcelId)).toHaveLength(0);
+    expect(await parcelAlertsOf(o.parcelId)).toHaveLength(0);
+    const [item] = await t.db.select().from(schema.items).where(eq(schema.items.id, o.itemId));
+    expect(item?.stage).toBe("ordered");
+    // Twice: gone already.
+    expect(await json(await call("DELETE", parcelPath(o), a.cookie), 404)).toEqual({ error: "not_found" });
+  });
+
+  it("receives the order when the parcels left are all settled with one delivered", async () => {
+    const a = await account();
+    const o = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" });
+    const deliveredAt = new Date(NOW.getTime() - 2 * DAY);
+    await addParcelRow(o.orderId, { status: "delivered", deliveredAt, nextCheckAt: null });
+    const view = await json<OrderView>(await call("DELETE", parcelPath(o), a.cookie), 200);
+    expect(view.lines[0]?.itemStage).toBe("owned");
+    const [item] = await t.db.select().from(schema.items).where(eq(schema.items.id, o.itemId));
+    // 14 days from the delivery, in Paris.
+    expect(item).toMatchObject({ stage: "owned", returnDeadline: "2026-11-27" });
+  });
+
+  it("never takes back what a delivered parcel brought", async () => {
+    const a = await account();
+    const o = await orderWithParcel(a, { carrier: "colissimo", status: "delivered" });
+    await t.db
+      .update(schema.items)
+      .set({ stage: "owned", returnDeadline: "2026-11-29" })
+      .where(eq(schema.items.id, o.itemId));
+    await json(await call("DELETE", parcelPath(o), a.cookie), 200);
+    const [item] = await t.db.select().from(schema.items).where(eq(schema.items.id, o.itemId));
+    expect(item).toMatchObject({ stage: "owned", returnDeadline: "2026-11-29" });
+  });
+
+  it("refuses another account's parcel, a parcel under another order, a dismissed order and a guest", async () => {
+    const a = await account();
+    const other = await account();
+    const theirs = await orderWithParcel(other, { carrier: "colissimo", status: "pending" });
+    expect(await json(await call("DELETE", parcelPath(theirs), a.cookie), 404)).toEqual({ error: "not_found" });
+    expect(await parcelRow(theirs.parcelId)).toBeDefined();
+    const mine = await orderWithParcel(a, { carrier: "colissimo", status: "pending" });
+    const second = await orderWithParcel(a, { carrier: "colissimo", status: "pending" });
+    expect(
+      await json(await call("DELETE", `/api/me/orders/${mine.orderId}/parcels/${second.parcelId}`, a.cookie), 404),
+    ).toEqual({ error: "not_found" });
+    await t.db.update(schema.orders).set({ status: "dismissed" }).where(eq(schema.orders.id, second.orderId));
+    expect(await json(await call("DELETE", parcelPath(second), a.cookie), 409)).toEqual({ error: "order_dismissed" });
+    const guest = await t.signIn();
+    expect(await json(await call("DELETE", parcelPath(mine), guest.cookie), 403)).toEqual({
+      error: "account_required",
+    });
+    expect(await parcelRow(mine.parcelId)).toBeDefined();
   });
 });
 

@@ -744,6 +744,7 @@ export const wardrobeErrorCodes = [
   "inbound_off",
   "order_not_confirmed",
   "parcel_delivered",
+  "parcel_exists",
   "sender_exists",
   "sender_limit",
   "sender_verified",
