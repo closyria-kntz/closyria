@@ -16,6 +16,15 @@ export const SIGNATURE_TOLERANCE_S = 300;
 
 const MAX_ADDRESS = 320;
 
+function normalizeClientIp(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  let ip = value.trim();
+  if (ip.startsWith("[") && ip.endsWith("]")) ip = ip.slice(1, -1);
+  if (/^ipv6:/i.test(ip)) ip = ip.slice(5);
+  const zone = ip.indexOf("%");
+  return zone > 0 && ip.includes(":") ? ip.slice(0, zone) : ip;
+}
+
 /**
  * The SMTP envelope Postfix saw: its queue id (with the recipient, what makes a retry idempotent), MAIL FROM (empty for
  * a bounce), the one recipient, the client's address and HELO.
@@ -26,7 +35,9 @@ export const envelopeSchema = z
     queueId: z.string().regex(/^[0-9A-Za-z]{5,32}$/),
     mailFrom: z.string().max(MAX_ADDRESS),
     rcptTo: z.string().min(3).max(MAX_ADDRESS),
-    clientIp: z.union([z.ipv4(), z.ipv6()]),
+    // Postfix gives an IPv6 client as `IPv6:2001:db8::1` (RFC 5321 address literal): keep the bare address, the
+    // SPF check wants it. Brackets and a zone id (`%eth0`) are dropped the same way.
+    clientIp: z.preprocess(normalizeClientIp, z.union([z.ipv4(), z.ipv6()])),
     helo: z.string().max(255),
   })
   .strict();

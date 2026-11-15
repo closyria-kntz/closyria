@@ -190,3 +190,32 @@ describe("envelopeProblem", () => {
     expect(envelopeProblem(ok)).toBe("none");
   });
 });
+
+describe("the client address Postfix gives", () => {
+  it("accepts an IPv6 client written as an address literal, and keeps the bare address", async () => {
+    const { decodeEnvelope, envelopeProblem } = await import("./signature");
+    const header = (clientIp: string) =>
+      Buffer.from(
+        JSON.stringify({
+          v: 1,
+          queueId: "4jSJr55ClKz3yWyJ",
+          mailFrom: "a@gmail.com",
+          rcptTo: "x@commandes.dev.closyria.com",
+          clientIp,
+          helo: "mail-ot1-x334.google.com",
+        }),
+      ).toString("base64url");
+    for (const raw of [
+      "IPv6:2607:f8b0:4864:20::334",
+      "ipv6:2607:f8b0:4864:20::334",
+      "[2607:f8b0:4864:20::334]",
+      "2607:f8b0:4864:20::334",
+    ]) {
+      expect(decodeEnvelope(header(raw))?.clientIp).toBe("2607:f8b0:4864:20::334");
+    }
+    expect(decodeEnvelope(header("IPv6:2001:41d0:303:9143::"))?.clientIp).toBe("2001:41d0:303:9143::");
+    expect(decodeEnvelope(header("fe80::1%eth0"))?.clientIp).toBe("fe80::1");
+    expect(decodeEnvelope(header("209.85.128.43"))?.clientIp).toBe("209.85.128.43");
+    expect(envelopeProblem(header("IPv6:not-an-ip"))).toBe("clientIp");
+  });
+});
