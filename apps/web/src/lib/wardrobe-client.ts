@@ -343,7 +343,7 @@ export async function fetchFacets(deps: ClientDeps = defaultDeps): Promise<Facet
 }
 
 /** A call whose success is a 204 with no body. */
-async function callNoContent(deps: ClientDeps, path: string, init: RequestInit): Promise<Result<object>> {
+export async function callNoContent(deps: ClientDeps, path: string, init: RequestInit): Promise<Result<object>> {
   try {
     await deps.ensure();
     const response = await deps.fetch(path, init);

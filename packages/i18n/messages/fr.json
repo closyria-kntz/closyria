@@ -363,6 +363,10 @@
       "codeIntro": "Voici ton code pour te connecter à Closyria :",
       "validity": "Il est valable 10 minutes.",
       "ignore": "Tu n’as pas demandé ce code ? Ignore simplement ce message."
+    },
+    "senderEmail": {
+      "subject": "Ton code Closyria : {code}",
+      "body": "Recopie ce code dans Closyria pour ajouter cette adresse à tes adresses d'envoi. Il est valable 15 minutes. Si tu n'as rien demandé, ignore cet e-mail."
     }
   },
   "SignIn": {
@@ -2822,7 +2826,7 @@
       "guestBody": "Ton adresse de commandes est liée à ton compte : c'est elle qui reconnaît tes e-mails.",
       "createAccount": "Crée ton compte pour suivre tes commandes",
       "addressTitle": "Ton adresse",
-      "addressHint": "Seuls les e-mails que tu transfères depuis ta propre adresse e-mail sont lus. Les autres sont ignorés.",
+      "addressHint": "Seuls les e-mails que tu transfères depuis tes adresses d'envoi (ci-dessous) sont lus. Les autres sont ignorés.",
       "copy": "Copier",
       "copied": "Adresse copiée",
       "copyFailed": "La copie n'a pas marché : sélectionne l'adresse pour la copier.",
@@ -2863,7 +2867,47 @@
       "ordersLink": "Voir mes commandes",
       "soonTitle": "Bientôt disponible",
       "soonBody": "La réception des e-mails de commande arrive bientôt. En attendant, tu peux ajouter une commande à la main ou coller un numéro de suivi.",
-      "soonLink": "Mes commandes"
+      "soonLink": "Mes commandes",
+      "senders": {
+        "title": "Mes adresses d'envoi",
+        "intro": "Tes e-mails de commande arrivent sur plusieurs boîtes ? Ajoute-les ici : ce que tu transfères depuis chacune d'elles sera lu.",
+        "loading": "Chargement de tes adresses…",
+        "failed": "Tes adresses ne se sont pas affichées. Réessaie dans un instant.",
+        "retry": "Réessayer",
+        "account": "Adresse du compte",
+        "verified": "Vérifiée",
+        "pending": "En attente du code",
+        "add": "Ajouter une adresse",
+        "emailLabel": "Adresse e-mail",
+        "emailHint": "On y envoie un code à 6 chiffres pour vérifier qu'elle est à toi.",
+        "sendCode": "Envoyer le code",
+        "cancel": "Annuler",
+        "enterCode": "Saisir le code",
+        "codeLabel": "Code reçu à {email}",
+        "codeHint": "Le code est valable 15 minutes.",
+        "verify": "Valider",
+        "resend": "Renvoyer le code",
+        "remove": "Retirer",
+        "removeTitle": "Retirer cette adresse ?",
+        "removeBody": "Les e-mails transférés depuis {email} ne seront plus lus.",
+        "limit": "Tu as atteint {max} adresses. Retires-en une pour en ajouter une autre.",
+        "sent": "Code envoyé à {email}",
+        "resent": "Nouveau code envoyé à {email}",
+        "done": "{email} est vérifiée : ses e-mails transférés seront lus.",
+        "removed": "Adresse retirée",
+        "errors": {
+          "invalidEmail": "Vérifie l'adresse e-mail.",
+          "invalidCode": "Le code a 6 chiffres.",
+          "sender_exists": "Cette adresse est déjà dans ta liste.",
+          "sender_limit": "Tu as déjà {max} adresses. Retires-en une pour en ajouter une autre.",
+          "rate_limited": "Trop de codes demandés. Réessaie dans quelques minutes.",
+          "mail_failed": "L'e-mail n'est pas parti. Réessaie avec « Renvoyer le code ».",
+          "code_wrong": "Ce code n'est pas le bon.",
+          "code_expired": "Ce code a expiré : demande-en un nouveau.",
+          "code_locked": "Trop d'essais : demande un nouveau code.",
+          "failed": "Ça n'a pas marché. Réessaie dans un instant."
+        }
+      }
     },
     "page": {
       "metadata": "Mes commandes",

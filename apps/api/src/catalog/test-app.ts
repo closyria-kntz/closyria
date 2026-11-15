@@ -1,4 +1,4 @@
-import { createAuth, memoryMailer } from "@closyria/auth";
+import { createAuth, type Mailer, memoryMailer } from "@closyria/auth";
 import { createDb, schema } from "@closyria/db";
 import { CATALOGUE_IMPORT_QUEUE } from "@closyria/shared";
 import { memoryStore, type ObjectStore } from "@closyria/storage";
@@ -37,13 +37,16 @@ export async function createCatalogHarness(
     pushPublicKey?: string;
     /** E-mail reception on (its database and store are the harness's own; `store` replaces it for this route). */
     inbound?: Omit<InboundEmailDeps, "db" | "store"> & { store?: ObjectStore };
+    /** The mailer of the app's own e-mails (sender codes); default: the harness's memory mailer (`mail`). */
+    mailer?: Mailer;
   } = {},
 ) {
   const database = await createTestDatabase();
   const handle = createDb(database.url, { max: 8 });
+  const mail = memoryMailer();
   const auth = createAuth({
     db: handle.db,
-    mailer: memoryMailer(),
+    mailer: mail,
     baseUrl: BASE_URL,
     secret: "test-secret-that-is-long-enough-0123456789",
   });
@@ -62,6 +65,7 @@ export async function createCatalogHarness(
     wardrobe: { db: handle.db, shareLinkKey: Buffer.alloc(32, 7), ...(overrides.now ? { now: overrides.now } : {}) },
     catalog: { db: handle.db, store, queue: recorder.queue, ...overrides },
     push: { publicKey: options.pushPublicKey ?? null },
+    mailer: options.mailer ?? mail,
     ...(options.inbound ? { inbound: { db: handle.db, store, ...options.inbound } } : {}),
   });
   let ipCounter = 0;
@@ -84,5 +88,5 @@ export async function createCatalogHarness(
     await handle.pool.end();
     await database.stop();
   }
-  return { ...handle, app, store, signIn, stop, ...recorder, schema };
+  return { ...handle, app, store, signIn, stop, mail, ...recorder, schema };
 }

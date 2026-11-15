@@ -13,6 +13,10 @@ import type { Envelope } from "./signature";
  * message and the SMTP envelope Postfix saw. The effective sender is the forwarding message's own, her mailbox, never
  * the shop's `From` inside a forwarded body:
  *
+ * « Her address » is her account address or one of her verified sender addresses (« Mes adresses d'envoi », spec
+ * §11): every rule below runs for whichever of them matches, with that address's own domain. A pending (unverified)
+ * address is never given here.
+ *
  * 1. a forward she made (« Transférer » in Gmail, Outlook, iCloud): her address alone in a well-formed `From:` (no
  *    group, plain ASCII), a DKIM signature that verifies, aligned with her domain, over the whole body, and which
  *    signs the `To:` or `Cc:` holding this order address (so a message of hers sent elsewhere, replayed here, does
@@ -32,10 +36,16 @@ export type SenderVerdict =
   | { kind: "ignored"; fromAddress: string }
   /** DNS temperror: nothing stored, Postfix retries. */
   | { kind: "retry" }
-  /** Gmail's « Confirmation de transfert » for her own Gmail address: the code, nothing else kept. */
+  /** Gmail's « Confirmation de transfert » for one of her own Gmail addresses: the code, nothing else kept. */
   | { kind: "gmail_confirmation"; code: string };
 
-export type SenderCheck = (input: { raw: Buffer; envelope: Envelope; accountEmail: string }) => Promise<SenderVerdict>;
+export type SenderCheck = (input: {
+  raw: Buffer;
+  envelope: Envelope;
+  accountEmail: string;
+  /** Her verified sender addresses (« Mes adresses d'envoi »), besides the account's; never a pending one. */
+  verifiedSenders?: readonly string[];
+}) => Promise<SenderVerdict>;
 
 /** Google's names (overridden by the tests, whose fake DNS serves `.example` domains). */
 export type GooglePolicy = {
@@ -156,12 +166,12 @@ async function textOf(raw: Buffer): Promise<string> {
   return (email.html ?? "").replace(/<[^>]*>/g, " ");
 }
 
-/** Gmail's forwarding confirmation: the code, when the address that asked is hers. */
+/** Gmail's forwarding confirmation: the code, when the address that asked is one of hers. */
 async function gmailConfirmationCode(
   raw: Buffer,
   result: AuthenticateResult,
   from: string,
-  own: string,
+  own: readonly string[],
   rcpt: string,
   google: GooglePolicy,
 ): Promise<string | null> {
@@ -173,59 +183,67 @@ async function gmailConfirmationCode(
   const addresses = addressesOf(text.replace(/[()[\]]/g, " "));
   if (!addresses.includes(rcpt)) return null;
   const requester = addresses.find((a) => a !== rcpt);
-  if (!requester || requester !== own) return null;
+  if (!requester || !own.includes(requester)) return null;
   const code =
     /(?:confirmation code|code de confirmation)\s*:\s*(\d{6,12})\b/i.exec(text)?.[1] ??
     /\(#(\d{6,12})\)/.exec(headerFields(raw).find((f) => f.name === "subject")?.value ?? "")?.[1];
   return code ?? null;
 }
 
-/** The decision, from mailauth's results (the tests feed it real results computed against fixtures). */
+/**
+ * The decision, from mailauth's results (the tests feed it real results computed against fixtures). `senders`: her
+ * addresses (the account's, then her verified ones), compared without case; the verdict names the one that matched.
+ */
 export async function decideSender(
   raw: Buffer,
   result: AuthenticateResult,
   envelope: Envelope,
-  accountEmail: string,
+  senders: readonly string[],
   policy: SenderPolicy,
 ): Promise<SenderVerdict> {
-  const own = lower(accountEmail);
+  const own = [...new Set(senders.map(lower))];
   const rcpt = lower(envelope.rcptTo);
   const fields = headerFields(raw);
   const from = singleFrom(result, fields);
   const mailFrom = lower(envelope.mailFrom);
+  // Rule 1 looks at the From address (one of hers, or not); rule 2 at her Gmail address its caf_ sender names.
+  const hersFrom = from !== undefined && own.includes(from) ? from : undefined;
+  const autoForwarder = own.find(
+    (address) =>
+      isAsciiAddress(address) &&
+      policy.google.mailboxDomains.includes(domainOf(address)) &&
+      mailFrom === gmailForwardingSender(address, rcpt),
+  );
 
   // Gmail's code only serves its automatic forwarding: while that is not accepted, it is never kept.
   if (from && policy.autoForward) {
     const code = await gmailConfirmationCode(raw, result, from, own, rcpt, policy.google);
     if (code) return { kind: "gmail_confirmation", code };
   }
-  if (from && sameMailbox(from, own) && signedForUs(result, fields, from, rcpt)) {
-    return { kind: "accepted", fromAddress: own };
+  if (hersFrom && signedForUs(result, fields, hersFrom, rcpt)) {
+    return { kind: "accepted", fromAddress: hersFrom };
   }
   if (
     policy.autoForward &&
+    autoForwarder !== undefined &&
     isAsciiAddress(mailFrom) &&
-    policy.google.mailboxDomains.includes(domainOf(own)) &&
-    mailFrom === gmailForwardingSender(own, rcpt) &&
     result.spf !== false &&
     result.spf.status.result === "pass" &&
-    lower(result.spf.domain) === domainOf(own) &&
+    lower(result.spf.domain) === domainOf(autoForwarder) &&
     relayedByGoogle(result, policy.google)
   ) {
-    return { kind: "accepted", fromAddress: own };
+    return { kind: "accepted", fromAddress: autoForwarder };
   }
   // A DNS failure (temperror) asks for a retry only when it hid the check that would decide: a DKIM signature of her
   // domain on her own forward (rule 1), or SPF on her exact Gmail forwarding sender (rule 2, when on).
   const rule1Undecided =
-    from !== undefined &&
-    sameMailbox(from, own) &&
+    hersFrom !== undefined &&
     result.dkim.results.some(
-      (r) => r.status.result === "temperror" && r.signingDomain && aligned(r.signingDomain, domainOf(from)),
+      (r) => r.status.result === "temperror" && r.signingDomain && aligned(r.signingDomain, domainOf(hersFrom)),
     );
   const rule2Undecided =
     policy.autoForward &&
-    policy.google.mailboxDomains.includes(domainOf(own)) &&
-    mailFrom === gmailForwardingSender(own, rcpt) &&
+    autoForwarder !== undefined &&
     result.spf !== false &&
     result.spf.status.result === "temperror";
   if (rule1Undecided || rule2Undecided) return { kind: "retry" };
@@ -248,7 +266,7 @@ export function mailauthSenderCheck(options: {
 }): SenderCheck {
   const resolver = options.resolver ?? systemResolver();
   const policy: SenderPolicy = { autoForward: options.autoForward ?? false, google: options.google ?? GOOGLE };
-  return async ({ raw, envelope, accountEmail }) => {
+  return async ({ raw, envelope, accountEmail, verifiedSenders = [] }) => {
     try {
       const result = await authenticate(raw, {
         ip: envelope.clientIp,
@@ -259,7 +277,7 @@ export function mailauthSenderCheck(options: {
         disableBimi: true,
         rejectRsaSha1: true,
       });
-      return await decideSender(raw, result, envelope, accountEmail, policy);
+      return await decideSender(raw, result, envelope, [accountEmail, ...verifiedSenders], policy);
     } catch (error) {
       // A message that cannot be read is nobody's: ignored. Only the error's name, never the message.
       console.error(`inbound e-mail: authentication check failed (${error instanceof Error ? error.name : "error"})`);

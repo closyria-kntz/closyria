@@ -77,6 +77,52 @@ export const orderInboxes = pgTable(
 );
 
 /**
+ * « Mes adresses d'envoi » (spec §11): the other mailboxes she forwards from, besides her account address. Only a
+ * verified one (`verified_at`) counts as her sender (inbound/sender.ts in the API). The code sent to a pending one is
+ * kept hashed only (HMAC-SHA256 under a salt of its own), for 15 minutes and 5 tries. The same address may be verified
+ * on several accounts: an e-mail is sorted by the order address it was sent to.
+ */
+export const orderSenderAddresses = pgTable(
+  "order_sender_addresses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: owner(),
+    /** Trimmed and lowercase (`senderEmailSchema`). */
+    email: text("email").notNull(),
+    verifiedAt: at("verified_at"),
+    codeHash: text("code_hash"),
+    codeSalt: text("code_salt"),
+    codeExpiresAt: at("code_expires_at"),
+    /** Tries spent on the current code. */
+    attempts: integer("attempts").notNull().default(0),
+    lastSentAt: at("last_sent_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("order_sender_addresses_user_id_email_idx").on(t.userId, t.email),
+    check(
+      "order_sender_addresses_email_check",
+      sql`char_length(${t.email}) BETWEEN 3 AND 254 AND ${t.email} = lower(${t.email})`,
+    ),
+    check("order_sender_addresses_attempts_check", sql`${t.attempts} >= 0`),
+    // A verified address keeps no code.
+    check(
+      "order_sender_addresses_code_check",
+      sql`${t.verifiedAt} IS NULL OR (${t.codeHash} IS NULL AND ${t.codeSalt} IS NULL AND ${t.codeExpiresAt} IS NULL)`,
+    ),
+  ],
+);
+
+/** Codes sent to her added addresses in the current hour (one row per account): 5 an hour, whatever the address. */
+export const orderSenderSends = pgTable("order_sender_sends", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  windowStart: at("window_start").notNull(),
+  sends: integer("sends").notNull(),
+});
+
+/**
  * E-mails received on one of her addresses. `user_id` is set only once the sender was accepted (her verified address,
  * authentication passed); an ignored one keeps only the inbox (deleted with it). The raw message lives in private
  * storage (`raw_object_key`) until `purge_after` (30 days); then `inboundEmailPurge` decides: ignored rows, and failed

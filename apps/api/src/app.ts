@@ -1,3 +1,4 @@
+import type { Mailer } from "@closyria/auth";
 import { appEnvSchema, healthSchema, orderInboxDomain } from "@closyria/shared";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { csrf } from "hono/csrf";
@@ -36,6 +37,7 @@ import { itemsRoutes } from "./routes/me/items";
 import { loveLevelsRoutes } from "./routes/me/love-levels";
 import { orderDraftRoutes } from "./routes/me/order-draft";
 import { orderInboxRoutes } from "./routes/me/order-inbox";
+import { orderSenderRoutes } from "./routes/me/order-senders";
 import { ordersRoutes } from "./routes/me/orders";
 import { preferencesRoutes } from "./routes/me/preferences";
 import { profilesRoutes } from "./routes/me/profiles";
@@ -71,6 +73,11 @@ export type AppDeps = {
   wardrobe: WardrobeDeps;
   /** Web Push (alerts); without it, push is off. */
   push?: PushDeps;
+  /**
+   * The e-mails the app sends itself (the codes of « Mes adresses d'envoi »), through the sign-in codes' transport.
+   * Without it, adding a sender address answers 502 `mail_failed`.
+   */
+  mailer?: Mailer;
   /** E-mail reception (`POST /api/inbound-email`); without it (no INBOUND_EMAIL_SECRET), reception is off (404). */
   inbound?: InboundEmailDeps;
   /** dev.closyria.com's access page (`POST /api/dev-access`). Never given in prod. */
@@ -167,6 +174,15 @@ export function createApp(deps: AppDeps) {
         receiving: deps.inbound !== undefined,
         autoForward: deps.inbound?.autoForward ?? false,
         ...(deps.wardrobe.now ? { nowMs: () => (deps.wardrobe.now as () => Date)().getTime() } : {}),
+      }),
+    )
+    .route(
+      "/",
+      orderSenderRoutes({
+        db: deps.wardrobe.db,
+        receiving: deps.inbound !== undefined,
+        ...(deps.mailer ? { mailer: deps.mailer } : {}),
+        ...(deps.wardrobe.now ? { now: deps.wardrobe.now } : {}),
       }),
     )
     .route("/", ordersRoutes(deps.wardrobe))

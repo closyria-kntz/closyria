@@ -162,6 +162,8 @@ async function expectNothingLeftOrCrossed(anonymousId: string) {
     "orders",
     "order_inboxes",
     "inbound_emails",
+    "order_sender_addresses",
+    "order_sender_sends",
   ]) {
     expect(
       await count(sql`select count(*)::int as n from ${sql.identifier(table)} where user_id = ${anonymousId}`),
@@ -659,6 +661,44 @@ describe("anonymous -> account merge on sign-in", () => {
       { localPart: `compte-m${n}`, active: true },
       { localPart: `invitee-m${n}`, active: false },
     ]);
+  });
+
+  it("keeps her sender addresses (« Mes adresses d'envoi »): one the account already has is folded, the verified one wins", async () => {
+    const email = `envoi-${randomUUID()}@example.test`;
+    const accountId = await signInWithEmail(email);
+    const anonymous = await signInAnonymously();
+    const n = ++counter;
+    const [shared, guestOnly, accountOnly] = [`a${n}@hotmail.example`, `b${n}@outlook.example`, `c${n}@icloud.example`];
+    const verifiedAt = day(1);
+    await handle.db.insert(schema.orderSenderAddresses).values([
+      { userId: accountId, email: shared },
+      { userId: accountId, email: accountOnly, verifiedAt },
+      { userId: anonymous.userId, email: shared, verifiedAt },
+      { userId: anonymous.userId, email: guestOnly },
+    ]);
+    await handle.db.insert(schema.orderSenderSends).values([
+      { userId: accountId, windowStart: day(1), sends: 2 },
+      { userId: anonymous.userId, windowStart: day(1), sends: 4 },
+    ]);
+
+    expect(await signInWithEmail(email, anonymous.cookie)).toBe(accountId);
+
+    await expectNothingLeftOrCrossed(anonymous.userId);
+    const rows = await handle.db
+      .select({ email: schema.orderSenderAddresses.email, verifiedAt: schema.orderSenderAddresses.verifiedAt })
+      .from(schema.orderSenderAddresses)
+      .where(eq(schema.orderSenderAddresses.userId, accountId))
+      .orderBy(asc(schema.orderSenderAddresses.email));
+    expect(rows).toEqual([
+      { email: shared, verifiedAt },
+      { email: guestOnly, verifiedAt: null },
+      { email: accountOnly, verifiedAt },
+    ]);
+    const sends = await handle.db
+      .select({ sends: schema.orderSenderSends.sends })
+      .from(schema.orderSenderSends)
+      .where(eq(schema.orderSenderSends.userId, accountId));
+    expect(sends).toEqual([{ sends: 2 }]);
   });
 
   it("folding the same product keeps her target price unless empty, « M'alerter » only if both, and its alerts", async () => {

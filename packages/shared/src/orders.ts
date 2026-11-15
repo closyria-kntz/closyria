@@ -495,6 +495,63 @@ export const orderInboxViewSchema = z.object({
 });
 export type OrderInboxView = z.infer<typeof orderInboxViewSchema>;
 
+// --- « Mes adresses d'envoi » (spec §11) -------------------------------------------------------------------------
+
+/** Addresses she may forward from, her account address included. */
+export const MAX_SENDER_ADDRESSES = 10;
+export const SENDER_CODE_LENGTH = 6;
+/** How long a code sent to an added address works. */
+export const SENDER_CODE_MINUTES = 15;
+/** Wrong codes allowed per code sent; then « Renvoyer le code ». */
+export const SENDER_CODE_MAX_ATTEMPTS = 5;
+/** « Renvoyer le code »: once a minute per address. */
+export const SENDER_RESEND_SECONDS = 60;
+/** Codes sent per account and per hour at most (adding an address sends one too). */
+export const SENDER_SENDS_PER_HOUR = 5;
+const MAX_EMAIL = 254;
+
+/**
+ * An address she adds: trimmed, lowercase, plain ASCII (§10.1: an internationalized address is never accepted as her
+ * sender, so it is not offered either).
+ */
+export const senderEmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(
+    z
+      .email()
+      .max(MAX_EMAIL)
+      .regex(/^[\x21-\x3f\x41-\x7e]+@[\x21-\x3f\x41-\x7e]+$/),
+  );
+export const senderAddressInputSchema = z.object({ email: senderEmailSchema });
+export type SenderAddressInput = z.infer<typeof senderAddressInputSchema>;
+export const senderCodeInputSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .regex(new RegExp(`^\\d{${SENDER_CODE_LENGTH}}$`)),
+});
+export type SenderCodeInput = z.infer<typeof senderCodeInputSchema>;
+
+/** An address she added: verified (its e-mails are read), or waiting for its code. */
+export const senderAddressViewSchema = z.object({
+  id: uuidSchema,
+  email: z.string(),
+  verified: z.boolean(),
+  createdAt: dateTimeSchema,
+});
+export type SenderAddressView = z.infer<typeof senderAddressViewSchema>;
+
+/** « Mes adresses d'envoi »: her account address (always counted, never removable), then those she added. */
+export const senderAddressListSchema = z.object({
+  accountEmail: z.string().nullable(),
+  /** Addresses at most, the account's included. */
+  max: z.number().int().positive(),
+  addresses: z.array(senderAddressViewSchema),
+});
+export type SenderAddressList = z.infer<typeof senderAddressListSchema>;
+
 // --- Reading an e-mail -------------------------------------------------------------------------------------------
 
 /** Longest product address kept from an e-mail (as `canonicalizeUrl`). */

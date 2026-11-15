@@ -63,6 +63,21 @@ export function codeEmail(to: string, code: string): MailMessage {
   };
 }
 
+/**
+ * The code that verifies an address she adds to « Mes adresses d'envoi » (spec §11), in French, sent through the same
+ * mailer as the sign-in codes. The code is in the subject so a phone shows it at once.
+ */
+export function senderCodeEmail(to: string, code: string): MailMessage {
+  const t = loadMessages("fr").Auth.senderEmail;
+  const lines = [code, t.body];
+  return {
+    to,
+    subject: t.subject.replace("{code}", code),
+    text: lines.join("\n\n"),
+    html: lines.map((line) => `<p>${line === code ? `<strong>${code}</strong>` : escapeHtml(line)}</p>`).join("\n"),
+  };
+}
+
 /** Better Auth options; also read by the Better Auth CLI to generate the Drizzle schema. */
 export function authOptions(deps: AuthDeps) {
   const { google, apple } = deps.social ?? {};

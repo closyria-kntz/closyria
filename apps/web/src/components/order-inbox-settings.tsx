@@ -7,6 +7,7 @@ import { type ReactNode, useEffect, useId, useState } from "react";
 import { mailboxHelp } from "@/lib/order-inbox-help";
 import { fetchOrderInbox, newOrderInbox } from "@/lib/orders-client";
 import { Dialog } from "./dialog";
+import { OrderSenderAddresses } from "./order-sender-addresses";
 import { buttonClass, focusRing, primaryButtonClass } from "./ui";
 
 const HERE = "/reglages/commandes";
@@ -254,6 +255,8 @@ export function OrderInboxSettings() {
           </div>
         )}
       </section>
+
+      <OrderSenderAddresses />
 
       <Dialog open={asking} onClose={() => setAsking(false)} title={t("changeTitle")} closeLabel={t("cancel")}>
         <p>{t("changeBody")}</p>

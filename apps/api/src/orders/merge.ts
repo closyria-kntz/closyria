@@ -14,3 +14,28 @@ export async function mergeOrderInboxes(fromUserId: string, toUserId: string, tx
       and exists (select 1 from ${schema.orderInboxes} where user_id = ${toUserId} and active)`);
   await tx.execute(sql`update ${schema.orderInboxes} set user_id = ${toUserId} where user_id = ${fromUserId}`);
 }
+
+/**
+ * Anonymous -> account merge of « Mes adresses d'envoi » (spec §11). A guest cannot add any (accounts only); should she
+ * hold some, they move, one address once per account (`order_sender_addresses_user_id_email_idx`): an address both
+ * have is kept on the account's row, verified if either was.
+ */
+export async function mergeOrderSenders(fromUserId: string, toUserId: string, tx: DbTransaction): Promise<void> {
+  const t = schema.orderSenderAddresses;
+  await tx.execute(sql`
+    update ${t} as mine
+    set verified_at = theirs.verified_at, code_hash = null, code_salt = null, code_expires_at = null, attempts = 0
+    from ${t} as theirs
+    where mine.user_id = ${toUserId} and mine.verified_at is null
+      and theirs.user_id = ${fromUserId} and theirs.email = mine.email and theirs.verified_at is not null`);
+  await tx.execute(sql`
+    delete from ${t} as theirs
+    where theirs.user_id = ${fromUserId}
+      and exists (select 1 from ${t} as mine where mine.user_id = ${toUserId} and mine.email = theirs.email)`);
+  await tx.execute(sql`update ${t} set user_id = ${toUserId} where user_id = ${fromUserId}`);
+}
+
+/** The guest's count of codes sent this hour is dropped: the account keeps its own (one row per account). */
+export async function mergeOrderSenderSends(fromUserId: string, _toUserId: string, tx: DbTransaction): Promise<void> {
+  await tx.execute(sql`delete from ${schema.orderSenderSends} where user_id = ${fromUserId}`);
+}

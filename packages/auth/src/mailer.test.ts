@@ -73,6 +73,16 @@ describe("memoryMailer", () => {
   });
 });
 
+describe("memoryMailer and a code in the subject", () => {
+  it("masks the code of a subject (« Ton code Closyria : 048213 ») in its log line", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    await memoryMailer().send({ ...message, subject: "Ton code Closyria : 048213" });
+    const logged = log.mock.calls.flat().join(" ");
+    expect(logged).toContain("Ton code Closyria");
+    expect(logged).not.toContain("048213");
+  });
+});
+
 describe("memoryMailer in local development", () => {
   it("logs the content (the code) but never the address when asked to", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});

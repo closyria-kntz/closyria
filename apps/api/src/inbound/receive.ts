@@ -1,4 +1,4 @@
-import { and, count, type Database, eq, gt, ne, schema } from "@closyria/db";
+import { and, count, type Database, eq, gt, isNotNull, ne, schema } from "@closyria/db";
 import {
   INBOUND_EMAIL_RETENTION_DAYS,
   MAX_IGNORED_INBOUND_EMAILS_PER_DAY,
@@ -42,6 +42,15 @@ function errorLabel(error: unknown): string {
   return [e?.name ?? "error", e?.cause?.code ?? e?.code].filter(Boolean).join(" ");
 }
 
+/** Her sender addresses that passed their code (« Mes adresses d'envoi »). */
+async function verifiedSendersOf(db: Database, userId: string): Promise<string[]> {
+  const rows = await db
+    .select({ email: schema.orderSenderAddresses.email })
+    .from(schema.orderSenderAddresses)
+    .where(and(eq(schema.orderSenderAddresses.userId, userId), isNotNull(schema.orderSenderAddresses.verifiedAt)));
+  return rows.map((r) => r.email);
+}
+
 /**
  * Files one e-mail received for `envelope.rcptTo` (Postfix delivers one recipient at a time). Order of the writes
  * (no object without its row, no object left behind): the row first, then the object, then its key on the row; a
@@ -80,10 +89,16 @@ export async function receiveInboundEmail(
     .where(and(eq(schema.inboundEmails.inboxId, inbox.id), eq(schema.inboundEmails.queueId, input.envelope.queueId)));
   if (seen) return "duplicate";
 
-  // Her verified address only: a guest has none (and cannot have an address), an unverified one proves nothing.
+  // Her verified addresses only: a guest has none (and cannot have an address), an unverified one proves nothing.
+  // Besides the account's, those she verified in « Mes adresses d'envoi » (spec §11), never one waiting for its code.
   const verdict: SenderVerdict =
     inbox.emailVerified && inbox.isAnonymous !== true
-      ? await deps.checkSender({ raw: input.raw, envelope: input.envelope, accountEmail: inbox.email })
+      ? await deps.checkSender({
+          raw: input.raw,
+          envelope: input.envelope,
+          accountEmail: inbox.email,
+          verifiedSenders: await verifiedSendersOf(db, inbox.userId),
+        })
       : { kind: "ignored", fromAddress: input.envelope.mailFrom.toLowerCase().slice(0, 320) || "(inconnu)" };
   if (verdict.kind === "retry") return "retry";
   if (verdict.kind === "gmail_confirmation") {

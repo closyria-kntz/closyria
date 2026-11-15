@@ -1,7 +1,7 @@
 import { registerAccountMerge, registerOwnedTable } from "@closyria/auth";
 import { schema } from "@closyria/db";
 import { registerEntitlementsOwnedTables } from "@closyria/entitlements";
-import { mergeOrderInboxes } from "./orders/merge";
+import { mergeOrderInboxes, mergeOrderSenderSends, mergeOrderSenders } from "./orders/merge";
 import {
   mergeItems,
   mergeLoveLevels,
@@ -45,6 +45,10 @@ export function registerOwnedTables(): void {
   registerOwnedTable(schema.orderInboxes, schema.orderInboxes.userId, mergeOrderInboxes);
   registerOwnedTable(schema.inboundEmails, schema.inboundEmails.userId);
   registerOwnedTable(schema.orders, schema.orders.userId);
+  // « Mes adresses d'envoi » (spec §11): her other mailboxes and her count of codes sent this hour, deleted with her
+  // account (cascade); one address once per account on a merge.
+  registerOwnedTable(schema.orderSenderAddresses, schema.orderSenderAddresses.userId, mergeOrderSenders);
+  registerOwnedTable(schema.orderSenderSends, schema.orderSenderSends.userId, mergeOrderSenderSends);
   // On the user row itself: the discovery seen and the closed tips (task 7).
   registerAccountMerge(mergePreferences);
 }

@@ -39,7 +39,7 @@ const MEMORY_MAILER_CAPACITY = 50;
 
 /**
  * Keeps the last messages in memory, for tests and local development.
- * Logs the subject only, never the address. `logContent` adds the text (which holds the code)
+ * Logs the subject only (any code in it masked), never the address. `logContent` adds the text (which holds the code)
  * so one can sign in locally: only ever enable it with APP_ENV=development.
  */
 export function memoryMailer(options: { logContent?: boolean } = {}): Mailer & { messages: MailMessage[] } {
@@ -49,7 +49,8 @@ export function memoryMailer(options: { logContent?: boolean } = {}): Mailer & {
     async send(msg) {
       messages.push(msg);
       if (messages.length > MEMORY_MAILER_CAPACITY) messages.splice(0, messages.length - MEMORY_MAILER_CAPACITY);
-      console.log(`[mail:memory] message kept in memory: "${msg.subject}"`);
+      // A code may sit in the subject (« Mes adresses d'envoi »): its digits are masked.
+      console.log(`[mail:memory] message kept in memory: "${msg.subject.replace(/\d{4,}/g, "••••")}"`);
       if (options.logContent) console.log(msg.text);
     },
   };

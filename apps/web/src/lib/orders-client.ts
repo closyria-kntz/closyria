@@ -10,11 +10,14 @@ import {
   orderInboxViewSchema,
   orderListSchema,
   orderViewSchema,
+  type SenderAddressList,
+  senderAddressListSchema,
+  senderAddressViewSchema,
   type TrackingInput,
 } from "@closyria/shared";
 import { z } from "zod";
 import type { ClientDeps } from "./catalog-client";
-import { call, defaultDeps, jsonInit } from "./wardrobe-client";
+import { call, callNoContent, defaultDeps, jsonInit } from "./wardrobe-client";
 
 /**
  * « Après la commande » (Task 7): her order address, her orders and what she does with them, the Instagram short form.
@@ -48,6 +51,28 @@ export function fetchOrderInbox(deps: ClientDeps = defaultDeps): Promise<GuestOr
 export function newOrderInbox(deps: ClientDeps = defaultDeps) {
   return call(deps, "/api/me/order-inbox", { method: "POST" }, orderInboxViewSchema);
 }
+
+/** « Mes adresses d'envoi »: her account address and those she added. Throws on a network error. */
+export function fetchSenderAddresses(deps: ClientDeps = defaultDeps): Promise<GuestOr<SenderAddressList>> {
+  return read(deps, "/api/me/order-inbox/senders", (body) => senderAddressListSchema.parse(body));
+}
+
+const SENDERS = "/api/me/order-inbox/senders";
+
+/** « Ajouter une adresse »: a code leaves for it. */
+export const addSenderAddress = (email: string, deps: ClientDeps = defaultDeps) =>
+  call(deps, SENDERS, jsonInit("POST", { email }), senderAddressViewSchema);
+
+export const verifySenderAddress = (id: string, code: string, deps: ClientDeps = defaultDeps) =>
+  call(deps, `${SENDERS}/${id}/verify`, jsonInit("POST", { code }), senderAddressViewSchema);
+
+/** « Renvoyer le code ». */
+export const resendSenderCode = (id: string, deps: ClientDeps = defaultDeps) =>
+  call(deps, `${SENDERS}/${id}/resend`, { method: "POST" }, senderAddressViewSchema);
+
+/** « Retirer ». */
+export const removeSenderAddress = (id: string, deps: ClientDeps = defaultDeps) =>
+  callNoContent(deps, `${SENDERS}/${id}`, { method: "DELETE" });
 
 /** Her orders to validate, her orders and her unreadable e-mails. Throws on a network error. */
 export function fetchOrders(deps: ClientDeps = defaultDeps, signal?: AbortSignal): Promise<GuestOr<OrderList>> {

@@ -66,6 +66,8 @@ describe("owned tables of the API process", () => {
       "love_levels",
       "media",
       "order_inboxes",
+      "order_sender_addresses",
+      "order_sender_sends",
       "orders",
       "photo_imports",
       "profiles",

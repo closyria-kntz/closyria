@@ -744,6 +744,13 @@ export const wardrobeErrorCodes = [
   "inbound_off",
   "order_not_confirmed",
   "parcel_delivered",
+  "sender_exists",
+  "sender_limit",
+  "sender_verified",
+  "code_wrong",
+  "code_expired",
+  "code_locked",
+  "mail_failed",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];

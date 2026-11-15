@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
 import type { Page, TestInfo } from "@playwright/test";
-import { sessionsOf } from "../fixtures/auth";
+import { readCode, sessionsOf } from "../fixtures/auth";
 import { AUTO_SHOP, autoProductUrl, keepWish, PRODUCT } from "../fixtures/shops";
 import { expect, test } from "../fixtures/test";
 
@@ -261,6 +261,77 @@ test("son adresse de commandes : copier, changer, le code Gmail et l'aide pas à
   await expect(page).toHaveURL(/\/mes-commandes$/);
   await expect(main(page).getByRole("heading", { name: "Pas encore de commande" })).toBeVisible();
   await axeLightAndDark(page);
+});
+
+test("ses adresses d'envoi : ajouter une autre boîte, recopier le code reçu, la retirer", async ({
+  page,
+  request,
+  db,
+  userAgentTag,
+}, testInfo) => {
+  const who = await account(page, db, userAgentTag);
+  await page.goto("/reglages/commandes");
+  await expect(main(page).getByRole("region", { name: "Ton adresse" })).toContainText(
+    "Seuls les e-mails que tu transfères depuis tes adresses d'envoi (ci-dessous) sont lus.",
+  );
+  const senders = main(page).getByRole("region", { name: "Mes adresses d'envoi" });
+  // Her account address comes first, always read, never removable.
+  await expect(senders.getByRole("listitem").first()).toContainText(`camille-${who.userId}@example.com`);
+  await expect(senders.getByRole("listitem").first()).toContainText("Adresse du compte");
+  await expect(senders.getByRole("listitem").first().getByRole("button")).toHaveCount(0);
+
+  const add = senders.getByRole("button", { name: "Ajouter une adresse" });
+  expect((await add.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await add.click();
+  const other = `camille-${who.userId}@hotmail.example`.toLowerCase();
+  const field = senders.getByLabel("Adresse e-mail");
+  await expect(field).toBeFocused();
+  await field.fill("pas-une-adresse");
+  await senders.getByRole("button", { name: "Envoyer le code" }).click();
+  await expect(senders.getByRole("alert")).toHaveText("Vérifie l'adresse e-mail.");
+  await field.fill(`  ${other.toUpperCase()} `);
+  await senders.getByRole("button", { name: "Envoyer le code" }).click();
+  await expect(senders.getByRole("status")).toHaveText(`Code envoyé à ${other}`);
+
+  const row = senders.getByTestId("sender-address").filter({ hasText: other });
+  await expect(row).toContainText("En attente du code");
+  const codeField = row.getByLabel(`Code reçu à ${other}`);
+  await expect(codeField).toBeFocused();
+  await expect(codeField).toHaveAttribute("autocomplete", "one-time-code");
+  await expect(codeField).toHaveAttribute("inputmode", "numeric");
+  await axeLightAndDark(page);
+  await shots(page, testInfo, "adresses-envoi-code");
+
+  const code = await readCode(request, other);
+  const wrong = code === "000000" ? "111111" : "000000";
+  await codeField.fill(wrong);
+  await row.getByRole("button", { name: "Valider" }).click();
+  await expect(row.getByRole("alert")).toHaveText("Ce code n'est pas le bon.");
+  await codeField.fill(code);
+  const valider = row.getByRole("button", { name: "Valider" });
+  expect((await valider.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await valider.click();
+  await expect(row).toContainText("Vérifiée");
+  await expect(senders.getByRole("status")).toHaveText(`${other} est vérifiée : ses e-mails transférés seront lus.`);
+  const { rows } = await db.query<{ email: string; verified: boolean; code_hash: string | null }>(
+    "select email, verified_at is not null as verified, code_hash from order_sender_addresses where user_id = $1",
+    [who.userId],
+  );
+  expect(rows).toEqual([{ email: other, verified: true, code_hash: null }]);
+  await axeLightAndDark(page);
+
+  // Still there after a reload, then « Retirer », asked first.
+  await page.reload();
+  await expect(row).toContainText("Vérifiée");
+  await row.getByRole("button", { name: `Retirer ${other}` }).click();
+  const dialog = page.getByRole("dialog", { name: "Retirer cette adresse ?" });
+  await expect(dialog).toContainText(`Les e-mails transférés depuis ${other} ne seront plus lus.`);
+  await axeLightAndDark(page);
+  await dialog.getByRole("button", { name: "Retirer", exact: true }).click();
+  await expect(senders.getByRole("status")).toHaveText("Adresse retirée");
+  await expect(senders.getByTestId("sender-address")).toHaveCount(0);
+  const after = await db.query("select 1 from order_sender_addresses where user_id = $1", [who.userId]);
+  expect(after.rows).toEqual([]);
 });
 
 test("la carte à valider : corriger, « C'est bon », « Ce n'est pas une commande » et un e-mail illisible", async ({

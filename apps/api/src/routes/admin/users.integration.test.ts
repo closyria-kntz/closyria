@@ -202,6 +202,9 @@ async function seedEverything(userId: string, email: string): Promise<string[]> 
     .values({ userId, endpoint: `https://push.test/${n}`, p256dh: "k", auth: "a" });
   await handle.db.insert(schema.alertSettings).values({ userId });
   await handle.db.insert(schema.alertSends).values({ userId, ok: true });
+  // « Mes adresses d'envoi »: an added address and her count of codes sent.
+  await handle.db.insert(schema.orderSenderAddresses).values({ userId, email: `autre-${n}@hotmail.example` });
+  await handle.db.insert(schema.orderSenderSends).values({ userId, windowStart: new Date(), sends: 1 });
   // « Après la commande »: her address, an accepted e-mail (raw message stored) and one ignored (no user yet), an
   // order with a line, a parcel and its step.
   const [inbox] = await handle.db

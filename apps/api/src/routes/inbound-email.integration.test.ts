@@ -323,6 +323,76 @@ describe("POST /api/inbound-email: her forwards are filed", () => {
   });
 });
 
+describe("POST /api/inbound-email: her other mailboxes (« Mes adresses d'envoi », spec §11)", () => {
+  /** An address she added, verified or still waiting for its code. */
+  async function addSender(userId: string, email: string, verified: boolean) {
+    const [row] = await t.db
+      .insert(schema.orderSenderAddresses)
+      .values({ userId, email, verifiedAt: verified ? NOW : null })
+      .returning();
+    return row?.id as string;
+  }
+
+  it("a forward from a verified address is filed, that address recorded as its sender", async () => {
+    const { address, userId } = await account(mailbox("gmail"));
+    const other = mailbox("outlook");
+    await addSender(userId, other, true);
+    const raw = await signed(outlookForward(address, `Marie <${other}>`), "outlook");
+    expect(await (await deliver(raw, envelopeFrom("outlook", other, address))).json()).toEqual({ result: "queued" });
+    const [row] = await rowsOf(address);
+    expect(row).toMatchObject({ userId, fromAddress: other, authOk: true, status: "queued" });
+  });
+
+  it("an address still waiting for its code does not count", async () => {
+    const { address, userId } = await account(mailbox("gmail"));
+    const other = mailbox("outlook");
+    await addSender(userId, other, false);
+    const raw = await signed(outlookForward(address, `Marie <${other}>`), "outlook");
+    expect(await (await deliver(raw, envelopeFrom("outlook", other, address))).json()).toEqual({ result: "ignored" });
+  });
+
+  it("a removed address no longer counts", async () => {
+    const { address, userId } = await account(mailbox("gmail"));
+    const other = mailbox("outlook");
+    const id = await addSender(userId, other, true);
+    await t.db.delete(schema.orderSenderAddresses).where(eq(schema.orderSenderAddresses.id, id));
+    const raw = await signed(outlookForward(address, `Marie <${other}>`), "outlook");
+    expect(await (await deliver(raw, envelopeFrom("outlook", other, address))).json()).toEqual({ result: "ignored" });
+  });
+
+  it("someone else's verified address counts on her own order address only", async () => {
+    const mine = await account(mailbox("gmail"));
+    const sophie = await account(mailbox("gmail"));
+    const shared = mailbox("outlook");
+    await addSender(sophie.userId, shared, true);
+    const toMine = await signed(outlookForward(mine.address, `Sophie <${shared}>`), "outlook");
+    expect(await (await deliver(toMine, envelopeFrom("outlook", shared, mine.address))).json()).toEqual({
+      result: "ignored",
+    });
+    const toHers = await signed(outlookForward(sophie.address, `Sophie <${shared}>`), "outlook");
+    expect(await (await deliver(toHers, envelopeFrom("outlook", shared, sophie.address))).json()).toEqual({
+      result: "queued",
+    });
+    // The same address verified on both accounts: each e-mail goes by the order address it was sent to.
+    await addSender(mine.userId, shared, true);
+    const again = await signed(outlookForward(mine.address, `Marie <${shared}>`), "outlook");
+    expect(await (await deliver(again, envelopeFrom("outlook", shared, mine.address))).json()).toEqual({
+      result: "queued",
+    });
+    expect((await rowsOf(mine.address)).map((r) => r.userId).sort()).toEqual([null, mine.userId].sort());
+  });
+
+  it("a verified address in From without its provider's signature is ignored", async () => {
+    const { address, userId } = await account(mailbox("gmail"));
+    const other = mailbox("outlook");
+    await addSender(userId, other, true);
+    const forged = unsigned(outlookForward(address, `Marie <${other}>`));
+    expect(await (await deliver(forged, envelopeFrom("attacker", other, address))).json()).toEqual({
+      result: "ignored",
+    });
+  });
+});
+
 describe("POST /api/inbound-email: anything else is ignored, without the message (Review Focus 1)", () => {
   async function expectIgnored(address: string, fromAddress: string) {
     const [row, ...more] = await rowsOf(address);

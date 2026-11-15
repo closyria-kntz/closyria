@@ -57,6 +57,7 @@ export function bootstrap(env: Env): Api {
     admin: { db },
     wardrobe: { db, shareLinkKey: parseShareLinkKey(env.SHARE_LINK_KEY) },
     push: { publicKey: vapidConfig(env)?.publicKey ?? null },
+    mailer,
     // E-mail reception, only with its secret (deploy/README.md, « Réception des e-mails de commande »).
     ...(env.INBOUND_EMAIL_SECRET
       ? {

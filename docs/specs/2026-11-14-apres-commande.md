@@ -568,7 +568,7 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   commandes encore loin de leur seconde question ne prennent plus la place des commandes dues (plafond de 2 000 par jour).
 - **Requêtes d'une transaction** : les lectures d'un article (`loadItemViews`, `loadBareItemFacts`, `loadProductViews`)
   passent une à une dans une transaction (`readAll`), toutes ensemble hors transaction.
-- **Mise en prod** : migrations 0037 à 0043 à essayer sur une copie de la prod (`deploy/dry-run-prod-migrations.sh`),
+- **Mise en prod** : migrations 0037 à 0044 à essayer sur une copie de la prod (`deploy/dry-run-prod-migrations.sh`),
   rappelé dans `deploy/README.md`.
 
 #### Textes à valider (relecture finale)
@@ -592,3 +592,71 @@ depuis l'adresse du compte sont gardés.
   d'envoi. Une adresse non vérifiée (en attente de code) ne compte pas.
 - Une même adresse peut être vérifiée sur plusieurs comptes (le tri se fait par l'adresse de commande destinataire).
 - Suppression du compte : ses adresses d'envoi sont effacées (registre des tables possédées).
+
+### 11.1 Construction (2026-11-15)
+
+- **Réception** (`inbound/sender.ts`, `inbound/receive.ts`) : « son adresse » est l'adresse du compte **ou** une de
+  ses adresses d'envoi vérifiées (`verified_at` posé), lues à chaque e-mail pour le compte de l'adresse de commande
+  destinataire. Les trois règles du §10.1 tournent pour celle qui correspond, avec **son** domaine : règle 1, le
+  `From:` est l'une d'elles et la signature DKIM est alignée sur le domaine de cette adresse-là (sa signature Gmail ne
+  vaut pas pour son adresse Outlook) ; règle 2 (si activée), l'étiquette `caf_` nomme l'une de ses adresses Gmail ;
+  confirmation Gmail, demandée par l'une d'elles. La ligne garde comme expéditeur l'adresse qui a correspondu. Une
+  adresse en attente du code, retirée, ou vérifiée sur un **autre** compte ne compte pas ; une même adresse vérifiée
+  sur deux comptes vaut pour chacun, l'e-mail va au compte de l'adresse de commande. Panne DNS (503) : comme le §10.1,
+  pour le domaine de l'adresse qui correspond.
+- **API** (`routes/me/order-senders.ts`, schémas dans `packages/shared/src/orders.ts`) :
+  `GET /api/me/order-inbox/senders` (adresse du compte à part, `max` 10, adresses ajoutées les plus anciennes
+  d'abord), `POST …/senders` `{ email }` (201, code envoyé), `POST …/senders/{id}/verify` `{ code }`,
+  `POST …/senders/{id}/resend`, `DELETE …/senders/{id}` (204). Invitée : 403 `account_required` ; réception pas en
+  service : 409 `inbound_off` partout ; adresse d'un autre compte ou inconnue : 404.
+  Erreurs : 409 `sender_exists` (l'adresse du compte, ou déjà ajoutée), 409 `sender_limit` (10 avec celle du compte,
+  rien envoyé), 409 `sender_verified`, 422 `code_wrong` / `code_locked` (5 essais par code) / `code_expired`
+  (15 minutes), 429 `rate_limited`, 502 `mail_failed` (l'adresse reste « En attente du code », « Renvoyer le code »
+  repart).
+- **Adresse** : coupée des espaces, en minuscules, e-mail valide de 254 caractères au plus, **ASCII seulement** (une
+  adresse internationalisée n'est jamais acceptée comme expéditrice, §10.1, elle n'est donc pas proposée).
+- **Code** : 6 chiffres (`randomInt`), gardé seulement en HMAC-SHA256 sous un sel aléatoire de 16 octets propre à la
+  ligne, comparé en temps constant ; jamais renvoyé par l'API ni écrit dans un journal (le faux mailer des tests et du
+  développement masque les chiffres de l'objet). Un nouveau code (« Renvoyer le code ») remplace l'ancien et remet les
+  essais à zéro ; une adresse vérifiée ne garde aucun code (contrainte en base).
+- **Limites d'envoi** : « Renvoyer le code » une fois par minute et par adresse ; **5 codes par heure et par compte,
+  ajout compris** (table `order_sender_sends`, une ligne par compte, fenêtre d'une heure, mise à jour atomique). Un
+  ajout refusé par la limite ne crée rien. Conséquence : ajouter plus de 5 adresses prend plus d'une heure (accepté :
+  le cas courant est une ou deux boîtes de plus).
+- **Base** : migration 0044, tables `order_sender_addresses` (unique par compte et adresse, adresse en minuscules,
+  essais ≥ 0) et `order_sender_sends`, toutes deux dans le registre des tables possédées (cascade : effacées avec le
+  compte). Fusion invitée → compte (une invitée ne peut pas en ajouter ; si elle en avait) : ses adresses passent au
+  compte, une adresse que le compte a déjà n'y figure qu'une fois, vérifiée si l'une des deux l'était ; son compteur
+  d'envois est abandonné.
+- **E-mail** : envoyé par le même mailer que les codes de connexion (Brevo ; le faux mailer en test, lu par
+  `/api/test/emails`), texte dans `packages/i18n/messages/fr.json` (`Auth.senderEmail`).
+- **Écran** (`order-sender-addresses.tsx`, dans « Mes commandes par e-mail ») : section « Mes adresses d'envoi » après
+  « Ton adresse » : l'adresse du compte d'abord (« Adresse du compte », sans bouton), puis chaque adresse ajoutée
+  (« Vérifiée » / « En attente du code », « Saisir le code », « Retirer » demandé d'abord). « Ajouter une adresse »
+  ouvre le champ, « Envoyer le code » ouvre aussitôt le champ du code (`autocomplete="one-time-code"`, clavier
+  numérique) avec « Valider » et « Renvoyer le code ». À 10 adresses, le bouton laisse place à une phrase.
+
+#### Textes à valider (adresses d'envoi)
+
+- E-mail du code : objet « Ton code Closyria : {code} » ; texte : le code, puis « Recopie ce code dans Closyria pour
+  ajouter cette adresse à tes adresses d'envoi. Il est valable 15 minutes. Si tu n'as rien demandé, ignore cet
+  e-mail. »
+- Aide sous « Ton adresse » (remplace « …depuis ta propre adresse e-mail… ») : « Seuls les e-mails que tu transfères
+  depuis tes adresses d'envoi (ci-dessous) sont lus. Les autres sont ignorés. »
+- Section : titre « Mes adresses d'envoi » ; « Tes e-mails de commande arrivent sur plusieurs boîtes ? Ajoute-les
+  ici : ce que tu transfères depuis chacune d'elles sera lu. » ; « Chargement de tes adresses… » ; « Tes adresses ne
+  se sont pas affichées. Réessaie dans un instant. » ; « Réessayer ».
+- Étiquettes : « Adresse du compte », « Vérifiée », « En attente du code ».
+- Boutons : « Ajouter une adresse », « Envoyer le code », « Annuler », « Saisir le code », « Valider »,
+  « Renvoyer le code », « Retirer ».
+- Champs : « Adresse e-mail » (aide : « On y envoie un code à 6 chiffres pour vérifier qu'elle est à toi. ») ;
+  « Code reçu à {adresse} » (aide : « Le code est valable 15 minutes. »).
+- Confirmation : « Retirer cette adresse ? » ; « Les e-mails transférés depuis {adresse} ne seront plus lus. »
+- Annonces : « Code envoyé à {adresse} » ; « Nouveau code envoyé à {adresse} » ; « {adresse} est vérifiée : ses
+  e-mails transférés seront lus. » ; « Adresse retirée » ; à la limite : « Tu as atteint 10 adresses. Retires-en une
+  pour en ajouter une autre. »
+- Erreurs : « Vérifie l'adresse e-mail. » ; « Le code a 6 chiffres. » ; « Cette adresse est déjà dans ta liste. » ;
+  « Tu as déjà 10 adresses. Retires-en une pour en ajouter une autre. » ; « Trop de codes demandés. Réessaie dans
+  quelques minutes. » ; « L'e-mail n'est pas parti. Réessaie avec « Renvoyer le code ». » ; « Ce code n'est pas le
+  bon. » ; « Ce code a expiré : demande-en un nouveau. » ; « Trop d'essais : demande un nouveau code. » ; « Ça n'a pas
+  marché. Réessaie dans un instant. »

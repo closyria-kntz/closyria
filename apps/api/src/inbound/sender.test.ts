@@ -329,3 +329,90 @@ describe("Gmail's forwarding confirmation", () => {
     }
   });
 });
+
+describe("her verified sender addresses (« Mes adresses d'envoi », spec §11)", () => {
+  const OUTLOOK = "marie.test@outlook.example";
+  const ICLOUD = "marie.test@icloud.example";
+
+  it("rule 1 from a verified address: accepted, the address that matched recorded", async () => {
+    const raw = await signed(outlookForward(TO), "outlook");
+    const verdict = await check({
+      raw,
+      envelope: envelopeFrom("outlook", OUTLOOK, TO),
+      accountEmail: HER,
+      verifiedSenders: [ICLOUD, OUTLOOK],
+    });
+    expect(verdict).toEqual(accepted(OUTLOOK));
+  });
+
+  it("the account address still works alongside them", async () => {
+    const raw = await signed(gmailForward(TO), "gmail");
+    expect(
+      await check({ raw, envelope: envelopeFrom("gmail", HER, TO), accountEmail: HER, verifiedSenders: [OUTLOOK] }),
+    ).toEqual(accepted(HER));
+  });
+
+  it("an address that is not in the list (not verified, removed, someone else's) is ignored", async () => {
+    const raw = await signed(outlookForward(TO), "outlook");
+    for (const verifiedSenders of [[], [ICLOUD], undefined]) {
+      const verdict = await check({
+        raw,
+        envelope: envelopeFrom("outlook", OUTLOOK, TO),
+        accountEmail: HER,
+        ...(verifiedSenders ? { verifiedSenders } : {}),
+      });
+      expect(verdict).toEqual({ kind: "ignored", fromAddress: OUTLOOK });
+    }
+  });
+
+  it("a verified address forged without its provider's DKIM, or signed by another domain: ignored", async () => {
+    const input = { accountEmail: HER, verifiedSenders: [OUTLOOK] };
+    const forged = unsigned(outlookForward(TO));
+    expect((await check({ raw: forged, envelope: envelopeFrom("attacker", OUTLOOK, TO), ...input })).kind).toBe(
+      "ignored",
+    );
+    const otherDomain = await signed(outlookForward(TO), "attacker");
+    expect(
+      (await check({ raw: otherDomain, envelope: envelopeFrom("attacker", "x@attacker.example", TO), ...input })).kind,
+    ).toBe("ignored");
+    // Her Gmail signature does not vouch for her Outlook address.
+    const crossed = await signed(gmailForward(TO, `Marie <${OUTLOOK}>`), "gmail");
+    expect((await check({ raw: crossed, envelope: envelopeFrom("gmail", HER, TO), ...input })).kind).toBe("ignored");
+  });
+
+  it("the DNS does not answer on a verified address's own forward: try again later", async () => {
+    const failing = mailauthSenderCheck({ ...options, resolver: fixtureResolver({ fail: true }) });
+    const raw = await signed(outlookForward(TO), "outlook");
+    expect(
+      await failing({
+        raw,
+        envelope: envelopeFrom("outlook", OUTLOOK, TO),
+        accountEmail: HER,
+        verifiedSenders: [OUTLOOK],
+      }),
+    ).toEqual({ kind: "retry" });
+  });
+
+  it("rule 2 for a verified Gmail address (account elsewhere), only when on", async () => {
+    const raw = await sealed(await signed(gmailAutoForward(TO), "shop"), "google");
+    const input = {
+      raw,
+      envelope: envelopeFrom("gmail", gmailForwardingSender(HER, TO), TO),
+      accountEmail: OUTLOOK,
+      verifiedSenders: [HER],
+    };
+    expect(await checkAuto(input)).toEqual(accepted(HER));
+    expect((await check(input)).kind).toBe("ignored");
+    expect((await checkAuto({ ...input, verifiedSenders: [] })).kind).toBe("ignored");
+  });
+
+  it("Gmail's confirmation asked by a verified Gmail address gives its code", async () => {
+    const raw = await signed(gmailConfirmation(TO, HER), "google");
+    const envelope = envelopeFrom("google", "forwarding-noreply@google.example", TO);
+    expect(await checkAuto({ raw, envelope, accountEmail: OUTLOOK, verifiedSenders: [HER] })).toEqual({
+      kind: "gmail_confirmation",
+      code: "185412963",
+    });
+    expect((await checkAuto({ raw, envelope, accountEmail: OUTLOOK })).kind).toBe("ignored");
+  });
+});

@@ -680,7 +680,7 @@ leurs documentations. Il faut donc un essai réel par pièce, **sur la dev**, av
   arrive bien (essai 1 ci-dessus). Seulement ensuite, décider pour la prod.
 - Les réponses réelles de La Poste et de 17TRACK, vues aux essais 2 et 3, confirment (ou corrigent) les formes
   écrites d'après les documentations (spec §10.4).
-- **Avant la prod** : ce chantier apporte les migrations 0037 à 0043 ; les essayer d'abord sur une copie de la prod
+- **Avant la prod** : ce chantier apporte les migrations 0037 à 0044 ; les essayer d'abord sur une copie de la prod
   (`sudo bash deploy/dry-run-prod-migrations.sh <id>`, étape 2 en tête de ce fichier), qui dit leur durée.
 - Tant que la réception n'est pas installée dans un environnement (pas d'`INBOUND_EMAIL_SECRET`), « Mes commandes par
   e-mail » ne donne aucune adresse et dit « Bientôt disponible » ; la saisie à la main et les numéros collés marchent.
