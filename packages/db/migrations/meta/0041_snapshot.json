@@ -1,5 +1,5 @@
 {
-  "id": "67503e10-8664-4ca0-a69f-d231ee044dd3",
+  "id": "6dd911a4-24fb-47ae-ab3c-30d5a23815e6",
   "prevId": "c0d3bca7-cf02-4da0-8aad-af6f1fecacbe",
   "version": "7",
   "dialect": "postgresql",
@@ -629,6 +629,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "items_received": {
+          "name": "items_received",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parcels_left": {
+          "name": "parcels_left",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -979,6 +991,10 @@
         "alert_events_order_check": {
           "name": "alert_events_order_check",
           "value": "\"alert_events\".\"kind\" <> 'order_received' OR \"alert_events\".\"order_id\" IS NOT NULL"
+        },
+        "alert_events_parcels_left_check": {
+          "name": "alert_events_parcels_left_check",
+          "value": "\"alert_events\".\"parcels_left\" IS NULL OR \"alert_events\".\"parcels_left\" >= 0"
         },
         "alert_events_parcel_check": {
           "name": "alert_events_parcel_check",

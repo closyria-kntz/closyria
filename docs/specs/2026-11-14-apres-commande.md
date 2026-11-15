@@ -337,19 +337,32 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   l'agrégateur) remet le compte à zéro ; au troisième raté d'affilée (`PARCEL_MAX_CHECK_FAILURES`), le colis passe
   `unknown`, sans erreur visible, et reste interrogé jusqu'à `check_until`. Un numéro inconnu ne passe donc pas
   `unknown` dès la première fois : une étiquette fraîchement créée est souvent inconnue quelques heures.
-- **Livraison** : date du transporteur (jamais après maintenant). Ses articles des lignes de la commande encore
-  « Commandé » (hors corbeille, avec ou sans produit) passent à « Reçu » (`owned`, l'étape de « Je l'ai reçu », avec sa
-  ligne d'historique à la date de livraison, sans montant) et reçoivent `return_deadline = returnDeadline(livraison,
-  shops.return_days ?? 14)` ; un article déjà « Reçu » sans date limite la reçoit ; les autres étapes ne bougent pas.
-  Une commande à plusieurs colis : le premier livré fait passer tous ses articles (on ne sait pas quel article est dans
-  quel colis). Rejouée, la livraison ne refait rien (articles déjà reçus, notification unique).
+- **Livraison d'une commande** (arbitrage de la relecture n°1, 2026-11-15) : la date de livraison d'un colis est celle
+  du transporteur (jamais après maintenant). Les articles de la commande passent à « Reçu » quand **tous** ses colis
+  sont réglés — livrés, `unknown`, ou au bout de leur suivi (`check_until`) — **et qu'au moins un est livré** ; aucun
+  livré : rien ne bouge (la question J+10 de la Task 6 prend le relais). La règle est revue après chaque contrôle d'un
+  de ses colis (même un colis déjà livré repris par la file), si bien qu'un colis en retard qui passe `unknown` ou
+  arrive au bout de son suivi ne bloque jamais les autres. Passent : ses articles des lignes de la commande encore
+  « Commandé » (hors corbeille, avec ou sans produit) → `owned` (l'étape de « Je l'ai reçu », avec sa ligne
+  d'historique à la date de la **dernière** livraison, sans montant), `return_deadline = returnDeadline(dernière
+  livraison, shops.return_days ?? 14)` ; un article déjà « Reçu » sans date limite la reçoit ; les autres étapes
+  (retourné, vendu…) ne bougent pas. Rejouée, la règle ne refait rien. Une date limite déjà posée n'est pas déplacée
+  si un colis `unknown` finit par être livré plus tard.
+- **Colis sans transporteur** (numéro d'un e-mail au format inconnu) : passé `unknown` au premier passage et plus
+  interrogé (`next_check_at` nul) ; une correction du transporteur (Task 7) devra lui redonner un prochain contrôle,
+  remettre `check_failures` à zéro et son étape à `pending`.
+- **Robustesse** : un colis dont la mise à jour échoue (interblocage, base occupée) n'arrête pas la passe ; il garde
+  son bail et revient après. La Poste : l'étape courante est celle de l'événement le plus récent par sa date, pas le
+  premier de la liste.
 - **Notifications** : trois nouvelles sortes d'alerte immédiates (même envoi que le chantier 4 : calme de 22 h à 8 h,
   5 par jour, le reste au résumé où elles ne figurent pas, comme `order_received`), une fois par colis et par sorte
-  (`alert_events.parcel_id`, index unique colis + sorte) : `parcel_delivered` « Ton colis {boutique} est arrivé »
-  (« Ses articles sont dans « Reçu ». »), `parcel_pickup_ready` « … est disponible en point relais » (« Tu peux aller le
+  (`alert_events.parcel_id`, index unique colis + sorte) : `parcel_delivered` « Ton colis {boutique} est arrivé »,
+  une par colis livré, avec « Ses articles sont dans « Reçu ». » seulement si cette livraison les a fait passer, sinon
+  « Encore {n} colis en route. » tant que d'autres colis de la commande sont en route, sinon sans texte (ce que la
+  livraison a produit est gardé sur l'alerte : `items_received`, `parcels_left`), `parcel_pickup_ready` « … est disponible en point relais » (« Tu peux aller le
   chercher. »), `parcel_out_for_delivery` « … est en cours de livraison » (« Il arrive aujourd'hui. ») seulement si
   son réglage est activé (`alert_settings.parcel_out_for_delivery`, coupé d'office, interrupteur « Colis en cours de
   livraison » dans « Notifications »). Boutique : celle de la commande, sinon le nom tapé, sinon « Ton colis est
-  arrivé ». À l'envoi, l'étape doit toujours tenir (retenue la nuit puis livrée, « en cours de livraison » ou « point
+  arrivé » (de même dans « Nouvelles », pour ces alertes et `order_received`). À l'envoi, l'étape doit toujours tenir (retenue la nuit puis livrée, « en cours de livraison » ou « point
   relais » n'est plus envoyée) et le réglage être encore activé. Lien vers « Nouvelles » en attendant « Mes commandes »
   (Task 7).

@@ -258,7 +258,8 @@ export async function listAlerts(db: Database, userId: string, cursor: string | 
       currency: schema.products.currency,
       productImageId: sql<string | null>`(select pi.id from ${schema.productImages} pi
         where pi.product_id = ${schema.products.id} order by pi.position, pi.id limit 1)`,
-      shopName: sql<string | null>`coalesce(${schema.shops.name}, item_shop.name)`,
+      // An order's or parcel's alert without a known shop: the name she typed (as its notification).
+      shopName: sql<string | null>`coalesce(${schema.shops.name}, item_shop.name, ${schema.orders.shopName})`,
       salePeriodName: schema.salePeriods.name,
       startsOn: schema.salePeriods.startsOn,
     })
@@ -269,6 +270,7 @@ export async function listAlerts(db: Database, userId: string, cursor: string | 
     .leftJoin(schema.shops, eq(schema.shops.id, e.shopId))
     .leftJoin(sql`${schema.shops} as item_shop`, sql`item_shop.id = ${schema.products.shopId}`)
     .leftJoin(schema.salePeriods, eq(schema.salePeriods.id, e.salePeriodId))
+    .leftJoin(schema.orders, and(eq(schema.orders.id, e.orderId), eq(schema.orders.userId, e.userId)))
     .where(and(...conditions))
     .orderBy(desc(e.createdAt), desc(e.id))
     .limit(ALERTS_PAGE_SIZE + 1);

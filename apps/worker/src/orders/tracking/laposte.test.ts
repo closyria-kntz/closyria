@@ -56,6 +56,13 @@ describe("La Poste connector", () => {
     if (result.kind === "found") expect(result.estimatedAt?.toISOString()).toBe("2026-11-12T23:00:00.000Z");
   });
 
+  it("reads the current step on the most recent date, whatever the order of the steps", async () => {
+    const body = JSON.parse(fixture("laposte-pickup"));
+    body.shipment.event.reverse();
+    const { fetch } = fakeFetch([{ status: 200, body: JSON.stringify(body) }]);
+    expect(await laPosteConnector({ apiKey: "k", fetch }).track(parcel)).toMatchObject({ status: "pickup_ready" });
+  });
+
   it("an unknown number (404) or a refused one (400) is not found, not a failure", async () => {
     for (const status of [404, 400]) {
       const { fetch } = fakeFetch([{ status, body: fixture("laposte-not-found") }]);

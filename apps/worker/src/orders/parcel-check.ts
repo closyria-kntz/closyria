@@ -15,8 +15,8 @@ import { connectorFor, type TrackingConnectors, TrackingError, type TrackingResu
 
 /**
  * « Après la commande », Task 5: the parcels of her validated orders are asked to their carrier when due
- * (`next_check_at`, every 2 or 6 hours by step), until delivered or `check_until` (30 days). A delivery moves her
- * ordered items to « Reçu » with their return deadline; a pickup point, a delivery (and out for delivery when she
+ * (`next_check_at`, every 2 or 6 hours by step), until delivered or `check_until` (30 days). Once every parcel of an
+ * order is settled and one at least delivered, her ordered items move to « Reçu » with their return deadline; a pickup point, a delivery (and out for delivery when she
  * wants it) are notified once per parcel through the alerts' sending (quiet hours, daily cap). A carrier that does not
  * answer, or does not know the number, three times in a row turns the parcel `unknown`, silently (RF 4).
  *
@@ -111,9 +111,10 @@ const NOTIFIED: Partial<Record<ParcelStatus, "parcel_out_for_delivery" | "parcel
   };
 
 /**
- * Applies a check to the parcel, in one transaction. Returns whether it was delivered by this check. A parcel already
- * delivered, gone, or whose carrier or number changed during the check (she corrected it) is left as it is, the
- * latter checked again at the next sweep.
+ * Applies a check to the parcel, in one transaction, then settles its order (`settleOrder`). Returns whether it was
+ * delivered by this check. A parcel already delivered or gone is left as it is; one whose carrier or number changed
+ * during the check (a correction) keeps it, checked again at the next sweep; one without a carrier is no longer
+ * checked (nothing to ask).
  */
 async function applyOutcome(db: Database, claimed: ClaimedParcel, outcome: Outcome, now: Date): Promise<boolean> {
   return db.transaction(async (tx) => {
@@ -140,6 +141,7 @@ async function applyOutcome(db: Database, claimed: ClaimedParcel, outcome: Outco
     if (!parcel) return false;
     if (parcel.status === "delivered") {
       await tx.update(schema.parcels).set({ nextCheckAt: null }).where(eq(schema.parcels.id, parcel.id));
+      await settleOrder(tx, order, now);
       return false;
     }
     if (parcel.carrier !== claimed.carrier || parcel.trackingNumber !== claimed.trackingNumber) {
@@ -175,6 +177,8 @@ async function applyOutcome(db: Database, claimed: ClaimedParcel, outcome: Outco
       failures += 1;
       if (failures >= PARCEL_MAX_CHECK_FAILURES) status = "unknown";
     }
+    // No carrier (an e-mail's number of unknown format): nobody to ask, `unknown` as when she pastes one.
+    if (!claimed.carrier) status = "unknown";
 
     await tx
       .update(schema.parcels)
@@ -182,9 +186,13 @@ async function applyOutcome(db: Database, claimed: ClaimedParcel, outcome: Outco
         ...values,
         status,
         checkFailures: failures,
-        nextCheckAt: nextParcelCheckClamped(status, now, parcel.checkUntil),
+        // Without a carrier there is nobody to ask: no more checks (a correction sets its next check).
+        nextCheckAt: claimed.carrier ? nextParcelCheckClamped(status, now, parcel.checkUntil) : null,
       })
       .where(eq(schema.parcels.id, parcel.id));
+
+    // Settled once delivered, unknown or at the end of its tracking: the order may now be received.
+    const settled = await settleOrder(tx, order, now);
 
     const kind = NOTIFIED[status];
     if (kind && outcome.kind === "answer") {
@@ -197,7 +205,8 @@ async function applyOutcome(db: Database, claimed: ClaimedParcel, outcome: Outco
         wanted = settings?.on ?? DEFAULT_ALERT_SETTINGS.parcelOutForDelivery;
       }
       if (wanted) {
-        // Once per parcel and kind (`alert_events_parcel_kind_idx`).
+        // Once per parcel and kind (`alert_events_parcel_kind_idx`). A delivery keeps what it brought: its items
+        // moved to « Reçu », or how many of the order's parcels are still on their way.
         await tx
           .insert(schema.alertEvents)
           .values({
@@ -208,29 +217,52 @@ async function applyOutcome(db: Database, claimed: ClaimedParcel, outcome: Outco
             parcelId: parcel.id,
             shopId: order.shopId,
             sendAfter: nextSendAt(now),
+            ...(kind === "parcel_delivered"
+              ? { itemsReceived: settled.moved > 0, parcelsLeft: settled.inTransit }
+              : {}),
           })
           .onConflictDoNothing();
       }
     }
-
-    if (status !== "delivered") return false;
-    await receiveItems(tx, order, values.deliveredAt ?? now, now);
-    return true;
+    return status === "delivered";
   });
 }
 
+/** A parcel done with: delivered, `unknown` (the carrier gave up on it, or we did), or at the end of its tracking. */
+const isSettled = (parcel: { status: string; checkUntil: Date }, now: Date) =>
+  parcel.status === "delivered" || parcel.status === "unknown" || parcel.checkUntil.getTime() <= now.getTime();
+
 /**
- * The delivery: her items of the order's lines still « Commandé » (not in the trash) move to « Reçu » (`owned`, the
- * stage « Je l'ai reçu » gives, with its history row on the delivery date), with the return deadline (the shop's
- * delay, 14 days without one). An item already received without a deadline gets it; any other stage is left alone.
- * Products are not needed (an article without a product moves the same).
+ * Receives the order once all its parcels are settled and one at least was delivered (none delivered: the J+10
+ * question of Task 6 takes over): her items of the order's lines still « Commandé » (not in the trash) move to « Reçu »
+ * (`owned`, the stage « Je l'ai reçu » gives, with its history row on the delivery date), with the return deadline
+ * counted from the latest delivery (the shop's delay, 14 days without one). An item already received without a
+ * deadline gets it; any other stage (returned, sold…) is left alone. Products are not needed (an article without a
+ * product moves the same). Run after every check of one of its parcels (under the order's lock), so a late parcel
+ * turning `unknown` or reaching its end never blocks the others; idempotent.
+ *
+ * Returns how many items moved and how many of its parcels are still on their way.
  */
-async function receiveItems(
+async function settleOrder(
   tx: Tx,
   order: { id: string; userId: string; shopId: string | null },
-  deliveredAt: Date,
   now: Date,
-) {
+): Promise<{ moved: number; inTransit: number }> {
+  const parcels = await tx
+    .select({
+      status: schema.parcels.status,
+      checkUntil: schema.parcels.checkUntil,
+      deliveredAt: schema.parcels.deliveredAt,
+    })
+    .from(schema.parcels)
+    .where(eq(schema.parcels.orderId, order.id));
+  const inTransit = parcels.filter((p) => !isSettled(p, now)).length;
+  const deliveries = parcels.flatMap((p) =>
+    p.status === "delivered" && p.deliveredAt ? [p.deliveredAt.getTime()] : [],
+  );
+  if (inTransit > 0 || deliveries.length === 0) return { moved: 0, inTransit };
+  const deliveredAt = new Date(Math.max(...deliveries));
+
   const [shop] = order.shopId
     ? await tx
         .select({ returnDays: schema.shops.returnDays })
@@ -255,6 +287,7 @@ async function receiveItems(
     )
     .orderBy(asc(schema.items.id))
     .for("update");
+  let moved = 0;
   for (const item of items) {
     if (item.stage === "ordered") {
       await tx
@@ -270,6 +303,7 @@ async function receiveItems(
         amountCents: null,
         spentCents: null,
       });
+      moved += 1;
     } else if (item.returnDeadline === null) {
       await tx
         .update(schema.items)
@@ -277,6 +311,7 @@ async function receiveItems(
         .where(eq(schema.items.id, item.id));
     }
   }
+  return { moved, inTransit };
 }
 
 /**
@@ -300,7 +335,13 @@ export async function checkDueParcels(
     if (batch.length === 0) break;
     for (const parcel of batch) {
       const outcome = await askCarrier(deps.connectors, parcel);
-      if (await applyOutcome(deps.db, parcel, outcome, now)) delivered += 1;
+      try {
+        if (await applyOutcome(deps.db, parcel, outcome, now)) delivered += 1;
+      } catch (error) {
+        // One parcel's failure (a deadlock, the database busy) does not stop the sweep: it keeps its lease and comes
+        // back after it.
+        console.error(`${PARCEL_CHECK_QUEUE}: parcel not updated (${error instanceof Error ? error.name : "error"})`);
+      }
       checked += 1;
     }
   }

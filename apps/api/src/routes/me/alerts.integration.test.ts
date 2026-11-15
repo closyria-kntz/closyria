@@ -312,6 +312,47 @@ describe("/api/me/alerts", () => {
     });
   });
 
+  it("names a parcel's alert by the order's shop, else by the shop name she typed (Après la commande)", async () => {
+    const a = await account();
+    const { profileId } = await wish(a.cookie);
+    const known = await shop({ name: "Maison Lune" });
+    const parcelAlert = async (orderValues: { shopId?: string; shopName?: string }) => {
+      const [order] = await t.db
+        .insert(schema.orders)
+        .values({
+          userId: a.userId,
+          profileId,
+          status: "confirmed",
+          source: "manual",
+          parseMethod: "manual",
+          ...orderValues,
+        })
+        .returning();
+      const [parcel] = await t.db
+        .insert(schema.parcels)
+        .values({
+          orderId: order?.id as string,
+          trackingNumber: `P${++counter}`,
+          status: "delivered",
+          checkUntil: new Date(),
+        })
+        .returning();
+      await event({
+        userId: a.userId,
+        kind: "parcel_delivered",
+        orderId: order?.id as string,
+        parcelId: parcel?.id as string,
+        shopId: orderValues.shopId ?? null,
+      });
+    };
+    await parcelAlert({ shopId: known.id });
+    await parcelAlert({ shopName: "Atelier Rose" });
+    await parcelAlert({});
+    const { alerts } = await page(a.cookie);
+    expect(alerts.map((x) => x.kind)).toEqual(Array(3).fill("parcel_delivered"));
+    expect(alerts.map((x) => x.shopName ?? "-").sort()).toEqual(["-", "Atelier Rose", "Maison Lune"]);
+  });
+
   it("never shows another person's alerts", async () => {
     const a = await account();
     const b = await account();

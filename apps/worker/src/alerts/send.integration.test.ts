@@ -8,6 +8,7 @@ import {
   ALERT_SEND_QUEUE,
   ALERT_SEND_QUEUE_OPTIONS,
   alertSendHandler,
+  parcelDeliveredBody,
   parcelTitle,
   planAlertSends,
   sendAlert,
@@ -478,12 +479,20 @@ describe("sendAlert", () => {
         .returning();
       return { orderId: order?.id as string, parcelId: row?.id as string };
     };
-    const parcelEvent = async (kind: string, ids: { orderId: string; parcelId: string }) =>
-      event(her, null, { kind, ...ids, shopId, sendAfter: afternoon });
+    const parcelEvent = async (
+      kind: string,
+      ids: { orderId: string; parcelId: string },
+      extra: { itemsReceived?: boolean; parcelsLeft?: number } = {},
+    ) => event(her, null, { kind, ...ids, shopId, sendAfter: afternoon, ...extra });
     const { push, calls } = fakePush();
 
     expect(
-      await sendAlert({ db, push }, await parcelEvent("parcel_delivered", await parcel("delivered")), afternoon, once),
+      await sendAlert(
+        { db, push },
+        await parcelEvent("parcel_delivered", await parcel("delivered"), { itemsReceived: true, parcelsLeft: 0 }),
+        afternoon,
+        once,
+      ),
     ).toBe("sent");
     expect(calls.at(-1)?.message).toEqual({
       title: "Ton colis Maison Lune est arrivé",
@@ -533,7 +542,7 @@ describe("sendAlert", () => {
     expect(calls.at(-1)?.message.title).toBe("Ton colis Atelier Rose est arrivé");
     const bare = await parcel("delivered", { shopId: null });
     await sendAlert({ db, push }, await parcelEvent("parcel_delivered", bare), afternoon, once);
-    expect(calls.at(-1)?.message.title).toBe("Ton colis est arrivé");
+    expect(calls.at(-1)?.message).toMatchObject({ title: "Ton colis est arrivé", body: "" });
 
     // Her setting turned off since the event was born: not sent.
     await db
@@ -554,6 +563,10 @@ describe("sendAlert", () => {
     expect(parcelTitle("parcel_delivered", "Maison Lune")).toBe("Ton colis Maison Lune est arrivé");
     expect(parcelTitle("parcel_pickup_ready", null)).toBe("Ton colis est disponible en point relais");
     expect(parcelTitle("parcel_out_for_delivery", "  ")).toBe("Ton colis est en cours de livraison");
+    expect(parcelDeliveredBody(true, 0)).toBe("Ses articles sont dans « Reçu ».");
+    expect(parcelDeliveredBody(false, 2)).toBe("Encore 2 colis en route.");
+    expect(parcelDeliveredBody(false, 0)).toBe("");
+    expect(parcelDeliveredBody(null, null)).toBe("");
   });
 
   it("an event already handled is left alone", async () => {

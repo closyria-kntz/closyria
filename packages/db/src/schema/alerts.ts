@@ -107,6 +107,12 @@ export const alertEvents = pgTable(
     orderId: uuid("order_id").references(() => orders.id, { onDelete: "cascade" }),
     /** Parcel kinds: the parcel (gone with it); with `order_id` its order. */
     parcelId: uuid("parcel_id").references(() => parcels.id, { onDelete: "cascade" }),
+    /**
+     * parcel_delivered: whether this delivery moved her items to « Reçu » (the order's last parcel), else how many of
+     * the order's parcels were still on their way (« Encore {n} colis en route. »).
+     */
+    itemsReceived: boolean("items_received"),
+    parcelsLeft: integer("parcels_left"),
     createdAt: createdAt(),
     /** Immediate kinds: not before this (quiet hours). */
     sendAfter: timestamp("send_after", { withTimezone: true }),
@@ -138,6 +144,7 @@ export const alertEvents = pgTable(
       sql`NOT (${oneOf(t.kind, ITEM_ALERT_KINDS)}) OR (${t.itemId} IS NOT NULL AND ${t.profileId} IS NOT NULL AND ${t.productId} IS NOT NULL)`,
     ),
     check("alert_events_order_check", sql`${t.kind} <> 'order_received' OR ${t.orderId} IS NOT NULL`),
+    check("alert_events_parcels_left_check", sql`${t.parcelsLeft} IS NULL OR ${t.parcelsLeft} >= 0`),
     check(
       "alert_events_parcel_check",
       sql`NOT (${oneOf(t.kind, PARCEL_ALERT_KINDS)}) OR (${t.parcelId} IS NOT NULL AND ${t.orderId} IS NOT NULL)`,

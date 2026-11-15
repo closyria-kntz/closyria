@@ -102,6 +102,16 @@ export function parcelTitle(kind: ParcelAlertKind, shop: string | null): string 
 
 const isParcelKind = (kind: string): kind is ParcelAlertKind => kind in PARCEL_WORDS;
 
+/**
+ * A delivery's body: « Ses articles sont dans « Reçu ». » only when that delivery moved them; else « Encore {n} colis
+ * en route. » while some of the order's parcels are on their way; else nothing.
+ */
+export function parcelDeliveredBody(itemsReceived: boolean | null, parcelsLeft: number | null): string {
+  if (itemsReceived) return PARCEL_WORDS.parcel_delivered.body;
+  if (parcelsLeft && parcelsLeft > 0) return `Encore ${parcelsLeft} colis en route.`;
+  return "";
+}
+
 /** The item's sheet, in the item's profile. */
 export const itemUrl = alertItemHref;
 
@@ -202,6 +212,8 @@ export async function sendAlert(
       sizeBackOn: schema.alertSettings.sizeBack,
       targetPriceOn: schema.alertSettings.targetPrice,
       parcelOutForDeliveryOn: schema.alertSettings.parcelOutForDelivery,
+      itemsReceived: schema.alertEvents.itemsReceived,
+      parcelsLeft: schema.alertEvents.parcelsLeft,
     })
     .from(schema.alertEvents)
     .innerJoin(schema.user, eq(schema.user.id, schema.alertEvents.userId))
@@ -298,7 +310,9 @@ export async function sendAlert(
       (event.parcelOutForDeliveryOn ?? DEFAULT_ALERT_SETTINGS.parcelOutForDelivery);
     if (parcel?.status === words.status && wanted) {
       // TODO(Task 7): lead to the order (« Mes commandes ») once the page exists.
-      message = { title: parcelTitle(event.kind, parcel.shopName), body: words.body, url: ALERTS_PAGE_HREF };
+      const body =
+        event.kind === "parcel_delivered" ? parcelDeliveredBody(event.itemsReceived, event.parcelsLeft) : words.body;
+      message = { title: parcelTitle(event.kind, parcel.shopName), body, url: ALERTS_PAGE_HREF };
     }
   }
   if (!message || !push || event.isAnonymous === true) return skip();

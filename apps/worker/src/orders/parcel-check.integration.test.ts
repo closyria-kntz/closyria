@@ -140,6 +140,21 @@ async function order(
   return { orderId, parcelId: parcel?.id as string, trackingNumber: parcel?.trackingNumber as string };
 }
 
+async function addParcel(orderId: string, values: { status?: ParcelStatus; checkUntil?: Date } = {}) {
+  const [row] = await handle.db
+    .insert(schema.parcels)
+    .values({
+      orderId,
+      carrier: "gls",
+      trackingNumber: `${20_000_000 + ++counter}`,
+      status: values.status ?? "in_transit",
+      nextCheckAt: new Date(now.getTime() - HOUR),
+      checkUntil: values.checkUntil ?? new Date(now.getTime() + 20 * DAY),
+    })
+    .returning();
+  return row?.id as string;
+}
+
 const parcelRow = async (id: string) =>
   (await handle.db.select().from(schema.parcels).where(eq(schema.parcels.id, id)))[0];
 const itemRow = async (id: string) => (await handle.db.select().from(schema.items).where(eq(schema.items.id, id)))[0];
@@ -206,6 +221,8 @@ describe("parcel-check: delivery", () => {
       shopId,
       profileId: who.profileId,
       status: "pending",
+      itemsReceived: true,
+      parcelsLeft: 0,
     });
     expect(alerts[0]?.sendAfter?.toISOString()).toBe(nextSendAt(now).toISOString());
 
@@ -262,6 +279,106 @@ describe("parcel-check: delivery", () => {
     await checkOnly(parcelId, connectorsFor(connector));
     expect((await parcelRow(parcelId))?.deliveredAt?.toISOString()).toBe(now.toISOString());
     expect((await stageEvents(itemId))[0]?.at.toISOString()).toBe(now.toISOString());
+  });
+});
+
+describe("parcel-check: an order in several parcels", () => {
+  const delivered = (at: Date) => found("delivered", { deliveredAt: at });
+  const due = (id: string) =>
+    handle.db.update(schema.parcels).set({ nextCheckAt: now }).where(eq(schema.parcels.id, id));
+
+  it("the first parcel delivered moves nothing; the last moves everything, the deadline from the last", async () => {
+    const who = await person();
+    const shopId = await shop(10);
+    const items = [await item(who), await item(who, { product: false })];
+    const { orderId, parcelId: first } = await order(who, { shopId, itemIds: items });
+    const second = await addParcel(orderId);
+
+    await checkOnly(first, connectorsFor(scripted(() => delivered(new Date("2026-11-12T10:00:00Z"))).connector));
+    for (const id of items) expect(await itemRow(id)).toMatchObject({ stage: "ordered", returnDeadline: null });
+    expect((await alertsOf(who.userId)).map((a) => [a.parcelId, a.itemsReceived, a.parcelsLeft])).toEqual([
+      [first, false, 1],
+    ]);
+
+    const last = new Date("2026-11-13T22:30:00Z"); // the 13th, 23:30 in Paris
+    await checkOnly(second, connectorsFor(scripted(() => delivered(last)).connector));
+    for (const id of items) {
+      expect(await itemRow(id)).toMatchObject({ stage: "owned", returnDeadline: "2026-11-23" });
+      expect((await stageEvents(id)).map((e) => e.at.toISOString())).toEqual([last.toISOString()]);
+    }
+    const alerts = await alertsOf(who.userId);
+    expect(alerts.find((a) => a.parcelId === second)).toMatchObject({ itemsReceived: true, parcelsLeft: 0 });
+    expect(alerts).toHaveLength(2);
+
+    // Processed again, both: nothing moves twice, nothing notified twice.
+    for (const id of [first, second]) {
+      await handle.db
+        .update(schema.parcels)
+        .set({ status: "in_transit", nextCheckAt: now })
+        .where(eq(schema.parcels.id, id));
+      await checkOnly(id, connectorsFor(scripted(() => delivered(last)).connector));
+    }
+    for (const id of items) expect(await stageEvents(id)).toHaveLength(1);
+    expect(await alertsOf(who.userId)).toHaveLength(2);
+  });
+
+  it("one delivered and one turning unknown: everything moves when the late one gives up", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const who = await person();
+    const itemId = await item(who);
+    const returned = await item(who, { stage: "returned" });
+    const { orderId, parcelId: first } = await order(who, { itemIds: [itemId, returned] });
+    const late = await addParcel(orderId, { status: "in_transit" });
+    await checkOnly(first, connectorsFor(scripted(() => delivered(new Date("2026-11-13T09:00:00Z"))).connector));
+    expect((await itemRow(itemId))?.stage).toBe("ordered");
+
+    for (let i = 1; i <= 3; i++) {
+      await due(late);
+      await checkOnly(late, connectorsFor(failing()));
+      expect((await itemRow(itemId))?.stage).toBe(i < 3 ? "ordered" : "owned");
+    }
+    expect(await parcelRow(late)).toMatchObject({ status: "unknown" });
+    // From the delivered one (the 13th, Paris) + 14 days; a returned item is left alone.
+    expect(await itemRow(itemId)).toMatchObject({ returnDeadline: "2026-11-27" });
+    expect(await itemRow(returned)).toMatchObject({ stage: "returned", returnDeadline: null });
+    warn.mockRestore();
+  });
+
+  it("a late parcel at the end of its tracking settles the order too", async () => {
+    const who = await person();
+    const itemId = await item(who);
+    const { orderId, parcelId: first } = await order(who, { itemIds: [itemId] });
+    const late = await addParcel(orderId, { checkUntil: new Date(now.getTime() + HOUR) });
+    await checkOnly(first, connectorsFor(scripted(() => delivered(new Date("2026-11-13T09:00:00Z"))).connector));
+    expect((await itemRow(itemId))?.stage).toBe("ordered");
+    await due(late);
+    await checkOnly(late, connectorsFor(scripted(() => found("in_transit")).connector), new Date(now.getTime() + HOUR));
+    expect((await itemRow(itemId))?.stage).toBe("owned");
+  });
+
+  it("a delivered parcel checked again settles the order once the other one is unknown", async () => {
+    const who = await person();
+    const itemId = await item(who);
+    const { orderId, parcelId: first } = await order(who, { itemIds: [itemId] });
+    const late = await addParcel(orderId);
+    await checkOnly(first, connectorsFor(scripted(() => delivered(new Date("2026-11-13T09:00:00Z"))).connector));
+    await handle.db.update(schema.parcels).set({ status: "unknown" }).where(eq(schema.parcels.id, late));
+    await due(first);
+    const { connector, asked } = scripted(() => found("in_transit"));
+    await checkOnly(first, connectorsFor(connector));
+    expect((await itemRow(itemId))?.stage).toBe("owned");
+    expect(await parcelRow(first)).toMatchObject({ status: "delivered", nextCheckAt: null });
+    expect(asked).toHaveLength(1);
+  });
+
+  it("nothing delivered: nothing moves, even when every parcel is settled (the J+10 question takes over)", async () => {
+    const who = await person();
+    const itemId = await item(who);
+    const { parcelId } = await order(who, { itemIds: [itemId], checkFailures: 2 });
+    await checkOnly(parcelId, connectorsFor(scripted(() => ({ kind: "not_found" })).connector));
+    expect(await parcelRow(parcelId)).toMatchObject({ status: "unknown" });
+    expect((await itemRow(itemId))?.stage).toBe("ordered");
+    expect(await alertsOf(who.userId)).toHaveLength(0);
   });
 });
 
@@ -352,20 +469,23 @@ describe("parcel-check: failures stay silent (RF 4)", () => {
     expect(await parcelRow(parcelId)).toMatchObject({ status: "unknown", checkFailures: 3 });
   });
 
-  it("without the connector's key or a carrier, the parcel waits: no call, no failure, checked later", async () => {
+  it("without the connector's key the parcel waits (checked later); without a carrier it is unknown, no longer checked", async () => {
     const who = await person();
     const noKey = await order(who, { carrier: "colissimo" });
-    const noCarrier = await order(who, { carrier: null, parcelStatus: "unknown" });
+    const noCarrier = await order(who, { carrier: null });
     const { connector, asked } = scripted(() => found("delivered"));
     await checkOnly(noKey.parcelId, connectorsFor(connector, null));
     await checkOnly(noCarrier.parcelId, connectorsFor(connector, connector));
     expect(asked).toHaveLength(0);
-    for (const id of [noKey.parcelId, noCarrier.parcelId]) {
-      const parcel = await parcelRow(id);
-      expect(parcel?.checkFailures).toBe(0);
-      expect(parcel?.nextCheckAt?.toISOString()).toBe(new Date(now.getTime() + 6 * HOUR).toISOString());
-    }
-    expect((await parcelRow(noKey.parcelId))?.status).toBe("pending");
+    expect(await parcelRow(noKey.parcelId)).toMatchObject({ status: "pending", checkFailures: 0 });
+    expect((await parcelRow(noKey.parcelId))?.nextCheckAt?.toISOString()).toBe(
+      new Date(now.getTime() + 6 * HOUR).toISOString(),
+    );
+    expect(await parcelRow(noCarrier.parcelId)).toMatchObject({
+      status: "unknown",
+      checkFailures: 0,
+      nextCheckAt: null,
+    });
   });
 
   it("La Poste's carriers go to La Poste, the others to the aggregator", async () => {
@@ -434,6 +554,40 @@ describe("parcel-check: which parcels", () => {
       new Date(now.getTime() + 60_000).toISOString(),
     );
     expect((await itemRow(itemId))?.stage).toBe("ordered");
+  });
+});
+
+describe("parcel-check: concurrent sweeps", () => {
+  it("never claims a parcel twice", async () => {
+    const who = await person();
+    const ids: string[] = [];
+    for (let i = 0; i < 20; i++) ids.push((await order(who)).parcelId);
+    const claims = await Promise.all(Array.from({ length: 4 }, () => claimDueParcels(handle.db, now, 8, ids)));
+    const claimed = claims.flat().map((p) => p.id);
+    expect(new Set(claimed).size).toBe(claimed.length);
+    expect(claimed.sort()).toEqual([...ids].sort());
+  });
+
+  it("one parcel that cannot be updated does not stop the sweep", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const who = await person();
+    const a = await order(who);
+    const b = await order(who);
+    // The first answer is unreadable by the database (an event label too long for its check).
+    let calls = 0;
+    const { connector } = scripted(() =>
+      ++calls === 1
+        ? found("in_transit", { events: [{ at: now, status: "in_transit", label: "x".repeat(500) }] })
+        : found("in_transit"),
+    );
+    const result = await checkDueParcels({ db: handle.db, connectors: connectorsFor(connector) }, now, {
+      onlyParcelIds: [a.parcelId, b.parcelId],
+    });
+    expect(result.checked).toBe(2);
+    expect(error.mock.calls).toEqual([["parcel-check: parcel not updated (Error)"]]);
+    const statuses = [(await parcelRow(a.parcelId))?.status, (await parcelRow(b.parcelId))?.status].sort();
+    expect(statuses).toEqual(["in_transit", "pending"]);
+    error.mockRestore();
   });
 });
 

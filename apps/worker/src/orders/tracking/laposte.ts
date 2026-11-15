@@ -80,7 +80,16 @@ export function laPosteConnector(options: { apiKey: string; fetch: FetchLike }):
         const label = eventLabel(event.label);
         if (at && label) events.push({ at, status: laPosteStatus(event.code), label });
       }
-      const latest = shipment.event[0];
+      // The most recent step by its date (the documentation lists them newest first; not relied upon), else the first.
+      let latest = shipment.event[0];
+      let latestAt = parseCarrierDate(latest?.date)?.getTime() ?? Number.NEGATIVE_INFINITY;
+      for (const event of shipment.event) {
+        const at = parseCarrierDate(event.date)?.getTime();
+        if (at !== undefined && at > latestAt) {
+          latest = event;
+          latestAt = at;
+        }
+      }
       let status: ParcelStatus = latest ? laPosteStatus(latest.code) : "pending";
       if (shipment.isFinal === true && status !== "exception") status = "delivered";
       const deliveredAt =
