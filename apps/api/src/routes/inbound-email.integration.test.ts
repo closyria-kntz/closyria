@@ -85,6 +85,7 @@ beforeAll(async () => {
         inbound: {
           secret: SECRET,
           domain: INBOX_DOMAIN,
+          autoForward: true,
           store: inboundStore,
           checkSender,
           queue: {
@@ -436,11 +437,13 @@ describe("Gmail's forwarding confirmation", () => {
     expect(parsed).toEqual([]);
     expect(await (await call("GET", "/api/me/order-inbox", cookie)).json()).toEqual({
       address,
+      autoForward: true,
       pendingGmailCode: "185412963",
     });
     clock.now = new Date(NOW.getTime() + 24 * 3_600_000 + 1);
     expect(await (await call("GET", "/api/me/order-inbox", cookie)).json()).toEqual({
       address,
+      autoForward: true,
       pendingGmailCode: null,
     });
   });
@@ -453,6 +456,7 @@ describe("Gmail's forwarding confirmation", () => {
     expect(await res.json()).toEqual({ result: "ignored" });
     expect(await (await call("GET", "/api/me/order-inbox", cookie)).json()).toEqual({
       address,
+      autoForward: true,
       pendingGmailCode: null,
     });
   });
@@ -532,6 +536,29 @@ describe("/api/me/order-inbox", () => {
     expect((await call("GET", "/api/me/order-inbox", undefined)).status).toBe(401);
   });
 
+  it("automatic forwarding off (or no reception): says so, and never shows Gmail's code", async () => {
+    const session = await off.signIn();
+    await off.db
+      .update(schema.user)
+      .set({ isAnonymous: false, name: "Marie", email: mailbox("gmail"), emailVerified: true })
+      .where(eq(schema.user.id, session.userId));
+    const created = (await (
+      await off.app.request("/api/me/order-inbox", {
+        method: "POST",
+        headers: { origin: BASE_URL, cookie: session.cookie },
+      })
+    ).json()) as OrderInboxView;
+    expect(created).toMatchObject({ autoForward: false, pendingGmailCode: null });
+    await off.db
+      .update(schema.orderInboxes)
+      .set({ gmailCode: "185412963", gmailCodeAt: new Date() }) // this harness keeps the real clock
+      .where(eq(schema.orderInboxes.userId, session.userId));
+    const read = await off.app.request("/api/me/order-inbox", {
+      headers: { origin: BASE_URL, cookie: session.cookie },
+    });
+    expect(await read.json()).toEqual({ address: created.address, autoForward: false, pendingGmailCode: null });
+  });
+
   it("has none at first, then `{first name}-{4 characters}` on the environment's domain", async () => {
     const session = await t.signIn();
     await t.db
@@ -540,6 +567,7 @@ describe("/api/me/order-inbox", () => {
       .where(eq(schema.user.id, session.userId));
     expect(await (await call("GET", "/api/me/order-inbox", session.cookie)).json()).toEqual({
       address: null,
+      autoForward: true,
       pendingGmailCode: null,
     });
     const created = (await (await call("POST", "/api/me/order-inbox", session.cookie)).json()) as OrderInboxView;
@@ -566,6 +594,7 @@ describe("/api/me/order-inbox", () => {
     expect(current).not.toBe(former);
     expect(await (await call("GET", "/api/me/order-inbox", cookie)).json()).toEqual({
       address: current,
+      autoForward: true,
       pendingGmailCode: null,
     });
 

@@ -37,7 +37,10 @@ export function lineDraftOf(line: OrderLineView): LineDraft {
   };
 }
 
-export type LinesCheck = { ok: true; lines: OrderLineInput[] } | { ok: false; error: "name" | "price" };
+export type LinesCheck =
+  | { ok: true; lines: OrderLineInput[] }
+  /** `index`: the line at fault, so the form ties the message to its field. */
+  | { ok: false; error: "name" | "price"; index: number };
 
 /**
  * Her articles as the API takes them: a name each, a quantity of 1 to 99 (1 when unreadable), a price in euros or
@@ -47,9 +50,9 @@ export function checkLines(drafts: readonly LineDraft[], currencies: readonly (s
   const lines: OrderLineInput[] = [];
   for (const [index, draft] of drafts.entries()) {
     const name = draft.name.trim();
-    if (!name) return { ok: false, error: "name" };
+    if (!name) return { ok: false, error: "name", index };
     const price = parsePriceCents(draft.price);
-    if (!price.ok) return { ok: false, error: "price" };
+    if (!price.ok) return { ok: false, error: "price", index };
     const quantity = Number.parseInt(draft.quantity, 10);
     const cents = price.cents ?? null;
     lines.push({
@@ -69,3 +72,10 @@ export function lineHref(line: Pick<OrderLineView, "itemId" | "productId">): str
   if (line.productId) return `/produits/${line.productId}`;
   return line.itemId ? bareItemHref(line.itemId) : null;
 }
+
+/**
+ * The article « Ajouter un numéro de suivi » goes through (the API joins the number to its order): one still
+ * « Commandé ». Once received (« Oui », a delivery) or none left, the action is not offered.
+ */
+export const trackableItem = (order: { lines: readonly Pick<OrderLineView, "itemId" | "itemStage">[] }) =>
+  order.lines.find((l) => l.itemId !== null && l.itemStage === "ordered")?.itemId ?? null;

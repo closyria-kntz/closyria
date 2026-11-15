@@ -50,7 +50,12 @@ export function InstagramForm() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [action, setAction] = useState<Action>("wish");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  /** The message, and the field it is about (tied by aria-describedby). */
+  const [error, setErrorState] = useState<{ text: string; field: "name" | "price" | null } | null>(null);
+  const setError = (text: string | null, field: "name" | "price" | null = null) =>
+    setErrorState(text === null ? null : { text, field });
+  const describe = (field: "name" | "price") =>
+    error?.field === field ? { "aria-invalid": true as const, "aria-describedby": ids.error } : {};
 
   const header = (
     <div className="flex flex-col gap-space-2">
@@ -73,9 +78,9 @@ export function InstagramForm() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!name.trim()) return setError(t("errors.name"));
+    if (!name.trim()) return setError(t("errors.name"), "name");
     const paid = action === "ordered" ? parsePriceCents(price) : { ok: true as const, cents: undefined };
-    if (!paid.ok) return setError(t("errors.price"));
+    if (!paid.ok) return setError(t("errors.price"), "price");
     setBusy(true);
     setError(null);
     const result = await createInstagramItem({
@@ -137,7 +142,7 @@ export function InstagramForm() {
             value={name}
             maxLength={MAX_ITEM_NAME}
             required
-            aria-invalid={error === t("errors.name") || undefined}
+            {...describe("name")}
             onChange={(e) => setName(e.target.value)}
             className={`${inputClass} min-h-touch-target`}
           />
@@ -177,6 +182,7 @@ export function InstagramForm() {
                 value={price}
                 inputMode="decimal"
                 onChange={(e) => setPrice(e.target.value)}
+                {...describe("price")}
                 className={`${inputClass} min-h-touch-target`}
               />
             </span>
@@ -209,7 +215,7 @@ export function InstagramForm() {
         </span>
         {error && (
           <p id={ids.error} role="alert" className="text-sm text-danger">
-            {error}
+            {error.text}
           </p>
         )}
         <button type="submit" disabled={busy} className={`${primaryButtonClass} min-h-touch-target self-start`}>

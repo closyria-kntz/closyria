@@ -443,11 +443,14 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   « Compte » ; marquée sous « Mes articles » dans le menu), fiche d'un article sans produit `/articles/{id}` (un article
   avec produit y est renvoyé vers sa fiche produit), formulaire Instagram `/ajouter/instagram?lien=…`.
 - **Adresse** : créée à la première ouverture de la page (pas de bouton « Créer » de plus) ; « Copier » ; « Changer
-  d'adresse » demande d'abord (« L'ancienne adresse cessera aussitôt de fonctionner. »). Le code de confirmation Gmail
-  (`pendingGmailCode`) s'affiche sous l'adresse et dans l'étape Gmail de l'aide. Aide pas à pas par messagerie (Gmail,
-  Outlook, iCloud), un e-mail à la fois puis automatiquement ; la règle de §10.1 y est dite (« Transférer », jamais Cci,
-  alias ni « redirection ») ; iCloud : transfert un par un seulement (ses règles changent l'expéditeur). Invitée : « Crée
-  ton compte pour suivre tes commandes ».
+  d'adresse » demande d'abord (« L'ancienne adresse cessera aussitôt de fonctionner. »). Aide par messagerie (Gmail,
+  Outlook, iCloud) ; la règle de §10.1 y est dite (« Transférer », jamais Cci, alias ni « redirection »).
+  **Transfert automatique (arbitrage de la relecture n°1)** : `GET/POST /api/me/order-inbox` disent `autoForward`
+  (`INBOUND_AUTOFORWARD=on` et la réception active). Coupé (par défaut) : seules les étapes « Transférer » un e-mail à
+  la fois sont montrées, pour les trois messageries, et le code Gmail n'est jamais donné (`pendingGmailCode` nul).
+  Activé : les étapes automatiques s'ajoutent (filtre Gmail, règle Outlook ; iCloud : « transfère un par un ») et le
+  code de confirmation Gmail s'affiche sous l'adresse et dans l'étape Gmail. Invitée : « Crée ton compte pour suivre
+  tes commandes ».
 - **À valider** (Accueil, en tête, et « Mes commandes ») : carte rose (comme la une) « Commande reçue de {boutique} »,
   articles (taille, couleur, quantité, prix d'une pièce), colis, « C'est bon » / « Corriger » (formulaire en place :
   boutique et articles) / « Ce n'est pas une commande ». Les e-mails illisibles ont leur carte « On n'a pas su lire cet
@@ -480,5 +483,7 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   commandé », nom, boutique ou marque, taille, prix payé seulement si commandé, photo de sa galerie, notes) ; le bouton
   est désactivé pendant l'envoi ; « Annuler » dans le bandeau ; la fiche de l'article s'ouvre ensuite avec « Voir la
   publication Instagram ».
-- **À trancher** : l'aide Gmail décrit le transfert automatique (filtre), mais `INBOUND_AUTOFORWARD` est coupé par
-  défaut (§10.1) : tant qu'il l'est, ces e-mails sont ignorés. Retirer l'étape ou activer le réglage après l'essai réel.
+- **Relecture n°1** : la vue de ses amies ne montre que la marque du catalogue (jamais `brand_override`, avec ou sans
+  produit) ; chaque ligne d'une commande dit l'étape de son article (`itemStage`) : « Ajouter un numéro de suivi » n'est
+  proposé que par un article encore « Commandé » (l'API répond 409 `item_not_ordered` sinon, dit en clair) ; les
+  messages d'erreur des formulaires sont reliés à leur champ.

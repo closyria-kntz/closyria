@@ -1,5 +1,5 @@
 import { eq, schema } from "@closyria/db";
-import type { HomeView, ItemView, OrderList, OrderView, WishlistView } from "@closyria/shared";
+import type { HomeView, ItemView, OrderList, OrderView, OwnerGroupOrder, WishlistView } from "@closyria/shared";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { BASE_URL, createCatalogHarness } from "../../catalog/test-app";
 
@@ -319,13 +319,90 @@ describe("articles after their order", () => {
     const byShop = await json<{ items: ItemView[] }>(await call("GET", `/api/me/items?shop=${shopId}`, a.cookie), 200);
     expect(byShop.items.map((i) => i.id)).toEqual([itemId]);
 
-    // Her friends see it too: her name for it and the order's shop, no shop link, no private photo.
+    // Her own brand for an article stays hers: neither the bare article's nor a product's without a catalogue brand.
+    await t.db.update(schema.items).set({ brandOverride: "Maison Rosa" }).where(eq(schema.items.id, itemId));
+    const [product] = await t.db
+      .insert(schema.products)
+      .values({ shopId, canonicalUrl: `https://atelier-nuit.test/p/${++counter}`, name: "Robe Lune", brand: null })
+      .returning();
+    const [withProduct] = await t.db
+      .insert(schema.items)
+      .values({
+        userId: a.userId,
+        profileId: a.moi,
+        productId: product?.id as string,
+        stage: "spotted",
+        brandOverride: "Ma marque à moi",
+      })
+      .returning();
+    await json(await call("POST", `/api/me/wishlists/${list.id}/items`, a.cookie, { itemId: withProduct?.id }), 200);
+
+    // Her friends see it too: her name for it and the order's shop, no brand, no shop link, no private photo.
     const share = await json<{ url: string }>(await call("POST", `/api/me/wishlists/${list.id}/share`, a.cookie), 200);
     const shared = await json<{
       items: { itemId: string; name: string | null; shopName: string; url: string; imageUrl: string | null }[];
     }>(await call("GET", `/api/shared/${share.url.slice("/l/".length)}`, undefined), 200);
     expect(shared.items).toEqual([
-      expect.objectContaining({ itemId, name: "Robe Iris", shopName: "Atelier Nuit", url: "", imageUrl: null }),
+      expect.objectContaining({
+        itemId,
+        name: "Robe Iris",
+        brand: null,
+        shopName: "Atelier Nuit",
+        url: "",
+        imageUrl: null,
+      }),
+      expect.objectContaining({ itemId: withProduct?.id, name: "Robe Lune", brand: null }),
     ]);
+  });
+
+  it("puts an article without a product in a group order of its order's shop (no sizes, no photo)", async () => {
+    const a = await account();
+    const shopId = await shop("Atelier Nuit");
+    const { itemId } = await orderWithParcel(a, { carrier: "colissimo", status: "pending" }, shopId);
+    const list = await json<WishlistView>(
+      await call("POST", "/api/me/wishlists", a.cookie, { name: "Commande des copines" }),
+      201,
+    );
+    await json(await call("POST", `/api/me/wishlists/${list.id}/items`, a.cookie, { itemId }), 200);
+    await json(await call("POST", `/api/me/wishlists/${list.id}/share`, a.cookie), 200);
+
+    const opened = await json<OwnerGroupOrder>(
+      await call("POST", `/api/me/wishlists/${list.id}/group-order`, a.cookie, {
+        shopId,
+        shipping: { label: "Colissimo", shippingCents: 590, freeFromCents: null },
+        deadline: null,
+      }),
+      201,
+    );
+    expect(opened.ownItems).toEqual([{ itemId, name: "Robe Iris", imageUrl: null, sizes: [] }]);
+
+    const mine = await json<OwnerGroupOrder>(
+      await call("PUT", `/api/me/group-orders/${opened.id}/own-lines`, a.cookie, {
+        lines: [{ itemId, sizeLabel: "M", quantity: 1 }],
+      }),
+      200,
+    );
+    const owner = mine.people.find((p) => p.isOwner);
+    expect(owner?.lines).toEqual([expect.objectContaining({ itemId, name: "Robe Iris" })]);
+  });
+
+  it("tells each line's article step: « Ajouter un numéro de suivi » only while still « Commandé »", async () => {
+    const a = await account();
+    const { orderId, itemId } = await orderWithParcel(a, { carrier: "colissimo", status: "in_transit" });
+    const stageOf = async () =>
+      (await json<OrderList>(await call("GET", "/api/me/orders", a.cookie), 200)).orders.find((o) => o.id === orderId)
+        ?.lines[0]?.itemStage;
+    expect(await stageOf()).toBe("ordered");
+    await json(await call("POST", `/api/me/orders/${orderId}/received`, a.cookie, { answer: "yes" }), 200);
+    expect(await stageOf()).toBe("owned");
+    // Received: the API refuses a number on it, with its own code (the screen no longer offers it).
+    expect(
+      await json(
+        await call("POST", `/api/me/items/${itemId}/tracking`, a.cookie, { trackingNumber: "6A12345678903" }),
+        409,
+      ),
+    ).toEqual({ error: "item_not_ordered" });
+    await t.db.update(schema.items).set({ deletedAt: NOW }).where(eq(schema.items.id, itemId));
+    expect(await stageOf()).toBeNull();
   });
 });

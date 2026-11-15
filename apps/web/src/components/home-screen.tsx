@@ -241,11 +241,11 @@ export function HomeScreen({ fieldId }: { fieldId: string }) {
 
   const load = useCallback(async () => {
     try {
+      // Her orders to validate, read alongside (accounts only; a guest or a failed read shows none).
+      const orders = fetchOrders().catch(() => null);
       const home = await fetchHome();
       setLoaded({ status: "ready", home, now: new Date() });
-      // Her orders to validate (accounts only; a guest or a failed read shows none).
-      const list = await fetchOrders().catch(() => null);
-      setOrders(list && list !== "guest" ? list : null);
+      void orders.then((list) => setOrders(list && list !== "guest" ? list : null));
       // Only once she keeps something (the row is not on a new account's home): a visit alone opens no session.
       if (!home.hasItems) return;
       const directory = await fetchShopDirectory().catch(() => null);

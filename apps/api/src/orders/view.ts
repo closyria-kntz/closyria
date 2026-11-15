@@ -11,7 +11,7 @@ import {
   schema,
   sql,
 } from "@closyria/db";
-import type { Carrier, OrderView, ParcelStatus, UnreadEmailView } from "@closyria/shared";
+import type { Carrier, ItemStage, OrderView, ParcelStatus, UnreadEmailView } from "@closyria/shared";
 import type { Tx } from "../wardrobe/events";
 
 type OrderRow = typeof schema.orders.$inferSelect & { receivedQuestion: boolean };
@@ -35,8 +35,13 @@ async function viewsOf(db: Database | Tx, rows: OrderRow[]): Promise<OrderView[]
           .from(schema.shops)
           .where(inArray(schema.shops.id, shopIds));
   const lines = await db
-    .select()
+    .select({
+      line: schema.orderLines,
+      // Its article's step (null when the line has none, or it is in the trash).
+      itemStage: sql<string | null>`case when ${schema.items.deletedAt} is null then ${schema.items.stage} end`,
+    })
     .from(schema.orderLines)
+    .leftJoin(schema.items, eq(schema.items.id, schema.orderLines.itemId))
     .where(inArray(schema.orderLines.orderId, ids))
     .orderBy(asc(schema.orderLines.position), asc(schema.orderLines.id));
   const parcels = await db
@@ -66,8 +71,8 @@ async function viewsOf(db: Database | Tx, rows: OrderRow[]): Promise<OrderView[]
       source: order.source as OrderView["source"],
       parseMethod: order.parseMethod as OrderView["parseMethod"],
       lines: lines
-        .filter((l) => l.orderId === order.id)
-        .map((l) => ({
+        .filter(({ line }) => line.orderId === order.id)
+        .map(({ line: l, itemStage }) => ({
           id: l.id,
           itemId: l.itemId,
           productId: l.productId,
@@ -77,6 +82,7 @@ async function viewsOf(db: Database | Tx, rows: OrderRow[]): Promise<OrderView[]
           quantity: l.quantity,
           priceCents: l.priceCents,
           currency: l.currency,
+          itemStage: itemStage as ItemStage | null,
         })),
       parcels: parcels
         .filter((p) => p.parcel.orderId === order.id)

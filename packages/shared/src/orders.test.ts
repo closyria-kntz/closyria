@@ -288,6 +288,7 @@ describe("order schemas", () => {
           quantity: 1,
           priceCents: 8900,
           currency: "EUR",
+          itemStage: null,
         },
       ],
       parcels: [
@@ -318,9 +319,12 @@ describe("order schemas", () => {
   });
 
   it("describes her order address", () => {
-    const view = { address: "marie-k7f2@commandes.closyria.com", pendingGmailCode: "185412963" };
+    const view = { address: "marie-k7f2@commandes.closyria.com", autoForward: true, pendingGmailCode: "185412963" };
     expect(orderInboxViewSchema.parse(view)).toEqual(view);
-    expect(orderInboxViewSchema.parse({ address: null, pendingGmailCode: null }).address).toBeNull();
+    expect(
+      orderInboxViewSchema.parse({ address: null, autoForward: false, pendingGmailCode: null }).address,
+    ).toBeNull();
+    expect(orderInboxViewSchema.safeParse({ address: null, pendingGmailCode: null }).success).toBe(false);
     expect(orderInboxViewSchema.safeParse({ ...view, pendingGmailCode: "12ab" }).success).toBe(false);
   });
 });

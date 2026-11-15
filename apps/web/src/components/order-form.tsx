@@ -21,11 +21,16 @@ function LineFields({
   line,
   onChange,
   onRemove,
+  invalid,
+  errorId,
 }: {
   index: number;
   line: LineDraft;
   onChange: (line: LineDraft) => void;
   onRemove: (() => void) | null;
+  /** The field the form's message is about, if it is one of this line's. */
+  invalid: keyof LineDraft | null;
+  errorId: string;
 }) {
   const t = useTranslations("Orders.form");
   const id = useId();
@@ -40,6 +45,8 @@ function LineFields({
         inputMode={extra.inputMode}
         autoComplete="off"
         onChange={(e) => onChange({ ...line, [key]: e.target.value })}
+        aria-invalid={invalid === key || undefined}
+        aria-describedby={invalid === key ? errorId : undefined}
         className={`${inputClass} min-h-touch-target`}
       />
     </span>
@@ -94,14 +101,24 @@ export function OrderForm({
   const [tracking, setTracking] = useState("");
   const [carrier, setCarrier] = useState<Carrier | "">("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  /** The message, and the field it is about (`line-{n}-{field}`, `shop`, `tracking`), tied by aria-describedby. */
+  const [error, setErrorState] = useState<{ text: string; field: string | null } | null>(null);
+  const setError = (text: string | null, field: string | null = null) =>
+    setErrorState(text === null ? null : { text, field });
+  const describe = (field: string) =>
+    error?.field === field ? { "aria-invalid": true as const, "aria-describedby": ids.error } : {};
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (manual && !shop.trim()) return setError(t("errors.shop"));
+    if (manual && !shop.trim()) return setError(t("errors.shop"), "shop");
     const checked = checkLines(lines, currencies);
-    if (!checked.ok) return setError(t(`errors.${checked.error}`));
-    if (manual && tracking.trim() && !isTrackingInput(tracking)) return setError(t("errors.tracking"));
+    if (!checked.ok) {
+      return setError(
+        t(`errors.${checked.error}`),
+        `line-${checked.index}-${checked.error === "name" ? "name" : "price"}`,
+      );
+    }
+    if (manual && tracking.trim() && !isTrackingInput(tracking)) return setError(t("errors.tracking"), "tracking");
     setBusy(true);
     setError(null);
     const failure = await onSubmit({
@@ -125,6 +142,7 @@ export function OrderForm({
           maxLength={MAX_SHOP_NAME}
           autoComplete="off"
           onChange={(e) => setShop(e.target.value)}
+          {...describe("shop")}
           className={`${inputClass} min-h-touch-target`}
         />
       </span>
@@ -136,6 +154,10 @@ export function OrderForm({
           line={line}
           onChange={(next) => setLines(lines.map((l, i) => (i === index ? next : l)))}
           onRemove={lines.length > 1 ? () => setLines(lines.filter((_, i) => i !== index)) : null}
+          invalid={
+            error?.field === `line-${index}-name` ? "name" : error?.field === `line-${index}-price` ? "price" : null
+          }
+          errorId={ids.error}
         />
       ))}
       {lines.length < MAX_ORDER_LINES && (
@@ -156,6 +178,7 @@ export function OrderForm({
               autoCapitalize="characters"
               spellCheck={false}
               onChange={(e) => setTracking(e.target.value)}
+              {...describe("tracking")}
               className={`${inputClass} min-h-touch-target`}
             />
           </span>
@@ -181,7 +204,7 @@ export function OrderForm({
       )}
       {error && (
         <p id={ids.error} role="alert" className="text-sm text-danger">
-          {error}
+          {error.text}
         </p>
       )}
       <span className="flex flex-wrap gap-space-2">

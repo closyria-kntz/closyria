@@ -156,13 +156,14 @@ export type SharedList = Pick<
 >;
 
 // Narrow: only the public columns. The size, stage and gift marker are for the gifts only (never sent otherwise).
-// An article without a product (« Après la commande »): her name and brand for it, its order's shop, no price, no
+// An article without a product (« Après la commande »): her name for it, its order's shop, no brand, no price, no
 // link, no photo (her private photos never reach a shared list).
 const sharedItemColumns = {
   itemId: schema.items.id,
   productId: schema.products.id,
   name: sql<string | null>`coalesce(${schema.products.name}, ${schema.items.nameOverride})`,
-  brand: sql<string | null>`coalesce(${schema.products.brand}, ${schema.items.brandOverride})`,
+  // The catalogue's brand only: her own (`brand_override`) stays hers, with or without a product.
+  brand: schema.products.brand,
   priceCents: schema.products.priceCents,
   currency: schema.products.currency,
   url: sql<string>`coalesce(${schema.products.canonicalUrl}, '')`,

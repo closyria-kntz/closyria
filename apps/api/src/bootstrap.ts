@@ -65,6 +65,7 @@ export function bootstrap(env: Env): Api {
             store,
             secret: env.INBOUND_EMAIL_SECRET,
             domain: orderInboxDomain(env.APP_ENV),
+            autoForward: env.INBOUND_AUTOFORWARD === "on",
             checkSender: mailauthSenderCheck({
               mta: "mx.closyria.com",
               autoForward: env.INBOUND_AUTOFORWARD === "on",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkLines, emptyLine, isTrackingInput, lineDraftOf, lineHref } from "./orders-form";
+import { checkLines, emptyLine, isTrackingInput, lineDraftOf, lineHref, trackableItem } from "./orders-form";
 
 const id = "00000000-0000-4000-8000-000000000001";
 
@@ -32,8 +32,17 @@ describe("checkLines", () => {
   });
 
   it("refuses a line without a name, or a price that is not one", () => {
-    expect(checkLines([{ ...emptyLine(), name: "  " }])).toEqual({ ok: false, error: "name" });
-    expect(checkLines([{ ...emptyLine(), name: "Robe", price: "douze" }])).toEqual({ ok: false, error: "price" });
+    expect(checkLines([{ ...emptyLine(), name: "  " }])).toEqual({ ok: false, error: "name", index: 0 });
+    expect(
+      checkLines([
+        { ...emptyLine(), name: "Robe" },
+        { ...emptyLine(), name: "Jupe", price: "douze" },
+      ]),
+    ).toEqual({
+      ok: false,
+      error: "price",
+      index: 1,
+    });
   });
 
   it("puts a line back into the form", () => {
@@ -48,6 +57,7 @@ describe("checkLines", () => {
         quantity: 1,
         priceCents: 8900,
         currency: "EUR",
+        itemStage: null,
       }),
     ).toEqual({ name: "Robe", sizeLabel: "", color: "Rouge", quantity: "1", price: "89,00" });
   });
@@ -58,5 +68,22 @@ describe("lineHref", () => {
     expect(lineHref({ productId: id, itemId: id })).toBe(`/produits/${id}`);
     expect(lineHref({ productId: null, itemId: id })).toBe(`/articles/${id}`);
     expect(lineHref({ productId: null, itemId: null })).toBeNull();
+  });
+});
+
+describe("trackableItem", () => {
+  it("offers « Ajouter un numéro de suivi » through an article still « Commandé », never once received", () => {
+    const other = "00000000-0000-4000-8000-000000000002";
+    expect(
+      trackableItem({
+        lines: [
+          { itemId: null, itemStage: null },
+          { itemId: id, itemStage: "owned" },
+          { itemId: other, itemStage: "ordered" },
+        ],
+      }),
+    ).toBe(other);
+    expect(trackableItem({ lines: [{ itemId: id, itemStage: "owned" }] })).toBeNull();
+    expect(trackableItem({ lines: [] })).toBeNull();
   });
 });

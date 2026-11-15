@@ -370,6 +370,7 @@ export function errorText(
 ): string {
   switch (error) {
     case "tracking":
+    case "item_not_ordered":
     case "tracking_exists":
     case "order_exists":
     case "rate_limited":

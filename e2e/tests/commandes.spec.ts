@@ -197,19 +197,24 @@ test("son adresse de commandes : copier, changer, le code Gmail et l'aide pas à
   // The help, step by step, for her mailbox.
   const help = main(page).getByRole("region", { name: "Comment transférer tes e-mails" });
   for (const name of ["Gmail", "Outlook", "iCloud"]) await expect(help.getByText(name, { exact: true })).toBeVisible();
+  // Gmail's automatic forwarding is not accepted here (INBOUND_AUTOFORWARD off, the default): only « Transférer »
+  // one e-mail at a time is explained, for every mailbox.
   await help.getByText("Gmail", { exact: true }).click();
-  await expect(help).toContainText("Transférer");
-  await expect(help).toContainText(first);
+  await expect(help).toContainText("touche « Transférer », colle ton adresse Closyria et envoie");
+  await expect(help).not.toContainText("automatiquement");
+  await expect(help).not.toContainText("Créer un filtre");
   await axeLightAndDark(page);
   await shots(page, testInfo, "reglages-commandes");
 
-  // Gmail's confirmation code, received on her address: shown so she can type it in Gmail.
+  // Gmail's confirmation code is only for its automatic forwarding: not shown while it is off.
   await db.query(
     "update order_inboxes set gmail_code = '83920571', gmail_code_at = now() where user_id = $1 and active",
     [who.userId],
   );
   await page.reload();
-  await expect(main(page).getByTestId("gmail-code")).toHaveText("83920571");
+  await expect(address).toHaveText(first);
+  await expect(main(page).getByTestId("gmail-code")).toHaveCount(0);
+  await expect(main(page)).not.toContainText("83920571");
 
   // « Changer d'adresse »: asked first, then the old one stops at once.
   await box.getByRole("button", { name: "Changer d'adresse" }).click();

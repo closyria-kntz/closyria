@@ -19,6 +19,8 @@ export type OrderInboxDeps = {
   db: Database;
   /** The order addresses' domain (`orderInboxDomain`). */
   domain: string;
+  /** Gmail's automatic forwarding accepted (INBOUND_AUTOFORWARD=on): its help and confirmation code are shown. */
+  autoForward?: boolean;
   /** Clock (the rate limit, the Gmail code's 24 hours), injectable for tests. */
   nowMs?: () => number;
 };
@@ -45,8 +47,9 @@ const getRoute = defineAccess(
     path: "/me/order-inbox",
     summary: "« Mes commandes par e-mail »: her order address",
     description:
-      "Her active address, or null before she asked for one, and Gmail's forwarding confirmation code when one " +
-      "arrived on it in the last 24 hours, asked by her own Gmail address (`pendingGmailCode`). Accounts only.",
+      "Her active address, or null before she asked for one; whether Gmail's automatic forwarding is accepted " +
+      "(`autoForward`, INBOUND_AUTOFORWARD) and, only then, Gmail's forwarding confirmation code when one arrived on " +
+      "it in the last 24 hours, asked by her own Gmail address (`pendingGmailCode`). Accounts only.",
     responses: { 200: json("Her address"), 403: accountRequiredContent },
   }),
   "user",
@@ -102,6 +105,7 @@ function drawCode(): string {
 
 export function orderInboxRoutes(deps: OrderInboxDeps) {
   const { db, domain } = deps;
+  const autoForward = deps.autoForward ?? false;
   const address = (localPart: string) => `${localPart}@${domain}`;
   return new OpenAPIHono<AccessEnv>()
     .openapi(getRoute, async (c) => {
@@ -116,9 +120,10 @@ export function orderInboxRoutes(deps: OrderInboxDeps) {
         .from(schema.orderInboxes)
         .where(and(eq(schema.orderInboxes.userId, userId), eq(schema.orderInboxes.active, true)));
       const since = (deps.nowMs?.() ?? Date.now()) - GMAIL_CODE_HOURS * 3_600_000;
+      // The code is only useful to set up Gmail's automatic forwarding: hidden while it is not accepted.
       const pendingGmailCode =
-        row?.gmailCode && row.gmailCodeAt && row.gmailCodeAt.getTime() > since ? row.gmailCode : null;
-      return c.json({ address: row ? address(row.localPart) : null, pendingGmailCode }, 200);
+        autoForward && row?.gmailCode && row.gmailCodeAt && row.gmailCodeAt.getTime() > since ? row.gmailCode : null;
+      return c.json({ address: row ? address(row.localPart) : null, autoForward, pendingGmailCode }, 200);
     })
     .openapi(postRoute(deps.nowMs), async (c) => {
       const userId = userIdOf(c);
@@ -137,7 +142,7 @@ export function orderInboxRoutes(deps: OrderInboxDeps) {
               .where(and(eq(schema.orderInboxes.userId, userId), eq(schema.orderInboxes.active, true)));
             await tx.insert(schema.orderInboxes).values({ userId, localPart });
           });
-          return c.json({ address: address(localPart), pendingGmailCode: null }, 200);
+          return c.json({ address: address(localPart), autoForward, pendingGmailCode: null }, 200);
         } catch (error) {
           // Taken (by anyone, former addresses included: never given twice), or a change at the same time: again.
           if (pgCode(error) !== "23505") throw error;

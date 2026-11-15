@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useId, useState } from "react";
 import { fetchOrders } from "@/lib/orders-client";
 import { linkActionClass, OrderMeta, orderShop, ParcelList, TrackingForm, useCalendarDay } from "./order-parts";
-import { blockClass, blockTitleClass } from "./ui";
+import { blockClass, blockTitleClass, buttonClass } from "./ui";
 
 type Orders = { kind: "loading" } | { kind: "guest" } | { kind: "failed" } | { kind: "ready"; orders: OrderView[] };
 
@@ -24,8 +24,9 @@ export function ItemOrderBlock({ item }: { item: ItemView }) {
   const titleId = useId();
   const calendarDay = useCalendarDay();
   const [state, setState] = useState<Orders>({ kind: "loading" });
+  const [attempt, setAttempt] = useState(0);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: read again when the article changes step (a « Oui » elsewhere, a delivery).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: read again when the article changes step (a « Oui » elsewhere, a delivery), and on « Réessayer ».
   useEffect(() => {
     let alive = true;
     const controller = new AbortController();
@@ -39,7 +40,7 @@ export function ItemOrderBlock({ item }: { item: ItemView }) {
       alive = false;
       controller.abort();
     };
-  }, [item.id, item.stage]);
+  }, [item.id, item.stage, attempt]);
 
   const ordered = item.stage === "ordered";
   const deadline = item.stage === "owned" && item.returnDeadline ? item.returnDeadline : null;
@@ -89,9 +90,18 @@ export function ItemOrderBlock({ item }: { item: ItemView }) {
         </Link>
       )}
       {state.kind === "failed" && (
-        <p role="alert" className="text-sm text-danger">
-          {t("item.loadFailed")}
-        </p>
+        <div className="flex flex-col items-start gap-space-2">
+          <p role="alert" className="text-sm text-danger">
+            {t("item.loadFailed")}
+          </p>
+          <button
+            type="button"
+            onClick={() => setAttempt((n) => n + 1)}
+            className={`${buttonClass} min-h-touch-target`}
+          >
+            {t("page.retry")}
+          </button>
+        </div>
       )}
     </section>
   );

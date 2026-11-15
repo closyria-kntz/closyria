@@ -12,8 +12,8 @@ describe("orders reads", () => {
       expect(await fetchOrders(d)).toBe("guest");
       expect(d.ensure).not.toHaveBeenCalled();
     }
-    const d = deps(json({ address: null, pendingGmailCode: "123456" }));
-    expect(await fetchOrderInbox(d)).toEqual({ address: null, pendingGmailCode: "123456" });
+    const d = deps(json({ address: null, autoForward: true, pendingGmailCode: "123456" }));
+    expect(await fetchOrderInbox(d)).toEqual({ address: null, autoForward: true, pendingGmailCode: "123456" });
     expect(d.ensure).not.toHaveBeenCalled();
   });
 

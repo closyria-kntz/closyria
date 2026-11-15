@@ -11,7 +11,7 @@ import {
   dismissUnreadEmail,
   patchOrder,
 } from "@/lib/orders-client";
-import { lineDraftOf, lineHref } from "@/lib/orders-form";
+import { lineDraftOf, lineHref, trackableItem } from "@/lib/orders-form";
 import { useCurrentProfile } from "@/lib/profile-context";
 import { OrderForm, type OrderFormValues } from "./order-form";
 import { errorText, OrderLines, OrderMeta, orderShop, ParcelList, TrackingForm, useDay } from "./order-parts";
@@ -33,7 +33,7 @@ const orderCardClass = "flex scroll-mt-space-4 flex-col gap-space-3 rounded-card
 /** The anchor of an order on « Mes commandes » (where its notifications lead). */
 export const orderAnchor = (orderId: string) => `commande-${orderId}`;
 
-/** An order read from her e-mail, to validate. `onChange(null)`: it left the list (validated or set aside). */
+/** An order read from her e-mail, to validate; `gone`: it left « À valider » (validated or set aside). */
 export function DraftOrderCard({
   order,
   onChange,
@@ -265,8 +265,7 @@ export function OrderCard({ order, onChange }: { order: OrderView; onChange: (or
   const t = useTranslations("Orders");
   const titleId = useId();
   const shop = orderShop(order);
-  const tracked = order.lines.find((l) => l.itemId !== null)?.itemId ?? null;
-  const delivered = order.parcels.some((p) => p.status === "delivered");
+  const tracked = trackableItem(order);
   return (
     <article id={orderAnchor(order.id)} aria-labelledby={titleId} className={orderCardClass}>
       <div className="flex flex-col gap-space-1">
@@ -283,7 +282,7 @@ export function OrderCard({ order, onChange }: { order: OrderView; onChange: (or
       )}
       <OrderLines order={order} hrefOf={lineHref} />
       <ParcelList order={order} onChange={onChange} />
-      {tracked && !delivered && <TrackingForm itemId={tracked} onAdded={onChange} />}
+      {tracked && <TrackingForm itemId={tracked} onAdded={onChange} />}
     </article>
   );
 }

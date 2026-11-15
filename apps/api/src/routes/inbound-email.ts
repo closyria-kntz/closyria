@@ -15,6 +15,11 @@ import {
 /** E-mail reception (INBOUND_EMAIL_SECRET set). Without the secret, the route does not exist (404). */
 export type InboundEmailDeps = InboundDeps & {
   secret: string;
+  /**
+   * Gmail's automatic forwarding is accepted (INBOUND_AUTOFORWARD=on, sender rule 2): « Mes commandes par e-mail »
+   * then shows its steps and Gmail's confirmation code. Off (the default): forwarding one e-mail at a time only.
+   */
+  autoForward?: boolean;
   /** Clock of the signature check (Unix seconds), injectable for tests. */
   nowS?: () => number;
 };

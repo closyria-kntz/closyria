@@ -4,6 +4,7 @@ import type { OrderInboxView } from "@closyria/shared";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useId, useState } from "react";
+import { mailboxHelp } from "@/lib/order-inbox-help";
 import { fetchOrderInbox, newOrderInbox } from "@/lib/orders-client";
 import { Dialog } from "./dialog";
 import { buttonClass, focusRing, primaryButtonClass } from "./ui";
@@ -23,7 +24,7 @@ async function loadInbox(): Promise<OrderInboxView | "guest"> {
   if (inbox === "guest" || inbox.address) return inbox;
   const created = await newOrderInbox();
   if (!created.ok) throw new Error(created.error);
-  return { address: created.address, pendingGmailCode: inbox.pendingGmailCode };
+  return { address: created.address, autoForward: created.autoForward, pendingGmailCode: inbox.pendingGmailCode };
 }
 
 function Shell({ children }: { children: ReactNode }) {
@@ -39,8 +40,8 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-/** A mailbox's steps: one e-mail at a time, then all of them automatically. */
-function Mailbox({ name, one, auto }: { name: string; one: string; auto: ReactNode }) {
+/** A mailbox's steps: one e-mail at a time, then — when accepted — all of them automatically. */
+function Mailbox({ name, one, auto }: { name: string; one: string; auto: string[] | null }) {
   const t = useTranslations("Orders.inbox");
   return (
     <details className="group rounded-card bg-surface-sunken px-space-4 py-space-1">
@@ -52,25 +53,27 @@ function Mailbox({ name, one, auto }: { name: string; one: string; auto: ReactNo
       </summary>
       <div className="flex flex-col gap-space-3 pt-space-1 pb-space-3 text-sm">
         <div className="flex flex-col gap-space-1">
-          <h4 className="font-strong">{t("oneByOne")}</h4>
+          {auto && <h4 className="font-strong">{t("oneByOne")}</h4>}
           <p>{one}</p>
         </div>
-        <div className="flex flex-col gap-space-1">
-          <h4 className="font-strong">{t("automatic")}</h4>
-          {auto}
-        </div>
+        {auto && (
+          <div className="flex flex-col gap-space-1">
+            <h4 className="font-strong">{t("automatic")}</h4>
+            {auto.length === 1 ? (
+              <p>{auto[0]}</p>
+            ) : (
+              <ol className="flex list-inside list-decimal flex-col gap-space-1-5 marker:font-bold marker:text-accent">
+                {auto.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            )}
+          </div>
+        )}
       </div>
     </details>
   );
 }
-
-const Steps = ({ steps }: { steps: string[] }) => (
-  <ol className="flex list-inside list-decimal flex-col gap-space-1-5 marker:font-bold marker:text-accent">
-    {steps.map((step) => (
-      <li key={step}>{step}</li>
-    ))}
-  </ol>
-);
 
 /**
  * Compte → « Mes commandes par e-mail » (spec §3.1): her personal address with « Copier » and « Changer d'adresse »
@@ -146,7 +149,10 @@ export function OrderInboxSettings() {
 
   const { inbox } = state;
   const address = inbox.address ?? "";
-  const code = inbox.pendingGmailCode;
+  // Gmail's code only matters for its automatic forwarding (the API gives none while it is off).
+  const code = inbox.autoForward ? inbox.pendingGmailCode : null;
+  /** A message of `Orders.inbox` named by the help (`mailboxHelp`). */
+  const tKey = (key: string, values?: { code: string }) => t(key as "gmail.one", values);
 
   const copy = async () => {
     setCopyFailed(false);
@@ -166,7 +172,10 @@ export function OrderInboxSettings() {
     setChanging(false);
     setAsking(false);
     if (!result.ok) return setChangeFailed(true);
-    setState({ kind: "ready", inbox: { address: result.address, pendingGmailCode: null } });
+    setState({
+      kind: "ready",
+      inbox: { address: result.address, autoForward: result.autoForward, pendingGmailCode: null },
+    });
     setStatus(t("changed"));
   };
 
@@ -239,26 +248,14 @@ export function OrderInboxSettings() {
         </h3>
         <p className="text-sm">{t("helpRule")}</p>
         <div className="flex flex-col gap-space-2">
-          <Mailbox
-            name={t("gmail.name")}
-            one={t("gmail.one")}
-            auto={
-              <Steps
-                steps={[
-                  t("gmail.auto1"),
-                  t("gmail.auto2", { address }),
-                  code ? t("gmail.auto3Code", { code }) : t("gmail.auto3"),
-                  t("gmail.auto4"),
-                ]}
-              />
-            }
-          />
-          <Mailbox
-            name={t("outlook.name")}
-            one={t("outlook.one")}
-            auto={<Steps steps={[t("outlook.auto1"), t("outlook.auto2"), t("outlook.auto3", { address })]} />}
-          />
-          <Mailbox name={t("icloud.name")} one={t("icloud.one")} auto={<p>{t("icloud.auto")}</p>} />
+          {mailboxHelp(inbox.autoForward, code !== null).map((mailbox) => (
+            <Mailbox
+              key={mailbox.name}
+              name={tKey(mailbox.name)}
+              one={tKey(mailbox.one)}
+              auto={mailbox.auto?.map((key) => tKey(key, { code: code ?? "" })) ?? null}
+            />
+          ))}
         </div>
       </section>
 

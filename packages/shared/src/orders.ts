@@ -2,7 +2,7 @@ import { z } from "zod";
 import { parisDay } from "./alerts";
 import { currencySchema } from "./catalog";
 import { isInstagramUrl } from "./catalog-url";
-import { MAX_NOTES, MAX_SIZE_LABEL } from "./wardrobe";
+import { itemStageSchema, MAX_NOTES, MAX_SIZE_LABEL } from "./wardrobe";
 
 /**
  * « Après la commande » (docs/specs/2026-11-14-apres-commande.md): orders read from a forwarded e-mail, typed by hand
@@ -411,6 +411,8 @@ export const orderLineViewSchema = z.object({
   quantity: z.number().int().positive(),
   priceCents: centsSchema.nullable(),
   currency: currencySchema.nullable(),
+  /** Its article's step (« Commandé »: a tracking number can still be added); null without one or in the trash. */
+  itemStage: itemStageSchema.nullable(),
 });
 export type OrderLineView = z.infer<typeof orderLineViewSchema>;
 
@@ -467,8 +469,13 @@ export type OrderList = z.infer<typeof orderListSchema>;
 export const orderInboxViewSchema = z.object({
   address: z.email().nullable(),
   /**
+   * Gmail's automatic forwarding is accepted (INBOUND_AUTOFORWARD=on): the help shows its steps. Off, only « Transférer »
+   * one e-mail at a time works, and no confirmation code is shown.
+   */
+  autoForward: z.boolean(),
+  /**
    * Gmail's forwarding confirmation code, received on her address in the last 24 hours, when the Gmail address that
-   * asked is hers (she types it in Gmail's settings); null otherwise.
+   * asked is hers (she types it in Gmail's settings); null otherwise, and always null while `autoForward` is off.
    */
   pendingGmailCode: z
     .string()
