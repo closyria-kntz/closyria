@@ -2,7 +2,7 @@ import { promises as dns } from "node:dns";
 import { type AuthenticateResult, authenticate, type DKIMResult, type DNSResolver } from "mailauth";
 import PostalMime from "postal-mime";
 import { getDomain } from "tldts";
-import { addressesOf, decodeEncodedWords, headerFields, isAsciiAddress, isGroup } from "./headers";
+import { addressesOf, decodeEncodedWords, headerFields, headersWellFormed, isAsciiAddress, isGroup } from "./headers";
 import type { Envelope } from "./signature";
 
 /**
@@ -126,6 +126,10 @@ function singleFrom(result: AuthenticateResult, fields: { name: string; value: s
 }
 
 /** Rule 1: an aligned signature that also signs the one To (or Cc) field naming this order address. */
+/** Mailbox providers whose domain can be logged (it does not name anyone). */
+const KNOWN_PROVIDERS =
+  /^(?:gmail\.com|googlemail\.com|google\.com|hotmail\.[a-z.]+|outlook\.[a-z.]+|live\.[a-z.]+|msn\.com|icloud\.com|me\.com|mac\.com|yahoo\.[a-z.]+|orange\.fr|wanadoo\.fr|free\.fr|sfr\.fr|laposte\.net|gmx\.[a-z.]+|proton\.me|protonmail\.com|[a-z0-9-]+\.onmicrosoft\.com|[a-z0-9-]+\.example)$/;
+
 /** « TR: », « Fwd: », « Fw: », « FW: » (any case, a non-breaking space allowed before the colon). */
 const FORWARD_SUBJECT = /^\s*(?:tr|fwd?)[\s\u00a0]*:/i;
 /** A forward older than this does not count as « just forwarded » (Microsoft rule, §10.1). */
@@ -177,9 +181,12 @@ export function ignoredReason(
   rcpt: string,
 ): string {
   if (!hersFrom) return "From is not one of her verified addresses";
+  // A personal domain would name her: only well-known mailbox providers are written out.
+  const shown = (domain: string | undefined) =>
+    domain && KNOWN_PROVIDERS.test(domain) ? domain : domain === undefined ? "?" : "custom domain";
   const signatures = result.dkim.results.map((r) => {
     const covered = signedHeaders(r);
-    return `d=${r.signingDomain ?? "?"} ${r.status.result}${covered.includes("to") ? " to" : ""}${covered.includes("cc") ? " cc" : ""}`;
+    return `d=${shown(r.signingDomain)} ${r.status.result}${covered.includes("to") ? " to" : ""}${covered.includes("cc") ? " cc" : ""}`;
   });
   const tos = fields.filter((f) => f.name === "to");
   const ccs = fields.filter((f) => f.name === "cc");
@@ -189,7 +196,7 @@ export function ignoredReason(
   ]
     .filter(Boolean)
     .join(", ");
-  return `From is hers (domain ${domainOf(hersFrom)}); ${where || "order address not in To/Cc"}; DKIM: ${signatures.join("; ") || "none"}`;
+  return `From is hers (domain ${shown(domainOf(hersFrom))}); ${where || "order address not in To/Cc"}; DKIM: ${signatures.join("; ") || "none"}`;
 }
 
 /** Rule 2's second proof: Google relayed it (verified ARC set from Google, or a Google DKIM signature). */
@@ -252,6 +259,12 @@ export async function decideSender(
 ): Promise<SenderVerdict> {
   const own = [...new Set(senders.map(lower))];
   const rcpt = lower(envelope.rcptTo);
+  // A header block DKIM and our parser could read differently (a refolded signed field hidden under a fake one):
+  // never trusted, whatever the signatures say.
+  if (!headersWellFormed(raw)) {
+    console.info("inbound e-mail: ignored (malformed header block)");
+    return { kind: "ignored", fromAddress: (lower(envelope.mailFrom) || UNKNOWN).slice(0, MAX_STORED_ADDRESS) };
+  }
   const fields = headerFields(raw);
   const from = singleFrom(result, fields);
   const mailFrom = lower(envelope.mailFrom);

@@ -68,3 +68,18 @@ export function decodeEncodedWords(value: string): string {
     },
   );
 }
+
+/**
+ * True when every line of the header block is either a continuation (leading space or tab, never first) or a strict
+ * `name:` line (printable ASCII name, nothing between it and the colon). Anything else (`Subject\r\n : x`, a stray
+ * line without a colon, a control character) could be read one way by DKIM and another way by `headerFields`, so
+ * such a message is never trusted.
+ */
+export function headersWellFormed(raw: Buffer): boolean {
+  const text = raw.toString("latin1");
+  const end = text.search(/\r?\n\r?\n/);
+  const block = end === -1 ? text : text.slice(0, end);
+  if (/\r(?!\n)|[\0\v\f]/.test(block)) return false;
+  const lines = block.split(/\r?\n/);
+  return lines.every((line, i) => (i > 0 && /^[ \t]/.test(line)) || /^[\x21-\x39\x3b-\x7e]+:/.test(line));
+}

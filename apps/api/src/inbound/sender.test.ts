@@ -486,3 +486,47 @@ describe("Microsoft forwards (To never signed): signed « forwarded » Subject a
     ).toBe("ignored");
   });
 });
+
+describe("a signed field refolded under a fake copy (DKIM and our parser must read the same fields)", () => {
+  const her = "marie.test@outlook.example";
+  const microsoft = { headerList: "From:Date:Subject:Message-ID:Content-Type:MIME-Version" };
+  const at = mailauthSenderCheck({ ...options, now: () => Date.parse("2026-11-15T09:00:00Z") });
+  /** Moves the signed `name: value` line under a fake one, folded between its name and colon. */
+  const refold = (raw: Buffer, name: string, fake: string) => {
+    const text = raw.toString("latin1");
+    const re = new RegExp(`^${name}: ([^\\r\\n]*)\\r\\n`, "m");
+    const real = re.exec(text);
+    if (!real) throw new Error(`no ${name}`);
+    return Buffer.from(text.replace(re, `${name}: ${fake}\r\nX-Pad: x\r\n${name}\r\n : ${real[1]}\r\n`), "latin1");
+  };
+
+  it("Microsoft: a fake « TR: » Subject over the signed one", async () => {
+    const raw = await signed(outlookForward(TO).replace("Subject: TR: ", "Subject: Hello "), "outlook", microsoft);
+    const forged = refold(raw, "Subject", "TR: fake");
+    expect((await at({ raw: forged, envelope: envelopeFrom("attacker", her, TO), accountEmail: her })).kind).toBe(
+      "ignored",
+    );
+  });
+
+  it("Microsoft: a fake recent Date over an old signed one", async () => {
+    const raw = await signed(outlookForward(TO), "outlook", microsoft);
+    const later = mailauthSenderCheck({ ...options, now: () => Date.parse("2027-11-15T09:00:00Z") });
+    const forged = refold(raw, "Date", "Mon, 15 Nov 2027 08:00:00 +0000");
+    expect((await later({ raw: forged, envelope: envelopeFrom("attacker", her, TO), accountEmail: her })).kind).toBe(
+      "ignored",
+    );
+  });
+
+  it("Gmail: a fake To naming her order address over the signed To of a message to someone else", async () => {
+    const raw = await signed(gmailForward("ami@gmail.example"), "gmail");
+    const forged = refold(raw, "To", TO);
+    expect((await check({ raw: forged, envelope: envelopeFrom("attacker", HER, TO), accountEmail: HER })).kind).toBe(
+      "ignored",
+    );
+  });
+
+  it("a well-formed message still passes", async () => {
+    const raw = await signed(gmailForward(TO), "gmail");
+    expect(await check({ raw, envelope: envelopeFrom("gmail", HER, TO), accountEmail: HER })).toEqual(accepted(HER));
+  });
+});
