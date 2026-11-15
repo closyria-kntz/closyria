@@ -34,7 +34,8 @@ export function isGroup(value: string): boolean {
 export function addressesOf(value: string): string[] {
   const found: string[] = [];
   for (const m of bare(value).matchAll(/<([^<>\s]+@[^<>\s]+)>|([^\s<>,;:"]+@[^\s<>,;:"]+)/g)) {
-    found.push((m[1] ?? m[2] ?? "").toLowerCase());
+    // A bare address may end a sentence: its final dot is not part of it.
+    found.push((m[1] ?? (m[2] ?? "").replace(/\.+$/, "")).toLowerCase());
   }
   return found;
 }

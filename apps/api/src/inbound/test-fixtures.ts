@@ -113,7 +113,7 @@ export const unsigned = (message: string) => Buffer.from(crlf(message));
 /** Google's names in the fake DNS (sender.ts's `GOOGLE` holds the real ones). */
 export const FIXTURE_GOOGLE: GooglePolicy = {
   mailboxDomains: ["gmail.example"],
-  proofDomains: ["google.example", "gmail.example"],
+  proofDomains: ["google.example"],
   confirmationFrom: "forwarding-noreply@google.example",
   confirmationDomain: "google.example",
 };

@@ -139,8 +139,9 @@ Ce qui est construit :
   machine), refuse dès la réception plus de 2 048 000 octets, plus de 5 destinataires, toute adresse d'un autre
   domaine, et limite le débit de chaque serveur d'envoi. Il accepte tout destinataire des deux domaines (il ne dit
   pas lesquels existent). Il chiffre quand l'expéditeur le propose (certificat par défaut de Debian : Gmail et Outlook
-  ne vérifient pas celui d'un MX sans MTA-STS ni DANE). L'installation refuse une machine où un autre serveur d'e-mail
-  est installé ou écoute sur le port 25, garde une copie des réglages, finit par un essai de bout en bout et revient
+  ne vérifient pas celui d'un MX sans MTA-STS ni DANE). Identifiants de file longs (`enable_long_queue_ids`), jamais
+  réutilisés. L'installation simule d'abord `apt-get` (rien ne doit être retiré ; au retrait complet, rien d'autre que
+  Postfix), refuse une machine où un autre serveur d'e-mail est installé ou écoute sur le port 25, garde une copie des réglages, finit par un essai de bout en bout et revient
   en arrière d'elle-même si un pas échoue (`deploy/README.md`) ;
 - pour chaque destinataire, Postfix lance `deploy/inbound/closyria-inbound-relay.mjs` (compte `closyria-mx`, secret
   dans `/etc/closyria-inbound/`), qui poste le message et l'enveloppe SMTP (identifiant de file, adresse du client,
@@ -151,8 +152,10 @@ Ce qui est construit :
 - l'API vérifie avec `mailauth` : DKIM sur les octets reçus (rsa-sha1 refusé, une signature `l=` qui ne couvre
   qu'une partie du corps ne compte pas), SPF à partir de l'adresse du client et du MAIL FROM, ARC, alignement relâché
   par la liste des suffixes publics (partie privée comprise). Un en-tête du message n'est jamais cru comme verdict ;
-- **panne DNS** (temperror sur SPF, DKIM ou ARC, quand rien n'a permis d'accepter) : l'API répond 503, rien n'est
-  gardé, Postfix réessaie (jusqu'à 5 jours, puis abandon sans réponse). Remplace la règle « panne DNS vaut refus » de
+- **panne DNS** : l'API répond 503 (rien n'est gardé, Postfix réessaie jusqu'à 5 jours, puis abandon sans réponse)
+  seulement quand le contrôle qui déciderait est en temperror : la signature DKIM de son domaine sur un transfert
+  dont le `From:` est elle (règle 1), ou SPF sur son expéditeur de transfert Gmail exact (règle 2, si activée).
+  Ailleurs, la panne ne change rien : l'e-mail suit son sort normal (ignoré). Remplace la règle « panne DNS vaut refus » de
   la première version : un e-mail d'elle ne se perd plus pour une panne passagère.
 
 **Expéditeur effectif** (celui du message de transfert, sa boîte à elle, jamais la boutique citée dedans) :
@@ -165,11 +168,15 @@ Ce qui est construit :
 2. **le transfert automatique de Gmail**, **coupé par défaut** (`INBOUND_AUTOFORWARD=off`). Activé : sa boîte est
    chez Gmail (`gmail.com`, `googlemail.com`), le MAIL FROM est exactement
    `<sa partie locale>+caf_=<adresse de commande, @ écrit =>@<son domaine Gmail>`, SPF réussit pour ce domaine, et
-   une seconde preuve que Google l'a relayé : un jeu ARC vérifié signé par `google.com` (ou `gmail.com`), ou une
-   signature DKIM de `google.com` / `gmail.com`. À vérifier sur un vrai transfert en dev avant de l'activer en prod
-   (TODO dans `inbound/sender.ts`) ;
+   une seconde preuve que Google l'a relayé : un jeu ARC vérifié signé par `google.com`, ou une signature DKIM de
+   `google.com` (pas `gmail.com` : tout e-mail d'un compte Gmail en porte une). **La vraie garantie est SPF plus
+   l'étiquette `caf_` exacte** (seuls les serveurs de Gmail envoient pour `gmail.com`, et Gmail écrit cette
+   étiquette pour une adresse de transfert qu'elle a confirmée, à vérifier aussi) ; la preuve Google n'est qu'un contrôle de plus.
+   À vérifier sur un vrai transfert automatique en dev **avant** `INBOUND_AUTOFORWARD=on` (TODO dans
+   `inbound/sender.ts`) ;
 3. **la confirmation de transfert de Gmail** (`forwarding-noreply@google.com`, DKIM `google.com` valide) : quand
-   l'adresse qui demande le transfert, dans son texte, est la sienne, son code est gardé sur l'adresse de commande et
+   son texte nomme l'adresse de commande comme destination (sa confirmation pour une autre destination, renvoyée
+   ici, ne compte pas) et que l'adresse qui demande le transfert est la sienne, son code est gardé sur l'adresse de commande et
    montré 24 h (`pendingGmailCode` de `GET /api/me/order-inbox`, affiché par la Task 7). Rien d'autre n'est gardé.
 
 La comparaison avec l'adresse du compte se fait sans tenir compte des majuscules ; le compte doit avoir son adresse
@@ -192,6 +199,7 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   brut reste ses 30 jours (saisie à la main). Si même le passage à `failed` échoue, la purge passe `failed` toute
   ligne restée `queued` sans message plus d'une heure (son objet éventuel effacé d'abord) ;
 - quotas par adresse et par 24 heures, comptés à part : 100 e-mails acceptés, 20 ignorés ; au-delà, rien ;
+- code de confirmation Gmail : effacé par la purge de la nuit une fois ses 24 heures passées ;
 - purge : tâche `order-email-purge` chaque nuit à 03:45 (UTC), qui applique `inboundEmailPurge` aux lignes passées
   leur `purge_after` (réception + 30 jours). L'objet est effacé d'abord ; la ligne ne change (supprimée, ou clé
   effacée) qu'une fois l'objet vraiment supprimé, sinon elle attend la nuit suivante ;

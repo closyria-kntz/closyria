@@ -46,6 +46,7 @@ describe("helpers", () => {
     expect(addressesOf(`"Moi" <${TO}>, b@c.example`)).toEqual([TO, "b@c.example"]);
     expect(addressesOf(`"${TO}" <other@x.example>`)).toEqual(["other@x.example"]);
     expect(addressesOf(`other@x.example (${TO})`)).toEqual(["other@x.example"]);
+    expect(addressesOf(`vers votre adresse ${TO}.`)).toEqual([TO]);
     expect(isGroup("Amis: a@b.example, c@d.example;")).toBe(true);
     expect(isGroup('"Marie: la vraie" <a@b.example>')).toBe(false);
     expect(isAsciiAddress("marie@gmail.example")).toBe(true);
@@ -209,6 +210,16 @@ describe("rule 1: ignored (Review Focus 1)", () => {
     });
   });
 
+  it("the DNS does not answer, but the message is not hers: ignored, no retry", async () => {
+    const failing = mailauthSenderCheck({ ...options, resolver: fixtureResolver({ fail: true }) });
+    const sophie = "sophie.autre@gmail.example";
+    const raw = await signed(gmailForward(TO, `Sophie <${sophie}>`), "gmail");
+    expect(await failing({ raw, envelope: envelopeFrom("gmail", sophie, TO), accountEmail: HER })).toEqual({
+      kind: "ignored",
+      fromAddress: sophie,
+    });
+  });
+
   it("an unreadable message is ignored", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const verdict = await check({ raw: Buffer.alloc(0), envelope: envelopeFrom("gmail", HER, TO), accountEmail: HER });
@@ -234,6 +245,20 @@ describe("rule 2, Gmail's automatic forwarding (INBOUND_AUTOFORWARD)", () => {
   it("on: a Google DKIM signature is the other accepted proof", async () => {
     const raw = await signed(gmailAutoForward(TO), "google");
     expect(await checkAuto({ raw, envelope: envelope(), accountEmail: HER })).toEqual(accepted(HER));
+  });
+
+  it("on: a signature of the Gmail mailbox domain is no proof (any Gmail user's mail has one)", async () => {
+    const raw = await signed(gmailAutoForward(TO), "gmail");
+    expect((await checkAuto({ raw, envelope: envelope(), accountEmail: HER })).kind).toBe("ignored");
+  });
+
+  it("the DNS does not answer: retry for her exact forwarding sender when on, ignored when off", async () => {
+    const down = { ...options, resolver: fixtureResolver({ fail: true }) };
+    const raw = await autoForward();
+    expect(
+      await mailauthSenderCheck({ ...down, autoForward: true })({ raw, envelope: envelope(), accountEmail: HER }),
+    ).toEqual({ kind: "retry" });
+    expect((await mailauthSenderCheck(down)({ raw, envelope: envelope(), accountEmail: HER })).kind).toBe("ignored");
   });
 
   it("on: refused without Google's proof", async () => {
@@ -278,6 +303,11 @@ describe("Gmail's forwarding confirmation", () => {
       kind: "gmail_confirmation",
       code: "185412963",
     });
+  });
+
+  it("her own confirmation for another destination, replayed to her order address: ignored", async () => {
+    const raw = await signed(gmailConfirmation("ailleurs@outlook.example", HER), "google");
+    expect((await check({ raw, envelope: google(), accountEmail: HER })).kind).toBe("ignored");
   });
 
   it("asked by someone else: ignored", async () => {

@@ -292,6 +292,17 @@ describe("POST /api/inbound-email: her forwards are filed", () => {
     expect(parsed).toHaveLength(1);
   });
 
+  it("with the DNS down, someone else's forward is still just ignored (202)", async () => {
+    const her = mailbox("gmail");
+    const sophie = mailbox("gmail");
+    const { address } = await account(her);
+    senderControl.dnsFail = true;
+    const raw = await signed(gmailForward(address, `Sophie <${sophie}>`), "gmail");
+    const res = await deliver(raw, envelopeFrom("gmail", sophie, address));
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ result: "ignored" });
+  });
+
   it("answers 503 when the DNS does not answer, nothing stored (Postfix tries again)", async () => {
     const her = mailbox("gmail");
     const { address } = await account(her);

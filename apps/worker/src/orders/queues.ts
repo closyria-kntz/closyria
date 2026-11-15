@@ -20,10 +20,10 @@ export function orderEmailPurgeHandler(run: () => Promise<InboundPurgeResult>) {
         console.error(`${ORDER_EMAIL_PURGE_QUEUE}: invalid job data (job ${job.id ?? "?"}), failing it`);
         throw new Error(`invalid job data on ${ORDER_EMAIL_PURGE_QUEUE}`);
       }
-      const { deleted, cleared, failed } = await run();
-      if (deleted + cleared + failed > 0) {
+      const { deleted, cleared, failed, codes } = await run();
+      if (deleted + cleared + failed + codes > 0) {
         console.log(
-          `inbound e-mail purge: ${deleted} e-mail(s) deleted, ${cleared} raw message(s) erased, ${failed} left unfinished marked failed`,
+          `inbound e-mail purge: ${deleted} e-mail(s) deleted, ${cleared} raw message(s) erased, ${failed} left unfinished marked failed, ${codes} Gmail code(s) erased`,
         );
       }
     }

@@ -96,7 +96,7 @@ describe("purgeInboundEmails", () => {
       inboundEmailId: failedWithOrder.id,
     });
 
-    expect(await purgeInboundEmails(db, now, store)).toEqual({ deleted: 2, cleared: 3, failed: 0 });
+    expect(await purgeInboundEmails(db, now, store)).toEqual({ deleted: 2, cleared: 3, failed: 0, codes: 0 });
 
     const all = [ignored, failedAlone, failedWithOrder, parsed, queued, fresh];
     const rows = await db
@@ -120,7 +120,7 @@ describe("purgeInboundEmails", () => {
     expect(await stored(store, fresh.key)).toBe(true);
 
     // Nothing left to do: a second run changes nothing.
-    expect(await purgeInboundEmails(db, now, store)).toEqual({ deleted: 0, cleared: 0, failed: 0 });
+    expect(await purgeInboundEmails(db, now, store)).toEqual({ deleted: 0, cleared: 0, failed: 0, codes: 0 });
   });
 
   it("keeps the key while the object is not deleted (logged), for the next run", async () => {
@@ -149,7 +149,7 @@ describe("purgeInboundEmails", () => {
         purgeAfter: new Date(r.getTime() + 30 * DAY_MS),
       })
       .returning();
-    expect(await purgeInboundEmails(db, now, failing)).toEqual({ deleted: 0, cleared: 0, failed: 0 });
+    expect(await purgeInboundEmails(db, now, failing)).toEqual({ deleted: 0, cleared: 0, failed: 0, codes: 0 });
     expect(error).toHaveBeenCalledTimes(1);
     const [kept] = await db
       .select()
@@ -157,7 +157,7 @@ describe("purgeInboundEmails", () => {
       .where(eq(schema.inboundEmails.id, row?.id as string));
     expect(kept?.rawObjectKey).toBe(`users/${ctx.userId}/inbound/x.eml`);
     // The store is back: the next run finishes it.
-    expect(await purgeInboundEmails(db, now, memoryStore())).toEqual({ deleted: 0, cleared: 1, failed: 0 });
+    expect(await purgeInboundEmails(db, now, memoryStore())).toEqual({ deleted: 0, cleared: 1, failed: 0, codes: 0 });
     expect(String(error.mock.calls[0])).not.toContain(ctx.userId);
     error.mockRestore();
   });
@@ -190,7 +190,7 @@ describe("purgeInboundEmails: what the reception left half done", () => {
     // Its object landed but the key was never saved: deleted with it.
     const orphan = rawEmailKey(ctx.userId, stuck);
     await store.put(orphan, Buffer.from("raw"), "message/rfc822");
-    expect(await purgeInboundEmails(db, now, store)).toEqual({ deleted: 0, cleared: 0, failed: 1 });
+    expect(await purgeInboundEmails(db, now, store)).toEqual({ deleted: 0, cleared: 0, failed: 1, codes: 0 });
     const statuses = await db
       .select({ id: schema.inboundEmails.id, status: schema.inboundEmails.status })
       .from(schema.inboundEmails)
@@ -202,6 +202,30 @@ describe("purgeInboundEmails: what the reception left half done", () => {
       ]),
     );
     expect(await stored(store, orphan)).toBe(false);
+  });
+});
+
+describe("purgeInboundEmails: Gmail confirmation codes", () => {
+  it("erases a code after 24 hours, keeps a fresher one", async () => {
+    const { db } = handle;
+    const old = await setup();
+    const fresh = await setup();
+    await db
+      .update(schema.orderInboxes)
+      .set({ gmailCode: "185412963", gmailCodeAt: new Date(now.getTime() - 24 * 3_600_000 - 1) })
+      .where(eq(schema.orderInboxes.id, old.inboxId));
+    await db
+      .update(schema.orderInboxes)
+      .set({ gmailCode: "185412964", gmailCodeAt: new Date(now.getTime() - 23 * 3_600_000) })
+      .where(eq(schema.orderInboxes.id, fresh.inboxId));
+    expect((await purgeInboundEmails(db, now, memoryStore())).codes).toBe(1);
+    const rows = await db
+      .select({ id: schema.orderInboxes.id, code: schema.orderInboxes.gmailCode, at: schema.orderInboxes.gmailCodeAt })
+      .from(schema.orderInboxes)
+      .where(inArray(schema.orderInboxes.id, [old.inboxId, fresh.inboxId]));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(old.inboxId)).toMatchObject({ code: null, at: null });
+    expect(byId.get(fresh.inboxId)?.code).toBe("185412964");
   });
 });
 
@@ -222,7 +246,7 @@ describe("order-email-purge queue", () => {
   });
 
   it("fails a job that carries data", async () => {
-    const run = vi.fn(async () => ({ deleted: 0, cleared: 0, failed: 0 }));
+    const run = vi.fn(async () => ({ deleted: 0, cleared: 0, failed: 0, codes: 0 }));
     const handler = orderEmailPurgeHandler(run);
     await handler([{ data: undefined }, { data: {} }]);
     expect(run).toHaveBeenCalledTimes(2);

@@ -23,7 +23,8 @@ import type { Envelope } from "./signature";
  * 3. Gmail's forwarding confirmation (`forwarding-noreply@google.com`, signed by google.com), when the address that
  *    asked for the forwarding, in its text, is hers: its code is kept for « Mes commandes par e-mail ».
  *
- * Anything else is ignored. A DNS failure that leaves a check undecided (temperror) asks Postfix to try again later.
+ * Anything else is ignored. A DNS failure (temperror) on the check that would decide (rule 1's DKIM of her domain, rule
+ * 2's SPF) asks Postfix to try again later; elsewhere it changes nothing.
  */
 
 export type SenderVerdict =
@@ -40,7 +41,10 @@ export type SenderCheck = (input: { raw: Buffer; envelope: Envelope; accountEmai
 export type GooglePolicy = {
   /** Gmail mailbox domains: the only ones automatic forwarding is accepted from. */
   mailboxDomains: readonly string[];
-  /** Domains whose ARC set or DKIM signature proves Google relayed the message. */
+  /**
+   * Domains whose ARC set or DKIM signature shows Google relayed the message. A second check only: rule 2's real
+   * guarantee is SPF for her Gmail domain plus the exact `caf_` tag.
+   */
   proofDomains: readonly string[];
   confirmationFrom: string;
   confirmationDomain: string;
@@ -48,7 +52,8 @@ export type GooglePolicy = {
 
 export const GOOGLE: GooglePolicy = {
   mailboxDomains: ["gmail.com", "googlemail.com"],
-  proofDomains: ["google.com", "gmail.com"],
+  // Not gmail.com: any Gmail user's own messages carry it; only Google's relay signature says Google forwarded it.
+  proofDomains: ["google.com"],
   confirmationFrom: "forwarding-noreply@google.com",
   confirmationDomain: "google.com",
 };
@@ -132,8 +137,8 @@ function signedForUs(
 function relayedByGoogle(result: AuthenticateResult, google: GooglePolicy): boolean {
   const proof = new Set(google.proofDomains);
   const arc = result.arc;
-  // TODO(dev): check against a real Gmail automatic forward that Gmail seals it with ARC d=google.com (and whether it
-  // adds a DKIM d=gmail.com / google.com signature) before turning INBOUND_AUTOFORWARD on in prod.
+  // TODO(dev): check against a real Gmail automatic forward that Gmail seals it with ARC d=google.com (or signs it
+  // with DKIM d=google.com) before turning INBOUND_AUTOFORWARD on.
   const arcOk =
     arc !== false &&
     arc.status.result === "pass" &&
@@ -164,18 +169,16 @@ async function gmailConfirmationCode(
   if (!passing(result).some((r) => lower(r.signingDomain as string) === lower(google.confirmationDomain))) return null;
   const text = await textOf(raw);
   // « marie@gmail.com a demandé … » / « marie@gmail.com has requested … »: the first address that is not ours.
-  const requester = addressesOf(text.replace(/[()[\]]/g, " ")).find((a) => a !== rcpt);
+  // Her confirmation for another destination, replayed here, is not for this address.
+  const addresses = addressesOf(text.replace(/[()[\]]/g, " "));
+  if (!addresses.includes(rcpt)) return null;
+  const requester = addresses.find((a) => a !== rcpt);
   if (!requester || requester !== own) return null;
   const code =
     /(?:confirmation code|code de confirmation)\s*:\s*(\d{6,12})\b/i.exec(text)?.[1] ??
     /\(#(\d{6,12})\)/.exec(headerFields(raw).find((f) => f.name === "subject")?.value ?? "")?.[1];
   return code ?? null;
 }
-
-const temperror = (result: AuthenticateResult) =>
-  (result.spf !== false && result.spf.status.result === "temperror") ||
-  result.dkim.results.some((r) => r.status.result === "temperror") ||
-  (result.arc !== false && result.arc.status.result === "temperror");
 
 /** The decision, from mailauth's results (the tests feed it real results computed against fixtures). */
 export async function decideSender(
@@ -210,7 +213,21 @@ export async function decideSender(
   ) {
     return { kind: "accepted", fromAddress: own };
   }
-  if (temperror(result)) return { kind: "retry" };
+  // A DNS failure (temperror) asks for a retry only when it hid the check that would decide: a DKIM signature of her
+  // domain on her own forward (rule 1), or SPF on her exact Gmail forwarding sender (rule 2, when on).
+  const rule1Undecided =
+    from !== undefined &&
+    sameMailbox(from, own) &&
+    result.dkim.results.some(
+      (r) => r.status.result === "temperror" && r.signingDomain && aligned(r.signingDomain, domainOf(from)),
+    );
+  const rule2Undecided =
+    policy.autoForward &&
+    policy.google.mailboxDomains.includes(domainOf(own)) &&
+    mailFrom === gmailForwardingSender(own, rcpt) &&
+    result.spf !== false &&
+    result.spf.status.result === "temperror";
+  if (rule1Undecided || rule2Undecided) return { kind: "retry" };
   const claimed = from ?? lower(result.dkim.headerFrom[0] ?? "");
   return { kind: "ignored", fromAddress: (claimed || mailFrom || UNKNOWN).slice(0, MAX_STORED_ADDRESS) };
 }

@@ -1,5 +1,6 @@
-import { and, type Database, eq, gt, isNull, lt, schema, sql } from "@closyria/db";
+import { and, type Database, eq, gt, isNotNull, isNull, lt, schema, sql } from "@closyria/db";
 import {
+  GMAIL_CODE_HOURS,
   inboundEmailPurge,
   inboundEmailStatusSchema,
   rawEmailKey,
@@ -17,6 +18,8 @@ export type InboundPurgeResult = {
   cleared: number;
   /** Rows left `queued` without a message, now `failed`. */
   failed: number;
+  /** Gmail forwarding confirmation codes past their 24 hours, erased. */
+  codes: number;
 };
 
 const errorName = (error: unknown) => (error instanceof Error ? error.name : "error");
@@ -27,12 +30,22 @@ const errorName = (error: unknown) => (error instanceof Error ? error.name : "er
  * The object goes first: a row changes only once its object is really deleted (a store failure is logged, the row
  * waits for the next night, never an orphan object nobody points to any more).
  *
- * Also fails what the reception left half done: an accepted e-mail still `queued` without its raw message an hour
+ * Also erases Gmail's forwarding confirmation codes past their 24 hours, and fails what the reception left half done: an accepted e-mail still `queued` without its raw message an hour
  * later (the reception could not mark it failed), its object (if any landed) deleted first.
  */
 export async function purgeInboundEmails(db: Database, now: Date, store: ObjectStore): Promise<InboundPurgeResult> {
   const e = schema.inboundEmails;
-  const result: InboundPurgeResult = { deleted: 0, cleared: 0, failed: 0 };
+  const result: InboundPurgeResult = { deleted: 0, cleared: 0, failed: 0, codes: 0 };
+
+  // Gmail's forwarding confirmation codes are shown 24 hours, then erased.
+  const codeLimit = new Date(now.getTime() - GMAIL_CODE_HOURS * 3_600_000);
+  const inboxes = schema.orderInboxes;
+  const erased = await db
+    .update(inboxes)
+    .set({ gmailCode: null, gmailCodeAt: null })
+    .where(and(isNotNull(inboxes.gmailCode), lt(inboxes.gmailCodeAt, codeLimit)))
+    .returning({ id: inboxes.id });
+  result.codes = erased.length;
   const removed = async (key: string) => {
     try {
       await store.delete(key);
