@@ -733,6 +733,7 @@ export const wardrobeErrorCodes = [
   "order_dismissed",
   "item_not_ordered",
   "tracking_exists",
+  "order_exists",
 ] as const;
 export const wardrobeErrorSchema = z.object({ error: z.enum(wardrobeErrorCodes) });
 export type WardrobeErrorCode = (typeof wardrobeErrorCodes)[number];

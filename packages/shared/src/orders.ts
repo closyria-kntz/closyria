@@ -416,6 +416,8 @@ export type OrderInboxView = z.infer<typeof orderInboxViewSchema>;
 
 // --- Reading an e-mail -------------------------------------------------------------------------------------------
 
+/** Longest product address kept from an e-mail (as `canonicalizeUrl`). */
+export const MAX_PRODUCT_URL = 2048;
 /** Tracking numbers kept from one e-mail at most. */
 export const MAX_PARSED_TRACKING_NUMBERS = 10;
 
@@ -426,6 +428,14 @@ export const parsedOrderLineSchema = z.object({
   quantity: z.number().int().min(1).max(MAX_ORDER_LINE_QUANTITY),
   priceCents: centsSchema.nullable(),
   currency: currencySchema.nullable(),
+  /**
+   * The product page the e-mail links the article to (known formats only, never followed): the worker looks it up
+   * among the products already known (`order_lines.product_id`), it never creates one.
+   */
+  productUrl: z
+    .url({ protocol: /^https?$/ })
+    .max(MAX_PRODUCT_URL)
+    .optional(),
 });
 export type ParsedOrderLine = z.infer<typeof parsedOrderLineSchema>;
 
@@ -471,6 +481,7 @@ export type ParsedOrderDraft = {
     quantity?: number | null;
     priceCents?: number | null;
     currency?: string | null;
+    productUrl?: string | null;
   }>;
   trackingNumbers?: ReadonlyArray<{ number: string; carrierHint?: Carrier | null }>;
 };
@@ -503,6 +514,7 @@ export function cleanParsedOrder(draft: ParsedOrderDraft, now: Date = new Date()
     const currency = line.currency && /^[A-Z]{3}$/.test(line.currency) ? line.currency : null;
     const price = line.priceCents;
     const priceOk = typeof price === "number" && centsSchema.safeParse(price).success && currency !== null;
+    const productUrl = parsedOrderLineSchema.shape.productUrl.safeParse(line.productUrl ?? undefined);
     lines.push({
       name,
       sizeLabel: squash(line.sizeLabel, MAX_SIZE_LABEL),
@@ -510,6 +522,7 @@ export function cleanParsedOrder(draft: ParsedOrderDraft, now: Date = new Date()
       quantity,
       priceCents: priceOk ? price : null,
       currency: priceOk ? currency : null,
+      ...(productUrl.success && productUrl.data ? { productUrl: productUrl.data } : {}),
     });
   }
   const trackings: ParsedTracking[] = [];

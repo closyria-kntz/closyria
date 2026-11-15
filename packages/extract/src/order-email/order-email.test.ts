@@ -29,6 +29,16 @@ describe("parseOrderEmail — Shopify", () => {
     });
   });
 
+  it("keeps the product address of a line linked to its page (photo or title), never followed", async () => {
+    const parsed = await read("shopify-fr-confirmation-liens");
+    expect(parsed?.lines.map((l) => [l.name, l.productUrl])).toEqual([
+      ["Robe Lina", "https://maison-lune.example/products/robe-lina?variant=4471&utm_source=shopify_email"],
+      ["Pull Côme", "https://maison-lune.example/collections/ete/products/pull-come#avis"],
+    ]);
+    // The other links (the shop, « Afficher votre commande ») are no product's.
+    expect((await read("shopify-fr-confirmation"))?.lines.every((l) => l.productUrl === undefined)).toBe(true);
+  });
+
   it("reads a French shipping update: the tracking number and its carrier, no order date", async () => {
     expect(await read("shopify-fr-shipping")).toEqual({
       shopName: "Maison Lune",

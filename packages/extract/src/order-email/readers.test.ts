@@ -93,6 +93,29 @@ describe("readShopify", () => {
     expect(draft?.lines?.[0]).toMatchObject({ sizeLabel: "36", color: null, priceCents: 5000, currency: "CHF" });
     expect(draft?.externalRef).toBeNull();
   });
+
+  it("keeps a product address only when its row holds one article and one product link", () => {
+    const row = (inner: string) => `<table><tr>${inner}</tr></table>`;
+    const html = [
+      row('<td><a href="https://oya.example/products/robe">Robe × 1</a></td>'),
+      // Two product links in one row: which one is the article's? None.
+      row(
+        '<td><a href="https://oya.example/products/a">x</a><a href="https://oya.example/products/b">Jupe × 1</a></td>',
+      ),
+      // Not a product page.
+      row('<td><a href="https://oya.example/collections/ete">Gilet × 1</a></td>'),
+      // The same name with two addresses: none.
+      row('<td><a href="https://oya.example/products/top-1">Top × 1</a></td>'),
+      row('<td><a href="https://oya.example/products/top-2">Top × 1</a></td>'),
+    ].join("");
+    const draft = readShopify(email("cdn.shopify.com\nRobe × 1\nJupe × 1\nGilet × 1\nTop × 1", html), header);
+    expect(draft?.lines?.map((l) => [l.name, l.productUrl])).toEqual([
+      ["Robe", "https://oya.example/products/robe"],
+      ["Jupe", undefined],
+      ["Gilet", undefined],
+      ["Top", undefined],
+    ]);
+  });
 });
 
 describe("readStructured", () => {

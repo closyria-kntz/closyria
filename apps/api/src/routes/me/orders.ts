@@ -125,7 +125,9 @@ const manualRoute = (limiter: MiddlewareHandler<AccessEnv>) =>
       responses: {
         201: orderContent("Recorded and validated"),
         ...common,
-        409: errorContent("The number is on another of her orders (tracking_exists)"),
+        409: errorContent(
+          "The number is on another of her orders (tracking_exists), or the e-mail already has its order (order_exists)",
+        ),
         429: errorContent("Over 300 entries this hour (rate_limited)"),
       },
     }),

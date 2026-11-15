@@ -2,6 +2,7 @@ import { type Carrier, carrierFromName, type ParsedOrderDraft } from "@closyria/
 import { parsePriceCents } from "../clean";
 import type { DecodedEmail } from "./decode";
 import type { OriginalHeader } from "./forwarded";
+import { htmlToText } from "./html-text";
 
 /** A Shopify notification: its images and links come from Shopify's hosts. */
 export const isShopifyEmail = (email: DecodedEmail) =>
@@ -44,12 +45,56 @@ function variant(line: string): { sizeLabel: string | null; color: string | null
 
 type Line = NonNullable<ParsedOrderDraft["lines"]>[number];
 
-function articles(lines: string[]): Line[] {
+/** A link to a product page of a shop (`…/products/<handle>`, Shopify's address of a product). */
+const PRODUCT_PATH = /\/products\/[^/?#]+\/?$/;
+const HREF = /<a\b[^>]*?\bhref\s*=\s*("([^"]*)"|'([^']*)')/gi;
+
+function productHref(raw: string): string | null {
+  const href = raw.replace(/&amp;/gi, "&").trim();
+  try {
+    const url = new URL(href);
+    return (url.protocol === "https:" || url.protocol === "http:") && PRODUCT_PATH.test(url.pathname) ? href : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The product page each article links to, by article name: read row by row (Shopify puts an article's photo, title
+ * and price in one table row), kept only when a row holds exactly one article and one product address. A name met
+ * with two addresses keeps none. Links are only read, never followed.
+ */
+function productLinks(html: string | null): Map<string, string | null> {
+  const links = new Map<string, string | null>();
+  if (!html) return links;
+  for (const row of html.split(/<tr\b/i)) {
+    const urls = new Set<string>();
+    for (const match of row.matchAll(HREF)) {
+      const url = productHref(match[2] ?? match[3] ?? "");
+      if (url) urls.add(url);
+    }
+    if (urls.size !== 1) continue;
+    const names = htmlToText(`<tr${row}`)
+      .split("\n")
+      .flatMap((line) => {
+        const item = ITEM.exec(line);
+        return item?.[1] ? [item[1]] : [];
+      });
+    if (names.length !== 1) continue;
+    const [name] = names as [string];
+    const [url] = [...urls] as [string];
+    links.set(name, links.has(name) && links.get(name) !== url ? null : url);
+  }
+  return links;
+}
+
+function articles(lines: string[], links: Map<string, string | null>): Line[] {
   const out: Line[] = [];
   for (let i = 0; i < lines.length; i++) {
     const item = ITEM.exec(lines[i] ?? "");
     if (!item) continue;
     const quantity = Number(item[2]);
+    const productUrl = links.get(item[1] ?? "");
     const line: Line = {
       name: item[1] ?? null,
       quantity,
@@ -57,6 +102,7 @@ function articles(lines: string[]): Line[] {
       color: null,
       priceCents: null,
       currency: null,
+      ...(productUrl ? { productUrl } : {}),
     };
     let j = i + 1;
     const next = lines[j] ?? "";
@@ -108,7 +154,7 @@ export function readShopify(email: DecodedEmail, header: OriginalHeader): Parsed
     shopName: header.fromName,
     externalRef: ref,
     orderedAt: confirmation ? header.date : null,
-    lines: articles(lines),
+    lines: articles(lines, productLinks(email.html)),
     trackingNumbers: trackings,
   };
 }

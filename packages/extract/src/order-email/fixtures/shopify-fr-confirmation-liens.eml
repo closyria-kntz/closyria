@@ -1,0 +1,58 @@
+From: Camille Martin <camille.martin@exemple.test>
+To: camille-k7f2@commandes.dev.closyria.com
+Subject: Fwd: Commande #1042 =?utf-8?q?confirm=C3=A9e?=
+Date: Mon, 09 Nov 2026 15:01:12 +0100
+Message-ID: <shopify-fr-confirmation-liens@mail.exemple.test>
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============5512094736101928374=="
+
+--===============5512094736101928374==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+---------- Message transféré ---------
+De : Maison Lune <bonjour@maison-lune.example>
+Date : lun. 9 nov. 2026 à 14:32
+Objet : Commande #1042 confirmée
+À : <camille.martin@exemple.test>
+
+
+Maison Lune
+Commande #1042
+
+Merci pour votre achat !
+(version texte abrégée)
+
+--===============5512094736101928374==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+MIME-Version: 1.0
+
+<div dir="ltr"><br><br><div class="gmail_quote"><div dir="ltr" class="gmail_attr">---------- Message transféré ---------<br>De : <strong>Maison Lune</strong> &lt;bonjour@maison-lune.example&gt;<br>Date : lun. 9 nov. 2026 à 14:32<br>Objet : Commande #1042 confirmée<br>À : &lt;camille.martin@exemple.test&gt;<br><br><br></div><div><!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Shopify</title>
+<style>.button__cell { background: #1f1f1f; }</style></head>
+<body><table class="body"><tr><td><table class="container"><tr><td><table class="header row"><tr>
+<td class="shop-name__cell"><h1 class="shop-name__text"><a href="https://maison-lune.example">Maison Lune</a></h1></td>
+<td class="order-number__cell"><span class="order-number__text">Commande #1042</span></td>
+</tr></table>
+<h2>Merci pour votre achat !</h2>
+<p>Bonjour Camille, nous préparons votre commande en vue de son expédition. Nous vous informerons lorsqu'elle aura été expédiée.</p>
+<table class="row actions"><tr><td class="button__cell"><a href="https://maison-lune.example/61234567890/orders/9f1c2b3a4d5e6f708192a3b4c5d6e7f8/authenticate?key=0a1b2c3d" class="button__text">Afficher votre commande</a></td>
+<td class="link__cell">ou <a href="https://maison-lune.example">Visitez notre boutique</a></td></tr></table>
+<h3>Récapitulatif de la commande</h3>
+<table class="row"><tr class="order-list__item"><td class="order-list__image-cell"><a href="https://maison-lune.example/products/robe-lina?variant=4471&amp;utm_source=shopify_email"><img src="https://cdn.shopify.com/s/files/1/0612/3456/7890/products/robe-lina_compact_cropped.jpg?v=1699999999" class="order-list__product-image" width="60" height="60"></a></td>
+<td class="order-list__product-description-cell"><span class="order-list__item-title">Robe Lina&nbsp;×&nbsp;1</span><br><span class="order-list__item-variant">M / Écru</span></td><td class="order-list__price-cell"><p class="order-list__item-price">89,00 €</p></td></tr><tr class="order-list__item"><td class="order-list__image-cell"><img src="https://cdn.shopify.com/s/files/1/0612/3456/7890/products/pull-come_compact_cropped.jpg?v=1699999999" class="order-list__product-image" width="60" height="60"></td>
+<td class="order-list__product-description-cell"><a href="https://maison-lune.example/collections/ete/products/pull-come#avis"><span class="order-list__item-title">Pull Côme&nbsp;×&nbsp;2</span></a><br><span class="order-list__item-variant">S</span></td><td class="order-list__price-cell"><del class="order-list__item-original-price">140,00 €</del><p class="order-list__item-price">120,00 €</p></td></tr></table>
+<table class="row subtotal-lines"><tr class="subtotal-line"><td class="subtotal-line__title"><p><span>Sous-total</span></p></td><td class="subtotal-line__value"><strong>209,00 €</strong></td></tr>
+<tr class="subtotal-line"><td class="subtotal-line__title"><p><span>Expédition</span></p></td><td class="subtotal-line__value"><strong>4,90 €</strong></td></tr>
+<tr class="subtotal-line"><td class="subtotal-line__title"><p><span>Total</span></p></td><td class="subtotal-line__value"><strong>213,90 € EUR</strong></td></tr></table>
+<h3>Informations client</h3>
+<table class="row"><tr>
+<td class="customer-info__item"><h4>Adresse de livraison</h4><p>Camille Martin<br>12 rue des Lilas<br>69003 Lyon<br>France<br>06 12 34 56 78</p></td>
+<td class="customer-info__item"><h4>Adresse de facturation</h4><p>Camille Martin<br>12 rue des Lilas<br>69003 Lyon<br>France</p></td>
+</tr><tr><td class="customer-info__item"><h4>Mode de paiement</h4><p>Se terminant par 4242 — <strong>213,90 €</strong></p></td>
+<td class="customer-info__item"><h4>Mode d'expédition</h4><p>Colissimo Domicile</p></td></tr></table>
+<table class="row footer"><tr><td><p class="disclaimer__subtext">Si vous avez des questions, répondez à cet e-mail ou contactez-nous à <a href="mailto:bonjour@maison-lune.example">bonjour@maison-lune.example</a></p></td></tr></table>
+</td></tr></table></td></tr></table></body></html></div></div></div>
+
+--===============5512094736101928374==--

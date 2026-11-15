@@ -271,16 +271,24 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
   quantité, compté seulement en euros) ; un article déjà « Commandé » reçoit la taille et le prix qui lui manquaient.
   La commande est verrouillée (`for update`, comme la lecture des e-mails) : une seconde validation attend la
   première et répond la commande telle quelle, sans rien recréer. Une commande écartée : 409 `order_dismissed`.
+- **Lien produit de l'e-mail** (relecture n°1, arbitrage de la fondatrice) : la lecture des notifications Shopify garde
+  l'adresse de la page produit d'un article quand l'e-mail la donne (lien `…/products/…` sur sa photo ou son titre,
+  lu ligne de tableau par ligne : une seule adresse produit et un seul article dans la ligne, sinon rien), sans
+  jamais la suivre. Le worker la met sous forme canonique et cherche le produit déjà connu à cette adresse (de la
+  boutique de la commande quand elle est connue) : `order_lines.product_id`. Aucun produit n'est créé ; l'IA ne garde
+  pas d'adresse. « Corriger » garde le produit d'une ligne dont le nom ne change pas (casse et accents mis à part).
 - **Corriger / écarter** : seulement un brouillon (409 `order_not_draft`) ; « Ce n'est pas une commande » deux fois ne
   fait rien de plus ; une commande écartée n'est plus listée.
 - **Saisie manuelle** : tapée par elle, elle est validée aussitôt (ses lignes reliées comme avec « C'est bon »), avec
-  son colis quand elle donne un numéro ; l'e-mail illisible qu'elle remplace doit être à elle (sinon 404).
+  son colis quand elle donne un numéro ; l'e-mail illisible qu'elle remplace doit être à elle (sinon 404) et n'est
+  remplacé qu'une fois : une commande non écartée qui en vient déjà → 409 `order_exists`.
 - **Numéro collé sur un article « Commandé »** : le colis rejoint la commande validée de l'article, sinon une commande
   `tracking` (validée, une ligne) est créée. Transporteur : celui que dit le format du numéro, sinon celui qu'elle a
   choisi, sinon inconnu (colis `unknown`, gardé quand même : « Suivre chez le transporteur » et la question J+10 des
   Tasks 5–6). Premier contrôle (`next_check_at`) au rythme de `nextParcelCheck`, jamais après la fin du suivi. Même
   numéro deux fois : sans effet ; numéro d'une autre de ses commandes : 409 `tracking_exists`. Même verrou par numéro
-  que la lecture des e-mails.
+  que la lecture des e-mails, et d'abord celui de ses profils, comme « C'est bon » et la saisie manuelle (ni
+  interblocage, ni article relié à deux commandes).
 - **Comptes seulement** : invitée → 403 `account_required` sur toutes ces routes ; commande ou article d'un autre
   compte → 404.
 - **Limite** : saisie manuelle et numéros collés comptent comme les créations d'articles, 300 par heure et par compte

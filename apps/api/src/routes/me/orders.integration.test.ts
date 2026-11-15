@@ -208,15 +208,19 @@ describe("« C'est bon » (RF 3)", () => {
     ]);
   });
 
-  it("links a line of a captured product to her item for it", async () => {
+  it("links a line of a captured product to her item for it, before any name (RF 3)", async () => {
     const a = await account();
     const shop = await newShop();
-    const product = await newProduct(shop.id, "Chemise");
+    const product = await newProduct(shop.id, "Chemise Iris");
     const wished = await wish(a, product.id);
-    const orderId = await draft(a, null, [{ name: "Un autre nom", productId: product.id, sizeLabel: "S" }]);
+    // Another wish of that shop named exactly as the line: the product wins, the name is never tried.
+    const namesake = await wish(a, (await newProduct(shop.id, "Chemise du soir")).id);
+    const orderId = await draft(a, shop.id, [{ name: "Chemise du soir", productId: product.id, sizeLabel: "S" }]);
     const order = await json<OrderView>(await confirm(a, orderId), 200);
     expect(order.lines[0]?.itemId).toBe(wished);
-    expect((await getItem(a, wished)).sizeLabel).toBe("S");
+    expect(await getItem(a, wished)).toMatchObject({ stage: "ordered", sizeLabel: "S" });
+    expect((await getItem(a, namesake)).stage).toBe("spotted");
+    expect((await itemsOf(a)).map((i) => i.id).sort()).toEqual([wished, namesake].sort());
   });
 
   it("links an article already in « Commandé » without changing its stage again", async () => {
@@ -282,6 +286,28 @@ describe("« C'est bon » (RF 3)", () => {
     expect((await getItem(a, one)).stage).toBe("spotted");
   });
 
+  it("links her wish of another of her profiles, never another account's", async () => {
+    const a = await account();
+    const other = await account();
+    const shop = await newShop();
+    const theirs = await wish(other, (await newProduct(shop.id, "Blouse Aya")).id);
+    const lea = await json<{ id: string }>(
+      await call("POST", "/api/me/profiles", a.cookie, { name: "Léa", audience: "women", color: "plum" }),
+      201,
+    );
+    const product = await newProduct(shop.id, "Robe Mila");
+    const created = await json<{ item: ItemView }>(
+      await call("POST", "/api/me/items", a.cookie, { productId: product.id, action: "wish", profileId: lea.id }),
+      201,
+    );
+    const orderId = await draft(a, shop.id, [{ name: "Robe Mila" }, { name: "Blouse Aya" }]);
+    const order = await json<OrderView>(await confirm(a, orderId), 200);
+    expect(order.lines[0]?.itemId).toBe(created.item.id);
+    expect((await getItem(a, created.item.id)).profileId).toBe(lea.id);
+    expect(order.lines[1]?.itemId).not.toBe(theirs);
+    expect((await getItem(other, theirs)).stage).toBe("spotted");
+  });
+
   it("names a typed shop on the article when the order has no known shop", async () => {
     const a = await account();
     const orderId = await draft(a, null, [{ name: "Sac Paola" }]);
@@ -340,6 +366,26 @@ describe("« Corriger » and « Ce n'est pas une commande »", () => {
     expect(order.lines.map((l) => [l.name, l.quantity])).toEqual([
       ["Robe", 1],
       ["Jupe", 2],
+    ]);
+  });
+
+  it("keeps the product read from the e-mail on a line whose name stays", async () => {
+    const a = await account();
+    const shop = await newShop();
+    const product = await newProduct(shop.id, "Cardigan");
+    const orderId = await draft(a, shop.id, [{ name: "Cardigan Lou", productId: product.id }, { name: "Bonnet" }]);
+    const order = await json<OrderView>(
+      await call("PATCH", `/api/me/orders/${orderId}`, a.cookie, {
+        lines: [
+          { name: "cardigan lou", sizeLabel: "M", quantity: 1 },
+          { name: "Écharpe", quantity: 1 },
+        ],
+      }),
+      200,
+    );
+    expect(order.lines.map((l) => [l.name, l.productId])).toEqual([
+      ["cardigan lou", product.id],
+      ["Écharpe", null],
     ]);
   });
 
@@ -437,6 +483,34 @@ describe("POST /api/me/orders (saisie manuelle)", () => {
     expect(await itemsOf(a)).toHaveLength(2);
   });
 
+  it("replaces an unreadable e-mail once (order_exists)", async () => {
+    const a = await account();
+    const [inbox] = await t.db
+      .insert(schema.orderInboxes)
+      .values({ userId: a.userId, localPart: `moi-${++counter}` })
+      .returning();
+    const [mail] = await t.db
+      .insert(schema.inboundEmails)
+      .values({
+        userId: a.userId,
+        inboxId: inbox?.id as string,
+        queueId: `q${counter}`,
+        fromAddress: "x@t.local",
+        authOk: true,
+        status: "failed",
+        purgeAfter: new Date(Date.now() + 86_400_000),
+      })
+      .returning();
+    const body = { profileId: a.moi, shopName: "X", lines: [{ name: "Robe", quantity: 1 }], inboundEmailId: mail?.id };
+    const [first, second] = await Promise.all([
+      call("POST", "/api/me/orders", a.cookie, body),
+      call("POST", "/api/me/orders", a.cookie, body),
+    ]);
+    expect([first.status, second.status].sort()).toEqual([201, 409]);
+    expect(await json((first.status === 409 ? first : second) as Response, 409)).toEqual({ error: "order_exists" });
+    expect(await itemsOf(a)).toHaveLength(1);
+  });
+
   it("replaces an unreadable e-mail of hers only", async () => {
     const a = await account();
     const other = await account();
@@ -528,6 +602,27 @@ describe("POST /api/me/items/{id}/tracking", () => {
     expect(first.id).toBe(orderId);
     const again = await json<OrderView>(await call("POST", `/api/me/items/${itemId}/tracking`, a.cookie, body), 200);
     expect(again.parcels).toHaveLength(1);
+  });
+
+  it("never deadlocks nor links twice with a « C'est bon » of the draft holding the number", async () => {
+    for (let round = 0; round < 5; round++) {
+      const a = await account();
+      const { id, shop } = await ordered(a, "Veste Noé");
+      const number = `6A${String(10_000_000_000 + round * 7 + counter).slice(0, 11)}`;
+      const orderId = await draft(a, shop.id, [{ name: "Veste Noé" }], { trackingNumber: number });
+      const [confirmed, pasted] = await Promise.all([
+        confirm(a, orderId),
+        call("POST", `/api/me/items/${id}/tracking`, a.cookie, { trackingNumber: number }),
+      ]);
+      expect(confirmed.status).toBe(200);
+      expect([200, 409]).toContain(pasted.status);
+      const holders = await t.db
+        .selectDistinct({ orderId: schema.orderLines.orderId })
+        .from(schema.orderLines)
+        .innerJoin(schema.orders, eq(schema.orders.id, schema.orderLines.orderId))
+        .where(and(eq(schema.orderLines.itemId, id), eq(schema.orders.status, "confirmed")));
+      expect(holders).toEqual([{ orderId }]);
+    }
   });
 
   it("refuses a number already on another of her orders (tracking_exists)", async () => {

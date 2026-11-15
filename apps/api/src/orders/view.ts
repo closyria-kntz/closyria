@@ -14,31 +14,31 @@ async function viewsOf(db: Database | Tx, rows: OrderRow[]): Promise<OrderView[]
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
   const shopIds = [...new Set(rows.flatMap((r) => (r.shopId ? [r.shopId] : [])))];
-  const [shops, lines, parcels] = await Promise.all([
+  // One after another: `db` may be a transaction, whose single connection runs one query at a time.
+  const shops =
     shopIds.length === 0
       ? []
-      : db
+      : await db
           .select({ id: schema.shops.id, name: schema.shops.name, returnsUrl: schema.shops.returnsUrl })
           .from(schema.shops)
-          .where(inArray(schema.shops.id, shopIds)),
-    db
-      .select()
-      .from(schema.orderLines)
-      .where(inArray(schema.orderLines.orderId, ids))
-      .orderBy(asc(schema.orderLines.position), asc(schema.orderLines.id)),
-    db
-      .select({
-        parcel: schema.parcels,
-        // The carrier's latest step (« Pris en charge », « Disponible en point relais »…).
-        lastEventLabel: sql<string | null>`(
-          select ${schema.parcelEvents.label} from ${schema.parcelEvents}
-          where ${schema.parcelEvents.parcelId} = ${schema.parcels.id}
-          order by ${schema.parcelEvents.at} desc, ${schema.parcelEvents.id} desc limit 1)`,
-      })
-      .from(schema.parcels)
-      .where(inArray(schema.parcels.orderId, ids))
-      .orderBy(asc(schema.parcels.createdAt), asc(schema.parcels.id)),
-  ]);
+          .where(inArray(schema.shops.id, shopIds));
+  const lines = await db
+    .select()
+    .from(schema.orderLines)
+    .where(inArray(schema.orderLines.orderId, ids))
+    .orderBy(asc(schema.orderLines.position), asc(schema.orderLines.id));
+  const parcels = await db
+    .select({
+      parcel: schema.parcels,
+      // The carrier's latest step (« Pris en charge », « Disponible en point relais »…).
+      lastEventLabel: sql<string | null>`(
+        select ${schema.parcelEvents.label} from ${schema.parcelEvents}
+        where ${schema.parcelEvents.parcelId} = ${schema.parcels.id}
+        order by ${schema.parcelEvents.at} desc, ${schema.parcelEvents.id} desc limit 1)`,
+    })
+    .from(schema.parcels)
+    .where(inArray(schema.parcels.orderId, ids))
+    .orderBy(asc(schema.parcels.createdAt), asc(schema.parcels.id));
   const shopOf = new Map(shops.map((s) => [s.id, s]));
   return rows.map((order): OrderView => {
     const shop = order.shopId ? shopOf.get(order.shopId) : undefined;

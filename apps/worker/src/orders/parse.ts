@@ -1,6 +1,7 @@
 import { and, asc, type Database, eq, findOrCreateShop, inArray, schema, sql } from "@closyria/db";
 import { decodeEmail, parseOrderEmail, shopHostOf } from "@closyria/extract";
 import {
+  canonicalizeUrl,
   nextParcelCheck,
   nextSendAt,
   ORDER_EMAIL_PARSE_QUEUE,
@@ -37,6 +38,32 @@ const sameArticle = (a: { name: string; sizeLabel: string | null }, b: ParsedOrd
   (a.sizeLabel === null ||
     b.sizeLabel === null ||
     a.sizeLabel.toLocaleLowerCase("fr") === b.sizeLabel.toLocaleLowerCase("fr"));
+
+/** An order line to store: what was read, its product when its link names a known one. */
+type LineRow = Omit<ParsedOrderLine, "productUrl"> & { productId: string | null };
+
+/**
+ * The lines with the product their link names (RF 3): a product already known by that canonical address, of the
+ * order's shop when it is known. A product is never created and its page never fetched.
+ */
+async function withProducts(db: Database, shopId: string | null, lines: ParsedOrderLine[]): Promise<LineRow[]> {
+  const urls = lines.map((line) => (line.productUrl ? canonicalizeUrl(line.productUrl) : null));
+  const wanted = [...new Set(urls.filter((u): u is string => u !== null))];
+  const found =
+    wanted.length === 0
+      ? []
+      : await db
+          .select({ id: schema.products.id, url: schema.products.canonicalUrl })
+          .from(schema.products)
+          .where(
+            and(inArray(schema.products.canonicalUrl, wanted), ...(shopId ? [eq(schema.products.shopId, shopId)] : [])),
+          );
+  const byUrl = new Map(found.map((p) => [p.url, p.id]));
+  return lines.map(({ productUrl: _url, ...line }, i) => {
+    const url = urls[i];
+    return { ...line, productId: (url ? byUrl.get(url) : undefined) ?? null };
+  });
+}
 
 /**
  * The order this e-mail completes (RF 2): hers, not dismissed, from the same shop with the same order number, or
@@ -94,8 +121,11 @@ async function addParcels(tx: Tx, orderId: string, parsed: ParsedOrder, now: Dat
     .onConflictDoNothing({ target: [schema.parcels.orderId, schema.parcels.trackingNumber] });
 }
 
-/** A draft gets the articles it lacks, and what its known articles lacked (size, colour, price); a confirmed one none. */
-async function completeLines(tx: Tx, orderId: string, lines: ParsedOrderLine[]) {
+/**
+ * A draft gets the articles it lacks, and what its known articles lacked (size, colour, price, product); a confirmed
+ * one none.
+ */
+async function completeLines(tx: Tx, orderId: string, lines: LineRow[]) {
   const l = schema.orderLines;
   const existing = await tx.select().from(l).where(eq(l.orderId, orderId)).orderBy(asc(l.position));
   let position = existing.reduce((max, row) => Math.max(max, row.position), -1) + 1;
@@ -114,6 +144,7 @@ async function completeLines(tx: Tx, orderId: string, lines: ParsedOrderLine[]) 
       ...(known.sizeLabel === null && line.sizeLabel !== null ? { sizeLabel: line.sizeLabel } : {}),
       ...(known.color === null && line.color !== null ? { color: line.color } : {}),
       ...(priced ? { priceCents: line.priceCents, currency: line.currency } : {}),
+      ...(known.productId === null && line.productId !== null ? { productId: line.productId } : {}),
     };
     if (Object.keys(patch).length > 0) await tx.update(l).set(patch).where(eq(l.id, known.id));
   }
@@ -175,6 +206,7 @@ export async function parseInboundEmail(
 
   const shop = parsed.shopHost ? await findOrCreateShop(db, `https://${parsed.shopHost}/`) : null;
   const order = parsed;
+  const lines = await withProducts(db, shop?.id ?? null, parsed.lines);
   return db.transaction(async (tx) => {
     const keys = [
       ...(shop && order.externalRef ? [`order:${userId}:${shop.id}:${order.externalRef}`] : []),
@@ -187,7 +219,7 @@ export async function parseInboundEmail(
     const existing = await existingOrder(tx, userId, shop?.id ?? null, order);
     if (existing) {
       if (existing.status === "draft") {
-        await completeLines(tx, existing.id, order.lines);
+        await completeLines(tx, existing.id, lines);
         if (!existing.orderedAt && order.orderedAt) {
           await tx
             .update(schema.orders)
@@ -213,10 +245,8 @@ export async function parseInboundEmail(
         })
         .returning({ id: schema.orders.id });
       const orderId = created?.id as string;
-      if (order.lines.length > 0) {
-        await tx
-          .insert(schema.orderLines)
-          .values(order.lines.map((line, position) => ({ orderId, ...line, position })));
+      if (lines.length > 0) {
+        await tx.insert(schema.orderLines).values(lines.map((line, position) => ({ orderId, ...line, position })));
       }
       await addParcels(tx, orderId, order, now);
       await tx.insert(schema.alertEvents).values({

@@ -2,7 +2,9 @@ import { and, asc, type Database, desc, eq, inArray, isNull, ne, schema, sql } f
 import {
   type Carrier,
   detectCarrier,
+  MAX_ORDER_LINE_NAME,
   type ManualOrderInput,
+  nameFromUrl,
   nextParcelCheckClamped,
   type OrderLineInput,
   type OrderPatch,
@@ -15,15 +17,17 @@ import type { Tx } from "../wardrobe/events";
 import { recordEvent } from "../wardrobe/events";
 import { type Item, insertOrderedItem, lockActiveItemFor, lockOwnItem, lockProductOfUser } from "../wardrobe/items";
 import { findOwnProfile, lockProfilesOf } from "../wardrobe/profiles";
-import { foldShopName, foldShopNameSql, pickSameArticle } from "./match";
+import { foldShopName, foldShopNameSql, normalizeArticleName, pickSameArticle } from "./match";
 import { loadOrderView } from "./view";
 
 /**
  * « Après la commande », Task 4: what she does with an order (docs/specs/2026-11-14-apres-commande.md §3.2–3.3).
  *
- * Lock order, always: her profiles (`lockProfilesOf`, as a profile deletion, which moves orders), the per-number
- * advisory lock of a tracking number (as the e-mail reading, Task 3), the order row (`for update`, as the e-mail
- * reading's completion), then the item rows.
+ * Lock order, always: her profiles (`lockProfilesOf`, as a profile deletion, which moves orders: it also serialises
+ * her « C'est bon », manual entries and pasted numbers), the per-number advisory lock of a tracking number (as the
+ * e-mail reading, Task 3), the replaced e-mail, the order row (`for update`, as the e-mail reading's completion), then
+ * the item rows — except the pasted number, which reads its item before its orders: the profiles lock keeps it from
+ * meeting a « C'est bon », the only other action that locks an order and then an item.
  */
 
 type Order = typeof schema.orders.$inferSelect;
@@ -88,10 +92,21 @@ export async function resolveShopName(
 
 // --- Lines --------------------------------------------------------------------------------------------------------
 
-async function insertLines(tx: Tx, orderId: string, lines: OrderLineInput[]) {
+/**
+ * Writes the lines; `previous` are the lines they replace (« Corriger »): a line keeping the name of one of them keeps
+ * its product (the link read from the e-mail), the form not carrying it.
+ */
+async function insertLines(tx: Tx, orderId: string, lines: OrderLineInput[], previous: OrderLine[] = []) {
+  const productOf = new Map<string, string | null>();
+  for (const line of previous) {
+    if (!line.productId) continue;
+    const key = normalizeArticleName(line.name);
+    productOf.set(key, productOf.has(key) && productOf.get(key) !== line.productId ? null : line.productId);
+  }
   await tx.insert(schema.orderLines).values(
     lines.map((line, position) => ({
       orderId,
+      productId: productOf.get(normalizeArticleName(line.name)) ?? null,
       name: line.name,
       sizeLabel: line.sizeLabel ?? null,
       color: line.color ?? null,
@@ -293,8 +308,8 @@ export async function patchOrder(
       })
       .where(eq(schema.orders.id, order.id));
     if (patch.lines) {
-      await tx.delete(schema.orderLines).where(eq(schema.orderLines.orderId, order.id));
-      await insertLines(tx, order.id, patch.lines);
+      const previous = await tx.delete(schema.orderLines).where(eq(schema.orderLines.orderId, order.id)).returning();
+      await insertLines(tx, order.id, patch.lines, previous);
     }
     return viewOf(tx, userId, order.id);
   });
@@ -383,6 +398,20 @@ export async function createManualOrder(
       await lockTrackingNumber(tx, userId, input.trackingNumber);
       if (await orderWithParcel(tx, userId, input.trackingNumber)) return { error: "tracking_exists" };
     }
+    if (input.inboundEmailId) {
+      // The e-mail is replaced once: an order of it (typed, or read from it) already there answers 409.
+      await tx
+        .select({ id: schema.inboundEmails.id })
+        .from(schema.inboundEmails)
+        .where(eq(schema.inboundEmails.id, input.inboundEmailId))
+        .for("update");
+      const [replaced] = await tx
+        .select({ id: schema.orders.id })
+        .from(schema.orders)
+        .where(and(eq(schema.orders.inboundEmailId, input.inboundEmailId), ne(schema.orders.status, "dismissed")))
+        .limit(1);
+      if (replaced) return { error: "order_exists" };
+    }
     // Read again under the lock: a profile deleted meanwhile answers 404.
     if (!(await findOwnProfile(tx, userId, input.profileId))) return { error: "not_found" };
     const [order] = await tx
@@ -422,6 +451,7 @@ export async function addItemTracking(
   now: Date,
 ): Promise<OrderOutcome> {
   return inTransaction(db, async (tx) => {
+    await lockProfilesOf(tx, userId);
     await lockTrackingNumber(tx, userId, input.trackingNumber);
     const item = await lockOwnItem(tx, userId, itemId);
     if (!item) return { error: "not_found" };
@@ -451,7 +481,7 @@ export async function addItemTracking(
 
     const [product] = item.productId
       ? await tx
-          .select({ shopId: schema.products.shopId, name: schema.products.name })
+          .select({ shopId: schema.products.shopId, name: schema.products.name, url: schema.products.canonicalUrl })
           .from(schema.products)
           .where(eq(schema.products.id, item.productId))
       : [];
@@ -471,7 +501,14 @@ export async function addItemTracking(
       orderId: order.id,
       itemId: item.id,
       productId: item.productId,
-      name: (item.nameOverride ?? product?.name ?? "Article").slice(0, 200),
+      // Her name for it, else its product's, else the one its address gives (a product always has one).
+      name: (
+        item.nameOverride ??
+        product?.name ??
+        (product && nameFromUrl(product.url)) ??
+        product?.url ??
+        itemId
+      ).slice(0, MAX_ORDER_LINE_NAME),
       sizeLabel: item.sizeLabel,
       quantity: 1,
       priceCents: item.pricePaidCents,

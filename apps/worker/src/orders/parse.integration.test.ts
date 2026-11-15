@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { and, createDb, eq, schema } from "@closyria/db";
+import { and, createDb, eq, findOrCreateShop, schema } from "@closyria/db";
 import { INBOUND_EMAIL_RETENTION_DAYS, nextSendAt, type ParsedOrder, rawEmailKey } from "@closyria/shared";
 import { memoryStore, type ObjectStore } from "@closyria/storage";
 import { createTestDatabase } from "@closyria/testing/vitest";
@@ -284,6 +284,35 @@ describe("parseInboundEmail", () => {
     expect(await parcelsOf(order?.id as string)).toMatchObject([
       { trackingNumber: "EE123456785FR", carrier: "chronopost" },
     ]);
+  });
+
+  it("ties a line to the product its link names, among that shop's products only, never creating one", async () => {
+    const store = memoryStore();
+    const who = await person();
+    const shop = await findOrCreateShop(handle.db, "https://maison-lune.example/");
+    const [other] = await handle.db
+      .insert(schema.shops)
+      .values({ name: "Ailleurs", slug: `ailleurs-${counter}` })
+      .returning();
+    const [robe] = await handle.db
+      .insert(schema.products)
+      .values({ shopId: shop.id, canonicalUrl: "https://maison-lune.example/products/robe-lina?variant=4471" })
+      .returning();
+    // Same address but filed under another shop: not this order's.
+    await handle.db.insert(schema.products).values({
+      shopId: other?.id as string,
+      canonicalUrl: "https://maison-lune.example/collections/ete/products/pull-come",
+    });
+    const before = (await handle.db.select({ id: schema.products.id }).from(schema.products)).length;
+
+    await parseInboundEmail(deps(store), await received(store, who, fixture("shopify-fr-confirmation-liens")), now);
+
+    const [order] = await ordersOf(who.userId);
+    expect((await linesOf(order?.id as string)).map((l) => [l.name, l.productId])).toEqual([
+      ["Robe Lina", robe?.id],
+      ["Pull Côme", null],
+    ]);
+    expect((await handle.db.select({ id: schema.products.id }).from(schema.products)).length).toBe(before);
   });
 
   it("does nothing twice when the job runs again", async () => {
