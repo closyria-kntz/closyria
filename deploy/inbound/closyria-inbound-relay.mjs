@@ -19,8 +19,12 @@
 // ignored, dropped…) on standard output after a 202.
 //
 // No dependency: Node's standard library only (it runs outside the application bundle).
+//
+// Postfix's systemd unit sets MemoryDenyWriteExecute=yes, so Node must run with --jitless (master.cf argv) and
+// WebAssembly is unavailable: that is why this uses node:http and not fetch (undici parses HTTP with WebAssembly).
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { request } from "node:http";
 
 const EX_OK = 0;
 const EX_TEMPFAIL = 75;
@@ -43,6 +47,31 @@ async function readStdin(limit) {
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
+}
+
+/** POST over plain HTTP (127.0.0.1 only); resolves with the status and, for a 202, the body text. */
+function post(url, headers, body) {
+  return new Promise((resolve, reject) => {
+    const req = request(url, { method: "POST", headers: { ...headers, "content-length": body.length } }, (res) => {
+      const status = res.statusCode ?? 0;
+      if (status !== 202) {
+        res.resume();
+        res.on("end", () => resolve({ status, text: "" }));
+        return;
+      }
+      const parts = [];
+      let size = 0;
+      res.on("data", (chunk) => {
+        size += chunk.length;
+        if (size <= 4096) parts.push(chunk);
+      });
+      res.on("end", () => resolve({ status, text: Buffer.concat(parts).toString("utf8") }));
+      res.on("error", reject);
+    });
+    req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error("timeout")));
+    req.on("error", reject);
+    req.end(body);
+  });
 }
 
 async function main() {
@@ -74,23 +103,23 @@ async function main() {
   let status;
   let result = "";
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
+    const response = await post(
+      url,
+      {
         "content-type": "message/rfc822",
         "x-closyria-envelope": envelope,
         "x-closyria-timestamp": timestamp,
         "x-closyria-signature": `v1=${signature}`,
       },
       body,
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
+    );
     status = response.status;
     if (status === 202) {
-      const answer = await response.json().catch(() => ({}));
+      let answer = {};
+      try {
+        answer = JSON.parse(response.text);
+      } catch {}
       result = typeof answer?.result === "string" && /^[a-z]{1,20}$/.test(answer.result) ? answer.result : "?";
-    } else {
-      await response.body?.cancel();
     }
   } catch {
     return done(EX_TEMPFAIL, "API unreachable");

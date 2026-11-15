@@ -104,7 +104,8 @@ describe("the relay Postfix runs (deploy/inbound/closyria-inbound-relay.mjs)", (
     });
     await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok));
     const { port } = server.address() as AddressInfo;
-    const child = spawn(process.execPath, [relay, ...args], {
+    // --jitless as in master.cf: Postfix runs Node under MemoryDenyWriteExecute (no JIT, no WebAssembly, so no fetch).
+    const child = spawn(process.execPath, ["--jitless", relay, ...args], {
       env: {
         CLOSYRIA_INBOUND_URL: `http://127.0.0.1:${port}/api/inbound-email`,
         CLOSYRIA_INBOUND_SECRET_FILE: secretPath,

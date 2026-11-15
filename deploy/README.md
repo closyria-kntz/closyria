@@ -266,7 +266,7 @@ Elle :
 4. règle Postfix (réception seulement, le domaine de l'environnement ajouté à ceux déjà reçus, limites de débit,
    journal à part), le fait vérifier par `postfix check`, ouvre le port 25 dans `ufw` s'il est actif, redémarre
    Postfix et contrôle qu'il écoute ;
-5. **essai de bout en bout** : lance le relais avec le compte `closyria-mx`, comme Postfix le fera, sur un e-mail
+5. **essai de bout en bout** : lance le relais avec le compte `closyria-mx` et la protection mémoire de Postfix (`MemoryDenyWriteExecute`, d'où `node --jitless`), comme Postfix le fera, sur un e-mail
    d'essai pour une adresse qui n'existe pas. Il doit finir sans erreur et l'API répondre `dropped` (signature
    acceptée, secret lisible par le relais).
 
@@ -358,7 +358,7 @@ sudo postconf -e "myhostname = mx.closyria.com" "mydomain = closyria.com" "myori
   "maillog_file = /var/log/postfix-closyria.log" "enable_long_queue_ids = yes" "biff = no" \
   "closyria-${ENV}_destination_recipient_limit = 1" || undo "Réglage de Postfix impossible ($MAIN)."
 sudo postconf -M "postlog/unix-dgram=postlog unix-dgram n - n - 1 postlogd" || undo "Réglage du journal de Postfix impossible (master.cf)."
-sudo postconf -M "closyria-$ENV/unix=closyria-$ENV unix - n n - 4 pipe user=closyria-mx null_sender= argv=/usr/bin/node $RELAY $ENV \${queue_id} \${sender} \${client_address} \${client_helo} \${recipient}" || undo "Réglage de Postfix impossible (master.cf)."
+sudo postconf -M "closyria-$ENV/unix=closyria-$ENV unix - n n - 4 pipe user=closyria-mx null_sender= argv=/usr/bin/node --jitless $RELAY $ENV \${queue_id} \${sender} \${client_address} \${client_helo} \${recipient}" || undo "Réglage de Postfix impossible (master.cf)."
 sudo test -e "$ROT" || ROT_CREATED=yes
 printf '/var/log/postfix-closyria.log {\n  daily\n  rotate 30\n  maxage 30\n  missingok\n  notifempty\n  compress\n  copytruncate\n}\n' | sudo tee "$ROT" >/dev/null || undo "Écriture de $ROT impossible."
 sudo postfix check || undo "postfix check refuse le réglage (détail ci-dessus)."
@@ -369,7 +369,7 @@ fi
 sudo systemctl enable postfix >/dev/null 2>&1; sudo systemctl restart postfix || undo "Postfix ne redémarre pas (sudo journalctl -u postfix@- -n 50)."
 sleep 2; [ -n "$(ss -ltnH 'sport = :25')" ] || undo "Postfix n'écoute pas sur le port 25 (sudo tail -n 50 /var/log/postfix-closyria.log)."
 # 5. De bout en bout : le relais, avec le compte de Postfix, signe et remet un e-mail à une adresse inconnue.
-OUT="$(printf 'From: verification@closyria.com\r\nSubject: verification\r\n\r\nverification\r\n' | sudo -u closyria-mx /usr/bin/node "$RELAY" "$ENV" "VERIF$(openssl rand -hex 6)" "" 127.0.0.1 localhost "verification-$(openssl rand -hex 4)@$DOMAIN" 2>&1)"; RC=$?
+OUT="$(printf 'From: verification@closyria.com\r\nSubject: verification\r\n\r\nverification\r\n' | sudo systemd-run --quiet --pipe --wait --collect -p User=closyria-mx -p MemoryDenyWriteExecute=yes /usr/bin/node --jitless "$RELAY" "$ENV" "VERIF$(openssl rand -hex 6)" "" 127.0.0.1 localhost "verification-$(openssl rand -hex 4)@$DOMAIN" 2>&1)"; RC=$?
 [ "$RC" = 0 ] && [ "$OUT" = "result=dropped" ] || undo "Essai de bout en bout raté : le relais répond « $OUT » (code $RC) au lieu de « result=dropped »."
 echo "C'est fait : $DOMAIN reçoit les e-mails (domaines reçus : $(/usr/sbin/postconf -h relay_domains))."
 echo "Copies des réglages d'avant : $MAIN.avant-closyria-$ENV.$STAMP et $MASTER.avant-closyria-$ENV.$STAMP."
@@ -460,7 +460,7 @@ sudo postconf -e "myhostname = mx.closyria.com" "mydomain = closyria.com" "myori
   "maillog_file = /var/log/postfix-closyria.log" "enable_long_queue_ids = yes" "biff = no" \
   "closyria-${ENV}_destination_recipient_limit = 1" || undo "Réglage de Postfix impossible ($MAIN)."
 sudo postconf -M "postlog/unix-dgram=postlog unix-dgram n - n - 1 postlogd" || undo "Réglage du journal de Postfix impossible (master.cf)."
-sudo postconf -M "closyria-$ENV/unix=closyria-$ENV unix - n n - 4 pipe user=closyria-mx null_sender= argv=/usr/bin/node $RELAY $ENV \${queue_id} \${sender} \${client_address} \${client_helo} \${recipient}" || undo "Réglage de Postfix impossible (master.cf)."
+sudo postconf -M "closyria-$ENV/unix=closyria-$ENV unix - n n - 4 pipe user=closyria-mx null_sender= argv=/usr/bin/node --jitless $RELAY $ENV \${queue_id} \${sender} \${client_address} \${client_helo} \${recipient}" || undo "Réglage de Postfix impossible (master.cf)."
 sudo test -e "$ROT" || ROT_CREATED=yes
 printf '/var/log/postfix-closyria.log {\n  daily\n  rotate 30\n  maxage 30\n  missingok\n  notifempty\n  compress\n  copytruncate\n}\n' | sudo tee "$ROT" >/dev/null || undo "Écriture de $ROT impossible."
 sudo postfix check || undo "postfix check refuse le réglage (détail ci-dessus)."
@@ -471,7 +471,7 @@ fi
 sudo systemctl enable postfix >/dev/null 2>&1; sudo systemctl restart postfix || undo "Postfix ne redémarre pas (sudo journalctl -u postfix@- -n 50)."
 sleep 2; [ -n "$(ss -ltnH 'sport = :25')" ] || undo "Postfix n'écoute pas sur le port 25 (sudo tail -n 50 /var/log/postfix-closyria.log)."
 # 5. De bout en bout : le relais, avec le compte de Postfix, signe et remet un e-mail à une adresse inconnue.
-OUT="$(printf 'From: verification@closyria.com\r\nSubject: verification\r\n\r\nverification\r\n' | sudo -u closyria-mx /usr/bin/node "$RELAY" "$ENV" "VERIF$(openssl rand -hex 6)" "" 127.0.0.1 localhost "verification-$(openssl rand -hex 4)@$DOMAIN" 2>&1)"; RC=$?
+OUT="$(printf 'From: verification@closyria.com\r\nSubject: verification\r\n\r\nverification\r\n' | sudo systemd-run --quiet --pipe --wait --collect -p User=closyria-mx -p MemoryDenyWriteExecute=yes /usr/bin/node --jitless "$RELAY" "$ENV" "VERIF$(openssl rand -hex 6)" "" 127.0.0.1 localhost "verification-$(openssl rand -hex 4)@$DOMAIN" 2>&1)"; RC=$?
 [ "$RC" = 0 ] && [ "$OUT" = "result=dropped" ] || undo "Essai de bout en bout raté : le relais répond « $OUT » (code $RC) au lieu de « result=dropped »."
 echo "C'est fait : $DOMAIN reçoit les e-mails (domaines reçus : $(/usr/sbin/postconf -h relay_domains))."
 echo "Copies des réglages d'avant : $MAIN.avant-closyria-$ENV.$STAMP et $MASTER.avant-closyria-$ENV.$STAMP."
