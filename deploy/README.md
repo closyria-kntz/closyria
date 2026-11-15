@@ -79,6 +79,7 @@ fixés par les unités systemd : ne pas les mettre dans ces fichiers.
 | `APPLE_CLIENT_ID`, `APPLE_CLIENT_SECRET` | Facultatif : connexion avec Apple. Les deux ensemble, ou aucune. | (Apple Developer) | (Apple Developer) |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Facultatif : notifications des alertes (Web Push). Les trois ensemble, ou aucune (sans elles, pas de notification). Voir « Clés des notifications (VAPID) ». | (clés prod), `https://closyria.com` | (clés dev, une autre paire), `https://closyria.com` |
 | `INBOUND_EMAIL_SECRET` | Facultatif : réception des e-mails de commande (« Mes commandes par e-mail »). 64 caractères hexadécimaux, un par environnement ; sans lui, réception coupée. Posé par la commande de « Réception des e-mails de commande », jamais à la main. | (secret) | (secret, un autre) |
+| `INBOUND_AUTOFORWARD` | Facultatif : `on` pour accepter le transfert automatique de Gmail ; `off` par défaut (voir « Réception des e-mails de commande »). | `off` | `off` (puis `on` pour l'essai) |
 | `DEV_ACCESS_PASSWORD`, `DEV_ACCESS_TOKEN` | **Dev seulement** : le mot de passe de la page « Accès au site de test » et le jeton du cookie que Caddy laisse passer (Caddy le lit dans `/etc/caddy/closyria-dev.env`, jamais dans le Caddyfile). Les deux ensemble, ou aucune ; refusées en prod. Voir « Accès au site de test (dev) ». | (jamais) | (secrets) |
 
 Exemple de `/etc/closyria/prod.env` (systemd ne comprend pas les commentaires en fin de ligne : un `# …` après une
@@ -177,26 +178,40 @@ sudo journalctl -u closyria-dev-worker -n 50 --no-pager | grep -i vapid
 
 « Mes commandes par e-mail » donne à chacune une adresse (`marie-k7f2@commandes.closyria.com` en prod,
 `…@commandes.dev.closyria.com` en dev) où elle transfère ses e-mails de commande. Pourquoi pas Brevo et comment le
-tri est fait : `docs/specs/2026-11-14-apres-commande.md`, §10.
+tri est fait : `docs/specs/2026-11-14-apres-commande.md`, §10.1.
 
 Comment ça marche :
 
 - **Postfix**, sur la machine, reçoit les e-mails des deux domaines (port 25) et **n'envoie jamais rien** : pas de
-  réponse, pas d'avis de non-remise (`default_transport = error`). Il refuse dès la réception un e-mail de plus de
-  2 Mo (2 048 000 octets) et toute adresse qui n'est pas de ces deux domaines (pas de relais ouvert) ;
+  réponse, pas d'avis de non-remise (`default_transport = error`), pas de relais (`reject_unauth_destination`, même
+  depuis la machine). Il refuse dès la réception un e-mail de plus de 2 Mo (2 048 000 octets), plus de 5
+  destinataires par e-mail, et limite chaque serveur d'envoi (5 connexions à la fois ; par minute : 20 connexions,
+  30 e-mails, 60 destinataires). Il ne dit pas quelles adresses existent : tout destinataire des deux domaines est
+  accepté, l'API garde ou non ;
 - pour chaque destinataire, Postfix lance le relais `/usr/local/lib/closyria/inbound-relay.mjs` (copie de
   `deploy/inbound/closyria-inbound-relay.mjs`, compte système `closyria-mx`, sans droits) qui remet le message brut et
-  l'enveloppe SMTP (adresse du serveur d'envoi, HELO, expéditeur, destinataire) à l'API de l'environnement, sur
-  `127.0.0.1` (jamais par Caddy), **signés** avec `INBOUND_EMAIL_SECRET` ;
-- l'API vérifie la signature, puis calcule elle-même SPF, DKIM et l'alignement à partir du message et de l'enveloppe
-  (aucun en-tête du message n'est cru). Seuls les e-mails transférés depuis **son adresse vérifiée** sont gardés
-  (brut dans le stockage S3 privé, 30 jours) ; les autres sont ignorés, sans réponse ;
+  l'enveloppe SMTP (identifiant de file, adresse du serveur d'envoi, HELO, expéditeur, destinataire) à l'API de
+  l'environnement, sur `127.0.0.1` (jamais par Caddy), **signés** avec le secret de l'environnement, lu dans
+  `/etc/closyria-inbound/<env>.secret` (`/etc/closyria` n'est lisible que par root) ;
+- l'API vérifie la signature, puis calcule elle-même DKIM, SPF, ARC et l'alignement à partir du message et de
+  l'enveloppe (aucun en-tête du message n'est cru). Seuls les e-mails transférés depuis **son adresse vérifiée** sont
+  gardés (brut dans le stockage S3 privé, 30 jours) ; les autres sont ignorés, sans réponse. Une panne DNS fait
+  répondre 503 : Postfix réessaie plus tard. Une reprise du même e-mail (même identifiant de file) n'est gardée qu'une
+  fois ;
 - **sans `INBOUND_EMAIL_SECRET`, la réception est coupée** : `POST /api/inbound-email` répond 404 (une requête passée
   par Caddy aussi, toujours). Les adresses se créent quand même dans Compte → « Mes commandes par e-mail ».
 
 | Variable | Valeur |
 |---|---|
-| `INBOUND_EMAIL_SECRET` | 64 caractères hexadécimaux (`openssl rand -hex 32`), **un par environnement**, le même que dans `/etc/closyria/inbound-<env>.secret` (root:closyria-mx 640), que lit le relais. Facultatif : sans lui, réception coupée. |
+| `INBOUND_EMAIL_SECRET` | 64 caractères hexadécimaux (`openssl rand -hex 32`), **un par environnement**, le même que dans `/etc/closyria-inbound/<env>.secret` (dossier root:closyria-mx 750, fichier 640), que lit le relais. Facultatif : sans lui, réception coupée. |
+| `INBOUND_AUTOFORWARD` | `off` (par défaut) ou `on` : accepter le transfert **automatique** de Gmail (adresse de transfert dans les réglages de Gmail). À laisser sur `off` tant qu'un vrai transfert automatique n'a pas été vérifié sur la dev (spec §10.1). Le transfert à la main marche dans les deux cas. |
+
+**Données personnelles dans les journaux** : Postfix écrit, pour chaque e-mail, les adresses de l'expéditeur et du
+destinataire et l'adresse IP du serveur d'envoi (jamais le contenu). Pour ne pas les laisser dans le journal de la
+machine (journald, partagé, sans limite de durée par défaut), la commande envoie le journal de Postfix dans son
+propre fichier, `/var/log/postfix-closyria.log` (`maillog_file`), tourné chaque jour et **effacé après 30 jours**
+(`/etc/logrotate.d/postfix-closyria`). Seuls quelques messages de démarrage de Postfix restent dans journald. Le relais
+n'écrit que `result=queued` (ou `ignored`, `dropped`…), sans adresse.
 
 ### 1. Le DNS, chez le registrar (la fondatrice, une fois)
 
@@ -223,15 +238,26 @@ la commande ouvre aussi le pare-feu `ufw` s'il est actif.
 la version qui contient la réception, la dev d'abord. Chaque commande se donne **dans un seul message**, entière.
 Elle :
 
-1. vérifie avant tout que le dépôt est à jour, que l'API de l'environnement connaît la réception, que le DNS du
-   domaine pointe vers `mx.closyria.com`, que `INBOUND_EMAIL_SECRET` n'est pas déjà là, et que Postfix, s'il est déjà
-   installé, ne sert pas à autre chose (sinon elle s'arrête sans rien changer : la machine est partagée) ;
-2. installe Postfix s'il manque (sans question), crée le compte `closyria-mx` et copie le relais ;
-3. tire le secret (`openssl rand -hex 32`), l'écrit dans `/etc/closyria/inbound-<env>.secret` (par l'entrée standard,
-   jamais en argument) et dans `/etc/closyria/<env>.env`, redémarre l'API et vérifie que la réception répond. Sinon
-   elle s'arrête **avant** de toucher à Postfix ;
-4. règle Postfix (réception seulement, le domaine de l'environnement ajouté à ceux déjà reçus), le fait vérifier par
-   `postfix check`, ouvre le port 25 dans `ufw` s'il est actif, redémarre Postfix et contrôle qu'il écoute.
+1. vérifie avant tout que le dépôt est à jour, que le DNS du domaine pointe vers `mx.closyria.com`, que l'API de
+   l'environnement connaît la réception, que `INBOUND_EMAIL_SECRET` n'est pas déjà là, **qu'aucun autre serveur
+   d'e-mail n'est installé** (exim4, nullmailer, msmtp-mta, dma, opensmtpd, sendmail), que Postfix, s'il est déjà
+   installé, vient de cette commande, et sinon que rien n'écoute sur le port 25. Au moindre doute elle s'arrête sans
+   rien changer (la machine est partagée) ;
+2. installe Postfix s'il manque (sans question), **garde une copie** de `main.cf` et `master.cf`
+   (`….avant-closyria-<env>.<date>`), crée le compte `closyria-mx`, copie le relais, crée `/etc/closyria-inbound` ;
+3. tire le secret (`openssl rand -hex 32`), l'écrit dans `/etc/closyria-inbound/<env>.secret` et dans
+   `/etc/closyria/<env>.env` (par l'entrée standard, jamais affiché ni en argument), redémarre l'API et vérifie que la
+   réception répond ;
+4. règle Postfix (réception seulement, le domaine de l'environnement ajouté à ceux déjà reçus, limites de débit,
+   journal à part), le fait vérifier par `postfix check`, ouvre le port 25 dans `ufw` s'il est actif, redémarre
+   Postfix et contrôle qu'il écoute ;
+5. **essai de bout en bout** : lance le relais avec le compte `closyria-mx`, comme Postfix le fera, sur un e-mail
+   d'essai pour une adresse qui n'existe pas. Il doit finir sans erreur et l'API répondre `dropped` (signature
+   acceptée, secret lisible par le relais).
+
+**À partir de l'étape 3, tout échec la fait revenir en arrière d'elle-même** : secret retiré des deux fichiers,
+`main.cf` et `master.cf` d'avant remis, domaine retiré de la table, API et Postfix redémarrés (Postfix arrêté s'il
+vient d'être installé). Le message dit ce qui a raté.
 
 Dev :
 
@@ -239,57 +265,89 @@ Dev :
 (
 set -uo pipefail
 ENV=dev; DOMAIN=commandes.dev.closyria.com; PORT=3101
-R=deploy/inbound/closyria-inbound-relay.mjs; E=/etc/closyria/$ENV.env; K=/etc/closyria/inbound-$ENV.secret
-RELAY=/usr/local/lib/closyria/inbound-relay.mjs; MAP=/etc/postfix/closyria-transport; MAIN=/etc/postfix/main.cf
+R=deploy/inbound/closyria-inbound-relay.mjs; E=/etc/closyria/$ENV.env; KD=/etc/closyria-inbound; K=$KD/$ENV.secret
+RELAY=/usr/local/lib/closyria/inbound-relay.mjs; MAP=/etc/postfix/closyria-transport
+MAIN=/etc/postfix/main.cf; MASTER=/etc/postfix/master.cf; ROT=/etc/logrotate.d/postfix-closyria
+STAMP="$(date +%Y%m%d-%H%M%S)"; FRESH=no
 stop() { echo "$1" >&2; exit 1; }
 code() { curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: message/rfc822' --data-binary x "$1"; }
+installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
 # 1. Vérifications, avant tout changement.
 [ -f "$R" ] || stop "Lancer depuis la racine du dépôt Closyria à jour : $R introuvable. Rien n'est changé."
+grep -q 'closyria-inbound/' "$R" || stop "$R n'est pas la bonne version : mettre le dépôt à jour. Rien n'est changé."
 command -v dig >/dev/null || stop "dig manque (sudo apt-get install -y dnsutils) : rien n'est changé."
 [ "$(dig +short MX "$DOMAIN")" = "10 mx.closyria.com." ] || stop "Le DNS de $DOMAIN ne donne pas encore « 10 mx.closyria.com. » : rien n'est changé."
 [ "$(code "http://127.0.0.1:$PORT/api/me/order-inbox")" = 401 ] || stop "L'API $ENV ne connaît pas la réception : déployer d'abord la version qui la contient. Rien n'est changé."
 sudo grep -q '^INBOUND_EMAIL_SECRET=' "$E" && stop "INBOUND_EMAIL_SECRET déjà dans $E : rien n'est changé."
 sudo test -e "$K" && stop "$K existe déjà : rien n'est changé."
-if [ -x /usr/sbin/postconf ] && sudo test -f "$MAIN" && ! sudo grep -q '^# closyria-inbound' "$MAIN"; then
-  stop "Postfix est déjà installé et réglé pour autre chose ($MAIN) : rien n'est changé. En parler avant."
+for p in exim4-base exim4-daemon-light exim4-daemon-heavy nullmailer msmtp-mta dma opensmtpd sendmail-bin sendmail; do
+  installed "$p" && stop "Un autre serveur d'e-mail est installé ($p) : rien n'est changé. En parler avant."
+done
+if [ -x /usr/sbin/postconf ]; then
+  sudo grep -q '^# closyria-inbound' "$MAIN" 2>/dev/null || stop "Postfix est déjà installé, pas par cette commande ($MAIN) : rien n'est changé. En parler avant."
+else
+  ss -ltnH 'sport = :25' | grep -q . && stop "Quelque chose écoute déjà sur le port 25 : rien n'est changé. En parler avant."
 fi
-# 2. Postfix (sans question s'il manque), le compte du relais, le relais.
+# 2. Postfix (sans question s'il manque), une copie de ses réglages, le compte et le relais, le dossier du secret.
 if [ ! -x /usr/sbin/postconf ]; then
   echo "postfix postfix/main_mailer_type select No configuration" | sudo debconf-set-selections
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postfix ssl-cert || stop "Installation de Postfix impossible : $E n'est pas changé."
+  FRESH=yes
+  sudo systemctl stop postfix 2>/dev/null
 fi
-sudo test -f "$MAIN" || { sudo cp /usr/share/postfix/main.cf.debian "$MAIN" && printf '\n# closyria-inbound : réception des e-mails de commande (deploy/README.md)\n' | sudo tee -a "$MAIN" >/dev/null; } || stop "Création de $MAIN impossible : $E n'est pas changé."
+sudo test -f "$MAIN" || sudo cp /usr/share/postfix/main.cf.debian "$MAIN" || stop "Création de $MAIN impossible : $E n'est pas changé."
+sudo grep -q '^# closyria-inbound' "$MAIN" || printf '\n# closyria-inbound : réception des e-mails de commande (deploy/README.md)\n' | sudo tee -a "$MAIN" >/dev/null
+sudo cp -p "$MAIN" "$MAIN.avant-closyria-$ENV.$STAMP" && sudo cp -p "$MASTER" "$MASTER.avant-closyria-$ENV.$STAMP" || stop "Copie de sûreté des réglages de Postfix impossible : $E n'est pas changé."
 id closyria-mx >/dev/null 2>&1 || sudo useradd --system --no-create-home --shell /usr/sbin/nologin closyria-mx || stop "Création du compte closyria-mx impossible : $E n'est pas changé."
 sudo install -D -o root -g root -m 755 "$R" "$RELAY" || stop "Copie du relais impossible : $E n'est pas changé."
-# 3. Le secret : dans le fichier du relais et dans celui de l'API, jamais affiché ni en argument.
+sudo install -d -o root -g closyria-mx -m 750 "$KD" || stop "Création de $KD impossible : $E n'est pas changé."
+# 3. Le secret, pour le relais et pour l'API (jamais affiché ni en argument), puis l'API redémarrée et vérifiée.
+undo() {
+  echo "Retour en arrière : secret retiré, réglages de Postfix d'avant remis, API et Postfix redémarrés." >&2
+  sudo sed -i '/^INBOUND_EMAIL_SECRET=/d' "$E"; sudo rm -f "$K"
+  sudo cp -p "$MAIN.avant-closyria-$ENV.$STAMP" "$MAIN"; sudo cp -p "$MASTER.avant-closyria-$ENV.$STAMP" "$MASTER"
+  if sudo test -f "$MAP"; then sudo sed -i "/^${DOMAIN//./\\.} /d" "$MAP"; sudo postmap "$MAP"; fi
+  sudo systemctl restart "closyria-$ENV-api"
+  if [ "$FRESH" = yes ]; then sudo systemctl stop postfix; else sudo systemctl restart postfix; fi
+  stop "$1 Rien n'est resté de cet essai (Postfix, s'il vient d'être installé, reste installé mais arrêté : voir « Tout retirer »)."
+}
 T="$(openssl rand -hex 32)" && [ "${#T}" = 64 ] || stop "openssl n'a pas donné de secret : $E n'est pas changé."
-printf '%s\n' "$T" | (umask 077; sudo tee "$K" >/dev/null) && sudo chown root:closyria-mx "$K" && sudo chmod 640 "$K" || stop "Écriture de $K impossible : $E n'est pas changé."
-printf '\nINBOUND_EMAIL_SECRET=%s\n' "$T" | sudo tee -a "$E" >/dev/null || stop "Écriture dans $E impossible : retirer $K (sudo rm $K) puis relancer."
+printf '%s\n' "$T" | (umask 077; sudo tee "$K" >/dev/null) && sudo chown root:closyria-mx "$K" && sudo chmod 640 "$K" || undo "Écriture de $K impossible."
+printf '\nINBOUND_EMAIL_SECRET=%s\n' "$T" | sudo tee -a "$E" >/dev/null || undo "Écriture dans $E impossible."
 unset T
-sudo systemctl restart "closyria-$ENV-api" || stop "closyria-$ENV-api ne redémarre pas (sudo journalctl -u closyria-$ENV-api -n 50) : Postfix n'est pas changé."
+sudo systemctl restart "closyria-$ENV-api" || undo "closyria-$ENV-api ne redémarre pas (sudo journalctl -u closyria-$ENV-api -n 50)."
 A=000; for _ in $(seq 30); do A="$(code "http://127.0.0.1:$PORT/api/inbound-email")"; [ "$A" = 401 ] && break; sleep 1; done
-[ "$A" = 401 ] || stop "La réception ne répond pas (réponse $A au lieu de 401 ; sudo journalctl -u closyria-$ENV-api -n 50) : Postfix n'est pas changé."
-# 4. Postfix : réception seulement, jamais d'envoi ; le domaine de l'environnement vers son relais.
-sudo touch "$MAP" && { sudo grep -q "^$DOMAIN " "$MAP" || echo "$DOMAIN closyria-$ENV:" | sudo tee -a "$MAP" >/dev/null; } || stop "Écriture de $MAP impossible."
-sudo postmap "$MAP" || stop "postmap $MAP a échoué."
+[ "$A" = 401 ] || undo "La réception ne répond pas (réponse $A au lieu de 401 ; sudo journalctl -u closyria-$ENV-api -n 50)."
+# 4. Postfix : réception seulement, jamais d'envoi ni de relais, débit limité, son propre journal (30 jours).
+sudo touch "$MAP" && { sudo grep -q "^${DOMAIN//./\\.} " "$MAP" || echo "$DOMAIN closyria-$ENV:" | sudo tee -a "$MAP" >/dev/null; } || undo "Écriture de $MAP impossible."
+sudo postmap "$MAP" || undo "postmap $MAP a échoué."
 sudo postconf -e "myhostname = mx.closyria.com" "mydomain = closyria.com" "myorigin = \$myhostname" \
   "inet_interfaces = all" "inet_protocols = all" "mynetworks = 127.0.0.0/8 [::1]/128" \
   "mydestination =" "local_recipient_maps =" "local_transport = error:5.1.1 aucune boite locale" \
   "relay_domains = $(sudo awk '{print $1}' "$MAP" | paste -sd' ')" "relay_recipient_maps =" "transport_maps = hash:$MAP" \
   "default_transport = error:5.7.1 ce serveur n'envoie pas d'e-mails" "relay_transport = error:5.7.1 ce serveur n'envoie pas d'e-mails" \
-  "smtpd_relay_restrictions = permit_mynetworks, reject_unauth_destination" \
-  "smtpd_recipient_restrictions = reject_unauth_destination" "smtpd_helo_required = yes" "disable_vrfy_command = yes" \
-  "smtpd_banner = \$myhostname ESMTP" "message_size_limit = 2048000" "mailbox_size_limit = 0" "biff = no" \
+  "smtpd_relay_restrictions = reject_unauth_destination" "smtpd_recipient_restrictions = reject_unauth_destination" \
+  "smtpd_helo_required = yes" "disable_vrfy_command = yes" "smtpd_banner = \$myhostname ESMTP" \
+  "message_size_limit = 2048000" "mailbox_size_limit = 0" "smtpd_recipient_limit = 5" \
+  "smtpd_client_connection_count_limit = 5" "smtpd_client_connection_rate_limit = 20" \
+  "smtpd_client_message_rate_limit = 30" "smtpd_client_recipient_rate_limit = 60" "anvil_rate_time_unit = 60s" \
   "smtpd_tls_security_level = may" "smtpd_tls_cert_file = /etc/ssl/certs/ssl-cert-snakeoil.pem" \
   "smtpd_tls_key_file = /etc/ssl/private/ssl-cert-snakeoil.key" "smtp_tls_security_level = none" \
-  "closyria-${ENV}_destination_recipient_limit = 1" || stop "Réglage de Postfix impossible ($MAIN)."
-sudo postconf -M "closyria-$ENV/unix=closyria-$ENV unix - n n - 4 pipe user=closyria-mx argv=/usr/bin/node $RELAY $ENV \${sender} \${client_address} \${client_helo} \${recipient}" || stop "Réglage de Postfix impossible (master.cf)."
-sudo postfix check || stop "postfix check refuse le réglage (détail ci-dessus)."
-if sudo ufw status 2>/dev/null | grep -q '^Status: active'; then sudo ufw allow 25/tcp >/dev/null || stop "ufw n'ouvre pas le port 25."; fi
-sudo systemctl enable postfix >/dev/null 2>&1; sudo systemctl restart postfix || stop "Postfix ne redémarre pas (sudo journalctl -u postfix@- -n 50)."
-sleep 2; ss -ltnH 'sport = :25' | grep -q . || stop "Postfix n'écoute pas sur le port 25 (sudo journalctl -u postfix@- -n 50)."
+  "maillog_file = /var/log/postfix-closyria.log" "biff = no" \
+  "closyria-${ENV}_destination_recipient_limit = 1" || undo "Réglage de Postfix impossible ($MAIN)."
+sudo postconf -M "postlog/unix-dgram=postlog unix-dgram n - n - 1 postlogd" || undo "Réglage du journal de Postfix impossible (master.cf)."
+sudo postconf -M "closyria-$ENV/unix=closyria-$ENV unix - n n - 4 pipe user=closyria-mx null_sender= argv=/usr/bin/node $RELAY $ENV \${queue_id} \${sender} \${client_address} \${client_helo} \${recipient}" || undo "Réglage de Postfix impossible (master.cf)."
+printf '/var/log/postfix-closyria.log {\n  daily\n  rotate 30\n  maxage 30\n  missingok\n  notifempty\n  compress\n  copytruncate\n}\n' | sudo tee "$ROT" >/dev/null || undo "Écriture de $ROT impossible."
+sudo postfix check || undo "postfix check refuse le réglage (détail ci-dessus)."
+if sudo ufw status 2>/dev/null | grep -q '^Status: active'; then sudo ufw allow 25/tcp >/dev/null || undo "ufw n'ouvre pas le port 25."; fi
+sudo systemctl enable postfix >/dev/null 2>&1; sudo systemctl restart postfix || undo "Postfix ne redémarre pas (sudo journalctl -u postfix@- -n 50)."
+sleep 2; ss -ltnH 'sport = :25' | grep -q . || undo "Postfix n'écoute pas sur le port 25 (sudo tail -n 50 /var/log/postfix-closyria.log)."
+# 5. De bout en bout : le relais, avec le compte de Postfix, signe et remet un e-mail à une adresse inconnue.
+OUT="$(printf 'From: verification@closyria.com\r\nSubject: verification\r\n\r\nverification\r\n' | sudo -u closyria-mx /usr/bin/node "$RELAY" "$ENV" "VERIF$(openssl rand -hex 6)" "" 127.0.0.1 localhost "verification-$(openssl rand -hex 4)@$DOMAIN" 2>&1)"; RC=$?
+[ "$RC" = 0 ] && [ "$OUT" = "result=dropped" ] || undo "Essai de bout en bout raté : le relais répond « $OUT » (code $RC) au lieu de « result=dropped »."
 echo "C'est fait : $DOMAIN reçoit les e-mails (domaines reçus : $(/usr/sbin/postconf -h relay_domains))."
-echo "Essai : Compte → « Mes commandes par e-mail », copier l'adresse, y transférer un e-mail de commande depuis l'adresse du compte."
+echo "Copies des réglages d'avant : $MAIN.avant-closyria-$ENV.$STAMP et $MASTER.avant-closyria-$ENV.$STAMP."
+echo "Essai réel : Compte → « Mes commandes par e-mail », copier l'adresse, y transférer un e-mail de commande depuis l'adresse du compte."
 )
 ```
 
@@ -299,82 +357,152 @@ Prod (même commande ; seule la deuxième ligne change) :
 (
 set -uo pipefail
 ENV=prod; DOMAIN=commandes.closyria.com; PORT=3001
-R=deploy/inbound/closyria-inbound-relay.mjs; E=/etc/closyria/$ENV.env; K=/etc/closyria/inbound-$ENV.secret
-RELAY=/usr/local/lib/closyria/inbound-relay.mjs; MAP=/etc/postfix/closyria-transport; MAIN=/etc/postfix/main.cf
+R=deploy/inbound/closyria-inbound-relay.mjs; E=/etc/closyria/$ENV.env; KD=/etc/closyria-inbound; K=$KD/$ENV.secret
+RELAY=/usr/local/lib/closyria/inbound-relay.mjs; MAP=/etc/postfix/closyria-transport
+MAIN=/etc/postfix/main.cf; MASTER=/etc/postfix/master.cf; ROT=/etc/logrotate.d/postfix-closyria
+STAMP="$(date +%Y%m%d-%H%M%S)"; FRESH=no
 stop() { echo "$1" >&2; exit 1; }
 code() { curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: message/rfc822' --data-binary x "$1"; }
+installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
 # 1. Vérifications, avant tout changement.
 [ -f "$R" ] || stop "Lancer depuis la racine du dépôt Closyria à jour : $R introuvable. Rien n'est changé."
+grep -q 'closyria-inbound/' "$R" || stop "$R n'est pas la bonne version : mettre le dépôt à jour. Rien n'est changé."
 command -v dig >/dev/null || stop "dig manque (sudo apt-get install -y dnsutils) : rien n'est changé."
 [ "$(dig +short MX "$DOMAIN")" = "10 mx.closyria.com." ] || stop "Le DNS de $DOMAIN ne donne pas encore « 10 mx.closyria.com. » : rien n'est changé."
 [ "$(code "http://127.0.0.1:$PORT/api/me/order-inbox")" = 401 ] || stop "L'API $ENV ne connaît pas la réception : déployer d'abord la version qui la contient. Rien n'est changé."
 sudo grep -q '^INBOUND_EMAIL_SECRET=' "$E" && stop "INBOUND_EMAIL_SECRET déjà dans $E : rien n'est changé."
 sudo test -e "$K" && stop "$K existe déjà : rien n'est changé."
-if [ -x /usr/sbin/postconf ] && sudo test -f "$MAIN" && ! sudo grep -q '^# closyria-inbound' "$MAIN"; then
-  stop "Postfix est déjà installé et réglé pour autre chose ($MAIN) : rien n'est changé. En parler avant."
+for p in exim4-base exim4-daemon-light exim4-daemon-heavy nullmailer msmtp-mta dma opensmtpd sendmail-bin sendmail; do
+  installed "$p" && stop "Un autre serveur d'e-mail est installé ($p) : rien n'est changé. En parler avant."
+done
+if [ -x /usr/sbin/postconf ]; then
+  sudo grep -q '^# closyria-inbound' "$MAIN" 2>/dev/null || stop "Postfix est déjà installé, pas par cette commande ($MAIN) : rien n'est changé. En parler avant."
+else
+  ss -ltnH 'sport = :25' | grep -q . && stop "Quelque chose écoute déjà sur le port 25 : rien n'est changé. En parler avant."
 fi
-# 2. Postfix (sans question s'il manque), le compte du relais, le relais.
+# 2. Postfix (sans question s'il manque), une copie de ses réglages, le compte et le relais, le dossier du secret.
 if [ ! -x /usr/sbin/postconf ]; then
   echo "postfix postfix/main_mailer_type select No configuration" | sudo debconf-set-selections
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postfix ssl-cert || stop "Installation de Postfix impossible : $E n'est pas changé."
+  FRESH=yes
+  sudo systemctl stop postfix 2>/dev/null
 fi
-sudo test -f "$MAIN" || { sudo cp /usr/share/postfix/main.cf.debian "$MAIN" && printf '\n# closyria-inbound : réception des e-mails de commande (deploy/README.md)\n' | sudo tee -a "$MAIN" >/dev/null; } || stop "Création de $MAIN impossible : $E n'est pas changé."
+sudo test -f "$MAIN" || sudo cp /usr/share/postfix/main.cf.debian "$MAIN" || stop "Création de $MAIN impossible : $E n'est pas changé."
+sudo grep -q '^# closyria-inbound' "$MAIN" || printf '\n# closyria-inbound : réception des e-mails de commande (deploy/README.md)\n' | sudo tee -a "$MAIN" >/dev/null
+sudo cp -p "$MAIN" "$MAIN.avant-closyria-$ENV.$STAMP" && sudo cp -p "$MASTER" "$MASTER.avant-closyria-$ENV.$STAMP" || stop "Copie de sûreté des réglages de Postfix impossible : $E n'est pas changé."
 id closyria-mx >/dev/null 2>&1 || sudo useradd --system --no-create-home --shell /usr/sbin/nologin closyria-mx || stop "Création du compte closyria-mx impossible : $E n'est pas changé."
 sudo install -D -o root -g root -m 755 "$R" "$RELAY" || stop "Copie du relais impossible : $E n'est pas changé."
-# 3. Le secret : dans le fichier du relais et dans celui de l'API, jamais affiché ni en argument.
+sudo install -d -o root -g closyria-mx -m 750 "$KD" || stop "Création de $KD impossible : $E n'est pas changé."
+# 3. Le secret, pour le relais et pour l'API (jamais affiché ni en argument), puis l'API redémarrée et vérifiée.
+undo() {
+  echo "Retour en arrière : secret retiré, réglages de Postfix d'avant remis, API et Postfix redémarrés." >&2
+  sudo sed -i '/^INBOUND_EMAIL_SECRET=/d' "$E"; sudo rm -f "$K"
+  sudo cp -p "$MAIN.avant-closyria-$ENV.$STAMP" "$MAIN"; sudo cp -p "$MASTER.avant-closyria-$ENV.$STAMP" "$MASTER"
+  if sudo test -f "$MAP"; then sudo sed -i "/^${DOMAIN//./\\.} /d" "$MAP"; sudo postmap "$MAP"; fi
+  sudo systemctl restart "closyria-$ENV-api"
+  if [ "$FRESH" = yes ]; then sudo systemctl stop postfix; else sudo systemctl restart postfix; fi
+  stop "$1 Rien n'est resté de cet essai (Postfix, s'il vient d'être installé, reste installé mais arrêté : voir « Tout retirer »)."
+}
 T="$(openssl rand -hex 32)" && [ "${#T}" = 64 ] || stop "openssl n'a pas donné de secret : $E n'est pas changé."
-printf '%s\n' "$T" | (umask 077; sudo tee "$K" >/dev/null) && sudo chown root:closyria-mx "$K" && sudo chmod 640 "$K" || stop "Écriture de $K impossible : $E n'est pas changé."
-printf '\nINBOUND_EMAIL_SECRET=%s\n' "$T" | sudo tee -a "$E" >/dev/null || stop "Écriture dans $E impossible : retirer $K (sudo rm $K) puis relancer."
+printf '%s\n' "$T" | (umask 077; sudo tee "$K" >/dev/null) && sudo chown root:closyria-mx "$K" && sudo chmod 640 "$K" || undo "Écriture de $K impossible."
+printf '\nINBOUND_EMAIL_SECRET=%s\n' "$T" | sudo tee -a "$E" >/dev/null || undo "Écriture dans $E impossible."
 unset T
-sudo systemctl restart "closyria-$ENV-api" || stop "closyria-$ENV-api ne redémarre pas (sudo journalctl -u closyria-$ENV-api -n 50) : Postfix n'est pas changé."
+sudo systemctl restart "closyria-$ENV-api" || undo "closyria-$ENV-api ne redémarre pas (sudo journalctl -u closyria-$ENV-api -n 50)."
 A=000; for _ in $(seq 30); do A="$(code "http://127.0.0.1:$PORT/api/inbound-email")"; [ "$A" = 401 ] && break; sleep 1; done
-[ "$A" = 401 ] || stop "La réception ne répond pas (réponse $A au lieu de 401 ; sudo journalctl -u closyria-$ENV-api -n 50) : Postfix n'est pas changé."
-# 4. Postfix : réception seulement, jamais d'envoi ; le domaine de l'environnement vers son relais.
-sudo touch "$MAP" && { sudo grep -q "^$DOMAIN " "$MAP" || echo "$DOMAIN closyria-$ENV:" | sudo tee -a "$MAP" >/dev/null; } || stop "Écriture de $MAP impossible."
-sudo postmap "$MAP" || stop "postmap $MAP a échoué."
+[ "$A" = 401 ] || undo "La réception ne répond pas (réponse $A au lieu de 401 ; sudo journalctl -u closyria-$ENV-api -n 50)."
+# 4. Postfix : réception seulement, jamais d'envoi ni de relais, débit limité, son propre journal (30 jours).
+sudo touch "$MAP" && { sudo grep -q "^${DOMAIN//./\\.} " "$MAP" || echo "$DOMAIN closyria-$ENV:" | sudo tee -a "$MAP" >/dev/null; } || undo "Écriture de $MAP impossible."
+sudo postmap "$MAP" || undo "postmap $MAP a échoué."
 sudo postconf -e "myhostname = mx.closyria.com" "mydomain = closyria.com" "myorigin = \$myhostname" \
   "inet_interfaces = all" "inet_protocols = all" "mynetworks = 127.0.0.0/8 [::1]/128" \
   "mydestination =" "local_recipient_maps =" "local_transport = error:5.1.1 aucune boite locale" \
   "relay_domains = $(sudo awk '{print $1}' "$MAP" | paste -sd' ')" "relay_recipient_maps =" "transport_maps = hash:$MAP" \
   "default_transport = error:5.7.1 ce serveur n'envoie pas d'e-mails" "relay_transport = error:5.7.1 ce serveur n'envoie pas d'e-mails" \
-  "smtpd_relay_restrictions = permit_mynetworks, reject_unauth_destination" \
-  "smtpd_recipient_restrictions = reject_unauth_destination" "smtpd_helo_required = yes" "disable_vrfy_command = yes" \
-  "smtpd_banner = \$myhostname ESMTP" "message_size_limit = 2048000" "mailbox_size_limit = 0" "biff = no" \
+  "smtpd_relay_restrictions = reject_unauth_destination" "smtpd_recipient_restrictions = reject_unauth_destination" \
+  "smtpd_helo_required = yes" "disable_vrfy_command = yes" "smtpd_banner = \$myhostname ESMTP" \
+  "message_size_limit = 2048000" "mailbox_size_limit = 0" "smtpd_recipient_limit = 5" \
+  "smtpd_client_connection_count_limit = 5" "smtpd_client_connection_rate_limit = 20" \
+  "smtpd_client_message_rate_limit = 30" "smtpd_client_recipient_rate_limit = 60" "anvil_rate_time_unit = 60s" \
   "smtpd_tls_security_level = may" "smtpd_tls_cert_file = /etc/ssl/certs/ssl-cert-snakeoil.pem" \
   "smtpd_tls_key_file = /etc/ssl/private/ssl-cert-snakeoil.key" "smtp_tls_security_level = none" \
-  "closyria-${ENV}_destination_recipient_limit = 1" || stop "Réglage de Postfix impossible ($MAIN)."
-sudo postconf -M "closyria-$ENV/unix=closyria-$ENV unix - n n - 4 pipe user=closyria-mx argv=/usr/bin/node $RELAY $ENV \${sender} \${client_address} \${client_helo} \${recipient}" || stop "Réglage de Postfix impossible (master.cf)."
-sudo postfix check || stop "postfix check refuse le réglage (détail ci-dessus)."
-if sudo ufw status 2>/dev/null | grep -q '^Status: active'; then sudo ufw allow 25/tcp >/dev/null || stop "ufw n'ouvre pas le port 25."; fi
-sudo systemctl enable postfix >/dev/null 2>&1; sudo systemctl restart postfix || stop "Postfix ne redémarre pas (sudo journalctl -u postfix@- -n 50)."
-sleep 2; ss -ltnH 'sport = :25' | grep -q . || stop "Postfix n'écoute pas sur le port 25 (sudo journalctl -u postfix@- -n 50)."
+  "maillog_file = /var/log/postfix-closyria.log" "biff = no" \
+  "closyria-${ENV}_destination_recipient_limit = 1" || undo "Réglage de Postfix impossible ($MAIN)."
+sudo postconf -M "postlog/unix-dgram=postlog unix-dgram n - n - 1 postlogd" || undo "Réglage du journal de Postfix impossible (master.cf)."
+sudo postconf -M "closyria-$ENV/unix=closyria-$ENV unix - n n - 4 pipe user=closyria-mx null_sender= argv=/usr/bin/node $RELAY $ENV \${queue_id} \${sender} \${client_address} \${client_helo} \${recipient}" || undo "Réglage de Postfix impossible (master.cf)."
+printf '/var/log/postfix-closyria.log {\n  daily\n  rotate 30\n  maxage 30\n  missingok\n  notifempty\n  compress\n  copytruncate\n}\n' | sudo tee "$ROT" >/dev/null || undo "Écriture de $ROT impossible."
+sudo postfix check || undo "postfix check refuse le réglage (détail ci-dessus)."
+if sudo ufw status 2>/dev/null | grep -q '^Status: active'; then sudo ufw allow 25/tcp >/dev/null || undo "ufw n'ouvre pas le port 25."; fi
+sudo systemctl enable postfix >/dev/null 2>&1; sudo systemctl restart postfix || undo "Postfix ne redémarre pas (sudo journalctl -u postfix@- -n 50)."
+sleep 2; ss -ltnH 'sport = :25' | grep -q . || undo "Postfix n'écoute pas sur le port 25 (sudo tail -n 50 /var/log/postfix-closyria.log)."
+# 5. De bout en bout : le relais, avec le compte de Postfix, signe et remet un e-mail à une adresse inconnue.
+OUT="$(printf 'From: verification@closyria.com\r\nSubject: verification\r\n\r\nverification\r\n' | sudo -u closyria-mx /usr/bin/node "$RELAY" "$ENV" "VERIF$(openssl rand -hex 6)" "" 127.0.0.1 localhost "verification-$(openssl rand -hex 4)@$DOMAIN" 2>&1)"; RC=$?
+[ "$RC" = 0 ] && [ "$OUT" = "result=dropped" ] || undo "Essai de bout en bout raté : le relais répond « $OUT » (code $RC) au lieu de « result=dropped »."
 echo "C'est fait : $DOMAIN reçoit les e-mails (domaines reçus : $(/usr/sbin/postconf -h relay_domains))."
-echo "Essai : Compte → « Mes commandes par e-mail », copier l'adresse, y transférer un e-mail de commande depuis l'adresse du compte."
+echo "Copies des réglages d'avant : $MAIN.avant-closyria-$ENV.$STAMP et $MASTER.avant-closyria-$ENV.$STAMP."
+echo "Essai réel : Compte → « Mes commandes par e-mail », copier l'adresse, y transférer un e-mail de commande depuis l'adresse du compte."
 )
 ```
 
-**Si la commande s'est arrêtée** :
-
-- à l'étape 1 ou 2 : rien n'a changé dans `/etc/closyria/` ; corriger ce qu'elle dit et la relancer (Postfix déjà
-  installé par un premier essai est repris tel quel) ;
-- à l'étape 3 (API) : Postfix n'a pas changé. Retirer le secret des deux fichiers
-  (`sudo sed -i '/^INBOUND_EMAIL_SECRET=/d' /etc/closyria/<env>.env && sudo rm /etc/closyria/inbound-<env>.secret`),
-  corriger d'après le journal de l'API, puis la relancer ;
-- à l'étape 4 (Postfix) : l'API a déjà son secret. Corriger d'après le message ou `sudo journalctl -u postfix@- -n 50`,
-  retirer le secret comme ci-dessus, puis la relancer (les réglages de Postfix sont repris, pas doublés).
+**Si la commande s'est arrêtée** : aux étapes 1 et 2, rien n'a changé dans `/etc/closyria/` ; corriger ce qu'elle dit
+et la relancer (Postfix déjà installé par un premier essai est repris tel quel). Après, elle est revenue en arrière :
+corriger d'après son message (et `sudo journalctl -u closyria-<env>-api -n 50` ou
+`sudo tail -n 50 /var/log/postfix-closyria.log`), puis la relancer.
 
 **Ensuite** :
 
-- journal de la réception (jamais le contenu des e-mails) : `sudo journalctl -u postfix@- -n 50 --no-pager` (une ligne
-  `status=sent (delivered via closyria-<env> service)` par e-mail remis à l'API ; `status=deferred` si l'API ne
-  répondait pas : Postfix réessaie seul pendant 5 jours) et `sudo journalctl -u closyria-<env>-api -n 50 | grep inbound` ;
+- journal de la réception : `sudo tail -n 50 /var/log/postfix-closyria.log` (une ligne `status=sent (delivered via
+  closyria-<env> service (result=…))` par e-mail remis à l'API ; `status=deferred` si l'API ne répondait pas ou si le
+  DNS était en panne : Postfix réessaie seul pendant 5 jours, puis abandonne sans réponse) et
+  `sudo journalctl -u closyria-<env>-api -n 50 | grep inbound` ;
 - **ne pas changer un secret en service sans changer les deux fichiers** : le relais lit
-  `/etc/closyria/inbound-<env>.secret` à chaque e-mail, l'API `INBOUND_EMAIL_SECRET` au démarrage. Si les deux
-  diffèrent, les e-mails restent en file chez Postfix (réessayés) jusqu'à ce qu'ils concordent ;
-- **couper la réception d'un environnement** : retirer sa ligne de `/etc/closyria/<env>.env`, redémarrer l'API ; les
-  e-mails attendent chez Postfix 5 jours, puis sont abandonnés sans réponse ;
+  `/etc/closyria-inbound/<env>.secret` à chaque e-mail, l'API `INBOUND_EMAIL_SECRET` au démarrage. S'ils diffèrent, les
+  e-mails restent en file chez Postfix (réessayés) jusqu'à ce qu'ils concordent ;
 - **mettre à jour le relais** (s'il change dans le dépôt) : `sudo install -o root -g root -m 755
   deploy/inbound/closyria-inbound-relay.mjs /usr/local/lib/closyria/inbound-relay.mjs` (pris au prochain e-mail).
+
+### 3. Retirer la réception
+
+**Un environnement** (ici la dev ; pour la prod, `ENV=prod; DOMAIN=commandes.closyria.com`), d'un bloc : retire son
+secret des deux fichiers, redémarre son API, retire son domaine de Postfix (le reste de Postfix ne change pas).
+
+```bash
+(
+set -uo pipefail
+ENV=dev; DOMAIN=commandes.dev.closyria.com
+MAP=/etc/postfix/closyria-transport; MAIN=/etc/postfix/main.cf
+stop() { echo "$1" >&2; exit 1; }
+sudo grep -q '^# closyria-inbound' "$MAIN" 2>/dev/null || stop "Postfix ne vient pas de la commande Closyria ($MAIN) : rien n'est changé."
+sudo sed -i '/^INBOUND_EMAIL_SECRET=/d' "/etc/closyria/$ENV.env" && sudo rm -f "/etc/closyria-inbound/$ENV.secret" || stop "Retrait du secret impossible."
+sudo systemctl restart "closyria-$ENV-api" || echo "closyria-$ENV-api ne redémarre pas : sudo journalctl -u closyria-$ENV-api -n 50" >&2
+sudo sed -i "/^${DOMAIN//./\\.} /d" "$MAP" && sudo postmap "$MAP" || stop "Retrait de $DOMAIN dans $MAP impossible."
+sudo postconf -e "relay_domains = $(sudo awk '{print $1}' "$MAP" | paste -sd' ')" || stop "Réglage de relay_domains impossible."
+sudo postconf -X "closyria-${ENV}_destination_recipient_limit"; sudo postconf -MX "closyria-$ENV/unix"
+sudo postfix check && sudo systemctl reload postfix || stop "postfix check refuse le réglage : voir ci-dessus."
+echo "$DOMAIN ne reçoit plus rien (les e-mails déjà en file sont abandonnés sans réponse)."
+)
+```
+
+**Tout** (les deux environnements, Postfix compris), d'un bloc : retire les secrets et redémarre les deux API, arrête
+et désinstalle Postfix (`apt-get purge`, ses réglages avec : copier avant les `….avant-closyria-*` de `/etc/postfix`
+si on veut les garder), ferme le port 25 dans `ufw`, efface le dossier du secret, le relais, le journal et sa
+rotation, et le compte `closyria-mx`. Elle refuse de toucher un Postfix qui ne vient pas de la commande d'installation.
+
+```bash
+(
+set -uo pipefail
+MAIN=/etc/postfix/main.cf
+stop() { echo "$1" >&2; exit 1; }
+sudo grep -q '^# closyria-inbound' "$MAIN" 2>/dev/null || stop "Postfix ne vient pas de la commande Closyria ($MAIN) : rien n'est changé."
+for ENV in dev prod; do sudo sed -i '/^INBOUND_EMAIL_SECRET=/d' "/etc/closyria/$ENV.env"; done
+sudo systemctl restart closyria-dev-api closyria-prod-api
+sudo systemctl stop postfix
+sudo DEBIAN_FRONTEND=noninteractive apt-get purge -y postfix || stop "apt-get purge postfix a échoué : le reste n'est pas touché, relancer après avoir lu l'erreur."
+if sudo ufw status 2>/dev/null | grep -q '^Status: active'; then sudo ufw delete allow 25/tcp >/dev/null; fi
+sudo rm -rf /etc/postfix /etc/closyria-inbound /usr/local/lib/closyria/inbound-relay.mjs /etc/logrotate.d/postfix-closyria /var/log/postfix-closyria.log*
+if id closyria-mx >/dev/null 2>&1; then sudo userdel closyria-mx; fi
+echo "Tout est retiré : plus de serveur d'e-mail ni de port 25, secrets, relais, compte et journal effacés. Les MX peuvent être retirés chez le registrar."
+)
+```
 
 ## Accès au site de test (dev)
 

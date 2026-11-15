@@ -93,7 +93,7 @@ export const inboundEmails = pgTable(
     /** Postfix's queue id: with the address (one recipient per delivery), a retry or a replay files nothing twice. */
     queueId: text("queue_id").notNull(),
     fromAddress: text("from_address").notNull(),
-    /** SPF or aligned DKIM passed for the effective sender. */
+    /** The effective sender was hers and authenticated (inbound/sender.ts in the API). */
     authOk: boolean("auth_ok").notNull(),
     status: text("status").notNull(),
     rawObjectKey: text("raw_object_key"),

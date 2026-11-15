@@ -39,7 +39,8 @@ const route = defineAccess(
       "INBOUND_EMAIL_SECRET is not set. Body: the raw message (`message/rfc822`, 2 MB at most). Headers: the SMTP " +
       "envelope (`X-Closyria-Envelope`), `X-Closyria-Timestamp` and `X-Closyria-Signature` (HMAC-SHA256 with " +
       "INBOUND_EMAIL_SECRET, see inbound/signature.ts). Accepted only when the effective sender is her verified " +
-      "address and SPF or aligned DKIM passed, as computed here; otherwise ignored, without any reply.",
+      "address, authenticated as computed here (inbound/sender.ts); otherwise ignored, without any reply. A DNS " +
+      "failure answers 503 so that Postfix tries again; the same delivery twice (queue id) is a duplicate.",
     middleware: [
       // Proxied: not the local relay. Answered like a missing route, before anything is read.
       async (c, next) => (c.req.header("x-forwarded-for") ? c.json({ error: "not_found" }, 404) : next()),

@@ -130,35 +130,56 @@ Les autres fournisseurs de réception (Amazon SES, SendGrid, Mailgun, Postmark) 
 chacun demande un nouveau compte et ajoute un sous-traitant pour des données personnelles, ce qui se décide avec la
 fondatrice.
 
+Choix validé par la fondatrice (2026-11-15) : Postfix sur notre machine.
+
 Ce qui est construit :
 
 - `commandes.closyria.com` (prod) et `commandes.dev.closyria.com` (dev) ont pour MX `mx.closyria.com` (la machine).
-  Postfix y reçoit seulement (aucun envoi, aucune réponse, aucun avis de non-remise), refuse dès la réception plus de
-  2 048 000 octets et toute adresse d'un autre domaine, chiffre quand l'expéditeur le propose (certificat par défaut
-  de Debian : Gmail et Outlook ne vérifient pas celui d'un MX sans MTA-STS ni DANE) ;
-- pour chaque destinataire, Postfix lance `deploy/inbound/closyria-inbound-relay.mjs`, qui poste le message et
-  l'enveloppe SMTP (adresse du client, HELO, MAIL FROM, RCPT TO) à `POST /api/inbound-email` sur `127.0.0.1`, signés
-  HMAC-SHA256 avec `INBOUND_EMAIL_SECRET` (horodatage à 5 minutes près, comparaison en temps constant). Sans secret :
-  404. Une requête passée par Caddy (`X-Forwarded-For`) : 404, même bien signée ;
-- l'API vérifie avec `mailauth` : SPF à partir de l'adresse du client et du MAIL FROM, DKIM sur les octets reçus
-  (rsa-sha1 refusé, une signature `l=` qui ne couvre qu'une partie du corps ne compte pas), alignement relâché par la
-  liste des suffixes publics (partie privée comprise). Un en-tête du message n'est jamais cru. Une panne DNS vaut refus.
+  Postfix y reçoit seulement (aucun envoi, aucune réponse, aucun avis de non-remise, aucun relais, même depuis la
+  machine), refuse dès la réception plus de 2 048 000 octets, plus de 5 destinataires, toute adresse d'un autre
+  domaine, et limite le débit de chaque serveur d'envoi. Il accepte tout destinataire des deux domaines (il ne dit
+  pas lesquels existent). Il chiffre quand l'expéditeur le propose (certificat par défaut de Debian : Gmail et Outlook
+  ne vérifient pas celui d'un MX sans MTA-STS ni DANE). L'installation refuse une machine où un autre serveur d'e-mail
+  est installé ou écoute sur le port 25, garde une copie des réglages, finit par un essai de bout en bout et revient
+  en arrière d'elle-même si un pas échoue (`deploy/README.md`) ;
+- pour chaque destinataire, Postfix lance `deploy/inbound/closyria-inbound-relay.mjs` (compte `closyria-mx`, secret
+  dans `/etc/closyria-inbound/`), qui poste le message et l'enveloppe SMTP (identifiant de file, adresse du client,
+  HELO, MAIL FROM, RCPT TO) à `POST /api/inbound-email` sur `127.0.0.1`, signés HMAC-SHA256 avec
+  `INBOUND_EMAIL_SECRET` (horodatage à 5 minutes près, comparaison en temps constant). Sans secret : 404. Une requête
+  passée par Caddy (`X-Forwarded-For`) : 404, même bien signée. L'identifiant de file et l'adresse forment une clé
+  unique : une reprise de Postfix (ou un rejeu) ne crée rien de plus (`duplicate`) ;
+- l'API vérifie avec `mailauth` : DKIM sur les octets reçus (rsa-sha1 refusé, une signature `l=` qui ne couvre
+  qu'une partie du corps ne compte pas), SPF à partir de l'adresse du client et du MAIL FROM, ARC, alignement relâché
+  par la liste des suffixes publics (partie privée comprise). Un en-tête du message n'est jamais cru comme verdict ;
+- **panne DNS** (temperror sur SPF, DKIM ou ARC, quand rien n'a permis d'accepter) : l'API répond 503, rien n'est
+  gardé, Postfix réessaie (jusqu'à 5 jours, puis abandon sans réponse). Remplace la règle « panne DNS vaut refus » de
+  la première version : un e-mail d'elle ne se perd plus pour une panne passagère.
 
 **Expéditeur effectif** (celui du message de transfert, sa boîte à elle, jamais la boutique citée dedans) :
 
-1. un transfert fait par elle (« Transférer » de Gmail, Outlook, iCloud) : son adresse en `From:` (un seul champ, une
-   seule adresse), avec une signature DKIM valide alignée sur ce domaine, ou SPF réussi pour un MAIL FROM aligné ;
-2. un transfert automatique (adresse de transfert Gmail) : le `From:` de la boutique est gardé, mais le MAIL FROM est
-   sa boîte (Gmail écrit `marie+caf_=…@gmail.com` : un `+tag` de sa boîte compte comme elle), avec SPF réussi pour ce
-   domaine exactement.
+1. **un transfert fait par elle** (« Transférer » de Gmail, Outlook, iCloud) : son adresse en `From:` (un seul
+   champ, une seule adresse, syntaxe valide, pas de groupe, ASCII), une signature DKIM valide **alignée** sur ce
+   domaine, sur tout le corps, et qui **signe le `To:` ou le `Cc:`** (un seul de chaque) où figure l'adresse de
+   commande. SPF seul ne suffit jamais : sans cela, un e-mail d'elle envoyé à quelqu'un d'autre, renvoyé tel quel sur
+   son adresse de commande, passerait ;
+2. **le transfert automatique de Gmail**, **coupé par défaut** (`INBOUND_AUTOFORWARD=off`). Activé : sa boîte est
+   chez Gmail (`gmail.com`, `googlemail.com`), le MAIL FROM est exactement
+   `<sa partie locale>+caf_=<adresse de commande, @ écrit =>@<son domaine Gmail>`, SPF réussit pour ce domaine, et
+   une seconde preuve que Google l'a relayé : un jeu ARC vérifié signé par `google.com` (ou `gmail.com`), ou une
+   signature DKIM de `google.com` / `gmail.com`. À vérifier sur un vrai transfert en dev avant de l'activer en prod
+   (TODO dans `inbound/sender.ts`) ;
+3. **la confirmation de transfert de Gmail** (`forwarding-noreply@google.com`, DKIM `google.com` valide) : quand
+   l'adresse qui demande le transfert, dans son texte, est la sienne, son code est gardé sur l'adresse de commande et
+   montré 24 h (`pendingGmailCode` de `GET /api/me/order-inbox`, affiché par la Task 7). Rien d'autre n'est gardé.
 
 La comparaison avec l'adresse du compte se fait sans tenir compte des majuscules ; le compte doit avoir son adresse
-vérifiée. Sinon : ligne `ignored` (adresse prétendue, `auth_ok = false`), **rien d'autre** : ni message brut, ni file.
+vérifiée ; les adresses internationalisées (non ASCII) ne sont pas acceptées comme expéditrice. Sinon : ligne
+`ignored` (adresse prétendue, `auth_ok = false`), **rien d'autre** : ni message brut, ni file.
 
 Limites acceptées (à dire dans l'aide de la Task 7) : un alias (« Envoyer en tant que » de Gmail, « Masquer mon
 adresse » d'iCloud, alias Outlook) n'est pas son adresse ; une redirection qui réécrit l'expéditeur (« Rediriger »
-d'Outlook, certaines règles iCloud) est ignorée : l'aide doit indiquer « Transférer ». Les chaînes ARC ne sont pas
-utilisées (il faudrait faire confiance au serveur qui transfère).
+d'Outlook, certaines règles iCloud) est ignorée ; une copie cachée (Cci) de l'adresse de commande aussi (elle n'est
+dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adresse de commande en destinataire.
 
 **Autres décisions** :
 
@@ -168,9 +189,14 @@ utilisées (il faudrait faire confiance au serveur qui transfère).
 - ordre d'écriture : la ligne (`queued`), puis l'objet `users/<user>/inbound/<id>.eml` dans le stockage privé, puis sa
   clé sur la ligne. Écriture ratée : ligne `failed`, l'objet éventuellement écrit est effacé. Ligne supprimée entre-temps
   (suppression du compte, qui verrouille ses adresses) : l'objet est effacé. File d'attente en panne : `failed`, le
-  brut reste ses 30 jours (saisie à la main) ;
-- au plus 100 e-mails gardés par adresse et par 24 heures (au-delà : rien) ;
+  brut reste ses 30 jours (saisie à la main). Si même le passage à `failed` échoue, la purge passe `failed` toute
+  ligne restée `queued` sans message plus d'une heure (son objet éventuel effacé d'abord) ;
+- quotas par adresse et par 24 heures, comptés à part : 100 e-mails acceptés, 20 ignorés ; au-delà, rien ;
 - purge : tâche `order-email-purge` chaque nuit à 03:45 (UTC), qui applique `inboundEmailPurge` aux lignes passées
-  leur `purge_after` (réception + 30 jours) et efface les objets après la validation ;
+  leur `purge_after` (réception + 30 jours). L'objet est effacé d'abord ; la ligne ne change (supprimée, ou clé
+  effacée) qu'une fois l'objet vraiment supprimé, sinon elle attend la nuit suivante ;
 - le relais ne fait jamais renvoyer d'avis : API d'accord (202), message trop gros (413) ou mal formé (400) → remis
-  (code 0) ; sinon → réessai par Postfix (code 75), 5 jours au plus, puis abandon sans réponse.
+  (code 0) ; sinon (401, 404, 503, API absente) → réessai par Postfix (code 75) ;
+- journaux : Postfix écrit les adresses et les IP de chaque e-mail ; son journal va dans
+  `/var/log/postfix-closyria.log`, effacé après 30 jours, pas dans journald (partagé, sans limite de durée). L'API et le
+  relais n'écrivent ni adresse ni contenu.
