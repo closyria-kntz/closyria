@@ -576,3 +576,19 @@ dans aucun `To:` ni `Cc:` signé). L'aide doit indiquer « Transférer », l'adr
 - « Mes commandes par e-mail », réception pas encore en service : titre « Bientôt disponible » ; « La réception des
   e-mails de commande arrive bientôt. En attendant, tu peux ajouter une commande à la main ou coller un numéro de
   suivi. » ; lien « Mes commandes ».
+
+## 11. Plusieurs adresses d'envoi (validé par la fondatrice le 2026-11-15)
+
+Besoin : on reçoit ses e-mails de commande sur plusieurs boîtes (Gmail, Hotmail…) ; aujourd'hui seuls les transferts
+depuis l'adresse du compte sont gardés.
+
+- Réglages › Commandes par e-mail : section « Mes adresses d'envoi ». L'adresse du compte y figure d'office (non
+  retirable). « Ajouter une adresse » : saisie, envoi d'un code à 6 chiffres à cette adresse (Brevo, comme les codes
+  de connexion), saisie du code → adresse vérifiée. Chaque adresse ajoutée se retire d'un geste.
+- Au plus 10 adresses par compte (adresse du compte comprise). Code valable 15 minutes, 5 essais au plus, renvoi
+  limité (1 par minute, 5 par heure et par compte) ; code stocké haché, jamais affiché ni journalisé.
+- Réception : un e-mail transféré est gardé s'il part de l'adresse du compte **ou** d'une adresse vérifiée, avec les
+  mêmes contrôles d'authentification qu'avant (DKIM aligné / règles du §10.1) appliqués au domaine de l'adresse
+  d'envoi. Une adresse non vérifiée (en attente de code) ne compte pas.
+- Une même adresse peut être vérifiée sur plusieurs comptes (le tri se fait par l'adresse de commande destinataire).
+- Suppression du compte : ses adresses d'envoi sont effacées (registre des tables possédées).
